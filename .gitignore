@@ -1,0 +1,14 @@
+# Build output (DLLs, objects, build logs, test executables)
+/build/
+# Python bytecode
+__pycache__/
+# clang tier compile commands and clangd index
+/compile_commands.json
+/.cache/
+# Visual Studio user and IDE files
+.vs/
+*.suo
+*.sdf
+*.vcxproj.user
+# Game logs copied in for a bug report
+*.log

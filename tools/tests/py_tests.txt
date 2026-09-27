@@ -1,0 +1,12 @@
+# Python unit tests run by tools\tests\run_py_tests.py (from build_tests.bat), one repo-relative
+# path per line. Blank lines and lines starting with # are ignored.
+tools\metrics\test_survey.py
+tools\metrics\test_df_census.py
+tools\metrics\test_log_shapes.py
+tools\kenshilib\test_check_headers_pin.py
+tools\kenshilib\test_resources_root.py
+tools\build\test_verify_layout.py
+tools\hooks\test_hooks.py
+tools\build\test_move_tools.py
+tools\build\test_hook_sites.py
+tools\build\test_split_check.py

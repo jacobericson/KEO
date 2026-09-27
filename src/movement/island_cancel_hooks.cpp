@@ -1,0 +1,139 @@
+// island_cancel_hooks.cpp - main-thread PlayerInterface cancel detours.
+// Stop and job call the original before bookkeeping; nearest snapshots first.
+// The detours take no lock, allocate nothing and log nothing.
+#include "movement/islands.h"
+#include "movement/islands_internal.h"
+#include "zone/preload/preload.h"
+#include "movement/formation.h"
+#include "pathfind/player_task_policy.h"   // PT_OFF_* task-system offsets (for K7)
+#include "movement/k7_swap_policy.h"       // K7ClassifySwap / K7SigOnsetStep
+#include "movement/k7_arrival_policy.h"    // K7ArrivalShouldArm / K7ArrivalPoll
+#include "zone/readiness/zone_readiness_classify.h"  // ClassifyZoneReadiness, ZR_*
+#include "movement/order_outcome.h"            // OrderOutcomeNoteReissueSent
+#include "movement/island_span_policy.h"       // IslandCellSpan (K7 arrival arm line)
+#include "zone/zone_pause.h"               // ZonePauseIsPaused (pause gate)
+#include <intrin.h>
+#include <cstring>
+#include "movement/islands_reissue_internal.h"
+#include "movement/islands_reissue_counters.h"
+namespace islands_reissue_detail {
+int        g_k7NearDepth     = 0;   // the snapshot belongs to the outermost call
+} // namespace islands_reissue_detail
+using namespace islands_reissue_detail;
+
+// =========================================================================
+// K7: PlayerInterface cancel hooks (main thread only)
+// =========================================================================
+//
+// Each detour runs the original with its arguments forwarded unchanged, then
+// the matching IslandNoteCancel*, which drops the tracked IslandOrder of
+// every character the player's action cancelled. No logging, no allocation,
+// no locks. The order-tracker drop in the stop and add==0 job detours is
+// still gated on K7FormOn (islandDeletedReissue=false leaves the tracker
+// without the deleted-order form), but both also detach the selected characters
+// from any formation group unconditionally, whether or not the deleted-order
+// form is on. The installed flags and counters keep their single definitions
+// with the tracker state in islands_reissue.cpp.
+
+void IslandSetCancelHooksInstalled(bool stop, bool job, bool task)
+{
+	g_cancelStopInstalled = stop;
+	g_cancelJobInstalled  = job;
+	g_cancelTaskInstalled = task;
+}
+
+bool IslandCancelHooksLive()
+{
+	return g_cancelStopInstalled && g_cancelJobInstalled && g_cancelTaskInstalled;
+}
+
+// Stop key: stopCharactersMovement halts and clearOrders every selected
+// character, with no faction filter. Drop them all.
+// The stop-key / job / nearest-task cancels must still drop a held entry:
+// K7DropSelected sets IslandOrder.active = false directly, by pointer, with
+// no read of k7PostDeathHold. A hold never reaches this decision -- the
+// player's own cancel always wins.
+void IslandNoteCancelStop(void* playerInterface)
+{
+	// Formation detach runs whether or not the deleted-order form is on
+	// (K7FormOn only gates the order tracker below).
+	IslandDetachSelectedFromFormation((uintptr_t)playerInterface);
+	if (!K7FormOn()) return;
+	g_k7CancelStop += K7DropSelected((uintptr_t)playerInterface);
+}
+
+// Job order: Character::addJob clears the orders only when `add`
+// (addDontClear) is 0. With add != 0 the job queues behind the move order,
+// which stays, so tracking stays too.
+void IslandNoteCancelJob(void* playerInterface, bool add)
+{
+	if (add) return;
+	IslandDetachSelectedFromFormation((uintptr_t)playerInterface);
+	if (!K7FormOn()) return;
+	g_k7CancelJob += K7DropSelected((uintptr_t)playerInterface);
+}
+
+// Nearest-character task: drop every tracked character whose order changed
+// across the original (deque size, head Tasker, head type, or a current
+// task 29 that is no longer 29) against the detour's snapshot. The
+// original's early-outs (a NULL subject, an unconscious selection,
+// checkPlayerOrderForProblems' veto) change nothing, so drop nothing. With
+// shift + task 26 it fans out through the hooked addJobSelectedCharacters /
+// addOrderSelectedCharacters, which drop first: those entries are gone and
+// are skipped here.
+void IslandNoteCancelNearestTask(void* playerInterface)
+{
+	(void)playerInterface;
+	// Gated on K7FormOn like every K7 drop: the snapshot this compares
+	// against (g_k7NearSnap, taken by hook_addTaskNearest below) only exists
+	// while the deleted-order form is on. So is the OrderOutcomeCancel call
+	// below -- a nearest-character task issued with islandDeletedReissue off
+	// still reads as an unrecovered stall rather than a cancel, same as
+	// every other K7-gated signal here.
+	if (!K7FormOn()) return;
+	for (int i = 0; i < g_k7NearSnapCount; ++i)
+	{
+		const K7NearSnap& s = g_k7NearSnap[i];
+		IslandOrder* ord = FindOrderForCharacter(s.character);
+		if (!ord) continue;
+		K7OrderState post;
+		if (!K7ReadOrders(s.character, &post)) continue;
+		bool changed = post.size != s.st.size
+		            || post.head != s.st.head
+		            || post.headType != s.st.headType
+		            || (s.st.curType == ORDER_TYPE_MOVE && post.curType != ORDER_TYPE_MOVE);
+		if (changed)
+		{
+			if (ord->k7ArrivalWaitSince > 0.0) g_k7ArrivalResumed++;
+			ord->active = false;
+			g_k7CancelTask++;
+			OrderOutcomeCancel(s.character, ElapsedSec());
+		}
+	}
+	g_k7NearSnapCount = 0;
+}
+
+void hook_stopCharactersMovement(void* thisPI)
+{
+	orig_stopCharactersMovement(thisPI);
+	IslandNoteCancelStop(thisPI);
+}
+
+void hook_addJobSelected(void* thisPI, int task, void* subject, bool shift,
+                         bool add, const float* location)
+{
+	orig_addJobSelected(thisPI, task, subject, shift, add, location);
+	IslandNoteCancelJob(thisPI, add);
+}
+
+void hook_addTaskNearest(void* thisPI, void* dest, int task, void* subject, bool shift,
+                         const float* location, bool noAnimals)
+{
+	// The snapshot belongs to the outermost call (no known path re-enters this
+	// function; the depth count keeps one from overwriting it).
+	bool outer = (g_k7NearDepth++ == 0);
+	if (outer) K7SnapshotTracked();
+	orig_addTaskNearest(thisPI, dest, task, subject, shift, location, noAnimals);
+	if (outer) IslandNoteCancelNearestTask(thisPI);
+	g_k7NearDepth--;
+}

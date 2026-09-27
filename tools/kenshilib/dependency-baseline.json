@@ -1,0 +1,131 @@
+{
+  "recorded_date": "2026-09-13",
+  "headers_revision": "565f8fb2c97e155b697735b67ec05bb29d874c66",
+  "headers_tag": "v0.5.1-2-g565f8fb",
+  "headers_include_sha256": "c37cabdc3221e82ae541b49efb2be90485a7a2f9e14cdfa9c048a80c8f049d63",
+  "header_changes_from_v0_5_1": "",
+  "headers_worktree_status": "?? Libraries/KenshiLib/",
+  "clang_headers": {
+    "repo": "https://github.com/jacobericson/KenshiLib",
+    "branch": "fix/header-layout-corrections",
+    "commit": "ca2883bba9152c4a7484781aa9bb31db68da0a7e",
+    "path": "..\\resources\\KenshiLib-pr-headers",
+    "include_sha256": "22e5be68249a358319a5d546f1fcd901ee2c795b3e1542b1d8bc877d13709c50",
+    "include_files": 861,
+    "measure": "sha256 over Include/ files ordered by lower-cased relative path; each contributes 'Include/<path>', NUL, raw bytes, NUL (tools/kenshilib/check_headers_pin.py); reproduces headers_include_sha256 for 0.5.1",
+    "files_changed_vs_v0_5_1": 30,
+    "include_files_changed_vs_v0_5_1": 24,
+    "recorded_date": "2026-09-23"
+  },
+  "artifact_version": "0.5.1",
+  "artifact_archive_source": "https://github.com/BFrizzleFoShizzle/KenshiLib/releases/download/v0.5.1/KenshiLib_v0.5.1.zip",
+  "artifact_archive_sha256": "1395d0af1c1319c7a6ae0e7783e7a879ccc8199907c06077101c405cf896f8e6",
+  "compatibility_minimum": "KenshiLib 0.5.0 / RE_Kenshi 0.3.5",
+  "installed_re_kenshi_version": "0.3.1",
+  "installed_kenshilib_version": "0.2.0",
+  "installed_version_evidence": "G:\\SteamLibrary\\steamapps\\common\\Kenshi\\RE_Kenshi_log.txt",
+  "runtime_validation": "ACCEPTED 2026-09-14: klib0 control, Session A and Session B ran on the installed_observations set (RE_Kenshi 0.3.5 prerelease / KenshiLib 0.5.1) and were accepted by the user; unreached checks deferred to Round 3.",
+  "boost_version": "1.60.0",
+  "boost_version_header_sha256": "8cad22b429dded760a595e3ff0782201195cda8a04ad6a3366c5e47ca096b117",
+  "compiler": "C:\\Program Files (x86)\\Microsoft Visual Studio 10.0\\VC\\bin\\amd64\\cl.exe",
+  "files": {
+    "build/KenshiLib.dll": {
+      "path": "..\\resources\\KenshiLib\\Libraries\\KenshiLib\\KenshiLib.dll",
+      "bytes": 956416,
+      "sha256": "9c7f3c6f63f8faff3573095199494f8e985fda91f54b9c3cad7079d0a56b1886"
+    },
+    "build/KenshiLib.lib": {
+      "path": "..\\resources\\KenshiLib\\Libraries\\KenshiLib\\KenshiLib.lib",
+      "bytes": 4218524,
+      "sha256": "0b0e11eb80e2f7172ed1f305ab83696d3ee3866cadcae083001aefc43af50fa1"
+    },
+    "build/RE_Kenshi/RVAs/Steam_1.0.65.br": {
+      "path": "..\\resources\\KenshiLib\\Libraries\\KenshiLib\\RE_Kenshi\\RVAs\\Steam_1.0.65.br",
+      "bytes": 30712,
+      "sha256": "a2d6027fdb009146f1391d59c3bbe9e20aa9643d95e5c60faf8bc894e67e2289",
+      "entries": 7678
+    },
+    "build/RE_Kenshi/RVAs/GOG_1.0.65.br": {
+      "path": "..\\resources\\KenshiLib\\Libraries\\KenshiLib\\RE_Kenshi\\RVAs\\GOG_1.0.65.br",
+      "bytes": 30712,
+      "sha256": "8910248abd88d78b777c8f77d5e8ef5287b87757001000cade44e7082e58cbc0",
+      "entries": 7678
+    },
+    "installed/KenshiLib.dll": {
+      "path": "G:\\SteamLibrary\\steamapps\\common\\Kenshi\\KenshiLib.dll",
+      "bytes": 632832,
+      "sha256": "782905fb5271bddc7f9767ac558cc825e7fc61f6b27dd647de3e5234316cbd2d"
+    },
+    "installed/RE_Kenshi.dll": {
+      "path": "G:\\SteamLibrary\\steamapps\\common\\Kenshi\\RE_Kenshi.dll",
+      "bytes": 1481216,
+      "sha256": "2d16bbcbce9c903d1023fd0a3bdc3d62865a6697254642a460214ee9d1807695"
+    },
+    "installed/kenshi_x64.exe": {
+      "path": "G:\\SteamLibrary\\steamapps\\common\\Kenshi\\kenshi_x64.exe",
+      "bytes": 36718592,
+      "sha256": "a596ab4e407c67b58599c54ffb32dc1bf2b64510cdebd3fa9359ef05a576aeb1"
+    },
+    "installed/RE_Kenshi/RVAs/Steam_1.0.65.br": {
+      "path": "G:\\SteamLibrary\\steamapps\\common\\Kenshi\\RE_Kenshi\\RVAs\\Steam_1.0.65.br",
+      "bytes": 20944,
+      "sha256": "1f1491ec7c0947e5909c577d432b61b57d1c71a24e678269226ed3c97ea76269",
+      "entries": 5236
+    },
+    "installed/RE_Kenshi/RVAs/GOG_1.0.65.br": {
+      "path": "G:\\SteamLibrary\\steamapps\\common\\Kenshi\\RE_Kenshi\\RVAs\\GOG_1.0.65.br",
+      "bytes": 20944,
+      "sha256": "6a62aa586b53a78795af1da42fdad75736046f9fc29a97e4fd860f8e9bf07648",
+      "entries": 5236
+    }
+  },
+  "artifact_archive_match": "DLL, import library and both RVA tables match the downloaded v0.5.1 archive byte-for-byte",
+  "installed_observations": [
+    {
+      "observed_utc": "2026-09-14T05:08:48.718245+00:00",
+      "re_kenshi_version": "0.3.5 prerelease (local build)",
+      "kenshilib_version": "0.5.1",
+      "re_source_revision": "47e446f0d429c2ec384097f72b43dbf74efa4059",
+      "version_evidence": "Installed RE_Kenshi.dll matches local dist; Version.cpp declares 0.3.5. RE_Kenshi_log.txt modified 2026-09-14 04:10:33 UTC reports RE_Kenshi 0.3.5 prerelease, KenshiLib 0.5.1 and RVAs loaded, ending at preload plugin startup. No live game process observed; this is not migration runtime acceptance.",
+      "files": {
+        "RE_Kenshi.dll": {
+          "path": "G:\\SteamLibrary\\steamapps\\common\\Kenshi\\RE_Kenshi.dll",
+          "bytes": 1540096,
+          "sha256": "496822f494bda39c44f2ac508ad6e07d61f2ba8b1a34a5721475befc8bec4a38",
+          "matches_staged_dist": true
+        },
+        "KenshiLib.dll": {
+          "path": "G:\\SteamLibrary\\steamapps\\common\\Kenshi\\KenshiLib.dll",
+          "bytes": 956416,
+          "sha256": "9c7f3c6f63f8faff3573095199494f8e985fda91f54b9c3cad7079d0a56b1886",
+          "matches_staged_dist": true
+        },
+        "CompressToolsLib.dll": {
+          "path": "G:\\SteamLibrary\\steamapps\\common\\Kenshi\\CompressToolsLib.dll",
+          "bytes": 187392,
+          "sha256": "31d1359e0523ae67bf8aa8d959be88a1141fd0247d1e873c0c33976be669e5e0",
+          "matches_staged_dist": true
+        },
+        "RE_Kenshi/RVAs/Steam_1.0.65.br": {
+          "path": "G:\\SteamLibrary\\steamapps\\common\\Kenshi\\RE_Kenshi\\RVAs\\Steam_1.0.65.br",
+          "bytes": 30712,
+          "sha256": "a2d6027fdb009146f1391d59c3bbe9e20aa9643d95e5c60faf8bc894e67e2289",
+          "matches_staged_dist": true,
+          "entries": 7678
+        },
+        "RE_Kenshi/RVAs/GOG_1.0.65.br": {
+          "path": "G:\\SteamLibrary\\steamapps\\common\\Kenshi\\RE_Kenshi\\RVAs\\GOG_1.0.65.br",
+          "bytes": 30712,
+          "sha256": "8910248abd88d78b777c8f77d5e8ef5287b87757001000cade44e7082e58cbc0",
+          "matches_staged_dist": true,
+          "entries": 7678
+        },
+        "RE_Kenshi/kenshi_x64.exe": {
+          "path": "G:\\SteamLibrary\\steamapps\\common\\Kenshi\\RE_Kenshi\\kenshi_x64.exe",
+          "bytes": 36713984,
+          "sha256": "504b362cde850d56afb1cea6f5b7b0ee014d9dd7b47e188599d91c804502cd3e"
+        }
+      }
+    }
+  ]
+}

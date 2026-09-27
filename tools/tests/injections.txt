@@ -1,0 +1,19 @@
+# Injection harnesses. Each drives a failure on purpose (most raise and catch
+# an access violation; the two reset harnesses hold the reset's drain or lock
+# past its deadline, and retire_stall_injection holds a worker thread past the
+# retire cap) and prints the line that proves it did: the evidence field.
+# run_injections.py builds and runs every row from the repository root; a row
+# passes only when its harness exits 0 and printed its evidence. Every
+# tools\tests\*_injection.cpp is the first source of one row.
+#
+# name | EH mode | defines | include directories | sources | evidence
+create_instance_injection | /EHa | | | tools\tests\create_instance_injection.cpp src\fixes\streaming\create_instance_guard_policy.cpp | vanilla: drain faulted at +0x
+graph_expand_injection | /EHa | | | tools\tests\graph_expand_injection.cpp src\fixes\search\graph_expand_guard_policy.cpp | vanilla read: access=0x10
+graph_position_injection | /EHa | | | tools\tests\graph_position_injection.cpp src\fixes\search\graph_position_guard_policy.cpp | vanilla read: access=0x30
+graph_visitor_injection | /EHa | | | tools\tests\graph_visitor_injection.cpp src\fixes\search\graph_visitor_guard_policy.cpp | vanilla read: access=0x30
+hull_queue_injection | /EHa | | | tools\tests\hull_queue_injection.cpp src\fixes\physx\hull_queue_guard_policy.cpp | vanilla: second batch faulted
+mesh_face_guard_injection | /EHa | | | tools\tests\mesh_face_guard_injection.cpp src\fixes\streaming\mesh_face_guard_policy.cpp | vanilla read: faulted
+section_key_injection | /EHsc | /DZONEOPT_DEBUG | %KENSHILIB%\Include %KENSHILIB%\Include\ogre | tools\tests\section_key_injection.cpp src\fixes\streaming\section_key_scan.cpp src\fixes\streaming\section_key_ring.cpp src\fixes\streaming\section_key_policy.cpp | fault taken, record
+reset_drain_injection | /EHa | | | tools\tests\reset_drain_injection.cpp src\zone\reset\zone_reset_sequence.cpp src\zone\reset\zone_reset_gate.cpp src\zone\reset\zone_reset_fence.cpp | t1: drain timed out (drainMs=10000), lock held on a 500 ms budget
+reset_lock_injection | /EHa | | | tools\tests\reset_lock_injection.cpp src\zone\reset\zone_reset_sequence.cpp src\zone\reset\zone_reset_gate.cpp src\zone\reset\zone_reset_fence.cpp | t2: lock timed out (pjWaitMs=10000), native unload ran anyway
+retire_stall_injection | /EHa | | | tools\tests\retire_stall_injection.cpp src\navmesh\workers\nm_retire_policy.cpp src\base\log_bounded.cpp | stall: terminate recorded code=3

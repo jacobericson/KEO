@@ -1,0 +1,101 @@
+// order_outcome.cpp -- game-facing glue for the player order-outcome record
+// table. All the bookkeeping and classification lives in
+// order_outcome_table.cpp (pure, host-tested); this file only translates
+// Character* and game state into calls on that API, and binds its sink to
+// LogMsg. Main thread only.
+
+#include "movement/order_outcome.h"
+#include "movement/order_outcome_table.h"
+#include "movement/order_outcome_policy.h"
+#include "zone/grid.h"
+#include "movement/island_span_policy.h"
+#include "zone/zone_pause.h"
+
+namespace order_outcome_detail {
+
+void Sink(const std::string& line)
+{
+	LogMsg(line);
+}
+
+} // namespace
+using namespace order_outcome_detail;
+
+void OrderOutcomeReset()
+{
+	OOT_Reset(Sink);
+}
+
+void OrderOutcomeBegin(const uintptr_t* chars, int count, float destX, float destZ, double now)
+{
+	if (count <= 0 || !chars) return;
+
+	int cellSpan = -1;
+	int gx, gy, dgx, dgy;
+	if (WorldToZoneGrid(GetCharPosX(chars[0]), GetCharPosZ(chars[0]), &gx, &gy)
+	    && WorldToZoneGrid(destX, destZ, &dgx, &dgy))
+		cellSpan = IslandCellSpan(gx, gy, dgx, dgy);
+
+	// size_t and uintptr_t are the same width everywhere this mod builds
+	// (x64); the table is pure and knows characters only as opaque handles.
+	OOT_Begin(reinterpret_cast<const size_t*>(chars), count, cellSpan, now, ZonePauseIsPaused());
+}
+
+void OrderOutcomeNoteMotion(uintptr_t character, bool moving, bool post, double now)
+{
+	OOT_NoteMotion((size_t)character, moving, post, now, ZonePauseIsPaused());
+}
+
+void OrderOutcomeNoteKo(uintptr_t character, double now)
+{
+	OOT_NoteKo((size_t)character, now, ZonePauseIsPaused());
+}
+
+void OrderOutcomeNoteReissueSent(uintptr_t character, const char* form, double now)
+{
+	OOT_NoteReissueSent((size_t)character, form, now, ZonePauseIsPaused());
+}
+
+void OrderOutcomeCancel(uintptr_t character, double now)
+{
+	OOT_Cancel((size_t)character, now, ZonePauseIsPaused());
+}
+
+void OrderOutcomeOnGroupComplete(const uintptr_t* chars, int count, double now)
+{
+	if (count <= 0 || !chars) return;
+	OOT_OnGroupComplete(reinterpret_cast<const size_t*>(chars), count, now, ZonePauseIsPaused());
+}
+
+void OrderOutcomePoll(double now)
+{
+	uintptr_t playerIntf = *(uintptr_t*)((uintptr_t)GameAddr(RVA_GLOBAL_PLAYER));
+	unsigned int scCount = 0;
+	uintptr_t* scStuff = NULL;
+	bool haveList = false;
+	if (playerIntf)
+	{
+		scCount = GetPlayerCharCount(playerIntf);
+		scStuff = GetPlayerCharStuff(playerIntf);
+		haveList = (scStuff != NULL && scCount > 0 && scCount <= 256);
+	}
+	OOT_Poll(reinterpret_cast<const size_t*>(scStuff), (int)scCount, haveList, now, ZonePauseIsPaused());
+}
+
+void OrderOutcomeNoteStopGuess(uintptr_t character, const char* guess, double now)
+{
+	OOT_NoteStopGuess((size_t)character, guess, now);
+}
+
+bool OrderOutcomeAppendSpanTotals(std::ostringstream& ss)
+{
+	static long lastOrders = -1, lastLongOrders = -1, lastLongStop = -1, lastLongFail = -1;
+	static long lastUserRec = -1, lastUnrec = -1;
+	OotTotals t = OOT_GetTotals();
+	ss << OrderOutcomeFormatSpanTotals(t.orders, t.longOrders, t.longStop, t.longFail, t.userRec, t.unrec);
+	bool changed = (t.orders != lastOrders || t.longOrders != lastLongOrders || t.longStop != lastLongStop
+	                || t.longFail != lastLongFail || t.userRec != lastUserRec || t.unrec != lastUnrec);
+	lastOrders = t.orders; lastLongOrders = t.longOrders; lastLongStop = t.longStop;
+	lastLongFail = t.longFail; lastUserRec = t.userRec; lastUnrec = t.unrec;
+	return changed;
+}
