@@ -10,6 +10,10 @@
 // in a single compare-exchange, so a reader never sees a lowered depth
 // without the raised epoch that goes with it, and an epoch that wraps cannot
 // carry into the depth.
+// Main mod-geometry mutations publish both halves by one 64-bit CAS;
+// generation and cache-store readers on bg/workers take one atomic snapshot.
+// This certificate input cannot tear into halves. A world reset advances
+// the epoch rather than zeroing it; the 32-bit epoch can wrap.
 static volatile LONGLONG g_geomWord = 0;
 
 static const LONGLONG GEOM_EPOCH_MASK = 0x00000000FFFFFFFFLL;

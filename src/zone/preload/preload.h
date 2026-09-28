@@ -65,7 +65,11 @@ struct QueuedZone {
 
 
 // =========================================================================
-// Preloading state (defined in preload.cpp)
+// Main-thread preload split units write this working state with plain stores,
+// and reset/compact it on save load and transition completion. The only
+// off-main table reader is TargetZoneLetter in transition_hook.cpp, at bracket
+// start; it reads numPreloaded and preloadedZones without allocation or lock.
+// There is no coherent publication; mixed values are tolerated diagnostics.
 // =========================================================================
 
 extern PreloadedZone preloadedZones[MAX_PRELOADED];

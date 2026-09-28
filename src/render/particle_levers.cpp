@@ -11,9 +11,18 @@
 #include <intrin.h>
 #include <math.h>
 
+namespace particle_levers_detail {
 typedef const void* (*PuTemplateName_t)(void* sys);   // returns const std::string&
+} // namespace particle_levers_detail
+using namespace particle_levers_detail;
+namespace particle_levers_detail {
 typedef void (*PuSetNonVisible_t)(void* sys, float seconds);
+} // namespace particle_levers_detail
+using namespace particle_levers_detail;
+namespace particle_levers_detail {
 typedef void (*PuUpdate_t)(void* sys, float dt);
+} // namespace particle_levers_detail
+using namespace particle_levers_detail;
 
 static PuTemplateName_t  s_getTemplateName      = NULL;
 static PuSetNonVisible_t s_setNonVisibleTimeout = NULL;
@@ -29,19 +38,21 @@ static const int    TICK_INTERVAL = 60;      // main-loop passes between walks
 static const size_t FX_WALK_MAX   = 4096;
 static const int    NAME_LEN      = 128;
 
-// Looping classification per live particle system, rebuilt from the active
-// list on every walk. Two tables: the main thread fills the one readers are
-// not using, then publishes it, so a reader (any thread) sees a complete table
-// that is at most one walk old. An address freed and reused by a new system
-// is reclassified on the next walk. Fill is capped below the table size so
-// every probe chain ends at an empty slot. age, the effect's age on that
-// walk, is read only by the main thread's next walk.
+// Main ParticleLevers_MainThreadTick rebuilds the inactive table, then
+// PublishTable atomically exchanges its index. Any-thread particle update
+// readers select one table through ParticleSystemIsLooping; only the main
+// next walk reads age. Save loading or disabled levers publish an empty table.
+// Looping is a behavior input: publication orders the completed fill, but
+// there is no reader pin or sequence check if a later walk reuses its table.
+namespace particle_levers_detail {
 struct SysEntry
 {
 	void* volatile sys;
 	volatile LONG  looping;
 	float          age;
 };
+} // namespace particle_levers_detail
+using namespace particle_levers_detail;
 static const int SYS_TABLE    = 1024;   // power of two
 static const int SYS_MAX_FILL = 768;
 static SysEntry      g_sysTable[2][SYS_TABLE];
@@ -90,7 +101,10 @@ bool ParticleSystemIsLooping(void* sys)
 	return e && e->looping != 0;
 }
 
+namespace particle_levers_detail {
 enum SysInsertResult { SYS_ADDED, SYS_SEEN, SYS_FULL };
+} // namespace particle_levers_detail
+using namespace particle_levers_detail;
 
 // Adds sys to the table being built; *entry is its slot unless SYS_FULL.
 // SYS_SEEN when it is already there (the active list can name one system twice).

@@ -15,59 +15,59 @@ namespace path_pool_detail {
 GateWindowStats SnapshotAndResetGateStats()
 {
 	GateWindowStats g;
-	g.n            = InterlockedExchange(&g_gatePassCount, 0);
-	g.totalUs      = InterlockedExchange64(&g_gatePassTotalUs, 0);
-	g.maxUs        = InterlockedExchange(&g_gatePassMaxUs, 0);
-	g.inTransition = InterlockedExchange(&g_gatePassInTransition, 0);
-	g.iterLimit    = InterlockedExchange(&g_gateIterLimit, 0);
-	g.stateFull    = InterlockedExchange(&g_gateStateFull, 0);
-	g.searches     = InterlockedExchange(&g_gateSearchCount, 0);
+	g.n            = InterlockedExchange(&g_ppWindow.g_gatePassCount, 0);
+	g.totalUs      = InterlockedExchange64(&g_ppWindow.g_gatePassTotalUs, 0);
+	g.maxUs        = InterlockedExchange(&g_ppWindow.g_gatePassMaxUs, 0);
+	g.inTransition = InterlockedExchange(&g_ppWindow.g_gatePassInTransition, 0);
+	g.iterLimit    = InterlockedExchange(&g_ppSearch.g_gateIterLimit, 0);
+	g.stateFull    = InterlockedExchange(&g_ppSearch.g_gateStateFull, 0);
+	g.searches     = InterlockedExchange(&g_ppSearch.g_gateSearchCount, 0);
 	return g;
 }
 
 void PrintPathQueueLine(double windowSec, const GateWindowStats& gws, LONG* servedOut)
 {
-	LONG arrived = InterlockedExchange(&g_arrivedCount, 0);
-	LONG served = InterlockedExchange(&g_servedCount, 0);
+	LONG arrived = InterlockedExchange(&g_ppWindow.g_arrivedCount, 0);
+	LONG served = InterlockedExchange(&g_ppWindow.g_servedCount, 0);
 	*servedOut = served;
-	LONG passes = InterlockedExchange(&g_passCount, 0);
-	LONGLONG passUs = InterlockedExchange64(&g_passTotalUs, 0);
+	LONG passes = InterlockedExchange(&g_ppWindow.g_passCount, 0);
+	LONGLONG passUs = InterlockedExchange64(&g_ppWindow.g_passTotalUs, 0);
 
-	LONG depthMax = InterlockedExchange(&g_depthMax, 0);
-	LONGLONG depthSum = InterlockedExchange64(&g_depthSum, 0);
-	LONG depthSamples = InterlockedExchange(&g_depthSamples, 0);
+	LONG depthMax = InterlockedExchange(&g_ppWindow.g_depthMax, 0);
+	LONGLONG depthSum = InterlockedExchange64(&g_ppWindow.g_depthSum, 0);
+	LONG depthSamples = InterlockedExchange(&g_ppWindow.g_depthSamples, 0);
 	double depthAvg = (depthSamples > 0) ? ((double)depthSum / (double)depthSamples) : 0.0;
 
-	double waitP50 = PPHistPercentileUs(&g_waitHist, 0.50) / 1000.0;
-	double waitP90 = PPHistPercentileUs(&g_waitHist, 0.90) / 1000.0;
-	double waitP99 = PPHistPercentileUs(&g_waitHist, 0.99) / 1000.0;
-	double waitMax = InterlockedExchange(&g_waitHist.maxUs, 0) / 1000.0;
+	double waitP50 = PPHistPercentileUs(&g_ppWindow.g_waitHist, 0.50) / 1000.0;
+	double waitP90 = PPHistPercentileUs(&g_ppWindow.g_waitHist, 0.90) / 1000.0;
+	double waitP99 = PPHistPercentileUs(&g_ppWindow.g_waitHist, 0.99) / 1000.0;
+	double waitMax = InterlockedExchange(&g_ppWindow.g_waitHist.maxUs, 0) / 1000.0;
 
-	double svcP50 = PPHistPercentileUs(&g_svcHist, 0.50) / 1000.0;
-	double svcP90 = PPHistPercentileUs(&g_svcHist, 0.90) / 1000.0;
-	double svcP99 = PPHistPercentileUs(&g_svcHist, 0.99) / 1000.0;
-	double svcMax = InterlockedExchange(&g_svcHist.maxUs, 0) / 1000.0;
-	LONGLONG svcTotalUs = InterlockedExchange64(&g_svcTotalUs, 0);
-	PPHistReset(&g_waitHist);
-	PPHistReset(&g_svcHist);
+	double svcP50 = PPHistPercentileUs(&g_ppWindow.g_svcHist, 0.50) / 1000.0;
+	double svcP90 = PPHistPercentileUs(&g_ppWindow.g_svcHist, 0.90) / 1000.0;
+	double svcP99 = PPHistPercentileUs(&g_ppWindow.g_svcHist, 0.99) / 1000.0;
+	double svcMax = InterlockedExchange(&g_ppWindow.g_svcHist.maxUs, 0) / 1000.0;
+	LONGLONG svcTotalUs = InterlockedExchange64(&g_ppWindow.g_svcTotalUs, 0);
+	PPHistReset(&g_ppWindow.g_waitHist);
+	PPHistReset(&g_ppWindow.g_svcHist);
 
-	LONG npcN    = InterlockedExchange(&g_priNpcCount, 0);
-	LONG playerN = InterlockedExchange(&g_priPlayerCount, 0);
-	LONG tierN   = InterlockedExchange(&g_priTierCount, 0);
+	LONG npcN    = InterlockedExchange(&g_ppWindow.g_priNpcCount, 0);
+	LONG playerN = InterlockedExchange(&g_ppWindow.g_priPlayerCount, 0);
+	LONG tierN   = InterlockedExchange(&g_ppWindow.g_priTierCount, 0);
 
-	LONG st0 = InterlockedExchange(&g_reqStatusCount[0], 0);
-	LONG st1 = InterlockedExchange(&g_reqStatusCount[1], 0);
-	LONG st2 = InterlockedExchange(&g_reqStatusCount[2], 0);
-	LONG st3 = InterlockedExchange(&g_reqStatusCount[3], 0);
-	LONG st4 = InterlockedExchange(&g_reqStatusCount[4], 0);
-	LONG direct = InterlockedExchange(&g_directCount, 0);
+	LONG st0 = InterlockedExchange(&g_ppWindow.g_reqStatusCount[0], 0);
+	LONG st1 = InterlockedExchange(&g_ppWindow.g_reqStatusCount[1], 0);
+	LONG st2 = InterlockedExchange(&g_ppWindow.g_reqStatusCount[2], 0);
+	LONG st3 = InterlockedExchange(&g_ppWindow.g_reqStatusCount[3], 0);
+	LONG st4 = InterlockedExchange(&g_ppWindow.g_reqStatusCount[4], 0);
+	LONG direct = InterlockedExchange(&g_ppWindow.g_directCount, 0);
 
-	LONG termIterLimit   = InterlockedExchange(&g_pathTermIterLimit, 0);
-	LONG termOpenSetFull = InterlockedExchange(&g_pathTermOpenSetFull, 0);
-	LONG termStateFull   = InterlockedExchange(&g_pathTermStateFull, 0);
-	LONG termOther       = InterlockedExchange(&g_pathTermOther, 0);
-	LONG astarOk   = InterlockedExchange(&g_pathSearchOk, 0);
-	LONG astarFail = InterlockedExchange(&g_pathSearchFail, 0);
+	LONG termIterLimit   = InterlockedExchange(&g_ppSearch.g_pathTermIterLimit, 0);
+	LONG termOpenSetFull = InterlockedExchange(&g_ppSearch.g_pathTermOpenSetFull, 0);
+	LONG termStateFull   = InterlockedExchange(&g_ppSearch.g_pathTermStateFull, 0);
+	LONG termOther       = InterlockedExchange(&g_ppSearch.g_pathTermOther, 0);
+	LONG astarOk   = InterlockedExchange(&g_ppSearch.g_pathSearchOk, 0);
+	LONG astarFail = InterlockedExchange(&g_ppSearch.g_pathSearchFail, 0);
 
 	// preamble = (pass total) - (the tightened svc total). svc's serve-start
 	// bound (hook_enqueueThreadSafe) is max(passStart, gatePassEnd,
@@ -131,9 +131,9 @@ void PrintPathQueueLine(double windowSec, const GateWindowStats& gws, LONG* serv
 // independently-reset pass totals never prints as negative.
 void PrintPathBusyLine(const GateWindowStats& gws)
 {
-	LONGLONG passUs    = InterlockedExchange64(&g_busyPassTotalUs, 0);
-	LONGLONG cause3Us  = QpcToUs(InterlockedExchange64(&g_busyCharCause3Ticks, 0));
-	LONGLONG otherUs   = QpcToUs(InterlockedExchange64(&g_busyCharOtherTicks, 0));
+	LONGLONG passUs    = InterlockedExchange64(&g_ppWindow.g_busyPassTotalUs, 0);
+	LONGLONG cause3Us  = QpcToUs(InterlockedExchange64(&g_ppSearch.g_busyCharCause3Ticks, 0));
+	LONGLONG otherUs   = QpcToUs(InterlockedExchange64(&g_ppSearch.g_busyCharOtherTicks, 0));
 	LONGLONG gateUs    = gws.totalUs;
 
 	std::ostringstream ss;
@@ -189,14 +189,14 @@ void PrintPathSlowLine(LONG servedThisWindow)
 	// it's 0, regardless of what is still sitting in g_slowPublished.
 	if (servedThisWindow <= 0)
 	{
-		InterlockedExchange(&g_slowResetRequested, 1);
+		PPSlowRequestReset();
 		LogMsg("PathSlow: (no completions this window)");
 		return;
 	}
 
 	PPSlowEntry entries[PP_SLOW_N];
 	int count = PPSlowSnapshot(entries);
-	InterlockedExchange(&g_slowResetRequested, 1);
+	PPSlowRequestReset();
 
 	if (count <= 0)
 	{
@@ -238,7 +238,7 @@ void PrintPathSlowLine(LONG servedThisWindow)
 
 void PrintAstarCostLine()
 {
-	PPClassStats* path = &g_classStats[PP_CLASS_PATH];
+	PPClassStats* path = &g_ppSearch.g_classStats[PP_CLASS_PATH];
 	LONG pathN = InterlockedExchange(&path->count, 0);
 	LONGLONG pathTicks = InterlockedExchange64(&path->totalTicks, 0);
 	LONGLONG pathIters = InterlockedExchange64(&path->totalIterations, 0);
@@ -256,7 +256,7 @@ void PrintAstarCostLine()
 
 	// nav/main/other's totals (totalTicks/totalIterations) feed a mean
 	// latency and mean iteration count per class.
-	PPClassStats* nav = &g_classStats[PP_CLASS_NAVMESH];
+	PPClassStats* nav = &g_ppSearch.g_classStats[PP_CLASS_NAVMESH];
 	LONG navN = InterlockedExchange(&nav->count, 0);
 	LONGLONG navTicks = InterlockedExchange64(&nav->totalTicks, 0);
 	LONGLONG navIters = InterlockedExchange64(&nav->totalIterations, 0);
@@ -265,7 +265,7 @@ void PrintAstarCostLine()
 	PPHistReset(&nav->latencyUs);
 	PPHistReset(&nav->iterNsHist);
 
-	PPClassStats* mainCls = &g_classStats[PP_CLASS_MAIN];
+	PPClassStats* mainCls = &g_ppSearch.g_classStats[PP_CLASS_MAIN];
 	LONG mainN = InterlockedExchange(&mainCls->count, 0);
 	LONGLONG mainTicks = InterlockedExchange64(&mainCls->totalTicks, 0);
 	LONGLONG mainIters = InterlockedExchange64(&mainCls->totalIterations, 0);
@@ -274,7 +274,7 @@ void PrintAstarCostLine()
 	PPHistReset(&mainCls->latencyUs);
 	PPHistReset(&mainCls->iterNsHist);
 
-	PPClassStats* other = &g_classStats[PP_CLASS_OTHER];
+	PPClassStats* other = &g_ppSearch.g_classStats[PP_CLASS_OTHER];
 	LONG otherN = InterlockedExchange(&other->count, 0);
 	LONGLONG otherTicks = InterlockedExchange64(&other->totalTicks, 0);
 	LONGLONG otherIters = InterlockedExchange64(&other->totalIterations, 0);
@@ -298,68 +298,19 @@ void PrintAstarCostLine()
 	ss << " ; boost:";
 	for (int o = 0; o < 3; ++o)
 	{
-		LONG tagNpc    = InterlockedExchange(&g_boostByTag[o][0], 0);
-		LONG tagPlayer = InterlockedExchange(&g_boostByTag[o][1], 0);
-		LONG reqNpc    = InterlockedExchange(&g_boostByReq[o][0], 0);
-		LONG reqPlayer = InterlockedExchange(&g_boostByReq[o][1], 0);
-		LONG reqUnk    = InterlockedExchange(&g_boostByReq[o][2], 0);
+		LONG tagNpc    = InterlockedExchange(&g_ppSearch.g_boostByTag[o][0], 0);
+		LONG tagPlayer = InterlockedExchange(&g_ppSearch.g_boostByTag[o][1], 0);
+		LONG reqNpc    = InterlockedExchange(&g_ppSearch.g_boostByReq[o][0], 0);
+		LONG reqPlayer = InterlockedExchange(&g_ppSearch.g_boostByReq[o][1], 0);
+		LONG reqUnk    = InterlockedExchange(&g_ppSearch.g_boostByReq[o][2], 0);
 		ss << " " << kOutcome[o] << "(tag npc=" << tagNpc << "/player=" << tagPlayer
 		   << " req npc=" << reqNpc << "/player=" << reqPlayer << "/unk=" << reqUnk << ")";
 	}
-	LONG disagree = InterlockedExchange(&g_boostDisagree, 0);
+	LONG disagree = InterlockedExchange(&g_ppSearch.g_boostDisagree, 0);
 	ss << " disagree=" << disagree;
 	LogMsg(ss.str());
 }
 
-void PrintNpcPathWaitLine(double windowSec)
-{
-	if (!g_haveLastWalk)
-		return;
-
-	NpcWaitWalkResult r = g_lastWalk;
-
-	double finP50 = PPHistPercentileUs(&g_finishedWaitHist, 0.50) / 1000000.0;
-	double finP90 = PPHistPercentileUs(&g_finishedWaitHist, 0.90) / 1000000.0;
-	double finMax = InterlockedExchange(&g_finishedWaitHist.maxUs, 0) / 1000000.0;
-	PPHistReset(&g_finishedWaitHist);
-
-	LONG reissueSamples       = InterlockedExchange(&g_reissueSamples, 0);
-	LONG reissueSamplesPlayer = InterlockedExchange(&g_reissueSamplesPlayer, 0);
-	// reissue(6) is character-samples in state 6 across this window's
-	// once-per-second polls (not a poll count: N characters seen in state 6
-	// on one poll add N, not 1), normalised to a /10s rate using windowSec
-	// (measured by PathPoolTickMain from the real interval between prints,
-	// so this is correct in both DEV's 10s and PROD's 30s window, and on a
-	// shorter first window). Split by player-owned, so this rate counts
-	// only NPCs.
-	double reissueRate10s       = (windowSec > 0.0) ? ((double)reissueSamples * 10.0 / windowSec) : 0.0;
-	double reissueRate10sPlayer = (windowSec > 0.0) ? ((double)reissueSamplesPlayer * 10.0 / windowSec) : 0.0;
-
-	std::ostringstream ss;
-	ss << std::fixed << std::setprecision(1);
-	ss << "NpcPathWait: waiting=" << r.waitingTotal
-	   << " (4:" << r.waiting4 << " 5:" << r.waiting5 << ")"
-	   << " finished p50/p90/max=" << finP50 << "/" << finP90 << "/" << finMax << "s"
-	   << " longest=" << r.longestWaitSec << "s\n"
-	   << "  failed(3,farDest)=" << r.failed3FarDest
-	   << " reissue(6)=" << reissueRate10s << "/10s"
-	   << " stopped(farDest,st0/1,noMove5s)=" << r.stoppedFarDestNoMove
-	   << " navWait(st0/1,zoneNotReady)=" << r.navWaitZoneNotReady;
-	if (r.faulted)
-		ss << " partial=1";
-	if (r.haveTop)
-	{
-		ss << "\n  top: (" << r.topPosX << "," << r.topPosZ << ")"
-		   << " zone(" << r.topGx << "," << r.topGy << ")"
-		   << " state=" << r.topState
-		   << " destDist=" << r.topDestDist
-		   << " zoneReady=" << r.topZoneReady;
-	}
-	ss << "\n  player: waiting=" << r.playerWaitingTotal
-	   << " (4:" << r.playerWaiting4 << " 5:" << r.playerWaiting5 << ")"
-	   << " reissue(6)=" << reissueRate10sPlayer << "/10s";
-	LogMsg(ss.str());
-}
 
 
 } // namespace path_pool_detail

@@ -15,17 +15,22 @@ namespace cpp_exception_detail {
 
 const size_t TYPE_CAP = 128;
 
-volatile LONG   g_count = 0;
-volatile LONG   g_recordSeq = 0;
-volatile LONG   g_typeLen = 0;
-volatile LONG64 g_lastAddr = 0;
-volatile LONG64 g_lastThrowInfo = 0;
-double          g_lastWriteSec = -1.0;
-char            g_typeName[TYPE_CAP] = { 0 };
+// Any-thread CppExceptionNote updates count/address atomically and fills
+// the last-type bytes before publishing their length and ThrowInfo. Main
+// token reporters and any-thread fault readers copy those live bytes without
+// a sequence check; mixed diagnostic names or independently updated fields
+// are tolerated. Session state is never reset; recordSeq is a separate claim.
+static volatile LONG   g_count = 0;
+static volatile LONG   g_recordSeq = 0;
+static volatile LONG   g_typeLen = 0;
+static volatile LONG64 g_lastAddr = 0;
+static volatile LONG64 g_lastThrowInfo = 0;
+static double          g_lastWriteSec = -1.0;
+static char            g_typeName[TYPE_CAP] = { 0 };
 
 // The throw's four parameters. The magic distinguishes a real throw from any
 // other use of the code, and a rethrow carries none of them.
-bool IsThrowWithTypeInfo(const EXCEPTION_RECORD* er)
+static bool IsThrowWithTypeInfo(const EXCEPTION_RECORD* er)
 {
 	if (er->NumberParameters < 4)
 		return false;
@@ -36,7 +41,7 @@ bool IsThrowWithTypeInfo(const EXCEPTION_RECORD* er)
 // Standalone and POD-only: MSVC 2010 rejects __try in a function holding
 // objects that need unwinding. A fault here re-enters the vectored handler,
 // which declines while the guard is held, and this __except takes it.
-bool ReadBytesGuarded(const void* addr, void* out, size_t size)
+static bool ReadBytesGuarded(const void* addr, void* out, size_t size)
 {
 	bool ok = true;
 	++g_inOurGuard;
@@ -52,7 +57,7 @@ bool ReadBytesGuarded(const void* addr, void* out, size_t size)
 	return ok;
 }
 
-bool ReadRva(uintptr_t base, unsigned long rva, void* out, size_t size)
+static bool ReadRva(uintptr_t base, unsigned long rva, void* out, size_t size)
 {
 	if (!base || !rva)
 		return false;
@@ -62,7 +67,7 @@ bool ReadRva(uintptr_t base, unsigned long rva, void* out, size_t size)
 // Walks throw -> ThrowInfo -> CatchableTypeArray -> first CatchableType ->
 // TypeDescriptor. Every field in that chain but the descriptor's name is a
 // 32-bit image-relative offset from the module base the throw carries.
-bool CaptureTypeDescriptorName(const EXCEPTION_RECORD* er, char* out, size_t cap)
+static bool CaptureTypeDescriptorName(const EXCEPTION_RECORD* er, char* out, size_t cap)
 {
 	uintptr_t base = (uintptr_t)er->ExceptionInformation[3];
 	const void* throwInfo = (const void*)er->ExceptionInformation[2];
@@ -120,9 +125,8 @@ void CppExceptionNote(const void* exceptionRecord)
 	if (!CaptureTypeDescriptorName(er, name, sizeof(name)))
 		return;
 
-	// The bytes go down before the length is published, so a concurrent
-	// reader sees either the previous name or this one, never a mix of the
-	// two beyond the published length.
+	// Publish the new length after the bytes; a concurrent diagnostic reader
+	// still copies the live array and can see mixed bytes during a rewrite.
 	size_t len = 0;
 	while (len + 1 < TYPE_CAP && name[len])
 	{

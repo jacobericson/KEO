@@ -11,6 +11,12 @@
 // which reach the admission policy only through this gate. Host-linkable: no
 // game or KenshiLib header, no heap allocation and no lock of its own.
 
+// Main raise/lower publishes inProgress and raises as individual atomics
+// under generator +152 when available; worker/bg admission reads those
+// scalars, never a copied set. Each behavior-input word is untorn. Init runs
+// before workers, each raise resets diagnostic deferred counters, and lower
+// clears the gate before signalling over. Waiters atomically count refusals;
+// main diagnostics tolerate mixed counts.
 struct ZoneResetGate
 {
 	volatile LONG inProgress;                        // 1 while the reset runs

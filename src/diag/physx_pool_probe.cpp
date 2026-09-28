@@ -27,7 +27,7 @@ namespace physx_pool_probe_detail
 {
 
 typedef __int64 (__fastcall *loadPhysXResource_t)(const void*, unsigned int);
-loadPhysXResource_t orig_loadPhysXResource = NULL;
+static loadPhysXResource_t orig_loadPhysXResource = NULL;
 
 // VS2010 x64 std::string: _Bx +0 (buffer or pointer), _Mysize +16, _Myres +24.
 const size_t OFF_STR_SIZE = 16;
@@ -47,19 +47,23 @@ const size_t MAX_NAME_BYTES = 256;
 
 // Resolved once at install, read-only afterwards. The classifier compares
 // against these instead of calling the loader from the pass-through.
-unsigned __int64 s_exeBase = 0;
-unsigned __int64 s_exeSize = 0;
+static unsigned __int64 s_exeBase = 0;
+static unsigned __int64 s_exeSize = 0;
 
-volatile LONG s_calls[PXP_ROLE_COUNT]    = { 0 };
-volatile LONG s_inflight[PXP_ROLE_COUNT] = { 0 };
-volatile LONG s_tid[PXP_ROLE_COUNT]      = { 0 };   // first thread seen in that role
-volatile LONG s_tidVaried[PXP_ROLE_COUNT]= { 0 };   // a second thread appeared in it
+// Any loadPhysXResource thread publishes counters and role masks with
+// individual Interlocked updates; main PhysXPoolTick reads them separately.
+// No coherent set is copied, so mixed diagnostic epochs are tolerated.
+// Initialized before hook install and cumulative for the session.
+static volatile LONG s_calls[PXP_ROLE_COUNT]    = { 0 };
+static volatile LONG s_inflight[PXP_ROLE_COUNT] = { 0 };
+static volatile LONG s_tid[PXP_ROLE_COUNT]      = { 0 };   // first thread seen in that role
+static volatile LONG s_tidVaried[PXP_ROLE_COUNT]= { 0 };   // a second thread appeared in it
 
-volatile LONG s_depth        = 0;
-volatile LONG s_maxDepth     = 0;
-volatile LONG s_concurrent   = 0;   // entries that found someone else already inside
-volatile LONG s_pairMask     = 0;   // roles seen inside together, accumulated
-volatile LONG s_maxDepthMask = 0;   // roles inside when the deepest nesting was reached
+static volatile LONG s_depth        = 0;
+static volatile LONG s_maxDepth     = 0;
+static volatile LONG s_concurrent   = 0;   // entries that found someone else already inside
+static volatile LONG s_pairMask     = 0;   // roles seen inside together, accumulated
+static volatile LONG s_maxDepthMask = 0;   // roles inside when the deepest nesting was reached
 
 // The accumulated mask above merges every overlap in the session, so it cannot
 // by itself say that one particular pair was ever inside together. These two
@@ -67,29 +71,27 @@ volatile LONG s_maxDepthMask = 0;   // roles inside when the deepest nesting was
 // company of its own role. Two navmesh-side entrants -- the reading that would
 // mean the generator's own serialisation is not what the source says -- shows
 // up here as a non-zero same-role count and nowhere else.
-volatile LONG s_concurrentByRole[PXP_ROLE_COUNT] = { 0 };
-volatile LONG s_sameRoleOverlap[PXP_ROLE_COUNT]  = { 0 };
+static volatile LONG s_concurrentByRole[PXP_ROLE_COUNT] = { 0 };
+static volatile LONG s_sameRoleOverlap[PXP_ROLE_COUNT]  = { 0 };
 
-volatile LONG s_scaleUnit    = 0;
-volatile LONG s_scaleNonUnit = 0;
+static volatile LONG s_scaleUnit    = 0;
+static volatile LONG s_scaleNonUnit = 0;
 
-PhysXPoolSet s_resources;
-PhysXPoolSet s_scales;
-PhysXPoolSet s_pairs;
+static PhysXPoolSet s_resources;
+static PhysXPoolSet s_scales;
+static PhysXPoolSet s_pairs;
 
-bool   s_installed  = false;
-double s_nextBeat   = 0.0;
-LONG   s_lastPrinted = -1;
+static bool   s_installed  = false;
+static double s_nextBeat   = 0.0;
+static LONG   s_lastPrinted = -1;
 const double kBeatSeconds = 60.0;
 
 
-// Raises s_maxDepth to `depth` and, on the attempt that actually wins the new
-// maximum, publishes the roles that were in flight with it. Testing the max
-// and storing the mask separately would let a shallower entrant overwrite a
-// deeper one's mask, leaving `deepest=` naming roles from an entry that was
-// not the deepest -- which is the one thing that field is for. `mask` is
-// ignored below depth 2, where there is nothing to name.
-void RaiseMaxDepth(LONG depth, LONG mask)
+// A successful max CAS is followed by a separate role-mask exchange. The
+// mask is diagnostic and not a coherent pair with the maximum: an earlier
+// winner can resume and publish its mask after a deeper winner. Below depth
+// two no mask is written.
+static void RaiseMaxDepth(LONG depth, LONG mask)
 {
 	for (;;)
 	{
@@ -108,7 +110,7 @@ void RaiseMaxDepth(LONG depth, LONG mask)
 // Which roles currently have a call in flight. Read without a lock, so it is
 // a snapshot of counters that are moving: it names the roles that overlapped,
 // which is the question, and makes no claim about the instant it was taken.
-LONG InFlightMask()
+static LONG InFlightMask()
 {
 	LONG mask = 0;
 	for (int i = 0; i < PXP_ROLE_COUNT; ++i)
@@ -123,7 +125,7 @@ LONG InFlightMask()
 // sites pass one by reference -- the physics pair pass a PhysFileParams whose
 // first member is that string -- so a bad pointer here would already have
 // faulted in the original a few instructions later. DEV builds only.
-unsigned __int64 HashName(const void* stringObj, unsigned int type)
+static unsigned __int64 HashName(const void* stringObj, unsigned int type)
 {
 	const unsigned char* s = (const unsigned char*)stringObj;
 	unsigned __int64 res  = *(const unsigned __int64*)(s + OFF_STR_RES);
@@ -161,7 +163,7 @@ private:
 };
 
 
-__int64 __fastcall hook_loadPhysXResource(const void* nameString, unsigned int type)
+static __int64 __fastcall hook_loadPhysXResource(const void* nameString, unsigned int type)
 {
 	unsigned __int64 ret = (unsigned __int64)_ReturnAddress();
 	bool insideExe = (s_exeSize != 0) && (ret >= s_exeBase) && (ret < s_exeBase + s_exeSize);
@@ -220,7 +222,7 @@ __int64 __fastcall hook_loadPhysXResource(const void* nameString, unsigned int t
 }
 
 
-bool ResolveExeExtent()
+static bool ResolveExeExtent()
 {
 	s_exeBase = (unsigned __int64)gameBase;
 	s_exeSize = 0;

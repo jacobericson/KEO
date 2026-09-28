@@ -112,7 +112,7 @@ bool BoostTryLockShared(volatile LONG* state)
 
 // try_lock, as inlined in SectionManager__isContentPending 0x3AB59D: fails
 // while any reader or the exclusive owner holds it.
-bool BoostTryLockExclusive(volatile LONG* state)
+static bool BoostTryLockExclusive(volatile LONG* state)
 {
 	LONG cur = *state;
 	for (;;)
@@ -126,7 +126,7 @@ bool BoostTryLockExclusive(volatile LONG* state)
 	}
 }
 
-namespace hooks_detail {
+namespace readiness_hook_detail {
 
 enum ReadyCaller { RC_POLL4 = 0, RC_MAIN = 1, RC_OFF = 2, RC_COUNT = 3 };
 // RZ_NOT_IN_WORLD: the scan read "outdoor instance not in the world", but the
@@ -138,55 +138,58 @@ enum ReadyClass  { RZ_NO_SECTION = 0, RZ_OUTDOOR_MISSING = 1, RZ_BUILDINGS_PENDI
 
 // Cumulative for the session. Incremented on any thread (Interlocked only),
 // read on the main thread by ReadinessReportTick.
-volatile LONG g_rdyCls[RC_COUNT][RZ_COUNT];
-volatile LONG g_rdyBypass    = 0;   // ready answers from the sections == 0 bypass
-volatile LONG g_rdyRuleReady = 0;   // rule answers, ready
-volatile LONG g_rdyRuleWait  = 0;   // rule answers, not ready
+// Written on any caller thread by hook_isContentPending; scan-cost fields
+// also come from ClassifyZoneReadiness through RecordScanCost. The main
+// ReadinessReportTick reads each atomic separately. Publication is each
+// Interlocked update, not a coherent set; mixed diagnostic counters are
+// tolerated. Never reset: cumulative for the session.
+struct ReadinessCounters
+{
+	volatile LONG g_rdyCls[RC_COUNT][RZ_COUNT];
+	volatile LONG g_rdyBypass;   // ready answers from the sections == 0 bypass
+	volatile LONG g_rdyRuleReady;   // rule answers, ready
+	volatile LONG g_rdyRuleWait;   // rule answers, not ready
+	// Collection scan QPC cost on all caller threads; max uses a CAS loop.
+	volatile LONG   g_rdyScans;
+	volatile LONG64 g_rdyScanTicks;
+	volatile LONG64 g_rdyScanMax;
+	volatile LONG64 g_rdyScanSlots;   // collection size at each scan, summed
+	// Samples off-main rule-off calls once per RDY_OFF_SAMPLE_MASK + 1.
+	volatile LONG g_rdyOffSample;
+};
+static ReadinessCounters g_rdy;
+union ReadinessCountersPodCheck { ReadinessCounters s; };
+static_assert(__alignof(ReadinessCounters) >= 8, "ReadinessCounters must be 8-byte aligned");
 
 #if ZONEHAND_STEP >= 2
-// The class the readiness contract saw, counted once per call the hook is
-// asked about -- private cell, adopted cell, or the global ZM+8 bypass
-// masking both. Counted where the class is read, which is ahead of every
-// answer the hook can return, so a zero here means no cell of that class was
-// ever asked about: these do not report the decision they gate.
-// Compiled only at this step: the contract itself does not exist below it
-// (hook_isContentPending), so these could otherwise only ever read zero.
-volatile LONG g_rdyContractPrivate = 0;
-volatile LONG g_rdyContractAdopted = 0;
-volatile LONG g_rdyContractGlobal  = 0;
+// Any hook caller atomically counts the contract class before its answer:
+// private, adopted or global bypass. The main reporter reads independently
+// published counters, tolerating mixed diagnostic values. No session reset.
+struct ReadinessContractCounters
+{
+	volatile LONG g_rdyContractPrivate;
+	volatile LONG g_rdyContractAdopted;
+	volatile LONG g_rdyContractGlobal;
+};
+static ReadinessContractCounters g_rdyContract;
+union ReadinessContractCountersPodCheck { ReadinessContractCounters s; };
 #endif
 
-// Cost of the collection scan (QPC ticks around the scan loop, all threads).
-// Session totals; the max is kept with a CAS loop.
-volatile LONG   g_rdyScans     = 0;
-volatile LONG64 g_rdyScanTicks = 0;
-volatile LONG64 g_rdyScanMax   = 0;
-volatile LONG64 g_rdyScanSlots = 0;   // collection size at each scan, summed
-
-// Off-main sampling while islandReadinessRule is off: only 1 call in
-// RDY_OFF_SAMPLE_MASK + 1 is classified (both try-locks and the scan); the
-// others answer as today without touching either lock. With the rule on every
-// call is classified, since its answer depends on the class.
-volatile LONG g_rdyOffSample   = 0;
-const LONG    RDY_OFF_SAMPLE_MASK = 15;   // 1 in 16
-
-// Sanity cap on the collection scan. The collection grows by one slot per
-// concurrently loaded section and reuses empty slots; a count past this means
-// we are not reading what we think we are.
-const int RDY_SC_MAX_SCAN = 8192;
+const LONG RDY_OFF_SAMPLE_MASK = 15;   // 1 in 16 off-main rule-off calls
+const int RDY_SC_MAX_SCAN = 8192;      // defensive collection-scan cap
 
 // Any thread: records one scan's cost (Interlocked only).
-void RecordScanCost(LONG64 ticks, int slots)
+static void RecordScanCost(LONG64 ticks, int slots)
 {
 	if (ticks < 0)
 		ticks = 0;
-	InterlockedIncrement(&g_rdyScans);
-	InterlockedExchangeAdd64(&g_rdyScanTicks, ticks);
-	InterlockedExchangeAdd64(&g_rdyScanSlots, (LONG64)slots);
-	LONG64 cur = InterlockedCompareExchange64(&g_rdyScanMax, 0, 0);
+	InterlockedIncrement(&g_rdy.g_rdyScans);
+	InterlockedExchangeAdd64(&g_rdy.g_rdyScanTicks, ticks);
+	InterlockedExchangeAdd64(&g_rdy.g_rdyScanSlots, (LONG64)slots);
+	LONG64 cur = InterlockedCompareExchange64(&g_rdy.g_rdyScanMax, 0, 0);
 	while (ticks > cur)
 	{
-		LONG64 prev = InterlockedCompareExchange64(&g_rdyScanMax, ticks, cur);
+		LONG64 prev = InterlockedCompareExchange64(&g_rdy.g_rdyScanMax, ticks, cur);
 		if (prev == cur)
 			break;
 		cur = prev;
@@ -194,14 +197,14 @@ void RecordScanCost(LONG64 ticks, int slots)
 }
 
 } // namespace
-using namespace hooks_detail;
+using namespace readiness_hook_detail;
 
 // Any thread: no allocation, no logging, never blocks. splitMap = false skips
 // the +0x1E0 noSection/outdoorMissing split (returns RZ_NOT_IN_WORLD instead).
 //
 // External linkage: the island re-issue readiness backstop (island_orders.cpp,
 // k7_observe.cpp, k7_reissue.cpp, via zone_readiness_classify.h) calls it. The
-// RZ_* names and helpers it uses come from hooks_detail above.
+// RZ_* names and helpers it uses come from readiness_hook_detail above.
 int ClassifyZoneReadiness(uintptr_t mgr, const int* pos, bool splitMap)
 {
 	if (!mgr || !pos || !fn_lookupSection || !fn_boostUnlock || !fn_boostUnlockShared)
@@ -269,7 +272,7 @@ int ClassifyZoneReadiness(uintptr_t mgr, const int* pos, bool splitMap)
 	return hasSection ? RZ_OUTDOOR_MISSING : RZ_NO_SECTION;
 }
 
-namespace hooks_detail {
+namespace readiness_hook_detail {
 
 // Main thread only. The "state-4 poll" class: main thread and zone manager in
 // state 4, for ANY zone. The zone's accessibility
@@ -281,19 +284,19 @@ namespace hooks_detail {
 // lenient sections == 0 answer. A flag set by a hook around
 // ZoneManager__stateMachineDriver 0xA0E950 would tell the poll apart exactly
 // (not done now).
-bool IsStatePoll4()
+static bool IsStatePoll4()
 {
 	void* zm = g_cachedZoneMgr;
 	return zm && GetZoneState(zm) == 4;
 }
 
-inline LONG ReadCounter(volatile LONG* c)
+static inline LONG ReadCounter(volatile LONG* c)
 {
 	return InterlockedCompareExchange(c, 0, 0);
 }
 
 } // namespace
-using namespace hooks_detail;
+using namespace readiness_hook_detail;
 
 namespace hooks_detail
 { // namespace hooks_detail
@@ -335,20 +338,20 @@ void ReadinessReportTick(double now)
 	for (int c = 0; c < RC_COUNT; ++c)
 		for (int z = 0; z < RZ_COUNT; ++z)
 		{
-			v[c][z] = ReadCounter(&g_rdyCls[c][z]);
+			v[c][z] = ReadCounter(&g_rdy.g_rdyCls[c][z]);
 			sig += (unsigned long)v[c][z];
 		}
-	LONG bypass = ReadCounter(&g_rdyBypass);
-	LONG rReady = ReadCounter(&g_rdyRuleReady);
-	LONG rWait  = ReadCounter(&g_rdyRuleWait);
-	LONG   scans     = ReadCounter(&g_rdyScans);
-	LONG64 scanTicks = InterlockedCompareExchange64(&g_rdyScanTicks, 0, 0);
-	LONG64 scanMax   = InterlockedCompareExchange64(&g_rdyScanMax, 0, 0);
-	LONG64 scanSlots = InterlockedCompareExchange64(&g_rdyScanSlots, 0, 0);
+	LONG bypass = ReadCounter(&g_rdy.g_rdyBypass);
+	LONG rReady = ReadCounter(&g_rdy.g_rdyRuleReady);
+	LONG rWait  = ReadCounter(&g_rdy.g_rdyRuleWait);
+	LONG   scans     = ReadCounter(&g_rdy.g_rdyScans);
+	LONG64 scanTicks = InterlockedCompareExchange64(&g_rdy.g_rdyScanTicks, 0, 0);
+	LONG64 scanMax   = InterlockedCompareExchange64(&g_rdy.g_rdyScanMax, 0, 0);
+	LONG64 scanSlots = InterlockedCompareExchange64(&g_rdy.g_rdyScanSlots, 0, 0);
 #if ZONEHAND_STEP >= 2
-	LONG cPriv = ReadCounter(&g_rdyContractPrivate);
-	LONG cAdopt = ReadCounter(&g_rdyContractAdopted);
-	LONG cGlobal = ReadCounter(&g_rdyContractGlobal);
+	LONG cPriv = ReadCounter(&g_rdyContract.g_rdyContractPrivate);
+	LONG cAdopt = ReadCounter(&g_rdyContract.g_rdyContractAdopted);
+	LONG cGlobal = ReadCounter(&g_rdyContract.g_rdyContractGlobal);
 #endif
 	sig += (unsigned long)bypass + (unsigned long)rReady + (unsigned long)rWait
 	     + (unsigned long)scans
@@ -477,9 +480,9 @@ bool hook_isContentPending(void* manager, void* zonePos)
 	int cellClassContract = ZoneReadinessBridgeClassOf(gxContract, gyContract);
 	switch (ZoneReadinessContractBucket(cellClassContract, justLoadedAGame))
 	{
-	case ZONE_READY_BUCKET_GLOBAL:  InterlockedIncrement(&g_rdyContractGlobal);  break;
-	case ZONE_READY_BUCKET_ADOPTED: InterlockedIncrement(&g_rdyContractAdopted); break;
-	case ZONE_READY_BUCKET_PRIVATE: InterlockedIncrement(&g_rdyContractPrivate); break;
+	case ZONE_READY_BUCKET_GLOBAL:  InterlockedIncrement(&g_rdyContract.g_rdyContractGlobal);  break;
+	case ZONE_READY_BUCKET_ADOPTED: InterlockedIncrement(&g_rdyContract.g_rdyContractAdopted); break;
+	case ZONE_READY_BUCKET_PRIVATE: InterlockedIncrement(&g_rdyContract.g_rdyContractPrivate); break;
 	case ZONE_READY_BUCKET_NONE:    break;   // no counter: the bypass count already covers these
 	}
 #endif
@@ -502,7 +505,7 @@ bool hook_isContentPending(void* manager, void* zonePos)
 	if (onMainThread)
 		caller = IsStatePoll4() ? RC_POLL4 : RC_MAIN;
 	bool classify = onMainThread || zone::g_zoneCfg.islandReadinessRuleEnabled
-	             || (InterlockedIncrement(&g_rdyOffSample) & RDY_OFF_SAMPLE_MASK) == 0;
+	             || (InterlockedIncrement(&g_rdy.g_rdyOffSample) & RDY_OFF_SAMPLE_MASK) == 0;
 	// The +0x1E0 split (diagnostic) runs on the main thread and in the sampled
 	// rule-off calls; off the main thread with the rule on it is skipped, so
 	// the rule path adds no contention against the game's blocking map lookups.
@@ -511,7 +514,7 @@ bool hook_isContentPending(void* manager, void* zonePos)
 	if (classify)
 	{
 		cls = ClassifyZoneReadiness((uintptr_t)manager, pos, splitMap);
-		InterlockedIncrement(&g_rdyCls[caller][cls]);
+		InterlockedIncrement(&g_rdy.g_rdyCls[caller][cls]);
 	}
 
 	// readinessOverrides off: the original's answer for every caller. The queue
@@ -547,14 +550,14 @@ bool hook_isContentPending(void* manager, void* zonePos)
 	if (zone::g_zoneCfg.islandReadinessRuleEnabled && classify && caller != RC_POLL4 && cls != RZ_UNKNOWN)
 	{
 		bool ready = (cls == RZ_BUILDINGS_PENDING);
-		InterlockedIncrement(ready ? &g_rdyRuleReady : &g_rdyRuleWait);
+		InterlockedIncrement(ready ? &g_rdy.g_rdyRuleReady : &g_rdy.g_rdyRuleWait);
 		return ready;
 	}
 #endif
 
 	if (sectionCount > 0)
 		return false;
-	InterlockedIncrement(&g_rdyBypass);
+	InterlockedIncrement(&g_rdy.g_rdyBypass);
 
 	// Sections drained: return ready regardless of navmesh state.
 	// Macro-transitions: the original navmesh-wait deferral (95% faster state 4).

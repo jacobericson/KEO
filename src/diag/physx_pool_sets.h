@@ -51,6 +51,10 @@ size_t PhysXPoolFormatRoleMask(char* out, size_t cap, unsigned long mask);
 
 const int PXP_SET_SLOTS = 512;
 
+// Probe callers on any load thread atomically insert hashes and update each
+// total; main heartbeat reads totals independently. Each CAS/counter update
+// publishes itself, so mixed diagnostic totals are tolerated. Reset only at
+// installation before the detour is live (or isolated host tests).
 struct PhysXPoolSet
 {
 	volatile __int64 slot[PXP_SET_SLOTS];   // 0 = empty; a hash is forced non-zero

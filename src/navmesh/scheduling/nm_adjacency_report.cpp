@@ -2,6 +2,9 @@
 // The 60-second report uses FixedLogBuf and prints three lines.
 #include "navmesh/scheduling/nm_adjacency_internal.h"
 #include "base/fixed_log_buf.h"
+namespace nm_adjacency_detail {
+static const double kBeatSeconds = 60.0;
+} // namespace nm_adjacency_detail
 using namespace nm_adjacency_detail;
 static void Field(FixedLogBuf* o, const char* name, LONG v, bool live)
 {

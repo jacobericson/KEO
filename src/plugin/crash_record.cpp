@@ -49,7 +49,10 @@ static volatile LONG g_crashSeq = 0;
 // Storage belongs to the caller, so the frame a record is built on is the
 // caller's choice. A stack overflow is recorded on the stack that overflowed,
 // and a second fault there would cost the minidump.
+namespace crash_record_detail {
 typedef FlbExternal CrashBuf;
+} // namespace crash_record_detail
+using namespace crash_record_detail;
 
 static void cbReg(CrashBuf* o, const char* name, unsigned __int64 v)
 {
@@ -70,6 +73,10 @@ static volatile LONG g_cppExRecordsWritten = 0;
 
 // The fault the vectored handler last recorded, so the unhandled filter can
 // tell the same event arriving a second time from a genuinely new one.
+// Any vectored fault writer atomically updates address then code; any
+// unhandled-filter reader tests those scalars to suppress a duplicate record.
+// They are session state with no reset or coherent pair publication, so
+// mixed diagnostic identity can affect attribution under concurrent faults.
 static volatile LONG64 g_lastRecordedAddr = 0;
 static volatile LONG   g_lastRecordedCode = 0;
 
@@ -86,8 +93,9 @@ bool ExitCaptureAnyCrashRecorded()
 
 // Loaded modules, captured once at startPlugin (see SnapshotModuleBases).
 // Reading this array at fault time touches no loader state and takes no
-// lock: it is a plain array this thread only ever reads after the one
-// write that fills it. A module the game loads after startup -- a codec, a
+// lock: main SnapshotModuleBases fills it before handlers are registered;
+// main attribution and any-thread fault/exit readers then see an immutable
+// array. Never reset or republished, so no reader can see a torn update. A module the game loads after startup -- a codec, a
 // late plugin -- never appears here, and this curated table also drops
 // whatever SelectModuleBases had no room for; EmitCrashRecord's addrMod=
 // resolves against the fuller g_rawModuleBases and a live VirtualQuery
@@ -111,6 +119,9 @@ const ModuleBaseEntry* CapturedModuleBases(int* outCount)
 // the curated g_moduleBases) so resolving one address against it never
 // depends on whether that address's module survived the cap.
 static const int kRawModuleCap = 256;
+// Same startup writer and fault/exit readers as the curated table: filled
+// before handler registration, then immutable. Count/valid are plain startup
+// publication, with no reset or concurrent update to tear.
 static ModuleBaseEntry g_rawModuleBases[kRawModuleCap];
 static int             g_rawModuleCount = 0;
 // False only if CreateToolhelp32Snapshot itself failed at startup; a real,
@@ -481,11 +492,14 @@ static void EmitMinimalRecord(const char* kind, LONG seq, PEXCEPTION_POINTERS pE
 // The throw ring's one exit. Opens the file once, writes what the ring holds
 // and closes it; a second call with nothing pending opens nothing, so the two
 // death paths can both call it for the same death.
+namespace crash_record_detail {
 struct ThrowFlushCtx
 {
 	HANDLE h;
 	long   written;
 };
+} // namespace crash_record_detail
+using namespace crash_record_detail;
 
 static void ThrowFlushSink(void* ctx, const char* text, size_t len)
 {

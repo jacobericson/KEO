@@ -8,7 +8,7 @@
 // without the counters and caller-identity plumbing hook_isContentPending
 // carries around it.
 //
-// Values mirror readiness_hook.cpp's own hooks_detail::ReadyClass
+// Values mirror readiness_hook.cpp's own readiness_hook_detail::ReadyClass
 // enum, duplicated here under a different prefix so the two enums never
 // collide by name when both files are built.
 enum

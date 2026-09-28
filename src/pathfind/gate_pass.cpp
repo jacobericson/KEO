@@ -11,6 +11,12 @@
 
 gatesFindPath_t orig_gatesFindPath = NULL;
 
+// Path GatePassEnd fills a ring slot with seq -1, then publishes its record
+// index and advances s_written. Main tick/transition reporters copy between
+// two matching index reads; an overwritten or changed copy is omitted and
+// counted lost. Diagnostic records never accept a torn copy; the session
+// ring wraps without a reset. s_cur is the path-private in-progress record.
+namespace gate_pass_detail {
 struct GatePassRecord
 {
 	volatile LONG seq;            // record index once complete; -1 while written
@@ -22,6 +28,8 @@ struct GatePassRecord
 	LONGLONG ticks[4];
 	int      iterLimit[3], stateFull[3];
 };
+} // namespace gate_pass_detail
+using namespace gate_pass_detail;
 
 static const int GP_RING = 64;
 static GatePassRecord s_ring[GP_RING];
@@ -37,7 +45,15 @@ static __declspec(thread) int t_gateLoop = -1;   // loop of the search in progre
 
 static volatile LONG s_otherRva = 0;             // first unrecognised return RVA
 
+// Any dismissal caller reserves an index and publishes the payload with
+// that seq after writing it. Main FindDismissal accepts a copy only between
+// equal index reads. Diagnostic failures are omitted; the session ring wraps
+// without a reset. There is no writer exclusion if outstanding producers
+// wrap onto one slot, so mixed diagnostic payloads can still be tolerated.
+namespace gate_pass_detail {
 struct Dismissal { volatile LONG seq; LONG gen; LONGLONG qpc; unsigned char onMain; };
+} // namespace gate_pass_detail
+using namespace gate_pass_detail;
 static const int GP_DIS = 8;
 static Dismissal     s_dis[GP_DIS];
 static volatile LONG s_disCount = 0;

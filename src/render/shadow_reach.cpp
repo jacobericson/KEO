@@ -36,7 +36,10 @@ static const float AABB_GROW    = 20.0f;
 static const float BIG_EXTENT   = 500.0f;
 
 static const int REACH_CASCADES = 4;
+namespace shadow_reach_detail {
 enum { R_IN, R_REACH, R_CUT, R_INF, R_BIG, R_FIELDS };
+} // namespace shadow_reach_detail
+using namespace shadow_reach_detail;
 static volatile LONG s_counts[REACH_CASCADES][R_FIELDS];
 static volatile LONG s_cullIn  = 0;
 static volatile LONG s_cullCut = 0;
@@ -47,31 +50,70 @@ static volatile LONG s_sunElev = 0;
 static volatile LONG s_sunAz   = 0;
 static volatile LONG s_sunSeen = 0;
 
+namespace shadow_reach_detail {
 struct OgreFastArray
 {
 	void** data;
 	size_t size;
 	size_t capacity;
 };
+} // namespace shadow_reach_detail
+using namespace shadow_reach_detail;
 
 // ObjectData is passed by value, which the x64 ABI passes as a pointer to the
 // caller's copy; the original advances that copy's pointers.
+namespace shadow_reach_detail {
 typedef void (*CullFrustum_t)(size_t numNodes, void* objData, const void* frustum,
                               unsigned visMask, OgreFastArray* out, const void* lodCamera);
+} // namespace shadow_reach_detail
+using namespace shadow_reach_detail;
+namespace shadow_reach_detail {
 typedef void (*SetupCascade_t)(void* csm, void* light, void* viewport, void* csmCamera,
                                void* mainCamera, int cascade);
+} // namespace shadow_reach_detail
+using namespace shadow_reach_detail;
+namespace shadow_reach_detail {
 typedef void (*RenderPhase_t)(void* target, void* viewport, void* camera, const void* lodCamera,
                               unsigned char firstRq, unsigned char lastRq, bool includeOverlays);
 // Struct returns go through a hidden pointer in rdx (this in rcx).
+} // namespace shadow_reach_detail
+using namespace shadow_reach_detail;
+namespace shadow_reach_detail {
 typedef void* (*GetWorldAabb_t)(const void* obj, float* centerHalf6);
+} // namespace shadow_reach_detail
+using namespace shadow_reach_detail;
+namespace shadow_reach_detail {
 typedef float* (*CamVector_t)(const void* cam, float* out3);
+} // namespace shadow_reach_detail
+using namespace shadow_reach_detail;
+namespace shadow_reach_detail {
 typedef const float* (*CamVectorRef_t)(const void* cam);
+} // namespace shadow_reach_detail
+using namespace shadow_reach_detail;
+namespace shadow_reach_detail {
 typedef const float* (*FrustumFovY_t)(const void* frustum);   // Radian&
+} // namespace shadow_reach_detail
+using namespace shadow_reach_detail;
+namespace shadow_reach_detail {
 typedef float (*FrustumAspect_t)(const void* frustum);
+} // namespace shadow_reach_detail
+using namespace shadow_reach_detail;
+namespace shadow_reach_detail {
 typedef int (*ViewportWidth_t)(const void* viewport);
+} // namespace shadow_reach_detail
+using namespace shadow_reach_detail;
+namespace shadow_reach_detail {
 typedef void* (*ParentNode_t)(const void* movable);
+} // namespace shadow_reach_detail
+using namespace shadow_reach_detail;
+namespace shadow_reach_detail {
 typedef bool (*FrustumFlag_t)(const void* frustum);
+} // namespace shadow_reach_detail
+using namespace shadow_reach_detail;
+namespace shadow_reach_detail {
 typedef const float* (*FrustumOffset_t)(const void* frustum);   // Vector2&
+} // namespace shadow_reach_detail
+using namespace shadow_reach_detail;
 
 static const char* const OGRE_MODULE = "OgreMain_x64.dll";
 
@@ -117,10 +159,13 @@ static bool s_cullEnabled    = false;
 static bool DiagActive() { return s_diagEnabled && g_renderCfg.shadowReachDiag; }
 static bool CullActive() { return s_cullEnabled && g_renderCfg.shadowReachCull; }
 
-// Single writer (the main thread), a sequence count for the cull workers:
-// odd while being written. The barrier already orders the arm before their
-// reads; a reader that still sees a change mid-read leaves the list alone.
-// The render-phase detour runs on the main thread and reads it directly.
+// Main PublishSlot arms the shadow camera and reach planes with seq odd
+// while writing, even when published. Ogre cull workers copy through one
+// ReadSlot attempt; main render phase reads directly. Disarmed after the
+// final cascade and on refused or disabled arm paths. A torn behavior input
+// is rejected: the original caster list remains, costing only missed culling
+// and diagnostic tallies for that call.
+namespace shadow_reach_detail {
 struct ReachSlot
 {
 	volatile LONG        seq;
@@ -130,6 +175,8 @@ struct ReachSlot
 	int                  count;     // reach planes; -1 when they could not be built
 	ReachPlane           planes[REACH_MAX_PLANES];
 };
+} // namespace shadow_reach_detail
+using namespace shadow_reach_detail;
 static ReachSlot s_slot;
 
 static void PublishSlot(const void* frustum, int cascade, int cascades,
@@ -168,11 +215,14 @@ static bool ReadSlot(const void* frustum, int* cascade, int* count, ReachPlane* 
 	return s_slot.seq == seq;
 }
 
+namespace shadow_reach_detail {
 struct CasterJudge
 {
 	const ReachPlane* planes;
 	int               count;
 };
+} // namespace shadow_reach_detail
+using namespace shadow_reach_detail;
 
 // Worker threads: getWorldAabb is a leaf read of the object's SoA box.
 static ReachVerdict JudgeCaster(const void* obj, void* ctx)

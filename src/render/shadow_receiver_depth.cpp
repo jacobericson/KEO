@@ -30,6 +30,10 @@ static const int   MAX_CASCADES = 4;
 // FloatOrderKey(+infinity): nothing folded yet.
 static const LONG EMPTY_KEY = 0x7F800000;
 
+// Main shadow-start/reset publishes the aligned camera pointer; Ogre cull
+// workers test it and atomically fold minima/counts. Main shadow-start and
+// reporter exchange fields individually; a mixed window is tolerated for
+// diagnostics. Reset disarms and clears each field, with no coherent set.
 static const void* volatile s_camera = NULL;   // the main camera being folded
 static volatile LONG s_minAll   = EMPTY_KEY;
 static volatile LONG s_minSmall = EMPTY_KEY;
@@ -37,6 +41,7 @@ static volatile LONG s_infCount = 0;
 static volatile LONG s_bigCount = 0;
 
 // Main thread only: the window's frames and the last frame's snapshot.
+namespace shadow_receiver_depth_detail {
 struct DepthWindow
 {
 	LONG  frames;                 // shadow renders with a candidate
@@ -48,6 +53,8 @@ struct DepthWindow
 	int   lastCascades;
 	float lastSplits[MAX_CASCADES + 1];
 };
+} // namespace shadow_receiver_depth_detail
+using namespace shadow_receiver_depth_detail;
 static DepthWindow s_window;
 
 static void FoldMin(volatile LONG* target, float v)

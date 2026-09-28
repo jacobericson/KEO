@@ -15,6 +15,7 @@
 #include "navmesh/workers/nm_worker_gate_policy.h"
 #include "navmesh/workers/nm_retire_policy.h"
 namespace nm_workers_detail {
+enum { CLAIM_SLOT_BG = NAVMESH_WORKER_COUNT, CLAIM_SLOT_COUNT = NAVMESH_WORKER_COUNT + 1 };
 extern volatile long g_cloneProcessing;
 extern volatile long g_processJobOwnerTid;
 extern __declspec(thread) int t_pjDepth;
@@ -25,12 +26,8 @@ extern volatile long g_workerCleanupInFlight;
 extern volatile long g_nmStopDropCount;
 extern volatile LONG g_workerPhase[];
 extern volatile long g_pjLockReady;
-extern void* volatile g_unloadingZone;
 extern nmgGetSeedPointsAdj_t orig_getSeedPointsAdj;
 extern __declspec(thread) uintptr_t t_busyNmg;
-extern const int CLAIM_SLOT_BG;
-extern const int CLAIM_SLOT_COUNT;
-extern void* volatile g_claimZone[];
 
 bool WorkerCleanupBegin();
 bool EnterProcessJobCSStopAware();
@@ -184,10 +181,7 @@ static inline void NoteClaimAge(bool isMiss, LONGLONG claimQpc, LONGLONG now)
 		NoteMaxUs(&navmesh::g_nmCache.nmClaimAgeHitMaxUs, us);
 	}
 }
-static inline uintptr_t UnloadingZone()
-{
-	return (uintptr_t)InterlockedCompareExchangePointer(&g_unloadingZone, NULL, NULL);
-}
+uintptr_t UnloadingZone();
 // --------------------------------------------------------------------
 // Scratch buffer lazy-init
 // --------------------------------------------------------------------
@@ -281,16 +275,8 @@ static inline void WorkerBusyLeave()
 	}
 	NoteBusyBridge(BusyBridgeLeave(GameBusyBridgeOps(nmg)));
 }
-static inline void ClaimZoneSet(int slot, uintptr_t zone)
-{
-	if (slot >= 0 && slot < CLAIM_SLOT_COUNT)
-		InterlockedExchangePointer(&g_claimZone[slot], (void*)zone);
-}
+void ClaimZoneSet(int slot, uintptr_t zone);
 
-static inline void ClaimZoneClear(int slot)
-{
-	if (slot >= 0 && slot < CLAIM_SLOT_COUNT)
-		InterlockedExchangePointer(&g_claimZone[slot], NULL);
-}
+void ClaimZoneClear(int slot);
 } // namespace nm_workers_detail
 #endif // KENSHI_ZONE_OPT_NM_WORKERS_INTERNAL_H

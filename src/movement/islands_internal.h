@@ -1,7 +1,7 @@
 // islands_internal.h - Private glue for island routing and tracking.
-// Shared mutable state has one definition in islands.cpp; component-private
-// state stays with island_components.cpp. Inline field/grid helpers are in
-// islands_inline.h, inside islands_detail.
+// Overlay state and entry points live in island_overlay_internal.h; the
+// adapters and tracker entry points remain here. Inline field/grid helpers
+// are in islands_inline.h, inside islands_detail.
 //
 // Used by the entry, components, hooks, stuck diagnostics, reissue tracker
 // and edge-ring filter. Shared helpers and state use the named namespace,
@@ -44,46 +44,5 @@ void IslandReissueAppendDiag(std::ostringstream& ss);
 // above, since Islands: is compiled out in PROD.
 void IslandReissueAppendSpanDiag(std::ostringstream& ss);
 
-
-namespace islands_detail {
-
-extern volatile long g_isInCalls;
-extern volatile long g_isInFlips;
-extern volatile long g_isInSeqFail;
-extern volatile long g_isInFarTrue;
-extern volatile long g_isInTrueZero;
-extern volatile long g_isInTrueLabel;
-extern volatile long g_isInMaxSpan;
-extern volatile long g_isInSpanUnk;
-extern volatile long g_isInVanTrue;
-extern volatile long g_isInVanFalse;
-extern volatile long g_isInRuleFlip;
-extern volatile long g_isInRuleUnk;
-extern volatile long g_isInFlipSpan[ISLAND_SPAN_BUCKETS];
-extern volatile long g_getIslCalls;
-extern volatile long g_getIslAppended;
-extern volatile long g_getIslFallback;
-extern volatile long g_hooksInstalled;
-extern uintptr_t     g_builderZm;
-extern unsigned int  g_snapGen;
-extern unsigned int  g_setBSig;
-extern bool          g_haveSig;
-extern bool          g_rebuildRequested;
-extern double        g_lastEligibility;
-extern int            g_setBAccessible;
-extern int            g_curCompCount;
-extern int            g_curModZones;
-
-bool SnapReadComps(uintptr_t a, uintptr_t b, int* ca, int* cb);
-int SnapCopyMembers(uintptr_t t, int* outComp, uintptr_t* outZm, unsigned short* buf, int maxCount);
-bool AppendLektor(uintptr_t lek, uintptr_t z);
-void ResetBuilder();
-void WalkSetB(uintptr_t zm);
-void Rebuild(uintptr_t zm, double now);
-int CountUnexplained(uintptr_t zm);
-int CurComp(uintptr_t zm, uintptr_t z);
-int RouterList(uintptr_t zm, uintptr_t t, unsigned short* out, int maxOut);
-
-} // namespace
 
 #endif // KENSHI_ZONE_OPT_ISLANDS_INTERNAL_H

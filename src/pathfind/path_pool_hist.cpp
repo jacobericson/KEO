@@ -4,6 +4,14 @@
 #include "pathfind/path_pool_internal.h"
 
 namespace path_pool_detail {
+PathSearchWindow g_ppSearch;
+} // namespace path_pool_detail
+namespace path_pool_hist_detail {
+union PathSearchWindowPodCheck { path_pool_detail::PathSearchWindow s; };
+static_assert(__alignof(path_pool_detail::PathSearchWindow) >= 8, "PathSearchWindow must be 8-byte aligned");
+} // namespace path_pool_hist_detail
+namespace path_pool_detail {
+
 
 void PPHistAdd(PPHist* h, LONGLONG us)
 {
@@ -63,80 +71,39 @@ void PPHistReset(PPHist* h)
 }
 
 
-// =========================================================================
-// PathQueue: / GateRate: window state (fed by the four hooks)
-// =========================================================================
-
-volatile LONG     g_passCount    = 0;   // contentStream passes this window
-volatile LONGLONG g_passTotalUs  = 0;   // sum of pass durations (busy%)
-
-// PathBusy: attribution. A second, independently-consumed running total of
-// the same per-pass duration PrintPathQueueLine already sums into
-// g_passTotalUs above -- kept apart so PrintPathBusyLine can reset its own
-// copy without racing PrintPathQueueLine's reset of the other. cause3/other
-// are QPC ticks (converted to us at print time); gate time is read from the
-// same GateWindowStats snapshot PathPoolTickMain already takes once per window.
-volatile LONGLONG g_busyPassTotalUs     = 0;
-volatile LONGLONG g_busyCharCause3Ticks = 0;
-volatile LONGLONG g_busyCharOtherTicks  = 0;
-
-volatile LONG     g_depthMax     = 0;
-volatile LONGLONG g_depthSum     = 0;
-volatile LONG     g_depthSamples = 0;
-
-volatile LONG     g_arrivedCount = 0;   // requests dequeued from the input queue
-volatile LONG     g_servedCount  = 0;   // completions seen at the result queue
-PPHist             g_waitHist;          // completion - drain stamp
-// "svc" is the tightened serve-start-to-completion span; see
-// the path-thread gate-end and dequeue tick latches for how serve-start is derived.
-PPHist             g_svcHist;
-volatile LONGLONG  g_svcTotalUs  = 0;   // for preamble = passTotalUs - svcTotalUs
-
-volatile LONG g_priNpcCount    = 0;     // req+0x2C <= 10
-volatile LONG g_priPlayerCount = 0;     // req+0x2C == 20
-volatile LONG g_priTierCount   = 0;     // req+0x2C >= 45
-
-// req+0x90 at completion, one counter per raw status: 0 path found, 1 no
-// start face, 2 no goal face, 3 not connected, 4 fallback search failed.
-// Status 3 is kept apart from "unreach": hook_csCheckFaceConn returns 1
-// under the cluster-graph bypass (pathfind_hooks.cpp), so RunPathRequest's
-// step 6 -- the only place that can write status 3 -- never runs false;
-// st3 is always 0 there by construction, not because goals are reachable.
-// Genuinely unreachable goals surface as status 4 (fallback/full A* search
-// ran and failed) mixed with 1 and 2 -- each status prints separately so
-// this counter can be read on its own instead of folding it into a
-// euphemism.
-volatile LONG g_reqStatusCount[5] = { 0, 0, 0, 0, 0 };
-
-// Completions with status 0 that ran no path-thread search this pass
-// (g_passSearchCount == 0) took RunPathRequest's step-4 direct csFindPath
-// success, not the step-7 fallback/full-search path.
-volatile LONG g_directCount = 0;
-
-volatile LONG     g_gatePassCount        = 0;
-volatile LONGLONG g_gatePassTotalUs      = 0;
-volatile LONG     g_gatePassMaxUs        = 0;
-volatile LONG     g_gatePassInTransition = 0;
-
-// Attributed inside a gate pass (PathPoolNoteSearch), not the queue counters.
-volatile LONG g_gateSearchCount = 0;
-volatile LONG g_gateIterLimit   = 0;    // cause == 1
-volatile LONG g_gateStateFull   = 0;    // cause == 3
-
-
-
 // Path-thread-owned working copy (single writer: the enqueue-result hook).
 static PPSlowEntry g_slowWork[PP_SLOW_N];
 static int         g_slowWorkCount = 0;
 
-// Published snapshot + seqlock (island_components.cpp's PublishSnapshot pattern).
-static volatile LONG g_slowSeq = 0;
-static PPSlowEntry   g_slowPublished[PP_SLOW_N];
-static volatile LONG g_slowPublishedCount = 0;
+} // namespace path_pool_detail
+using namespace path_pool_detail;
+namespace path_pool_hist_detail {
+// The path-thread PPSlowConsider copies its private working set here: seq
+// odd while copying, even when published. Main PPSlowSnapshot accepts only
+// an unchanged even sequence, with four attempts; failure is an empty
+// diagnostic window. Main PPSlowRequestReset raises g_slowResetRequested;
+// the path writer clears its private work at its next insert, then publishes.
+struct PathSlowPublished
+{
+	volatile LONG g_slowSeq;
+	PPSlowEntry g_slowPublished[PP_SLOW_N];
+	volatile LONG g_slowPublishedCount;
+};
+static PathSlowPublished g_ppSlow;
+union PathSlowPublishedPodCheck { PathSlowPublished s; };
+static_assert(__alignof(PathSlowPublished) >= 8, "PathSlowPublished must be 8-byte aligned");
+} // namespace path_pool_hist_detail
+using namespace path_pool_hist_detail;
+namespace path_pool_detail {
 
 // Main thread requests a reset; the path thread clears its working copy the
 // next time it has something to insert (no cross-thread array write).
-volatile LONG g_slowResetRequested = 0;
+static volatile LONG g_slowResetRequested = 0;
+
+void PPSlowRequestReset()
+{
+	InterlockedExchange(&g_slowResetRequested, 1);
+}
 
 void PPSlowConsider(LONGLONG svcUs, LONG status, LONG priority, LONG iterations,
                             float sx, float sz, float gx, float gz)
@@ -169,12 +136,12 @@ void PPSlowConsider(LONGLONG svcUs, LONG status, LONG priority, LONG iterations,
 	g_slowWork[insertAt].goalX    = gx;
 	g_slowWork[insertAt].goalZ    = gz;
 
-	InterlockedIncrement(&g_slowSeq);        // odd: writing
+	InterlockedIncrement(&g_ppSlow.g_slowSeq);        // odd: writing
 	_ReadWriteBarrier();
-	memcpy(g_slowPublished, g_slowWork, sizeof(g_slowWork));
-	InterlockedExchange(&g_slowPublishedCount, g_slowWorkCount);
+	memcpy(g_ppSlow.g_slowPublished, g_slowWork, sizeof(g_slowWork));
+	InterlockedExchange(&g_ppSlow.g_slowPublishedCount, g_slowWorkCount);
 	_ReadWriteBarrier();
-	InterlockedIncrement(&g_slowSeq);        // even: consistent
+	InterlockedIncrement(&g_ppSlow.g_slowSeq);        // even: consistent
 }
 
 // Main thread only. Returns the published count (0 on a failed snapshot,
@@ -183,14 +150,14 @@ int PPSlowSnapshot(PPSlowEntry* out)
 {
 	for (int attempt = 0; attempt < 4; ++attempt)
 	{
-		LONG s1 = g_slowSeq;
+		LONG s1 = g_ppSlow.g_slowSeq;
 		if (s1 & 1) continue;
 		_ReadWriteBarrier();
 		PPSlowEntry tmp[PP_SLOW_N];
-		memcpy(tmp, g_slowPublished, sizeof(tmp));
-		LONG cnt = g_slowPublishedCount;
+		memcpy(tmp, g_ppSlow.g_slowPublished, sizeof(tmp));
+		LONG cnt = g_ppSlow.g_slowPublishedCount;
 		_ReadWriteBarrier();
-		LONG s2 = g_slowSeq;
+		LONG s2 = g_ppSlow.g_slowSeq;
 		if (s1 == s2)
 		{
 			memcpy(out, tmp, sizeof(tmp));
@@ -202,23 +169,13 @@ int PPSlowSnapshot(PPSlowEntry* out)
 
 
 
-PPClassStats g_classStats[PP_CLASS_COUNT];
 
 // Path-thread, non-gate A* outcome/termination accumulation. Feeds
 // PathQueue's term= field. cause: 1 = iteration limit, 2 = open set full,
 // 3 = search state full; 0/other = "other".
-volatile LONG g_pathSearchOk    = 0;  // status == 1
-volatile LONG g_pathSearchFail  = 0;  // status != 1
-volatile LONG g_pathTermIterLimit   = 0;
-volatile LONG g_pathTermOpenSetFull = 0;
-volatile LONG g_pathTermStateFull   = 0;
-volatile LONG g_pathTermOther       = 0;
 
 // Boost counters. Outcome index: 0 = success, iterations > 32768;
 // 1 = success, iterations <= 32768; 2 = failure (status != 1).
-volatile LONG g_boostByTag[3][2];   // [outcome][playerByTag: 0 npc / 1 player]
-volatile LONG g_boostByReq[3][3];   // [outcome][playerByReq: 0 npc / 1 player / 2 unknown(-1)]
-volatile LONG g_boostDisagree = 0;  // playerByReq != -1 && playerByReq != playerByTag
 
 
 } // namespace path_pool_detail
@@ -245,14 +202,14 @@ void PathPoolNoteSearch(const PathSearchSample* s)
 
 	if (inGate)
 	{
-		InterlockedIncrement(&g_gateSearchCount);
-		if (s->cause == 1) InterlockedIncrement(&g_gateIterLimit);
-		if (s->cause == 3) InterlockedIncrement(&g_gateStateFull);
+		InterlockedIncrement(&g_ppSearch.g_gateSearchCount);
+		if (s->cause == 1) InterlockedIncrement(&g_ppSearch.g_gateIterLimit);
+		if (s->cause == 3) InterlockedIncrement(&g_ppSearch.g_gateStateFull);
 		GatePassNoteCause(s->cause);
 	}
 	else
 	{
-		PPClassStats* cs = &g_classStats[cls];
+		PPClassStats* cs = &g_ppSearch.g_classStats[cls];
 		InterlockedIncrement(&cs->count);
 		InterlockedExchangeAdd64(&cs->totalTicks, s->ticks);
 		InterlockedExchangeAdd64(&cs->totalIterations, (LONGLONG)s->iterations);
@@ -273,14 +230,14 @@ void PathPoolNoteSearch(const PathSearchSample* s)
 			g_lastPathIterations = s->iterations;
 			++g_passSearchCount;
 
-			if (s->status == 1) InterlockedIncrement(&g_pathSearchOk);
-			else                InterlockedIncrement(&g_pathSearchFail);
+			if (s->status == 1) InterlockedIncrement(&g_ppSearch.g_pathSearchOk);
+			else                InterlockedIncrement(&g_ppSearch.g_pathSearchFail);
 			switch (s->cause)
 			{
-				case 1:  InterlockedIncrement(&g_pathTermIterLimit);   break;
-				case 2:  InterlockedIncrement(&g_pathTermOpenSetFull); break;
-				case 3:  InterlockedIncrement(&g_pathTermStateFull);   break;
-				default: InterlockedIncrement(&g_pathTermOther);       break;
+				case 1:  InterlockedIncrement(&g_ppSearch.g_pathTermIterLimit);   break;
+				case 2:  InterlockedIncrement(&g_ppSearch.g_pathTermOpenSetFull); break;
+				case 3:  InterlockedIncrement(&g_ppSearch.g_pathTermStateFull);   break;
+				default: InterlockedIncrement(&g_ppSearch.g_pathTermOther);       break;
 			}
 
 			// PathBusy: attribute this path-thread search's own ticks to one
@@ -294,9 +251,9 @@ void PathPoolNoteSearch(const PathSearchSample* s)
 			if (isCharacterCaller)
 			{
 				if (s->isCause3)
-					InterlockedExchangeAdd64(&g_busyCharCause3Ticks, s->ticks);
+					InterlockedExchangeAdd64(&g_ppSearch.g_busyCharCause3Ticks, s->ticks);
 				else
-					InterlockedExchangeAdd64(&g_busyCharOtherTicks, s->ticks);
+					InterlockedExchangeAdd64(&g_ppSearch.g_busyCharOtherTicks, s->ticks);
 			}
 		}
 	}
@@ -305,12 +262,12 @@ void PathPoolNoteSearch(const PathSearchSample* s)
 	{
 		int outcome = (s->status == 1) ? ((s->iterations > 32768) ? 0 : 1) : 2;
 		int tagIdx  = (s->playerByTag != 0) ? 1 : 0;
-		InterlockedIncrement(&g_boostByTag[outcome][tagIdx]);
+		InterlockedIncrement(&g_ppSearch.g_boostByTag[outcome][tagIdx]);
 
 		int reqIdx = (s->playerByReq < 0) ? 2 : ((s->playerByReq != 0) ? 1 : 0);
-		InterlockedIncrement(&g_boostByReq[outcome][reqIdx]);
+		InterlockedIncrement(&g_ppSearch.g_boostByReq[outcome][reqIdx]);
 
 		if (s->playerByReq != -1 && s->playerByReq != s->playerByTag)
-			InterlockedIncrement(&g_boostDisagree);
+			InterlockedIncrement(&g_ppSearch.g_boostDisagree);
 	}
 }

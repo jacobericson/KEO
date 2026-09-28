@@ -16,11 +16,15 @@ using namespace nm_workers_detail;
 namespace nm_workers_detail {
 // The zone the main thread is unloading under the mod-unload protocol
 // (NavMeshBeginZoneUnload below), or NULL. Published under the generator's
-// queue lock (+152) by NavMeshBeginZoneUnload and cleared by
-// NavMeshEndZoneUnload. Every claim loop runs under +152 and leaves a job for
+// queue lock (+152) by NavMeshBeginZoneUnload and cleared atomically by
+// a refused Begin or NavMeshEndZoneUnload, without that lock. Every claim
+// loop runs under +152 and leaves a job for
 // this zone queued. Declared here because NavMeshTryLockProcessJobFor counts
 // its failures during an unload (ulSkipPj=).
-void* volatile g_unloadingZone = NULL;
+// Main-thread writer; bg/worker claim loops and process-job entry read the
+// pointer through UnloadingZone. Each exchange is an untorn behavior input;
+// there is no copied set and a completed unload restores NULL.
+static void* volatile g_unloadingZone = NULL;
 
 } // namespace nm_workers_detail
 
@@ -30,14 +34,34 @@ void* volatile g_unloadingZone = NULL;
 // region that unlinks the job and raises the busy bridge, and clears it only
 // once the job is completely finished with (served, dropped or regenerated,
 // L2 write included). NavMeshBeginZoneUnload publishes g_unloadingZone under
-// +152 and then reads these slots: every claim made before its locked walk is
+// +152, releases that lock, then reads the slots atomically: every prior claim is
 // visible in a slot (the lock orders the write before the read), and every
 // claim made after it sees g_unloadingZone and leaves the zone's jobs queued.
 // A clear seen late only makes the unload wait a frame (conservative).
 namespace nm_workers_detail {
-const int CLAIM_SLOT_BG    = NAVMESH_WORKER_COUNT;
-const int CLAIM_SLOT_COUNT = NAVMESH_WORKER_COUNT + 1;
-void* volatile g_claimZone[CLAIM_SLOT_COUNT] = {};
+// Worker/bg claims write their own slot with Interlocked pointer exchange;
+// main unload and NavMeshZoneClaimed read slots atomically without +152.
+// Each slot is an untorn behavior input, not a coherent table snapshot.
+// Finish clears its slot; a late clear conservatively delays the unload.
+static void* volatile g_claimZone[CLAIM_SLOT_COUNT] = {};
+
+// ClaimZoneSet runs under the caller-held generator queue lock +152, before
+// unlink ownership is exposed by releasing it. ClaimZoneClear is called
+// when the claimed job finishes; an invalid slot, including -1, is a no-op.
+uintptr_t UnloadingZone()
+{
+	return (uintptr_t)InterlockedCompareExchangePointer(&g_unloadingZone, NULL, NULL);
+}
+void ClaimZoneSet(int slot, uintptr_t zone)
+{
+	if (slot >= 0 && slot < CLAIM_SLOT_COUNT)
+		InterlockedExchangePointer(&g_claimZone[slot], (void*)zone);
+}
+void ClaimZoneClear(int slot)
+{
+	if (slot >= 0 && slot < CLAIM_SLOT_COUNT)
+		InterlockedExchangePointer(&g_claimZone[slot], NULL);
+}
 } // namespace nm_workers_detail
 
 // --------------------------------------------------------------------

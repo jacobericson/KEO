@@ -13,6 +13,7 @@
 
 #include "movement/islands.h"
 #include "movement/islands_internal.h"
+#include "movement/island_overlay_internal.h"
 #include "movement/formation.h"      // FormationCohesionSample (coh= on the diag line)
 #include "pathfind/pathfinding.h"    // PlayerFarArrivals (farArrive= on the diag line)
 #include "movement/island_span_policy.h"
@@ -32,6 +33,10 @@ namespace islands_detail {
 const int    READINESS_TID_SLOTS = 8;
 const double DIAG_INTERVAL_SEC   = 5.0;
 
+// Any IslandCountReadiness caller claims tid by CAS before setting isMain
+// and incrementing the atomic counts. The main AppendReadinessTids reads
+// each field separately: a newly visible tid can precede its other values.
+// Mixed values are tolerated diagnostics; slots and overflow never reset.
 struct ReadinessTid {
 	volatile LONG tid;
 	volatile LONG isMain;
@@ -40,8 +45,8 @@ struct ReadinessTid {
 	volatile long notReadySec;
 };
 
-ReadinessTid  g_readTids[READINESS_TID_SLOTS];
-volatile long g_readTidOverflow = 0;
+static ReadinessTid  g_readTids[READINESS_TID_SLOTS];
+static volatile long g_readTidOverflow = 0;
 
 } // namespace
 using namespace islands_detail;
@@ -128,16 +133,7 @@ volatile long g_getIslCalls    = 0;
 volatile long g_getIslAppended = 0;   // members appended (would-append when passing through)
 volatile long g_getIslFallback = 0;   // seqlock failure / oversize -> original's answer
 volatile long g_hooksInstalled = 0;
-uintptr_t     g_builderZm = 0;
-unsigned int  g_snapGen   = 0;
-unsigned int  g_setBSig   = 0;
-bool          g_haveSig   = false;
-bool          g_rebuildRequested = false;
-double        g_lastEligibility  = -1.0;
-bool          g_wasLoading       = false;
-int            g_setBAccessible = 0;
-int            g_curCompCount = 0;
-int            g_curModZones = 0;
+static bool          g_wasLoading       = false;
 } // namespace
 using namespace islands_detail;
 
@@ -182,7 +178,7 @@ void IslandReset()
 // the calls below reach them through islands_internal.h.
 // =========================================================================
 
-namespace islands_detail { unsigned int g_lastSig = 0; }
+namespace islands_detail { static unsigned int g_lastSig = 0; }
 using namespace islands_detail;
 
 // IslandSpan: the far-span rule's state, its call identity and the edge legs

@@ -13,9 +13,11 @@ namespace player_repath_tier_detail {
 
 const int PRT_MAX_CHARS = 256;
 
-// Classic single-buffer seqlock: odd while being written, even and stable
-// once published. Two failed read attempts fall back to "no match" (the
-// request keeps its game priority), never to a stale or torn array.
+// Main PublishArray publishes the player-owned set once per frame: seq is
+// odd during the write and even when stable. Main and AI requestPath callers
+// read through PlayerRepathTierIsPlayerOwned. Loading publishes an empty set.
+// This priority input never accepts a torn set: two failed attempts answer
+// "no match", so the request keeps its own game priority.
 struct PlayerSet
 {
 	volatile LONG seq;
@@ -23,12 +25,12 @@ struct PlayerSet
 	uintptr_t     havokChars[PRT_MAX_CHARS];
 };
 
-PlayerSet g_playerSet = { 0, 0, {0} };
+static PlayerSet g_playerSet = { 0, 0, {0} };
 
-volatile long g_repathSeen      = 0;  // every priority<2 requestPath call examined
-volatile long g_repathWouldTier = 0;  // of those, matched the published set
-volatile long g_repathTiered    = 0;  // of those, the tier was actually written
-volatile long g_repathSetSize   = 0;  // most recent publish's count (gauge)
+static volatile long g_repathSeen      = 0;  // every priority<2 requestPath call examined
+static volatile long g_repathWouldTier = 0;  // of those, matched the published set
+static volatile long g_repathTiered    = 0;  // of those, the tier was actually written
+static volatile long g_repathSetSize   = 0;  // most recent publish's count (gauge)
 
 } // namespace
 using namespace player_repath_tier_detail;
@@ -36,7 +38,7 @@ using namespace player_repath_tier_detail;
 
 namespace player_repath_tier_detail {
 
-void PublishArray(const uintptr_t* local, int n)
+static void PublishArray(const uintptr_t* local, int n)
 {
 	InterlockedIncrement(&g_playerSet.seq);   // odd: writing
 	_ReadWriteBarrier();

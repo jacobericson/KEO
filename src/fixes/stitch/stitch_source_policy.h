@@ -11,7 +11,11 @@
 // un-stitch (section-manager thread, under changeMutex). The two sides share no
 // lock, so a slot is published through a per-slot sequence word: a writer
 // takes it odd, fills the payload and makes it even; a reader copies the
-// payload between two equal even reads. Nothing here allocates or blocks.
+// payload between two equal even reads, with three attempts. Failed or torn
+// copies are reported as missing attribution, never accepted as a set; these
+// tables classify diagnostics, not the un-stitch bounds decision. Initialized
+// before installation, never reset: claimed slots are never freed. Nothing
+// here allocates or blocks.
 
 #include <stddef.h>
 #include <string.h>

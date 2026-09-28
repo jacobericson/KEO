@@ -33,6 +33,11 @@ struct ZonePrepEntry
 	unsigned     illegalAttempts;   // ZonePrepLedgerSetState calls rejected by the state machine
 };
 
+// Main ledger lifecycle code publishes each classWord by a plain byte store;
+// any-thread readiness queries read that byte only, never the entry beside
+// it. A byte cannot tear, but it can lag the next main-frame publication.
+// Initialization/world clear and cell release restore NONE. No coherent
+// snapshot with the other main-thread-only fields is supplied.
 struct ZonePrepLedger
 {
 	ZonePrepEntry entries[ZONE_GRID_CELLS];

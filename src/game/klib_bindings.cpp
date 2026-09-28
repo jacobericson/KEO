@@ -58,16 +58,17 @@ uintptr_t KlibWeatherAddress(bool mainThread);
 
 namespace klib_bindings_detail
 {
-// Our own image's extent and import address table, resolved on first use.
-// The sizes are published before the base, so a reader that sees a base also
-// sees them; a second thread racing the first resolution writes the same
-// values.
-volatile uintptr_t s_selfBase = 0;
-volatile size_t s_selfSize = 0;
-volatile size_t s_selfIatOffset = 0;
-volatile size_t s_selfIatSize = 0;
+// Our own image extent and import address table.
+// SelfImage can first resolve on any caller thread; its plain volatile
+// metadata stores precede base. Resolver callers read these immutable image
+// values; racing initializers compute the same fields. No reset or changing
+// set is published, and each aligned scalar is untorn.
+static volatile uintptr_t s_selfBase = 0;
+static volatile size_t s_selfSize = 0;
+static volatile size_t s_selfIatOffset = 0;
+static volatile size_t s_selfIatSize = 0;
 
-bool SelfImage(uintptr_t* base, size_t* size, size_t* iatOffset, size_t* iatSize)
+static bool SelfImage(uintptr_t* base, size_t* size, size_t* iatOffset, size_t* iatSize)
 {
 	if (!s_selfBase)
 	{
@@ -104,14 +105,19 @@ intptr_t KlibRealAddressOf(void* function)
 
 namespace klib_bindings_detail
 {
-KlibAddressEntry s_entries[160];
-size_t s_count = 0;
-uintptr_t s_base = 0;
-bool s_ready = false;
-bool s_overflow = false;
-uintptr_t s_globals[9] = { 0 };
+// Main plugin/profiler startup initializes this registry before any hooks
+// can read KlibAddress on another thread. Resolve fills entries/globals, then
+// successful InitKlibBindings sets the plain ready flag; failed startup can
+// retry before installing hooks. No reset after success and no concurrent
+// mutation: behavior readers use the immutable table, not a torn set.
+static KlibAddressEntry s_entries[160];
+static size_t s_count = 0;
+static uintptr_t s_base = 0;
+static bool s_ready = false;
+static bool s_overflow = false;
+static uintptr_t s_globals[9] = { 0 };
 
-void Add(const char* name, uintptr_t legacy, uintptr_t impl, uintptr_t resolved)
+static void Add(const char* name, uintptr_t legacy, uintptr_t impl, uintptr_t resolved)
 {
 	if (s_count == sizeof(s_entries) / sizeof(s_entries[0]))
 	{
@@ -125,11 +131,11 @@ void Add(const char* name, uintptr_t legacy, uintptr_t impl, uintptr_t resolved)
 	entry.resolved = resolved;
 }
 template<typename T>
-void Bind(const char* name, uintptr_t legacy, uintptr_t impl, T function)
+static void Bind(const char* name, uintptr_t legacy, uintptr_t impl, T function)
 {
 	Add(name, legacy, impl, (uintptr_t)KlibRealAddress(function));
 }
-void Resolve()
+static void Resolve()
 {
 	// Legacy aliases are documented game jump thunks, not runtime E9 scans.
 	// This normalizes the baseline without following another plugin's hook.

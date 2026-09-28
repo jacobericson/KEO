@@ -18,21 +18,6 @@ namespace path_pool_detail {
 static const size_t PATHQ_INPUT_OFFSET  = 0xB8;   // mgr+0xB8: input queue (submit)
 static const size_t PATHQ_RESULT_OFFSET = 0xF8;   // mgr+0xF8: result queue (contentStream)
 static const size_t PATHQ_DEPTH_OFFSET  = 0x1C0;  // mgr+0x1C0: sorted array count
-// Sets t_inContentStreamPass or t_inGatePass for the lifetime of a hook call
-// and clears it on every exit, including a C++ exception unwinding out of the
-// original (a flag left at 1 would attribute every later path-thread search to
-// the gate counters, or hide the "outside a pass" warning for good). Used only
-// in the two hooks, which have no __try, so a destructor is allowed there.
-struct PPTlsFlagScope
-{
-	int* flag;
-	explicit PPTlsFlagScope(int* f) : flag(f) { *flag = 1; }
-	~PPTlsFlagScope() { *flag = 0; }
-private:
-	PPTlsFlagScope(const PPTlsFlagScope&);
-	PPTlsFlagScope& operator=(const PPTlsFlagScope&);
-};
-
 // =========================================================================
 // Fixed log-spaced histogram (lock-free): p50/p90/p99/max from bucket counts
 // =========================================================================
@@ -52,7 +37,7 @@ struct PPHist
 	volatile LONG     count;
 	volatile LONGLONG sumUs;
 };
-// --- PathSlow: top 5 by service time (lock-free seqlock double buffer) ---
+// --- PathSlow: top 5 by service time (single published buffer + seqlock) ---
 
 struct PPSlowEntry
 {
@@ -80,26 +65,7 @@ struct PPClassStats
 	PPHist            latencyUs;        // per-class search wall time (the latency histogram)
 	PPHist            iterNsHist;       // per-iteration cost in ns; only path-thread's is printed (AstarCost)
 };
-struct NpcWaitWalkResult
-{
-	int waitingTotal, waiting4, waiting5;
-	int failed3FarDest;
-	int stoppedFarDestNoMove;
-	int navWaitZoneNotReady;
-	double longestWaitSec;
-	int haveTop;
-	float topPosX, topPosZ;
-	int topGx, topGy;
-	int topState;
-	double topDestDist;
-	int topZoneReady;      // -1 unknown, 0/1
-	int playerWaitingTotal, playerWaiting4, playerWaiting5;
-	// 1 when the walk faulted part-way (a node or character freed mid-walk):
-	// the counts above cover only the characters seen before the fault, and
-	// the NpcPathWait line says so (partial=1) instead of passing them off as
-	// the whole list.
-	int faulted;
-};
+
 
 struct GateWindowStats
 {
@@ -113,47 +79,82 @@ struct GateWindowStats
 };
 
 
-extern const size_t REQ_STAMP_OFFSET;
-extern const size_t REQ_PRIORITY_OFFSET;
-extern const size_t REQ_STATUS_OFFSET;
-extern const size_t REQ_START_OFFSET;
-extern const size_t REQ_GOAL_OFFSET;
-extern const int REQ_STATUS_SENTINEL;
-extern void* volatile g_sectionMgrPtr;
-extern __declspec(thread) int t_inContentStreamPass;
+// Path-thread gate flag set/cleared by the hook_gatesUpdateCodes scope.
+// The iteration/count latches reset at hook_contentStream pass top and
+// advance in PathPoolNoteSearch during that same pass.
 extern __declspec(thread) int t_inGatePass;
-extern LARGE_INTEGER g_passStartTicks;
-extern LARGE_INTEGER g_gatePassEndTicks;
-extern LARGE_INTEGER g_lastDequeueTicks;
 extern volatile LONG g_gateOutsideStreamWarned;
 extern LONG g_lastPathIterations;
 extern LONG g_passSearchCount;
 LONGLONG TicksToNs(LONGLONG ticks);
 void PPHistAdd(PPHist* h, LONGLONG us);
+void PPSlowRequestReset();
+void PPSlowConsider(LONGLONG svcUs, LONG status, LONG priority, LONG iterations, float sx, float sz, float gx, float gz);
+int PPSlowSnapshot(PPSlowEntry* out);
 LONGLONG PPHistPercentileUs(const PPHist* h, double frac);
 void PPHistReset(PPHist* h);
-extern volatile LONG g_passCount;
-extern volatile LONGLONG g_passTotalUs;
-extern volatile LONGLONG g_busyPassTotalUs;
-extern volatile LONGLONG g_busyCharCause3Ticks;
-extern volatile LONGLONG g_busyCharOtherTicks;
-extern volatile LONG g_depthMax;
-extern volatile LONGLONG g_depthSum;
-extern volatile LONG g_depthSamples;
-extern volatile LONG g_arrivedCount;
-extern volatile LONG g_servedCount;
-extern PPHist g_waitHist;
-extern PPHist g_svcHist;
-extern volatile LONGLONG g_svcTotalUs;
-extern volatile LONG g_priNpcCount;
-extern volatile LONG g_priPlayerCount;
-extern volatile LONG g_priTierCount;
-extern volatile LONG g_reqStatusCount[5];
-extern volatile LONG g_directCount;
-extern volatile LONG g_gatePassCount;
-extern volatile LONGLONG g_gatePassTotalUs;
-extern volatile LONG g_gatePassMaxUs;
-extern volatile LONG g_gatePassInTransition;
+// Written by the path-thread pass-through hooks in path_pool_hooks.cpp,
+// with Interlocked updates. Main-thread reporters in path_pool_report.cpp
+// read and reset each member or histogram bucket independently. Each atomic
+// update publishes itself; a diagnostic window can straddle a pass and mix
+// member epochs. Torn sets are tolerated; the whole struct is never copied.
+struct PathPassWindow
+{
+	volatile LONG g_passCount;
+	volatile LONGLONG g_passTotalUs;
+	// Independent pass-duration total: PathBusy resets separately from PathQueue.
+	volatile LONGLONG g_busyPassTotalUs;
+	volatile LONG g_depthMax;
+	volatile LONGLONG g_depthSum;
+	volatile LONG g_depthSamples;
+	volatile LONG g_arrivedCount;
+	volatile LONG g_servedCount;
+	PPHist g_waitHist;
+	// Service starts after the latest pass-start, gate-end or dequeue latch.
+	PPHist g_svcHist;
+	volatile LONGLONG g_svcTotalUs;
+	volatile LONG g_priNpcCount;
+	volatile LONG g_priPlayerCount;
+	volatile LONG g_priTierCount;
+	// Raw completion status 0 found, 1 no start, 2 no goal, 3 disconnected,
+	// 4 fallback failed. Cluster bypass leaves status 3 at zero; not reachability.
+	volatile LONG g_reqStatusCount[5];
+	// Status-0 completions with no path-thread search during this pass.
+	volatile LONG g_directCount;
+	volatile LONG g_gatePassCount;
+	volatile LONGLONG g_gatePassTotalUs;
+	volatile LONG g_gatePassMaxUs;
+	volatile LONG g_gatePassInTransition;
+};
+extern PathPassWindow g_ppWindow;
+
+// PathPoolNoteSearch in path_pool_hist.cpp atomically writes these fields.
+// Gate, busy and outcome members are path-thread-only; class stats and boost
+// tallies have any-search-thread writers. Main reporters read/reset members
+// independently per window; each atomic is its publication. Mixed values
+// are tolerated diagnostics, never a copied coherent set.
+struct PathSearchWindow
+{
+	volatile LONGLONG g_busyCharCause3Ticks;
+	volatile LONGLONG g_busyCharOtherTicks;
+	volatile LONG g_gateSearchCount;
+	volatile LONG g_gateIterLimit;
+	volatile LONG g_gateStateFull;
+	PPClassStats g_classStats[PP_CLASS_COUNT];
+	// Non-gate path outcomes; cause 1 iter limit, 2 open full, 3 state full.
+	volatile LONG g_pathSearchOk;
+	volatile LONG g_pathSearchFail;
+	volatile LONG g_pathTermIterLimit;
+	volatile LONG g_pathTermOpenSetFull;
+	volatile LONG g_pathTermStateFull;
+	volatile LONG g_pathTermOther;
+	// Boost outcomes: high-iteration success, other success, failure.
+	volatile LONG g_boostByTag[3][2];
+	volatile LONG g_boostByReq[3][3];
+	volatile LONG g_boostDisagree;
+};
+extern PathSearchWindow g_ppSearch;
+
 void RunNpcWaitDiagnostic(double now);
 GateWindowStats SnapshotAndResetGateStats();
 void PrintPathQueueLine(double windowSec, const GateWindowStats& gws, LONG* servedOut);
@@ -164,6 +165,6 @@ void PrintAstarCostLine();
 void PrintNpcPathWaitLine(double windowSec);
 } // namespace path_pool_detail
 
-#include "pathfind/path_pool_search_state.h"
+
 
 #endif // KENSHI_ZONE_OPT_PATH_POOL_INTERNAL_H

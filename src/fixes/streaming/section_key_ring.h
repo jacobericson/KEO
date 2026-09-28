@@ -22,6 +22,11 @@ enum SectionKeyFlags
 	SECTION_KEY_FLAG_NO_COLL     = 0x04   // the collection pointer was NULL
 };
 
+// A section-key probe on its calling thread reserves a site-ring slot,
+// clears seq, fills it and publishes its own number by InterlockedExchange.
+// Any-thread crash formatting checks seq once before using the live entry;
+// a later overwrite can mix diagnostic fields and is tolerated. Init clears
+// the rings only before detour installation; entries otherwise wrap.
 struct SectionKeyEntry
 {
 	volatile LONG    seq;        // published last; 0 means never written

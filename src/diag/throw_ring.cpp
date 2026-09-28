@@ -7,19 +7,24 @@
 
 namespace throw_ring_detail {
 
-char          g_slot[THROW_RING_SLOTS][THROW_RING_CHARS] = { { 0 } };
-volatile LONG g_len[THROW_RING_SLOTS] = { 0 };
-volatile LONG g_pushed = 0;
-volatile LONG g_drained = 0;
-volatile LONG g_lost = 0;
+// Any first-chance throw thread reserves a ring index, copies text and
+// publishes its length with InterlockedExchange. Any death-path drain reads
+// that length before handing live bytes to its sink; slots can wrap and
+// overwrite concurrently, so mixed diagnostic text is tolerated. No runtime
+// reset: ThrowRingResetForTest clears it only in isolated tests.
+static char          g_slot[THROW_RING_SLOTS][THROW_RING_CHARS] = { { 0 } };
+static volatile LONG g_len[THROW_RING_SLOTS] = { 0 };
+static volatile LONG g_pushed = 0;
+static volatile LONG g_drained = 0;
+static volatile LONG g_lost = 0;
 
-void Append(char* out, size_t cap, size_t& n, const char* s)
+static void Append(char* out, size_t cap, size_t& n, const char* s)
 {
 	while (s && *s && n + 1 < cap)
 		out[n++] = *s++;
 }
 
-void AppendDec(char* out, size_t cap, size_t& n, unsigned __int64 v)
+static void AppendDec(char* out, size_t cap, size_t& n, unsigned __int64 v)
 {
 	char tmp[24];
 	int d = 0;
@@ -34,7 +39,7 @@ void AppendDec(char* out, size_t cap, size_t& n, unsigned __int64 v)
 		out[n++] = tmp[--d];
 }
 
-void AppendHex(char* out, size_t cap, size_t& n, unsigned __int64 v, int digits)
+static void AppendHex(char* out, size_t cap, size_t& n, unsigned __int64 v, int digits)
 {
 	static const char HEX[] = "0123456789ABCDEF";
 	for (int i = digits - 1; i >= 0 && n + 1 < cap; --i)

@@ -22,46 +22,47 @@ namespace physx_query_guard_detail
 // Resolved once, before the site is patched, and read-only afterwards. The
 // per-entry path never calls the loader and never takes a lock: every test it
 // makes is an integer compare against these.
-volatile unsigned __int64 g_physBase = 0;
-volatile unsigned __int64 g_physEnd  = 0;
-volatile unsigned __int64 g_purecall = 0;   // 0 = unconfirmed, pure test off
+static volatile unsigned __int64 g_physBase = 0;
+static volatile unsigned __int64 g_physEnd  = 0;
+static volatile unsigned __int64 g_purecall = 0;   // 0 = unconfirmed, pure test off
 
 // Per-entry counters. One per rejection class, because a bare skip count
 // cannot separate a use-after-free from an unknown-but-legitimate shape.
-volatile LONG s_entries     = 0;
-volatile LONG s_ok          = 0;
-volatile LONG s_rejAddr     = 0;
-volatile LONG s_rejUnread   = 0;
-volatile LONG s_rejPure     = 0;
-volatile LONG s_rejFVptr    = 0;
-volatile LONG s_rejFSlot    = 0;
+static volatile LONG s_entries     = 0;
+static volatile LONG s_ok          = 0;
+static volatile LONG s_rejAddr     = 0;
+static volatile LONG s_rejUnread   = 0;
+static volatile LONG s_rejPure     = 0;
+static volatile LONG s_rejFVptr    = 0;
+static volatile LONG s_rejFSlot    = 0;
 
-// The first few foreign rejections carry their vptr out to the main thread,
-// which is the only place a module name can be resolved. A fixed ring, no
-// lock: a producer claims a slot with one InterlockedIncrement and publishes
-// it with one store; the main thread only ever reads published slots.
+// Any query caller claims one of the first eight report slots, fills its
+// vptr and publishes ready by InterlockedExchange. Main DrainForeignReports
+// reads ready atomically before resolving the payload. These diagnostic
+// entries never wrap or reset, so a ready payload is never overwritten and
+// cannot become a torn read. Later claims are simply unrecorded.
 const int kForeignReports = 8;
-volatile LONG s_foreignClaim = 0;
-volatile unsigned __int64 s_foreignVptr[kForeignReports] = { 0 };
-volatile LONG s_foreignReady[kForeignReports] = { 0 };
-int s_foreignDrained = 0;   // main thread only
+static volatile LONG s_foreignClaim = 0;
+static volatile unsigned __int64 s_foreignVptr[kForeignReports] = { 0 };
+static volatile LONG s_foreignReady[kForeignReports] = { 0 };
+static int s_foreignDrained = 0;   // main thread only
 
 // Install state (main thread only).
 enum GuardState { kOff = 0, kPending, kArmed, kGaveUp };
-int    s_state       = kOff;
-int    s_attempts    = 0;
-double s_firstSec    = -1.0;
-double s_lastSec     = -1.0;
-double s_nextBeat    = 0.0;
+static int    s_state       = kOff;
+static int    s_attempts    = 0;
+static double s_firstSec    = -1.0;
+static double s_lastSec     = -1.0;
+static double s_nextBeat    = 0.0;
 const double kBeatSeconds = 60.0;
-std::string s_why;          // why the guard is not armed, for the stats line
+static std::string s_why;          // why the guard is not armed, for the stats line
 
 // The stub's page. Allocated once, never freed and never made writable
 // again: the game's own code jumps into it, and the callee of the re-issued
 // virtual call returns into it, so a thread can be inside it at any moment
 // with no way to prove otherwise.
-unsigned char* s_page     = NULL;   // data page (RW): the gate slot
-unsigned char* s_codePage = NULL;   // code page (RX): stub + accept-all thunk
+static unsigned char* s_page     = NULL;   // data page (RW): the gate slot
+static unsigned char* s_codePage = NULL;   // code page (RX): stub + accept-all thunk
 const size_t kDataPageSize = 0x1000;
 const size_t kCodePageSize = 0x1000;
 const size_t kAcceptAllOffset = 0x40;
@@ -70,7 +71,7 @@ const size_t kAcceptAllOffset = 0x40;
 // --- SEH-guarded reads. Standalone and POD-only: MSVC 2010 rejects __try in
 // a function that also holds an object needing unwinding. ---
 
-bool SafeReadQword(unsigned __int64 addr, unsigned __int64* out)
+static bool SafeReadQword(unsigned __int64 addr, unsigned __int64* out)
 {
 	bool ok = true;
 	GuardEnter();
@@ -86,7 +87,7 @@ bool SafeReadQword(unsigned __int64 addr, unsigned __int64* out)
 	return ok;
 }
 
-bool SafeReadBytes(const void* addr, void* out, size_t n)
+static bool SafeReadBytes(const void* addr, void* out, size_t n)
 {
 	bool ok = true;
 	GuardEnter();
@@ -102,7 +103,7 @@ bool SafeReadBytes(const void* addr, void* out, size_t n)
 	return ok;
 }
 
-bool ResolveModuleSize(unsigned __int64 base, unsigned __int64* outSize)
+static bool ResolveModuleSize(unsigned __int64 base, unsigned __int64* outSize)
 {
 	if (!base)
 		return false;
@@ -134,7 +135,7 @@ bool ResolveModuleSize(unsigned __int64 base, unsigned __int64* outSize)
 }
 
 
-void CountClass(PhysQueryClass cls)
+static void CountClass(PhysQueryClass cls)
 {
 	switch (cls)
 	{
@@ -150,7 +151,7 @@ void CountClass(PhysQueryClass cls)
 // A foreign rejection is the only kind that could have been a live shape, so
 // the first few carry their vptr out for module attribution. Claim-and-
 // publish only; no formatting and no loader call on this path.
-void ReportForeign(unsigned __int64 vptr)
+static void ReportForeign(unsigned __int64 vptr)
 {
 	LONG slot = InterlockedIncrement(&s_foreignClaim) - 1;
 	if (slot < 0 || slot >= kForeignReports)
@@ -159,7 +160,7 @@ void ReportForeign(unsigned __int64 vptr)
 	InterlockedExchange(&s_foreignReady[slot], 1);
 }
 
-PhysQueryClass EvaluateEntry(unsigned __int64 p, unsigned __int64* outVptr)
+static PhysQueryClass EvaluateEntry(unsigned __int64 p, unsigned __int64* outVptr)
 {
 	unsigned __int64 vptr = 0, slot1 = 0;
 	bool vptrRead = false, slot1Read = false;
@@ -212,7 +213,7 @@ namespace physx_query_guard_detail
 const unsigned __int64 kAbstractShapeVtableRva = 0x3B3F90;
 const unsigned __int64 kConcreteShapeVtableRva = 0x3B40D0;
 
-const char* ClassName(PhysQueryClass cls)
+static const char* ClassName(PhysQueryClass cls)
 {
 	switch (cls)
 	{
@@ -226,7 +227,7 @@ const char* ClassName(PhysQueryClass cls)
 	return "?";
 }
 
-void SelfTestClassifier()
+static void SelfTestClassifier()
 {
 	unsigned __int64 fakes[3];
 	fakes[0] = g_physBase + kAbstractShapeVtableRva;  // expect pure
@@ -260,7 +261,7 @@ void SelfTestClassifier()
 }
 #endif
 
-bool TryArmPhysQueryGuard()
+static bool TryArmPhysQueryGuard()
 {
 	unsigned __int64 physBase = (unsigned __int64)(uintptr_t)GetModuleHandleA("PhysXCore64.dll");
 	if (!physBase)
@@ -391,7 +392,7 @@ bool TryArmPhysQueryGuard()
 	return true;
 }
 
-void DrainForeignReports()
+static void DrainForeignReports()
 {
 	while (s_foreignDrained < kForeignReports
 	       && InterlockedCompareExchange(&s_foreignReady[s_foreignDrained], 0, 0) != 0)

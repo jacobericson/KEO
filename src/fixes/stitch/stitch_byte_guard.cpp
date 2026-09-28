@@ -31,9 +31,12 @@ static volatile LONG s_unreadable = 0;  // the neighbour qword could not be read
 // Read once at install, before the site is patched.
 static bool s_actMode = true;
 
-// One slot per interior store. Filled on the path thread and published with
-// one interlocked store of its number; the main thread and the crash path read
-// only published slots.
+// Path-thread interior stores fill a ring slot after clearing seq, then
+// atomically publish its number. Main drain and any-thread crash formatting
+// check seq once before reading the live entry; a later overwrite can mix
+// diagnostic values and is tolerated. Installation clears the ring once;
+// later entries wrap. No behavior decision reads this diagnostic payload.
+namespace stitch_byte_guard_detail {
 struct StitchByteEntry
 {
 	volatile LONG    seq;     // 0 = unpublished
@@ -46,6 +49,8 @@ struct StitchByteEntry
 	unsigned char    readable;
 	unsigned char    skipped;
 };
+} // namespace stitch_byte_guard_detail
+using namespace stitch_byte_guard_detail;
 
 static const int kRingSize = 16;
 static StitchByteEntry s_ring[kRingSize];
@@ -415,7 +420,10 @@ void InstallStitchByteGuard(bool allowed)
 
 // --- crash path ---
 
+namespace stitch_byte_guard_detail {
 typedef FlbExternal SbBuf;
+} // namespace stitch_byte_guard_detail
+using namespace stitch_byte_guard_detail;
 
 size_t StitchByteGuardCrashFormat(char* buf, size_t cap, int maxEntries)
 {

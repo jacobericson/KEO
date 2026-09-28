@@ -5,6 +5,7 @@
 
 #include "movement/islands.h"
 #include "movement/islands_internal.h"
+#include "movement/island_overlay_internal.h"
 #include "movement/island_edge_ring.h"
 #include <intrin.h>
 
@@ -14,7 +15,7 @@ namespace islands_detail {
 
 const int HOOK_COPY_MAX   = 512;              // getIsland stack copy bound
 const int ISIN_FAR_CELLS = 2;         // cell span at which a direct path spans unloaded ground
-volatile long g_farSpanArmed   = 0;
+static volatile long g_farSpanArmed   = 0;
 
 } // namespace
 using namespace islands_detail;

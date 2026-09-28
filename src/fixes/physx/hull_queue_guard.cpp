@@ -80,14 +80,20 @@ static HqgState s_judge;
 static volatile LONG s_flushSeq = 0;
 static uintptr_t s_recPhys = 0;
 
-// Last two callers of each pushed address. Direct-mapped and overwritten, from
-// any thread, without a lock: attribution only.
+// Any pusher thread publishes the last two callers of an address with
+// independent Interlocked key/caller/flush updates. The flush-thread reporter
+// reads with a key check before/after, not a coherent sequence copy. Mixed
+// fields during overwrite are tolerated attribution diagnostics. Static
+// zero initialization only; direct-mapped slots overwrite without a reset.
+namespace hull_queue_guard_detail {
 struct PushRec
 {
 	volatile LONG64 key;
 	volatile LONG64 callers;
 	volatile LONG   flushSeq;
 };
+} // namespace hull_queue_guard_detail
+using namespace hull_queue_guard_detail;
 static const unsigned kPushRecs = 1u << 14;
 static PushRec s_pushRecs[kPushRecs];
 
@@ -155,7 +161,10 @@ static bool LookupPush(uintptr_t p, unsigned __int64* callers, LONG* seq)
 
 // ---- The five pushers --------------------------------------------------------
 
+namespace hull_queue_guard_detail {
 typedef void* (*Push_t)(void*);
+} // namespace hull_queue_guard_detail
+using namespace hull_queue_guard_detail;
 static const int kPushers = 5;
 static Push_t s_origPush[kPushers];
 
@@ -289,11 +298,14 @@ void HullQueueGuardTick(double now)
 
 // ---- updateUT ---------------------------------------------------------------
 
+namespace hull_queue_guard_detail {
 struct NullCtx
 {
 	uintptr_t        phys;
 	const uintptr_t* data;   // the main buffer the judge read
 };
+} // namespace hull_queue_guard_detail
+using namespace hull_queue_guard_detail;
 
 // Re-reads the buffer before each store: a push from another thread could
 // have grown and freed it since the judge read it.
@@ -307,15 +319,21 @@ static bool NullEntry(void* ctx, unsigned index, uintptr_t expected)
 	return InterlockedCompareExchange64((volatile LONG64*)&data[index], 0, (LONG64)expected) == (LONG64)expected;
 }
 
+namespace hull_queue_guard_detail {
 typedef void (*updateUT_t)(void* physics);
+} // namespace hull_queue_guard_detail
+using namespace hull_queue_guard_detail;
 static updateUT_t orig_updateUT = NULL;
 
+namespace hull_queue_guard_detail {
 struct Pass
 {
 	HqgResult  r;
 	unsigned   count;
 	HqgFinding found[kFindings];
 };
+} // namespace hull_queue_guard_detail
+using namespace hull_queue_guard_detail;
 
 static void RunPass(uintptr_t phys, bool post, Pass* p)
 {

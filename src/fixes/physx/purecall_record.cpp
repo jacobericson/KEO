@@ -14,25 +14,30 @@ namespace purecall_record_detail
 
 // Resolved once at install (main thread), read-only afterwards. The handler
 // never calls the loader: every range it needs is a plain integer compare.
-volatile uintptr_t g_gameBase  = 0;
-volatile uintptr_t g_gameSize  = 0;
-volatile uintptr_t g_physxBase = 0;
-volatile uintptr_t g_physxSize = 0;
+// Main install fills these immutable ranges and the path/previous-handler
+// state before publishing the encoded handler slot. Any purecall handler
+// reads them directly, without a copied set. Failed install clears its
+// unpublished path/handler; an armed handler has no concurrent metadata
+// rewrite or torn set. Teardown uninstalls the slot without resetting ranges.
+static volatile uintptr_t g_gameBase  = 0;
+static volatile uintptr_t g_gameSize  = 0;
+static volatile uintptr_t g_physxBase = 0;
+static volatile uintptr_t g_physxSize = 0;
 
 typedef void (__cdecl *PurecallHandlerFn)(void);
 
 // Non-NULL only if PhysXCore64 already carried a handler at install time.
 // Chained rather than replaced: see InstallPurecallRecorder for why.
-PurecallHandlerFn g_priorHandler = NULL;
+static PurecallHandlerFn g_priorHandler = NULL;
 
-char g_dumpPath[MAX_PATH] = { 0 };
-volatile LONG g_recordSeq = 0;
+static char g_dumpPath[MAX_PATH] = { 0 };
+static volatile LONG g_recordSeq = 0;
 
 // Teardown state (main thread only, both at install and at DLL_PROCESS_DETACH
 // -- see UninstallPurecallRecorder). g_handlerAddr is 0 until armed.
-volatile uintptr_t g_handlerAddr    = 0;
-volatile unsigned __int64 g_installedEncoded = 0; // the value we wrote
-volatile unsigned __int64 g_priorRaw = 0;         // the value it replaced (0 = none)
+static volatile uintptr_t g_handlerAddr    = 0;
+static volatile unsigned __int64 g_installedEncoded = 0; // the value we wrote
+static volatile unsigned __int64 g_priorRaw = 0;         // the value it replaced (0 = none)
 
 // Deferred-install state (main thread only: startPlugin and
 // hook_updateCameraZone are the only two callers). PhysXCore64.dll is
@@ -40,18 +45,18 @@ volatile unsigned __int64 g_priorRaw = 0;         // the value it replaced (0 = 
 // there is not a verdict -- it is retried from PurecallRecordTick until it
 // either arms or the retry window (purecall_layout.h) expires.
 enum PurecallState { kPurecallStateOff = 0, kPurecallStatePending, kPurecallStateArmed, kPurecallStateGaveUp };
-int    g_state           = kPurecallStateOff;
-int    g_attemptCount    = 0;
-double g_firstAttemptSec = -1.0;
-double g_lastAttemptSec  = -1.0;
+static int    g_state           = kPurecallStateOff;
+static int    g_attemptCount    = 0;
+static double g_firstAttemptSec = -1.0;
+static double g_lastAttemptSec  = -1.0;
 
-void __cdecl ZoneOpt_OnPurecall(void);
+static void __cdecl ZoneOpt_OnPurecall(void);
 
 // --- SEH-guarded reads. Standalone and POD-only, same idiom as
 // ReadGameBytes16 in prologue.cpp: MSVC 2010 rejects __try in a function that
 // also holds an object needing unwinding. ---
 
-bool SafeReadBytes(const void* addr, void* out, size_t n)
+static bool SafeReadBytes(const void* addr, void* out, size_t n)
 {
 	bool ok = true;
 	GuardEnter();
@@ -67,7 +72,7 @@ bool SafeReadBytes(const void* addr, void* out, size_t n)
 	return ok;
 }
 
-bool SafeReadQword(uintptr_t addr, unsigned __int64* out)
+static bool SafeReadQword(uintptr_t addr, unsigned __int64* out)
 {
 	if (!addr)
 		return false;
@@ -89,7 +94,7 @@ bool SafeReadQword(uintptr_t addr, unsigned __int64* out)
 // in core.cpp does the same thing for KenshiZoneProfiler.dll; duplicated here
 // rather than shared, since this file is meant to stand alone -- see the
 // design note in the header).
-bool ResolveModuleRange(uintptr_t base, uintptr_t* outSize)
+static bool ResolveModuleRange(uintptr_t base, uintptr_t* outSize)
 {
 	if (!base)
 		return false;
@@ -129,7 +134,7 @@ bool ResolveModuleRange(uintptr_t base, uintptr_t* outSize)
 
 typedef FixedLogBufN<512> RecBuf;
 
-const char* ModuleClassName(PurecallModuleClass cls)
+static const char* ModuleClassName(PurecallModuleClass cls)
 {
 	switch (cls)
 	{
@@ -142,7 +147,7 @@ const char* ModuleClassName(PurecallModuleClass cls)
 // Runs on the faulting thread, an instant before abort(). No lock, no CRT
 // stream, no allocation: a fixed buffer and plain CreateFileA/WriteFile,
 // exactly like NavMeshCrashHandler in plugin/crash_record.cpp.
-void WriteRecord(unsigned __int64 tid, unsigned __int64 qpc,
+static void WriteRecord(unsigned __int64 tid, unsigned __int64 qpc,
                   unsigned __int64 purecallRet, unsigned __int64 culprit,
                   PurecallModuleClass cls, unsigned __int64 culpritRva,
                   bool chained)
@@ -185,7 +190,7 @@ void WriteRecord(unsigned __int64 tid, unsigned __int64 qpc,
 // handler at all, which just falls through to abort()). Prototype fixed by
 // the CRT: void (__cdecl *)(void), called with a plain `call rax` -- no
 // arguments, no return value read afterwards.
-void __cdecl ZoneOpt_OnPurecall(void)
+static void __cdecl ZoneOpt_OnPurecall(void)
 {
 	// The address _purecall itself will resume at once this call returns.
 	// Reading it is informational only (it always lands in PhysXCore64); the
@@ -230,7 +235,7 @@ void __cdecl ZoneOpt_OnPurecall(void)
 // and logs that outcome itself. Returns false only for "the module is not
 // loaded yet" -- the one outcome purecall_record.cpp retries, silently, so
 // the once-a-second probe doesn't spam the log.
-bool TryArmPurecallRecorder()
+static bool TryArmPurecallRecorder()
 {
 	uintptr_t physxBase = (uintptr_t)GetModuleHandleA("PhysXCore64.dll");
 	if (!physxBase)

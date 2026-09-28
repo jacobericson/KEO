@@ -19,6 +19,11 @@
 bool           isTransitionActive   = false;
 int            deferredFrameCount   = 0;
 LARGE_INTEGER  transitionStartTime;
+// Any dismissal caller fills the end stamp, then atomically raises pending.
+// Main TransitionCompleteIfPending claims that flag before reporting and
+// resetting the bracket. Flag ordering publishes earlier stores, not an
+// immutable copy: another dismissal can restamp it while pending. Mixed
+// diagnostic stamps are tolerated; the claim clears pending each completion.
 volatile LONG  transitionEndPending  = 0;
 LARGE_INTEGER  transitionEndQpc;
 DWORD          transitionEndTid      = 0;
@@ -46,6 +51,10 @@ static LONG          transitionEndGen = 0;
 // LogTransitionTarget on the main thread. When the start ran off the main
 // thread, g_tgtLogPending is raised after the buffer is written and the next
 // main-thread hook_updateCameraZone claims it (interlocked pair orders them).
+// The pending flag orders an off-main capture before the main reporter,
+// which consumes it before logging. The next bracket replaces the buffer;
+// there is no sequence-checked copy, so overlapping captures can mix a
+// diagnostic target. Main captures log directly and clear the pending flag.
 static char          g_tgtLetters[10];
 static int           g_tgtX          = -1;
 static int           g_tgtY          = -1;

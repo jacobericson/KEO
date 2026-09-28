@@ -3,6 +3,12 @@
 // the bg wait takes no lock and checks stop, while unpin takes +152 itself.
 #include "navmesh/scheduling/nm_adjacency_internal.h"
 #include <string.h>
+namespace nm_adjacency_detail {
+static const size_t OFF_NMG_THREAD_RUNNING = 0x108;
+static const LONGLONG kAgeAfterMs = 100;   // a worker-skipped job is reserved after this
+static const DWORD    kBgStopPollMs = 10;  // longest wait before the stop flags are read again
+static const LONGLONG kBgSliceMs  = 40;    // then the bg thread idles in threadProc's sleep
+} // namespace nm_adjacency_detail
 using namespace nm_adjacency_detail;
 static void NoteDeferral(LONGLONG waited);
 // ---------------------------------------------------------------------------

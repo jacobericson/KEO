@@ -28,6 +28,9 @@ bool AstarCostHookInstalled()
 // fire, but its SizeOfImage is not stored anywhere else in this plugin.
 // Same read-only PE-header walk as core.cpp's ProfilerImageResolve, applied
 // to the game module instead of this DLL's own.
+// Any cost caller may initialize this immutable image-size cache with an
+// aligned scalar store; later callers read it directly. Racing initializers
+// compute the same size. No reset, and the scalar cannot tear.
 static volatile uintptr_t g_gameImageSize = 0;
 
 static uintptr_t GameImageSize()
@@ -74,6 +77,10 @@ static const int ASTAR_STATUS_SLOTS = 6;
 
 // One outcome's histogram: a count/ticks sum plus the latency (us) and
 // iteration-count buckets (astar_cost_policy.h's log2 bucketing).
+namespace astar_cost_detail {
+// Any search-thread writer publishes each histogram bucket/count atomically;
+// main reports and resets fields independently per window. Mixed diagnostic
+// bucket epochs are tolerated, with no coherent struct publication.
 struct AstarOutcomeHist
 {
 	volatile LONG     count;
@@ -81,6 +88,8 @@ struct AstarOutcomeHist
 	volatile LONG     latHistUs[ASTAR_HIST_BUCKETS];
 	volatile LONG     iterHist[ASTAR_HIST_BUCKETS];
 };
+} // namespace astar_cost_detail
+using namespace astar_cost_detail;
 
 // Reduced cut of "class x status": success, the two terminated/cause=3
 // (search-state-full) buckets split by whether the 4x boost wrote
@@ -88,13 +97,22 @@ struct AstarOutcomeHist
 // unboosted open-set limit, so its cause=3 rate is not directly comparable
 // to an unboosted one), and everything else. statusCount keeps the plain
 // per-status counts a reader can total independently of this cut.
+namespace astar_cost_detail {
 enum { ASTAR_OUT_OK = 0, ASTAR_OUT_CAUSE3_UNBOOSTED = 1, ASTAR_OUT_CAUSE3_BOOSTED = 2, ASTAR_OUT_OTHER = 3, ASTAR_OUT_COUNT = 4 };
+} // namespace astar_cost_detail
+using namespace astar_cost_detail;
 
+// Any AstarCostNote caller atomically publishes outcome/status counters;
+// the main tick reads and resets each field independently per window. No
+// coherent set is copied; mixed diagnostic epochs are tolerated.
+namespace astar_cost_detail {
 struct AstarClassStats
 {
 	volatile LONG   statusCount[ASTAR_STATUS_SLOTS];
 	AstarOutcomeHist outcome[ASTAR_OUT_COUNT];
 };
+} // namespace astar_cost_detail
+using namespace astar_cost_detail;
 
 static AstarClassStats g_classStats[ASTAR_CALLER_CLASS_COUNT];
 
@@ -115,22 +133,26 @@ static volatile LONG g_staleBoostGate = 0;
 // request-pointer key, and this hook runs on the contentStream thread with
 // only the request object in hand -- there is no join between the two, so
 // every sample here lands in ASTAR_LEG_UNKNOWN.
+namespace astar_cost_detail {
 enum AstarLegTag { ASTAR_LEG_UNKNOWN = 0, ASTAR_LEG_DIRECT = 1, ASTAR_LEG_EDGE = 2, ASTAR_LEG_COUNT = 3 };
+} // namespace astar_cost_detail
+using namespace astar_cost_detail;
 
+// Any search caller atomically increments caps; main transition completion
+// increments transitions and the main tick reads each scalar separately.
+// Session cumulative with no reset; mixed diagnostic totals are tolerated.
 static volatile LONG g_capCumulative[2][2][ASTAR_LEG_COUNT];   // [player][boosted][leg]
 static volatile LONG g_transitionsCompleted = 0;
 
 // --- Slowest-capped-search ring: spin-guarded, not lock-free ---
 //
-// Only a status==3/cause==3 character search takes this lock, which is rare
-// next to the interlocked accumulators above (every call takes those), so a
-// short spin here does not compete with the hot path the way a per-call lock
-// would. PathSlow (path_pool_report.cpp) can use a true single-writer seqlock
-// because only the path thread ever calls PPSlowConsider; this ring can be
-// fed from the path thread and a NavMesh worker at once, so it needs mutual
-// exclusion on the insert, not just a publish barrier. AstarCostTick prints
-// and clears it every window (main thread, under the same lock), so it never
-// grows unbounded and never mixes readers with an in-progress insert.
+// Any capped-character search writer inserts under g_slowLock; release
+// publishes the set. Main PrintAstarSlowLine takes that same spinlock, copies
+// and clears the count each window, then logs outside it. Torn copied sets
+// are rejected by mutual exclusion. The writer also reads an unlocked
+// minimum/count hint, which may miss a diagnostic insert but cannot alter
+// the set without taking the lock. No whole-session payload reset.
+namespace astar_cost_detail {
 struct AstarSlowEntry
 {
 	LONGLONG ticks;
@@ -141,6 +163,8 @@ struct AstarSlowEntry
 	unsigned goalFaceKey;
 	float    goalDist3D;
 };
+} // namespace astar_cost_detail
+using namespace astar_cost_detail;
 
 static const int ASTAR_SLOW_N = 8;
 static AstarSlowEntry     g_slowEntries[ASTAR_SLOW_N];

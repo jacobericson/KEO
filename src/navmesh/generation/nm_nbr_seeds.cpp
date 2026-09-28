@@ -41,7 +41,10 @@ using namespace nm_workers_detail;
 // LogMsg. NavMesh::mutex is taken under processJobCS exactly as the original
 // takes it, so the lock order is unchanged.
 
+namespace nm_nbr_seeds_detail {
 enum { NBR_CLASS_UNSEEN = 0, NBR_CLASS_NONE, NBR_CLASS_TEMP, NBR_CLASS_LIVE, NBR_CLASS_ZERO };
+} // namespace nm_nbr_seeds_detail
+using namespace nm_nbr_seeds_detail;
 
 // The direction index of a unit step, -1 for anything else.
 static inline int NbrDirIndex(int dx, int dy)
@@ -82,8 +85,14 @@ nmgGetSeedPointsAdj_t orig_getSeedPointsAdj = NULL;
 // that side. Records are freed at NavMesh::stop, after the game has joined its
 // own NavMesh threads, and only when every worker has exited.
 
+namespace nm_nbr_seeds_detail {
 enum { NBR_SI_NONE = 0, NBR_SI_SHIP, NBR_SI_PLACE, NBR_SI_NOFILE, NBR_SI_LATE, NBR_SI_HBAD };
+} // namespace nm_nbr_seeds_detail
+using namespace nm_nbr_seeds_detail;
+namespace nm_nbr_seeds_detail {
 enum { NBR_REC_SHIP = 1, NBR_REC_PLACE, NBR_REC_NOFILE };
+} // namespace nm_nbr_seeds_detail
+using namespace nm_nbr_seeds_detail;
 
 // Unit step of side s (W E S N), the same order as the hook's directions.
 static const int kNbrSideDx[NBR_DIR_COUNT] = { -1, 1,  0, 0 };
@@ -104,6 +113,7 @@ static const DWORD NBR_INFLIGHT_WAIT_MS = 1000;
 // hkArray<hkVector4> getSeedPointsFromAdjacentZone appends to at 0x3C9A02-
 // 0x3C9A4C (settings+0xA0 data, +0xA8 size, +0xAC capacity and flags).
 
+namespace nm_nbr_seeds_detail {
 struct NbrSeedRecord
 {
 	int          kind;                        // NBR_REC_*
@@ -112,10 +122,15 @@ struct NbrSeedRecord
 	int          count[NBR_DIR_COUNT];        // seeds per side
 	float*       seeds[NBR_DIR_COUNT];        // 4 floats (an hkVector4) per seed
 };
+} // namespace nm_nbr_seeds_detail
+using namespace nm_nbr_seeds_detail;
 
-// Per cell (index x * 64 + y): NULL (not built), NBR_REC_INFLIGHT (a thread is
-// building it) or the published NbrSeedRecord*. Written only through
-// InterlockedCompareExchangePointer / InterlockedExchangePointer.
+// Worker/bg NbrSeedPrefetch claims a cell (x * 64 + y) by atomic pointer CAS
+// to NBR_REC_INFLIGHT. NbrBuildCell publishes a completed immutable record
+// by pointer exchange; prefetch and processJobCS-held NbrApplyStandIn read
+// atomically. A reader sees NULL, inflight or a whole record, never a torn
+// behavior input. Abandoned builds restore NULL; NbrSeedFreeTable clears
+// and frees only after stop joined bg and no worker remains alive.
 static void* volatile g_nbrTable[ZONE_GRID_COUNT] = {};
 static void* const    NBR_REC_INFLIGHT = (void*)(uintptr_t)1;
 
@@ -287,6 +302,7 @@ static NbrSeedRecord* NbrExtractRecord(uintptr_t mesh, float h)
 // deleteMesh carry C++ unwind state; if anything unwinds through the build, the
 // mutex is still released (a build mutex left held would stall every section
 // add, zone creation and tile save on the path thread for good).
+namespace nm_nbr_seeds_detail {
 struct NbrBuildMutexScope
 {
 	void* nmg;
@@ -309,10 +325,13 @@ private:
 	NbrBuildMutexScope(const NbrBuildMutexScope&);
 	NbrBuildMutexScope& operator=(const NbrBuildMutexScope&);
 };
+} // namespace nm_nbr_seeds_detail
+using namespace nm_nbr_seeds_detail;
 
 // The file name std::string getFilename constructs (the game's own allocation),
 // released through the game's own string routine: no CRT string object of ours
 // on a NavMesh thread.
+namespace nm_nbr_seeds_detail {
 struct NbrGameString
 {
 	unsigned __int64 storage[GAME_STRING_SIZE / 8];
@@ -332,6 +351,8 @@ private:
 	NbrGameString(const NbrGameString&);
 	NbrGameString& operator=(const NbrGameString&);
 };
+} // namespace nm_nbr_seeds_detail
+using namespace nm_nbr_seeds_detail;
 
 // Loads cell (x, y)'s shipped tile and extracts its record, exactly as
 // stitchUnloadedZone (0x3CB140) loads an unloaded neighbour on these threads:

@@ -34,19 +34,22 @@ struct ProcessMemoryCountersEx
 
 typedef BOOL (WINAPI *PfnGetProcessMemoryInfo)(HANDLE, ProcessMemoryCountersEx*, DWORD);
 
-PfnGetProcessMemoryInfo g_getProcessMemoryInfo = 0;
-HANDLE                  g_selfProcess = 0;
-volatile LONG           g_initialised = 0;
+static PfnGetProcessMemoryInfo g_getProcessMemoryInfo = 0;
+static HANDLE                  g_selfProcess = 0;
+static volatile LONG           g_initialised = 0;
 
-// Seqlock over the published sample. Only the periodic tick writes, and a
-// torn read would only misprint a diagnostic, but two attempts cost nothing
-// and remove even that.
-volatile LONG g_sampleSeq = 0;
-MemFigures    g_sample;
-double        g_sampleTime = -1.0;
-volatile LONG g_haveSample = 0;
+// Main initialization and the periodic LogMemoryStats tick write sample and
+// time between odd/even g_sampleSeq updates, then raise g_haveSample. Main
+// reporters and any-thread crash readers use MemProbeLastSample: two checked
+// copies, with failure reported as unavailable. A torn copy is rejected; the
+// sample is diagnostic. Initialized once, never reset; a failed live query
+// preserves the previous sample and timestamp.
+static volatile LONG g_sampleSeq = 0;
+static MemFigures    g_sample;
+static double        g_sampleTime = -1.0;
+static volatile LONG g_haveSample = 0;
 
-double g_lastLogTime = -1.0;
+static double g_lastLogTime = -1.0;
 #ifdef ZONEOPT_DEBUG
 // Matched to the cache stats line's cadence, so three consecutive rows that
 // reprint one sample cannot read as flat memory.

@@ -42,6 +42,10 @@ static const int kMaxChain  = 12;
 #define UNW_FLAG_NHANDLER 0
 #endif
 
+// Main install fills the enabled flag, record path, image extent and QPC
+// frequency before publishing the hook. Path-thread calls then read this
+// immutable diagnostic setup directly; no changing set can tear. Disabled
+// installation leaves it inert, and there is no runtime metadata reset.
 static bool             g_enabled   = false;
 static char             g_recordPath[MAX_PATH] = { 0 };
 static unsigned __int64 g_gameBase  = 0;
@@ -109,10 +113,14 @@ static bool ResolveImageSize(unsigned __int64 base, unsigned __int64* outSize)
 // --- record formatter: base/fixed_log_buf.h's builder over GBuf, a 1024-byte
 // buffer; no CRT, no allocation. ---
 
+namespace navmesh_update_guard_detail {
 typedef FixedLogBufN<1024> GBuf;
+} // namespace navmesh_update_guard_detail
+using namespace navmesh_update_guard_detail;
 
 
 // What the frame walk established about the faulting thread.
+namespace navmesh_update_guard_detail {
 struct UnwindFacts
 {
 	bool ok;          // the walk ran to completion without faulting
@@ -123,6 +131,8 @@ struct UnwindFacts
 	unsigned __int64 chain[kMaxChain]; // exe RVAs, innermost first
 	bool stackScanUsed; // chain came from StackScanFallback, not RtlVirtualUnwind
 };
+} // namespace navmesh_update_guard_detail
+using namespace navmesh_update_guard_detail;
 
 // Fixed span above RSP that StackScanFallback reads, in qwords. A page is
 // ample for the frame depths this guard has actually seen and keeps the scan

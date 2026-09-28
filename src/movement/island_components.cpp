@@ -4,6 +4,7 @@
 
 #include "movement/islands.h"
 #include "movement/islands_internal.h"
+#include "movement/island_overlay_internal.h"
 #include "zone/grid.h"
 #include <intrin.h>
 #include <iomanip>
@@ -16,6 +17,17 @@ const int MAX_MEMBERS     = ZONE_GRID_COUNT;  // every zone at most once
 // Published snapshot (double buffer + per-buffer seqlock)
 // =========================================================================
 
+
+
+} // namespace islands_detail
+using namespace islands_detail;
+namespace island_components_detail {
+// Main-thread PublishSnapshot writes the inactive buffer, with seq odd
+// during the copy and even before exchanging the active index. Main and AI
+// hooks read through SnapReadComps or SnapCopyMembers, with two attempts.
+// ResetBuilder publishes an invalid buffer on a load or ZoneManager change.
+// The component answer is a behavior input: a torn read is rejected and the
+// hook falls back to the original answer. The component overlay is dormant.
 struct IslandSnapshot {
 	volatile LONG  seq;          // odd while being written
 	volatile LONG  valid;        // 0 = no components (save load / no zm)
@@ -27,9 +39,29 @@ struct IslandSnapshot {
 	unsigned short memberCount[MAX_COMPS];
 	unsigned short members[MAX_MEMBERS];         // zone indices grouped by component
 };
+} // namespace island_components_detail
+using namespace island_components_detail;
+namespace islands_detail {
+static IslandSnapshot g_snap[2];
+static volatile LONG  g_activeSnap = 0;
 
-IslandSnapshot g_snap[2];
-volatile LONG  g_activeSnap = 0;
+// Main thread writes these builder scalars in IslandTick, IslandReset,
+// IslandRequestRebuild, WalkSetB, Rebuild and ResetBuilder. HookCellSpan
+// reads only g_builderZm on any thread with an aligned pointer-sized load
+// for the far-span rule; the other scalars are main-thread-only.
+// Plain main-thread stores publish these scalars separately; ResetBuilder
+// resets its state and IslandReset clears g_builderZm. The any-thread span
+// reader takes only the aligned pointer; no coherent scalar set is promised,
+// and an unresolved zone index leaves the far-span rule unchanged.
+uintptr_t     g_builderZm = 0;
+unsigned int  g_snapGen   = 0;
+unsigned int  g_setBSig   = 0;
+bool          g_haveSig   = false;
+bool          g_rebuildRequested = false;
+double        g_lastEligibility  = -1.0;
+int            g_setBAccessible = 0;
+int            g_curCompCount = 0;
+int            g_curModZones = 0;
 
 
 // Seqlock read of comp[] for up to two zones. b may be 0.
@@ -131,31 +163,31 @@ bool AppendLektor(uintptr_t lek, uintptr_t z)
 
 
 // Last Set B walk (for unexpl + the vanilla router list)
-unsigned short g_setBIdx[ZONE_GRID_COUNT];
-int            g_setBCount = 0;
-unsigned char  g_inSetB[ZONE_GRID_COUNT];
+static unsigned short g_setBIdx[ZONE_GRID_COUNT];
+static int            g_setBCount = 0;
+static unsigned char  g_inSetB[ZONE_GRID_COUNT];
 
 // Current published result (main-thread mirror for comparison + diagnostics)
-short          g_curComp[ZONE_GRID_COUNT];
-unsigned short g_curMemberStart[MAX_COMPS];
-unsigned short g_curMemberCount[MAX_COMPS];
-unsigned short g_curMembers[MAX_MEMBERS];
-unsigned char  g_curIsMod[ZONE_GRID_COUNT];
-bool           g_curValid = false;
-int            g_compOverflow = 0;
-bool           g_inputsLogged = false;
+static short          g_curComp[ZONE_GRID_COUNT];
+static unsigned short g_curMemberStart[MAX_COMPS];
+static unsigned short g_curMemberCount[MAX_COMPS];
+static unsigned short g_curMembers[MAX_MEMBERS];
+static unsigned char  g_curIsMod[ZONE_GRID_COUNT];
+static bool           g_curValid = false;
+static int            g_compOverflow = 0;
+static bool           g_inputsLogged = false;
 
 // Scratch for a rebuild
-short          g_ufParent[ZONE_GRID_COUNT];
-unsigned char  g_included[ZONE_GRID_COUNT];
-unsigned char  g_isMod[ZONE_GRID_COUNT];
-short          g_newComp[ZONE_GRID_COUNT];
-unsigned short g_newMemberStart[MAX_COMPS];
-unsigned short g_newMemberCount[MAX_COMPS];
-unsigned short g_newMembers[MAX_MEMBERS];
-short          g_rootComp[ZONE_GRID_COUNT];
+static short          g_ufParent[ZONE_GRID_COUNT];
+static unsigned char  g_included[ZONE_GRID_COUNT];
+static unsigned char  g_isMod[ZONE_GRID_COUNT];
+static short          g_newComp[ZONE_GRID_COUNT];
+static unsigned short g_newMemberStart[MAX_COMPS];
+static unsigned short g_newMemberCount[MAX_COMPS];
+static unsigned short g_newMembers[MAX_MEMBERS];
+static short          g_rootComp[ZONE_GRID_COUNT];
 
-int UfFind(int i)
+static int UfFind(int i)
 {
 	while (g_ufParent[i] != i)
 	{
@@ -165,7 +197,7 @@ int UfFind(int i)
 	return i;
 }
 
-void UfUnion(int a, int b)
+static void UfUnion(int a, int b)
 {
 	int ra = UfFind(a), rb = UfFind(b);
 	if (ra == rb) return;
@@ -211,7 +243,7 @@ void WalkSetB(uintptr_t zm)
 	          ^ (unsigned int)g_setBAccessible * 0xC2B2AE35u;
 }
 
-void PublishSnapshot(bool valid, uintptr_t zm)
+static void PublishSnapshot(bool valid, uintptr_t zm)
 {
 	LONG cur = g_activeSnap;
 	IslandSnapshot* w = &g_snap[(cur + 1) & 1];
@@ -237,8 +269,8 @@ void PublishSnapshot(bool valid, uintptr_t zm)
 	InterlockedExchange(&g_activeSnap, (cur + 1) & 1);
 }
 
-void DumpComponents();
-void LogInputsOnce(uintptr_t zm);
+static void DumpComponents();
+static void LogInputsOnce(uintptr_t zm);
 
 // Full rebuild (main thread). Publishes only when the result changes.
 //
@@ -412,7 +444,7 @@ int RouterList(uintptr_t zm, uintptr_t t, unsigned short* out, int maxOut)
 	return n;
 }
 
-void DumpComponents()
+static void DumpComponents()
 {
 #ifdef ZONEOPT_DEBUG
 	{
@@ -443,7 +475,7 @@ void DumpComponents()
 
 // The router's bounds minimum and navmesh+468 must match
 // centre - zoneStep/2 and zoneStep for the zones we route through.
-void LogInputsOnce(uintptr_t zm)
+static void LogInputsOnce(uintptr_t zm)
 {
 	g_inputsLogged = true;
 	uintptr_t navmesh = *(uintptr_t*)((uintptr_t)GameAddr(RVA_GLOBAL_SECTION_MGR));

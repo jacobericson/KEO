@@ -1,6 +1,7 @@
 // nm_adjacency_observer.cpp - claim end and drain observer.
-// Worker/bg claim end takes queue +152 then unlocks before wake; the NavMesh bg
-// drain hook calls the original first, then takes +152 before done.mutex.
+// Worker/bg claim end takes queue +152 then unlocks before wake. The path
+// thread drain (contentStream through NavMesh::update) calls the original
+// first, then takes +152 before done.mutex.
 #include "navmesh/scheduling/nm_adjacency_internal.h"
 using namespace nm_adjacency_detail;
 namespace nm_adjacency_detail {

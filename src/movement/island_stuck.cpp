@@ -3,6 +3,7 @@
 
 #include "movement/islands.h"
 #include "movement/islands_internal.h"
+#include "movement/island_overlay_internal.h"
 #include "zone/grid.h"
 
 using namespace islands_detail;

@@ -3,6 +3,40 @@
 
 #include "pathfind/path_pool_internal.h"
 
+namespace npc_wait_diag_detail {
+struct NpcWaitEntry
+{
+	void*  hc;
+	int    state;
+	double since;      // when 'state' was last observed changing
+	float  posX, posZ; // last CharMovement position sample
+	double posSince;   // when the position last moved past NPC_NO_MOVE_EPS_SQ
+	bool   inUse;
+};
+
+struct NpcWaitWalkResult
+{
+	int waitingTotal, waiting4, waiting5;
+	int failed3FarDest;
+	int stoppedFarDestNoMove;
+	int navWaitZoneNotReady;
+	double longestWaitSec;
+	int haveTop;
+	float topPosX, topPosZ;
+	int topGx, topGy;
+	int topState;
+	double topDestDist;
+	int topZoneReady;      // -1 unknown, 0/1
+	int playerWaitingTotal, playerWaiting4, playerWaiting5;
+	// 1 when the walk faulted part-way (a node or character freed mid-walk):
+	// the counts above cover only the characters seen before the fault, and
+	// the NpcPathWait line says so (partial=1) instead of passing them off as
+	// the whole list.
+	int faulted;
+};
+} // namespace npc_wait_diag_detail
+using namespace npc_wait_diag_detail;
+
 namespace path_pool_detail {
 // =========================================================================
 // NPC wait diagnostic (main thread, once per second)
@@ -24,25 +58,17 @@ static const float NPC_FAR_DEST_UNITS  = 100.0f;
 static const float NPC_NO_MOVE_EPS_SQ  = 0.25f;   // 0.5 units
 static const double NPC_NO_MOVE_SEC    = 5.0;
 
-struct NpcWaitEntry
-{
-	void*  hc;
-	int    state;
-	double since;      // when 'state' was last observed changing
-	float  posX, posZ; // last CharMovement position sample
-	double posSince;   // when the position last moved past NPC_NO_MOVE_EPS_SQ
-	bool   inUse;
-};
+
 
 static NpcWaitEntry g_npcWaitTable[NPC_WAIT_TABLE_SIZE];
 
-PPHist g_finishedWaitHist;      // seconds*1e6, waits that ended this window
+static PPHist g_finishedWaitHist;      // seconds*1e6, waits that ended this window
 // Character-samples in state 6 across this window's once-per-second polls
 // (NOT a count of polls: every character seen in state 6 on a given poll
 // adds one sample, so N characters stuck in state 6 on the same poll add N).
 // Split by player-owned so the NPC line's reissue(6) only counts NPCs.
-volatile LONG g_reissueSamples       = 0;  // non-player
-volatile LONG g_reissueSamplesPlayer = 0;  // player-owned
+static volatile LONG g_reissueSamples       = 0;  // non-player
+static volatile LONG g_reissueSamplesPlayer = 0;  // player-owned
 
 static uintptr_t g_npcZmSeen     = 0;
 static bool      g_npcWasLoading = false;
@@ -238,8 +264,8 @@ static bool PPReadCharListHead(uintptr_t base, void** headOut)
 // the same list). pauseState itself is RVA_GLOBAL_GAMEWORLD (rva.h).
 static const size_t OFF_PAUSESTATE_CHAR_UPDATE_LIST_MAIN = 0x750;
 
-NpcWaitWalkResult g_lastWalk;
-bool              g_haveLastWalk = false;
+static NpcWaitWalkResult g_lastWalk;
+static bool              g_haveLastWalk = false;
 
 void RunNpcWaitDiagnostic(double now)
 {
@@ -282,6 +308,57 @@ void RunNpcWaitDiagnostic(double now)
 	PPWalkCharList(head, now, zoneMgr, &r);
 	g_lastWalk = r;
 	g_haveLastWalk = true;
+}
+
+
+void PrintNpcPathWaitLine(double windowSec)
+{
+	if (!g_haveLastWalk)
+		return;
+
+	NpcWaitWalkResult r = g_lastWalk;
+
+	double finP50 = PPHistPercentileUs(&g_finishedWaitHist, 0.50) / 1000000.0;
+	double finP90 = PPHistPercentileUs(&g_finishedWaitHist, 0.90) / 1000000.0;
+	double finMax = InterlockedExchange(&g_finishedWaitHist.maxUs, 0) / 1000000.0;
+	PPHistReset(&g_finishedWaitHist);
+
+	LONG reissueSamples       = InterlockedExchange(&g_reissueSamples, 0);
+	LONG reissueSamplesPlayer = InterlockedExchange(&g_reissueSamplesPlayer, 0);
+	// reissue(6) is character-samples in state 6 across this window's
+	// once-per-second polls (not a poll count: N characters seen in state 6
+	// on one poll add N, not 1), normalised to a /10s rate using windowSec
+	// (measured by PathPoolTickMain from the real interval between prints,
+	// so this is correct in both DEV's 10s and PROD's 30s window, and on a
+	// shorter first window). Split by player-owned, so this rate counts
+	// only NPCs.
+	double reissueRate10s       = (windowSec > 0.0) ? ((double)reissueSamples * 10.0 / windowSec) : 0.0;
+	double reissueRate10sPlayer = (windowSec > 0.0) ? ((double)reissueSamplesPlayer * 10.0 / windowSec) : 0.0;
+
+	std::ostringstream ss;
+	ss << std::fixed << std::setprecision(1);
+	ss << "NpcPathWait: waiting=" << r.waitingTotal
+	   << " (4:" << r.waiting4 << " 5:" << r.waiting5 << ")"
+	   << " finished p50/p90/max=" << finP50 << "/" << finP90 << "/" << finMax << "s"
+	   << " longest=" << r.longestWaitSec << "s\n"
+	   << "  failed(3,farDest)=" << r.failed3FarDest
+	   << " reissue(6)=" << reissueRate10s << "/10s"
+	   << " stopped(farDest,st0/1,noMove5s)=" << r.stoppedFarDestNoMove
+	   << " navWait(st0/1,zoneNotReady)=" << r.navWaitZoneNotReady;
+	if (r.faulted)
+		ss << " partial=1";
+	if (r.haveTop)
+	{
+		ss << "\n  top: (" << r.topPosX << "," << r.topPosZ << ")"
+		   << " zone(" << r.topGx << "," << r.topGy << ")"
+		   << " state=" << r.topState
+		   << " destDist=" << r.topDestDist
+		   << " zoneReady=" << r.topZoneReady;
+	}
+	ss << "\n  player: waiting=" << r.playerWaitingTotal
+	   << " (4:" << r.playerWaiting4 << " 5:" << r.playerWaiting5 << ")"
+	   << " reissue(6)=" << reissueRate10sPlayer << "/10s";
+	LogMsg(ss.str());
 }
 
 

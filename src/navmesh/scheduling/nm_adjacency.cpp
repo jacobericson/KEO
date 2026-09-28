@@ -37,7 +37,6 @@ namespace nm_adjacency_detail {
 // image; read at install.
 static const size_t RVA_SUBMAP_CELL_Z = 0x20989F0;
 static const size_t RVA_SUBMAP_CELL_X = 0x20989F4;
-const size_t OFF_NMG_THREAD_RUNNING = 0x108;
 
 int   s_mode = MODE_OFF;
 static const char* s_modeWhy = "not installed";
@@ -45,6 +44,13 @@ static float s_cellX = 0.0f, s_cellZ = 0.0f;
 bool  s_observerInstalled = false;
 const char* s_observerWhy = "not attempted";
 
+// Worker/bg claim scans and claim ends mutate the registry under queue
+// +152; the path-thread drain observer takes +152 then done.mutex. WBegin
+// makes g_regSeq odd, WEnd publishes the hint then makes it even. Exclusion
+// scans read under +152; the stitch diagnostic copies entries with four
+// sequence-checked attempts and counts/omits a failed copy. No torn copy is
+// used. Initialized before install; individual jobs free on drop or drain,
+// and stop unpins. bgLastLook/bgLooked are the bg-only unlocked exception.
 NmAdjRegistry g_reg;
 volatile LONG g_regSeq  = 0;   // odd while a writer is inside
 volatile LONG g_pubHint = 0;   // published entries, for the observer's fast path
@@ -54,9 +60,6 @@ __declspec(thread) int              t_own     = -1;
 __declspec(thread) unsigned __int64 t_ownTask = 0;
 
 LONGLONG s_qpf = 1;
-const LONGLONG kAgeAfterMs = 100;   // a worker-skipped job is reserved after this
-const DWORD    kBgStopPollMs = 10;  // longest wait before the stop flags are read again
-const LONGLONG kBgSliceMs  = 40;    // then the bg thread idles in threadProc's sleep
 
 // Counters.
 volatile LONG   s_calls        = 0;   // NavMeshGenerator::update passes
@@ -94,10 +97,8 @@ volatile LONG   s_spanOut      = 0;
 volatile LONG   s_unowned      = 0;
 volatile LONG   s_torn         = 0;
 volatile LONG   s_violLines    = 0;
-const LONG      kMaxViolLines  = 8;
 
 double s_nextBeat = 0.0;
-const double kBeatSeconds = 60.0;
 
 LONG Read(volatile LONG* p) { return InterlockedCompareExchange(p, 0, 0); }
 LONG64 Read64(volatile LONG64* p) { return InterlockedCompareExchange64(p, 0, 0); }
