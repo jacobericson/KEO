@@ -1,4 +1,4 @@
-# KEO — Kenshi Engine Optimizations
+# KEO: Kenshi Engine Optimizations
 
 A performance and stability mod for Kenshi, built as an RE_Kenshi plugin.
 
@@ -14,9 +14,9 @@ KEO makes moving between areas of the map smoother. It loads areas before your s
 - **Faster area loading.** Areas around your camera and your squads are loaded ahead of time, so crossing into a new one is much quicker.
 - **Pathing ready sooner.** Walkable ground for a new area is prepared faster and saved to disk, so an area you have visited before is ready right away.
 - **Better squad movement.** Long move orders the game drops partway are re-issued, and squads keep together while travelling.
-- **Higher frame rate.** Render and particle optimizations, each with its own switch. Any that visibly changes the picture is off by default.
-- **Stability fixes** for several of the game's own crashes that can happen while areas load.
-- **ZoneOpt options tab** in the game's Options window, with an **in-game benchmark** that measures the frame-rate optimizations on your own machine.
+- **Higher frame rate.** Render and particle optimizations. Any change that causes a noticeable drop in quality is off by default.
+- **Stability fixes** for several of the vanilla bugs and crashes.
+- **ZoneOpt tab** in the game's Options window, with an **in-game benchmark** that measures the frame-rate optimizations on your own machine.
 
 ## Requirements
 
@@ -25,7 +25,7 @@ KEO makes moving between areas of the map smoother. It loads areas before your s
 
 ## Installation
 
-- **Steam Workshop:** subscribe, and enable the mod in the launcher.
+- **[Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3802456502):** subscribe, and enable the mod in the launcher.
 - **Manual:** download the latest release, copy the `KEO` folder into Kenshi's `mods\` directory, and launch Kenshi through the RE_Kenshi launcher.
 
 ## Configuration
