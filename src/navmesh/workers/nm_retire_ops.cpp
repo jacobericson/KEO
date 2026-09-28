@@ -41,7 +41,7 @@ int RetireOpLiveCount(void* ctx)
 	for (int i = 0; i < c->activeCount; ++i)
 		if (WaitForSingleObject(c->active[i], 0) == WAIT_TIMEOUT)
 			++running;
-	const long counted = InterlockedCompareExchange(&g_navMeshWorkersLive, 0, 0);
+	const long counted = InterlockedCompareExchange(&navmesh::g_nmCache.g_navMeshWorkersLive, 0, 0);
 	return counted > running ? (int)counted : running;
 }
 
@@ -193,7 +193,7 @@ void RetireNavMeshWorkers()
 	s.waitMs        = r.waitMs;
 	s.anyWaitFailed = r.anyWaitFailed;
 	s.lastGle       = r.lastGle;
-	s.live          = (int)InterlockedCompareExchange(&g_navMeshWorkersLive, 0, 0);
+	s.live          = (int)InterlockedCompareExchange(&navmesh::g_nmCache.g_navMeshWorkersLive, 0, 0);
 	// Jobs dropped because the stop was seen (after the claim, after
 	// CloneNMG, after missLock; workers and the bg thread). 0 at an idle quit.
 	s.stopDrop      = InterlockedCompareExchange(&g_nmStopDropCount, 0, 0);

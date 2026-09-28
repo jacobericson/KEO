@@ -158,9 +158,9 @@ void BridgeUnlockQueue(void* nmg)
 	fn_readerUnlock((void*)(KLIB_MEMBER(4, (uintptr_t)nmg, NavMeshGenerator_queue_mutex, 152)));
 }
 
-long BridgeIncrement(void*) { return InterlockedIncrement(&workerBusyCount); }
-long BridgeDecrement(void*) { return InterlockedDecrement(&workerBusyCount); }
-long BridgeReadCount(void*) { return InterlockedCompareExchange(&workerBusyCount, 0, 0); }
+long BridgeIncrement(void*) { return InterlockedIncrement(&navmesh::g_nmCache.workerBusyCount); }
+long BridgeDecrement(void*) { return InterlockedDecrement(&navmesh::g_nmCache.workerBusyCount); }
+long BridgeReadCount(void*) { return InterlockedCompareExchange(&navmesh::g_nmCache.workerBusyCount, 0, 0); }
 
 unsigned char BridgeReadFlag(void* nmg)
 {
@@ -189,7 +189,7 @@ BusyBridgeOps GameBusyBridgeOps(uintptr_t nmg)
 void NoteBusyBridge(bool held)
 {
 	if (!held)
-		InterlockedIncrement(&nmBusyBridgeViolCount);
+		InterlockedIncrement(&navmesh::g_nmCache.nmBusyBridgeViolCount);
 }
 
 
@@ -445,7 +445,7 @@ DWORD WINAPI NavMeshWorkerProc(LPVOID param)
 	char buf8[8];
 	char name[32];
 	if (!WorkerInitHavok(workerId, ctx128, buf8, name)) return 1;
-	InterlockedIncrement(&g_navMeshWorkersLive);
+	InterlockedIncrement(&navmesh::g_nmCache.g_navMeshWorkersLive);
 	WorkerStart(workerId);
 	while (!g_workerShutdown)
 	{
@@ -465,7 +465,7 @@ DWORD WINAPI NavMeshWorkerProc(LPVOID param)
 		WorkerCleanupEnd();
 	}
 
-	InterlockedDecrement(&g_navMeshWorkersLive);
+	InterlockedDecrement(&navmesh::g_nmCache.g_navMeshWorkersLive);
 
 	// Deferred, not LogMsg: no CRT strings on a worker, and at quit this runs
 	// while the main thread is in RetireNavMeshWorkers, which flushes it.

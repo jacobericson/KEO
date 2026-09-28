@@ -98,7 +98,7 @@ unsigned int L2SettingsHash()
 static inline void L2Reject(int reason)
 {
 	if (reason >= 0 && reason < L2REJ_REASON_COUNT)
-		InterlockedIncrement(&l2RejCount[reason]);
+		InterlockedIncrement(&navmesh::g_nmCache.l2RejCount[reason]);
 }
 
 
@@ -150,9 +150,9 @@ void GetDiskCachePath(const NavMeshCacheKey& key, char* out, size_t outSize)
 {
 	if (!out || outSize == 0) return;
 	out[0] = 0;
-	if (!nmDiskCacheDirBuf[0]) return;   // InitNavMeshCacheCS has not run
+	if (!navmesh::g_nmCache.nmDiskCacheDirBuf[0]) return;   // InitNavMeshCacheCS has not run
 	L2FormatPathQuiet(out, outSize, "%s%d_%d_%d_%d_%x_%x_%x.bin",
-	                  nmDiskCacheDirBuf,
+	                  navmesh::g_nmCache.nmDiskCacheDirBuf,
 	                  key.gridX, key.gridY, key.sectionTileId, key.jobType,
 	                  key.aabbHash, key.buildingHash, g_modSetHash);
 }
@@ -241,7 +241,7 @@ static void L2SweepTempFiles()
 	now.HighPart = nowFt.dwHighDateTime;
 
 	char pattern[MAX_PATH];
-	if (!L2FormatPath(pattern, sizeof(pattern), "%s*.tmp", nmDiskCacheDirBuf))
+	if (!L2FormatPath(pattern, sizeof(pattern), "%s*.tmp", navmesh::g_nmCache.nmDiskCacheDirBuf))
 		return;
 
 	WIN32_FIND_DATAA fd;
@@ -260,17 +260,17 @@ static void L2SweepTempFiles()
 			continue;   // a write may be in flight right now
 
 		char full[MAX_PATH];
-		if (!L2FormatPath(full, sizeof(full), "%s%s", nmDiskCacheDirBuf, fd.cFileName))
+		if (!L2FormatPath(full, sizeof(full), "%s%s", navmesh::g_nmCache.nmDiskCacheDirBuf, fd.cFileName))
 			continue;
 		if (DeleteFileA(full))
-			InterlockedIncrement(&l2CapEvicted);
+			InterlockedIncrement(&navmesh::g_nmCache.l2CapEvicted);
 	} while (FindNextFileA(h, &fd));
 	FindClose(h);
 }
 
 static void L2ScanAndEvict(long long cap)
 {
-	if (!nmDiskCacheDirBuf[0]) return;
+	if (!navmesh::g_nmCache.nmDiskCacheDirBuf[0]) return;
 
 	L2SweepTempFiles();
 
@@ -279,7 +279,7 @@ static void L2ScanAndEvict(long long cap)
 	if (!recs) return;
 
 	char pattern[MAX_PATH];
-	if (!L2FormatPath(pattern, sizeof(pattern), "%s*.bin", nmDiskCacheDirBuf))
+	if (!L2FormatPath(pattern, sizeof(pattern), "%s*.bin", navmesh::g_nmCache.nmDiskCacheDirBuf))
 	{ free(recs); return; }
 
 	int n = 0;
@@ -297,11 +297,11 @@ static void L2ScanAndEvict(long long cap)
 			if (!L2NameIsCurrentFormat(fd.cFileName))
 			{
 				char full[MAX_PATH];
-				if (!L2FormatPath(full, sizeof(full), "%s%s", nmDiskCacheDirBuf, fd.cFileName))
+				if (!L2FormatPath(full, sizeof(full), "%s%s", navmesh::g_nmCache.nmDiskCacheDirBuf, fd.cFileName))
 					continue;
 				if (DeleteFileA(full))
 				{
-					InterlockedIncrement(&l2CapEvicted);
+					InterlockedIncrement(&navmesh::g_nmCache.l2CapEvicted);
 					continue;
 				}
 			}
@@ -325,12 +325,12 @@ static void L2ScanAndEvict(long long cap)
 		char full[MAX_PATH];
 		for (int i = 0; i < n && total > target; ++i)
 		{
-			if (!L2FormatPath(full, sizeof(full), "%s%s", nmDiskCacheDirBuf, recs[i].name))
+			if (!L2FormatPath(full, sizeof(full), "%s%s", navmesh::g_nmCache.nmDiskCacheDirBuf, recs[i].name))
 				continue;
 			if (DeleteFileA(full))
 			{
 				total -= (long long)recs[i].size;
-				InterlockedIncrement(&l2CapEvicted);
+				InterlockedIncrement(&navmesh::g_nmCache.l2CapEvicted);
 			}
 		}
 	}
@@ -417,7 +417,7 @@ bool BuildDiskCacheBlob(const NavMeshCacheKey& key, const NavMeshCacheEntry& e, 
 	// When the real WB's generation settings differ from the tables
 	// the settings hash describes, this mesh does not match its cache key.
 	// The only producer of L2 bytes, so refusing here stops every write.
-	if (L2Bypassed()) { InterlockedIncrement(&nmL2BypassWrites); return false; }
+	if (L2Bypassed()) { InterlockedIncrement(&navmesh::g_nmCache.nmL2BypassWrites); return false; }
 
 	if (!e.valid || !L2EntryConsistent(e))
 	{ L2NoteWriteFailure(L2WR_BADENTRY, 0, NULL); return false; }
@@ -433,7 +433,7 @@ bool BuildDiskCacheBlob(const NavMeshCacheKey& key, const NavMeshCacheEntry& e, 
 	// still refused on the read side (PromoteDiskEntryToL1), not deleted.
 	if (e.faceCount <= 0)
 	{
-		InterlockedIncrement(&nmL2ZeroFaceSkip);
+		InterlockedIncrement(&navmesh::g_nmCache.nmL2ZeroFaceSkip);
 		return false;
 	}
 
@@ -498,7 +498,7 @@ bool WriteDiskCacheBlob(L2WriteBlob* blob)
 	GetDiskCachePath(blob->key, path, sizeof(path));
 
 	unsigned long osErr = 0;
-	L2WriteOutcome outcome = L2WriteFileAtomic(nmDiskCacheDirBuf, path,
+	L2WriteOutcome outcome = L2WriteFileAtomic(navmesh::g_nmCache.nmDiskCacheDirBuf, path,
 	                                           blob->data, blob->size, &osErr);
 	if (outcome != L2WR_OK)
 	{
@@ -511,21 +511,21 @@ bool WriteDiskCacheBlob(L2WriteBlob* blob)
 	NavMeshCacheKey key = blob->key;
 	FreeDiskCacheBlob(blob);
 
-	InterlockedIncrement(&nmDiskWriteCount);
+	InterlockedIncrement(&navmesh::g_nmCache.nmDiskWriteCount);
 
-	long wIdx = InterlockedCompareExchange(&nmDiskWriteCount, 0, 0);
+	long wIdx = InterlockedCompareExchange(&navmesh::g_nmCache.nmDiskWriteCount, 0, 0);
 	if (wIdx <= L2_MISS_LOG_MAX)
 	{
-		long idx = InterlockedIncrement(&l2MissLogCount) - 1;
+		long idx = InterlockedIncrement(&navmesh::g_nmCache.l2MissLogCount) - 1;
 		if (idx < L2_MISS_LOG_MAX)
 		{
-			l2MissLog[idx].gridX = key.gridX;
-			l2MissLog[idx].gridY = key.gridY;
-			l2MissLog[idx].tileId = key.sectionTileId;
-			l2MissLog[idx].jobType = key.jobType;
-			l2MissLog[idx].aabbHash = key.aabbHash;
-			l2MissLog[idx].buildingHash = key.buildingHash;
-			l2MissLog[idx].thingsCount = -2;  // sentinel: write entry
+			navmesh::g_nmCache.l2MissLog[idx].gridX = key.gridX;
+			navmesh::g_nmCache.l2MissLog[idx].gridY = key.gridY;
+			navmesh::g_nmCache.l2MissLog[idx].tileId = key.sectionTileId;
+			navmesh::g_nmCache.l2MissLog[idx].jobType = key.jobType;
+			navmesh::g_nmCache.l2MissLog[idx].aabbHash = key.aabbHash;
+			navmesh::g_nmCache.l2MissLog[idx].buildingHash = key.buildingHash;
+			navmesh::g_nmCache.l2MissLog[idx].thingsCount = -2;  // sentinel: write entry
 		}
 	}
 
@@ -572,7 +572,7 @@ bool ReadDiskCache(const NavMeshCacheKey& key, NavMeshCacheEntry& out)
 	// L2 off for the session (nm_cache_core.h). A plain miss,
 	// not a rejection: the file may be perfectly good for the settings its key
 	// names, it is this session's generation that no longer matches.
-	if (L2Bypassed()) { InterlockedIncrement(&nmL2BypassReads); return false; }
+	if (L2Bypassed()) { InterlockedIncrement(&navmesh::g_nmCache.nmL2BypassReads); return false; }
 
 	char path[MAX_PATH];
 	GetDiskCachePath(key, path, sizeof(path));

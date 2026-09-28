@@ -317,11 +317,11 @@ static void EmitCrashRecord(const char* kind, LONG seq, PEXCEPTION_POINTERS pExI
 	}
 	FlbStr(&o, "\r\n  ");
 	FlbStr(&o, "busy=");
-	FlbDecU(&o, (unsigned __int64)(unsigned long)InterlockedCompareExchange(&workerBusyCount, 0, 0));
+	FlbDecU(&o, (unsigned __int64)(unsigned long)InterlockedCompareExchange(&navmesh::g_nmCache.workerBusyCount, 0, 0));
 	FlbStr(&o, " slabHook=");
-	FlbDecU(&o, (unsigned __int64)(unsigned long)InterlockedCompareExchange(&g_slabAllocHits, 0, 0));
+	FlbDecU(&o, (unsigned __int64)(unsigned long)InterlockedCompareExchange(&navmesh::g_nmCache.g_slabAllocHits, 0, 0));
 	FlbChar(&o, '/');
-	FlbDecU(&o, (unsigned __int64)(unsigned long)InterlockedCompareExchange(&g_slabAllocWorkerHits, 0, 0));
+	FlbDecU(&o, (unsigned __int64)(unsigned long)InterlockedCompareExchange(&navmesh::g_nmCache.g_slabAllocWorkerHits, 0, 0));
 	FlbChar(&o, ' ');
 	// The build mutex a narrow builder scope is holding, if any. A fault here
 	// leaves it held for the rest of the process, and every later non-blocking

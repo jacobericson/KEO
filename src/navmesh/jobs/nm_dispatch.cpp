@@ -39,13 +39,13 @@ static char CallOrigDispatchLocked(void* thisNMG, bool measure)
 	{
 		QueryPerformanceCounter(&t1);
 		long ms10 = (long)(QPCToMs(t0, t1) * 10.0);
-		InterlockedIncrement(&nmT234Count);
-		InterlockedExchangeAdd(&nmT234TotalMsTimes10, ms10);
+		InterlockedIncrement(&navmesh::g_nmCache.nmT234Count);
+		InterlockedExchangeAdd(&navmesh::g_nmCache.nmT234TotalMsTimes10, ms10);
 		for (;;)
 		{
-			long prev = InterlockedCompareExchange(&nmT234MaxMsTimes10, 0, 0);
+			long prev = InterlockedCompareExchange(&navmesh::g_nmCache.nmT234MaxMsTimes10, 0, 0);
 			if (ms10 <= prev) break;
-			if (InterlockedCompareExchange(&nmT234MaxMsTimes10, ms10, prev) == prev) break;
+			if (InterlockedCompareExchange(&navmesh::g_nmCache.nmT234MaxMsTimes10, ms10, prev) == prev) break;
 		}
 	}
 
@@ -84,7 +84,7 @@ namespace nm_workers_detail
 // exists.
 void RefuseNavMeshWorkers(NmPoolDecision decision)
 {
-	InterlockedExchange(&g_navMeshPoolRefusal, (long)decision);
+	InterlockedExchange(&navmesh::g_nmCache.g_navMeshPoolRefusal, (long)decision);
 	const char* why = decision == NMPOOL_REFUSE_STOPHOOK
 		? "NavMesh::stop is not hooked, so nothing would retire them before the game frees the Havok heap"
 		: "buildCollision is not hooked, so their collision builds would run beside the bg thread's with no cover";
@@ -184,7 +184,7 @@ static uintptr_t BgFirstDispatchPhase(void* thisNMG)
 		if (!InterlockedCompareExchange(&poolDecided, 0, 0))
 		{
 			NmPoolDecision d = NmPoolDecide(
-				InterlockedCompareExchange(&lazyHooksInstalled, 0, 0) == 2,
+				InterlockedCompareExchange(&navmesh::g_nmCache.lazyHooksInstalled, 0, 0) == 2,
 				HookRowInstalled(HOOK_NAVMESH_STOP),
 				HookRowInstalled(HOOK_BUILD_COLLISION_IMPL));
 			if (d != NMPOOL_WAIT && !InterlockedCompareExchange(&poolDecided, 1, 0))
@@ -314,7 +314,7 @@ bool BgDispatchCtx::Pick(char* result)
 				break;
 		}
 		if (headHeld)
-			InterlockedIncrement(&nmUlHeld);
+			InterlockedIncrement(&navmesh::g_nmCache.nmUlHeld);
 		uintptr_t pick = 0;
 		NmAdjBgDecision decision = NmAdjBgScanEndLocked(&scan, &pick, adjSlice == 0);
 		if (decision != NMADJ_BG_CLAIM)
@@ -376,8 +376,8 @@ char BgDispatchCtx::ProcessPicked()
 		// (the prioritizer leaves a pinned head in place), because the job
 		// registered by the scan above must be the job the original processes.
 		fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
-		InterlockedIncrement(&nmJobCount);
-		InterlockedIncrement(&nmCacheSkipCount);
+		InterlockedIncrement(&navmesh::g_nmCache.nmJobCount);
+		InterlockedIncrement(&navmesh::g_nmCache.nmCacheSkipCount);
 		// Same wake as the bad-zone forward: a stitching job at the head is
 		// exactly the case that made workers clear the event and sleep on a
 		// queue that still held type 0/1 work behind it.
@@ -408,13 +408,13 @@ char BgDispatchCtx::ProcessPicked()
 	if (peekZone == UnloadingZone())
 	{
 		fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
-		InterlockedIncrement(&nmUlHeld);
+		InterlockedIncrement(&navmesh::g_nmCache.nmUlHeld);
 		if (nextJob)
 			SignalJobAvailable();
 		return 0;
 	}
 
-	InterlockedIncrement(&nmJobCount);
+	InterlockedIncrement(&navmesh::g_nmCache.nmJobCount);
 
 	if (adjPrev)
 	{

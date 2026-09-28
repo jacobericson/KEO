@@ -31,7 +31,7 @@ static processJobAlt_t orig_processJobAltTrip = NULL;
 static void hook_processJobAltTrip(void* thisNMG, void* job)
 {
 	if (InterlockedCompareExchange(&g_processJobOwnerTid, 0, 0) != (long)GetCurrentThreadId())
-		InterlockedIncrement(&nmTripCount);
+		InterlockedIncrement(&navmesh::g_nmCache.nmTripCount);
 	orig_processJobAltTrip(thisNMG, job);
 }
 
@@ -53,8 +53,6 @@ namespace nm_workers_detail {
 edgeProcess_t orig_edgeProcess = NULL;
 } // namespace nm_workers_detail
 static volatile long g_edgeProcessLogged = 0;
-volatile long g_edgeProcessArmedCount = 0;
-volatile long g_edgeProcessUnarmedCount = 0;
 
 static void __fastcall hook_edgeProcess(void* entry)
 {
@@ -63,10 +61,10 @@ static void __fastcall hook_edgeProcess(void* entry)
 
 	if (InterlockedCompareExchange(&g_cloneProcessing, 0, 0) != 0)
 	{
-		InterlockedIncrement(&g_edgeProcessArmedCount);
+		InterlockedIncrement(&navmesh::g_nmCache.g_edgeProcessArmedCount);
 		return;
 	}
-	InterlockedIncrement(&g_edgeProcessUnarmedCount);
+	InterlockedIncrement(&navmesh::g_nmCache.g_edgeProcessUnarmedCount);
 	orig_edgeProcess(entry);
 }
 
@@ -93,7 +91,7 @@ static void hook_navMeshStop(void* navMesh)
 	// hook and the prefetch on the NavMesh threads. After the original the
 	// game's own NavMesh threads are joined, and the retire returned with no
 	// worker live, so this test holds; it stays as the backstop.
-	if (InterlockedCompareExchange(&g_navMeshWorkersLive, 0, 0) == 0)
+	if (InterlockedCompareExchange(&navmesh::g_nmCache.g_navMeshWorkersLive, 0, 0) == 0)
 		NbrSeedFreeTable();
 }
 
@@ -123,7 +121,7 @@ static void hook_navMeshStop(void* navMesh)
 namespace nm_workers_detail {
 void InstallNavMeshLazyHooks()
 {
-	if (InterlockedCompareExchange(&lazyHooksInstalled, 1, 0) != 0)
+	if (InterlockedCompareExchange(&navmesh::g_nmCache.lazyHooksInstalled, 1, 0) != 0)
 		return;
 
 	if (HookInstallRow(HOOK_EDGE_PROCESS, (void*)hook_edgeProcess, (void**)&orig_edgeProcess,
@@ -147,7 +145,7 @@ void InstallNavMeshLazyHooks()
 	if (HookInstallRow(HOOK_PROCESS_JOB_ALT, (void*)hook_processJobAltTrip,
 	                   (void**)&orig_processJobAltTrip, NULL, true) == NULL)
 	{
-		InterlockedExchange(&nmTripInstalled, 1);
+		InterlockedExchange(&navmesh::g_nmCache.nmTripInstalled, 1);
 		LogMsgDeferrable("processJobAlt tripwire: installed");
 	}
 	else
@@ -188,7 +186,7 @@ void InstallNavMeshLazyHooks()
 		    && HookInstallRow(HOOK_NMG_GET_SEED_POINTS_ADJ, (void*)hook_getSeedPointsAdj,
 		                      (void**)&orig_getSeedPointsAdj, NULL, true) == NULL)
 		{
-			InterlockedExchange(&g_nbrSeedHookState, 1);
+			InterlockedExchange(&navmesh::g_nmCache.g_nbrSeedHookState, 1);
 			char line[128];
 			_snprintf_s(line, sizeof(line), _TRUNCATE,
 				"neighbour-seed hook: installed (NMNBRSEED_STEP %d)", (int)2);
@@ -197,14 +195,14 @@ void InstallNavMeshLazyHooks()
 			// settings hash (NmNbrSeedStandInActive) before a file is read.
 			if (!NbrCheckStandInCallees())
 			{
-				InterlockedExchange(&g_nbrSeedStandInRefused, 1);
+				InterlockedExchange(&navmesh::g_nmCache.g_nbrSeedStandInRefused, 1);
 				LogMsgDeferrable("neighbour seeds: stand-in REFUSED (a callee check failed); "
 				                 "instrumentation only, L2 settings hash without nbrseed1");
 			}
 		}
 		else
 		{
-			InterlockedExchange(&g_nbrSeedHookState, 2);
+			InterlockedExchange(&navmesh::g_nmCache.g_nbrSeedHookState, 2);
 			LogMsgDeferrable("neighbour-seed hook: install FAILED (neighbour seeds off for the session"
 			                 "; L2 settings hash without nbrseed1"
 			                 ")");
@@ -221,6 +219,6 @@ void InstallNavMeshLazyHooks()
 		}
 	}
 
-	InterlockedExchange(&lazyHooksInstalled, 2);
+	InterlockedExchange(&navmesh::g_nmCache.lazyHooksInstalled, 2);
 }
 } // namespace nm_workers_detail

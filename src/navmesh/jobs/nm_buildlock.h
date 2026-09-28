@@ -31,8 +31,5 @@ std::string BuildLockStatsSuffix();
 extern volatile LONG g_buildLockOwnerTid;
 extern volatile LONG g_buildLockOwnerState;
 
-// 1 once the buildCollision hook is installed. Written once by
-// InstallBuildLockHooks on the NavMesh bg thread, before any worker exists.
-extern volatile LONG g_buildCollisionHookInstalled;
 
 #endif

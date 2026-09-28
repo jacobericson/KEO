@@ -545,7 +545,7 @@ void __fastcall hook_resetUnloadZones(void* zoneMgr)
 	// unloaded: workerBusyCount is the busy bridge, raised by the worker path
 	// at claim time and by the bg thread at the unlink, so it counts
 	// MISSes and HITs on both.
-	long nmBusy = InterlockedCompareExchange(&workerBusyCount, 0, 0);
+	long nmBusy = InterlockedCompareExchange(&navmesh::g_nmCache.workerBusyCount, 0, 0);
 
 	// What the reset is about to destroy, taken before the original frees any
 	// of it. The survivor pass below runs after the original and by

@@ -404,13 +404,13 @@ static void NbrBuildCell(void* realNMG, void* navmesh, void* zoneMgr, int x, int
 		LONGLONG t1 = QpcNow();
 		WorkerCleanupEnd();
 		long us = QpcDeltaUs(t0, t1);
-		InterlockedIncrement(&nmNbrLoadCount);
-		InterlockedExchangeAdd64(&nmNbrLoadTotalUs, (LONGLONG)us);
-		NoteMaxUs(&nmNbrLoadMaxUs, us);
+		InterlockedIncrement(&navmesh::g_nmCache.nmNbrLoadCount);
+		InterlockedExchangeAdd64(&navmesh::g_nmCache.nmNbrLoadTotalUs, (LONGLONG)us);
+		NoteMaxUs(&navmesh::g_nmCache.nmNbrLoadMaxUs, us);
 	}
 
 	if (rec)
-		InterlockedIncrement(&nmNbrRecordCount);
+		InterlockedIncrement(&navmesh::g_nmCache.nmNbrRecordCount);
 	InterlockedExchangePointer(&g_nbrTable[idx], rec);   // NULL = retry later
 }
 
@@ -425,7 +425,7 @@ namespace nm_workers_detail {
 // refused after the worker retire has returned (NbrBuildCell).
 void NbrSeedPrefetch(uintptr_t realNMG, uintptr_t jobZone)
 {
-	if (!NmNbrSeedStandInActive() || InterlockedCompareExchange(&g_nbrSeedHookState, 0, 0) != 1)
+	if (!NmNbrSeedStandInActive() || InterlockedCompareExchange(&navmesh::g_nmCache.g_nbrSeedHookState, 0, 0) != 1)
 		return;
 	if (NbrStopSeen() || !realNMG || !jobZone)
 		return;
@@ -624,10 +624,10 @@ int hook_getSeedPointsAdj(void* nmg, const void* zone, const int* dir)
 
 	switch (cls)
 	{
-	case NBR_CLASS_LIVE: InterlockedIncrement(&nmNbrSeedLive); break;
-	case NBR_CLASS_TEMP: InterlockedIncrement(&nmNbrSeedTemp); break;
-	case NBR_CLASS_ZERO: InterlockedIncrement(&nmNbrSeedZero); break;
-	default:             InterlockedIncrement(&nmNbrSeedNone); break;
+	case NBR_CLASS_LIVE: InterlockedIncrement(&navmesh::g_nmCache.nmNbrSeedLive); break;
+	case NBR_CLASS_TEMP: InterlockedIncrement(&navmesh::g_nmCache.nmNbrSeedTemp); break;
+	case NBR_CLASS_ZERO: InterlockedIncrement(&navmesh::g_nmCache.nmNbrSeedZero); break;
+	default:             InterlockedIncrement(&navmesh::g_nmCache.nmNbrSeedNone); break;
 	}
 
 	int d = NbrDirIndex(dx, dy);
@@ -648,14 +648,14 @@ int hook_getSeedPointsAdj(void* nmg, const void* zone, const int* dir)
 			switch (si)
 			{
 			case NBR_SI_SHIP:
-				InterlockedIncrement(&nmNbrStandInShip);
-				InterlockedExchangeAdd64(&nmNbrStandInSeeds, (LONGLONG)added);
+				InterlockedIncrement(&navmesh::g_nmCache.nmNbrStandInShip);
+				InterlockedExchangeAdd64(&navmesh::g_nmCache.nmNbrStandInSeeds, (LONGLONG)added);
 				break;
-			case NBR_SI_PLACE:  InterlockedIncrement(&nmNbrStandInPlace);  break;
-			case NBR_SI_NOFILE: InterlockedIncrement(&nmNbrStandInNoFile); break;
-			case NBR_SI_HBAD:   InterlockedIncrement(&nmNbrStandInHBad);   break;
+			case NBR_SI_PLACE:  InterlockedIncrement(&navmesh::g_nmCache.nmNbrStandInPlace);  break;
+			case NBR_SI_NOFILE: InterlockedIncrement(&navmesh::g_nmCache.nmNbrStandInNoFile); break;
+			case NBR_SI_HBAD:   InterlockedIncrement(&navmesh::g_nmCache.nmNbrStandInHBad);   break;
 			default:
-				InterlockedIncrement(&nmNbrStandInLate);
+				InterlockedIncrement(&navmesh::g_nmCache.nmNbrStandInLate);
 				t_nbrJob.late = 1;   // this job's mesh stays out of L2
 				break;
 			}
@@ -678,7 +678,7 @@ void NbrSeedJobBegin(int jobType, int gridX, int gridY)
 {
 	memset(&t_nbrJob, 0, sizeof(t_nbrJob));
 	if (jobType != 0 || !NmNbrSeedHookWanted()
-	    || InterlockedCompareExchange(&g_nbrSeedHookState, 0, 0) != 1)
+	    || InterlockedCompareExchange(&navmesh::g_nmCache.g_nbrSeedHookState, 0, 0) != 1)
 		return;
 	t_nbrJob.gridX = gridX;
 	t_nbrJob.gridY = gridY;

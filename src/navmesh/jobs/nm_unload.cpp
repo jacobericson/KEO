@@ -143,7 +143,7 @@ NavMeshUnloadBegin NavMeshBeginZoneUnload(void* zone)
 	if (queued)
 	{
 		fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
-		InterlockedIncrement(&nmUlSkipJob);
+		InterlockedIncrement(&navmesh::g_nmCache.nmUlSkipJob);
 		return NM_UL_REFUSED;
 	}
 
@@ -156,7 +156,7 @@ NavMeshUnloadBegin NavMeshBeginZoneUnload(void* zone)
 		if (InterlockedCompareExchangePointer(&g_claimZone[i], NULL, NULL) == zone)
 		{
 			InterlockedExchangePointer(&g_unloadingZone, NULL);
-			InterlockedIncrement(&nmUlSkipClaim);
+			InterlockedIncrement(&navmesh::g_nmCache.nmUlSkipClaim);
 			return NM_UL_REFUSED;
 		}
 	}
@@ -208,7 +208,7 @@ void NavMeshLowerResetGateLocked(ZoneResetGate* g)
 
 bool NavMeshWorkersIdle()
 {
-	return InterlockedCompareExchange(&workerBusyCount, 0, 0) == 0;
+	return InterlockedCompareExchange(&navmesh::g_nmCache.workerBusyCount, 0, 0) == 0;
 }
 
 bool NavMeshZoneClaimed(void* zone)

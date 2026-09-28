@@ -339,7 +339,7 @@ static void EmitRow(int setIndex, int connIndex, const SetFacts& set,
 	FlbStr(&o, " nodeIndex="); FlbDec(&o, nodeIndex);
 	FlbStr(&o, " nodeMapSize="); FlbDec(&o, nodeMapSize);
 	FlbStr(&o, " busy=");
-	FlbDec(&o, (LONG)InterlockedCompareExchange(&workerBusyCount, 0, 0));
+	FlbDec(&o, (LONG)InterlockedCompareExchange(&navmesh::g_nmCache.workerBusyCount, 0, 0));
 	FlbStr(&o, " changeMutex=0x"); FlbHexDigits(&o, mutexWord, 8);
 	FlbStr(&o, " tid=");       FlbDec(&o, (__int64)GetCurrentThreadId());
 	LogMsgDeferrable(FlbDone(&o));

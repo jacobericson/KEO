@@ -256,8 +256,8 @@ bool UnloadModZone(void* zm, void* zone, bool save, const char* why)
 	}
 
 	// 6. Keep every mod NavMesh thread off the zone.
-	long skipJob0   = InterlockedCompareExchange(&nmUlSkipJob, 0, 0);
-	long skipClaim0 = InterlockedCompareExchange(&nmUlSkipClaim, 0, 0);
+	long skipJob0   = InterlockedCompareExchange(&navmesh::g_nmCache.nmUlSkipJob, 0, 0);
+	long skipClaim0 = InterlockedCompareExchange(&navmesh::g_nmCache.nmUlSkipClaim, 0, 0);
 	NavMeshUnloadBegin ub = NavMeshBeginZoneUnload(zone);
 	if (ub == NM_UL_UNAVAILABLE)
 	{
@@ -270,9 +270,9 @@ bool UnloadModZone(void* zm, void* zone, bool save, const char* why)
 		int kind = ZLD_STATE;
 		// Begin runs on the main thread only, so a change in either counter
 		// across the call is this call's refusal.
-		if (InterlockedCompareExchange(&nmUlSkipJob, 0, 0) != skipJob0)
+		if (InterlockedCompareExchange(&navmesh::g_nmCache.nmUlSkipJob, 0, 0) != skipJob0)
 			kind = ZLD_JOB;
-		else if (InterlockedCompareExchange(&nmUlSkipClaim, 0, 0) != skipClaim0)
+		else if (InterlockedCompareExchange(&navmesh::g_nmCache.nmUlSkipClaim, 0, 0) != skipClaim0)
 			kind = ZLD_CLAIM;
 		ZlDefer(kind);
 		return false;

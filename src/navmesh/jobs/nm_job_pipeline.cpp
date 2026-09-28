@@ -43,8 +43,6 @@ private:
 	WbSwapRestore(const WbSwapRestore&);
 	WbSwapRestore& operator=(const WbSwapRestore&);
 };
-// wb+328 as written on the last fresh work buffer, raw float bits.
-volatile long g_wbQualityLast = 0;
 // Input geometry size of the generation running on this thread, captured by
 // hook_nmResultPopulate_diag and read back at the store site. -1 means the hook
 // did not run for this job (not installed, or the job never reached populate).
@@ -124,7 +122,7 @@ bool WorkerProcessHit(void* nmg, uintptr_t job, int jobType, int hitIdx,
 	if (!replaced)
 	{
 		long ms10 = (long)(QPCToMs(t0, t1) * 10.0);
-		InterlockedExchangeAdd(&nmSavedMsTimes10, ms10);
+		InterlockedExchangeAdd(&navmesh::g_nmCache.nmSavedMsTimes10, ms10);
 	}
 	LeaveCriticalSection(&nmCacheCS);
 
@@ -132,7 +130,7 @@ bool WorkerProcessHit(void* nmg, uintptr_t job, int jobType, int hitIdx,
 	{
 		// Stale slot, or the reconstruct failed. Hand the job back whole; the
 		// worker loop keeps the busy bridge raised and releases it once.
-		InterlockedIncrement(&nmHitStaleCount);
+		InterlockedIncrement(&navmesh::g_nmCache.nmHitStaleCount);
 		return false;
 	}
 
@@ -142,7 +140,7 @@ bool WorkerProcessHit(void* nmg, uintptr_t job, int jobType, int hitIdx,
 	{
 		*(void**)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_mesh, 72)) = freshNavMesh;
 		*(void**)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_output, 80)) = NULL;
-		InterlockedIncrement(&nmCacheHitCount);
+		InterlockedIncrement(&navmesh::g_nmCache.nmCacheHitCount);
 		int resetReason = STALE_REASON_NONE;
 		if (ResetWaitAt(ZONE_RESET_SITE_BUILD, job, resetRaises, &resetReason))
 		{
@@ -324,9 +322,9 @@ bool PjCtx::Begin()
 	// end of the job — after the game has the mesh.
 	memset(pendingWrite, 0, sizeof(*pendingWrite));
 
-	InterlockedExchange(&nmDiagLastGridX, gridX);
-	InterlockedExchange(&nmDiagLastGridY, gridY);
-	InterlockedExchange(&nmDiagLastType, jobType);
+	InterlockedExchange(&navmesh::g_nmCache.nmDiagLastGridX, gridX);
+	InterlockedExchange(&navmesh::g_nmCache.nmDiagLastGridY, gridY);
+	InterlockedExchange(&navmesh::g_nmCache.nmDiagLastType, jobType);
 
 	key.gridX = gridX;
 	key.gridY = gridY;
@@ -344,8 +342,8 @@ bool PjCtx::Begin()
 			// Exit 5 before the lookup: the job is left as exit 4 leaves it.
 			NoteStaleDrop(onBgThread ? STALE_SITE_BGMISS : STALE_SITE_WMISS,
 			              job, jobType, resetReason, claimQpc);
-			InterlockedExchange(&nmDiagStep, 36);
-			InterlockedExchange(&nmDiagStep, 50);
+			InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 36);
+			InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 50);
 			return false;   // the worker caller still frees its clone
 		}
 	}
@@ -363,17 +361,17 @@ void PjCtx::Lookup()
 	hashContent = 0;
 	keyOk = ComputeBuildingHashChecked(jobZone, &key.buildingHash, &hashContent);
 
-	InterlockedExchange(&nmDiagStep, 10);
+	InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 10);
 
 	hitIdx = -1;
 	isHit = false;
 	isL2Hit = false;
-	if (keyOk && nmDiagStage >= 2 && !InterlockedCompareExchange(&nmCacheDisabled, 0, 0))
+	if (keyOk && navmesh::g_nmCache.nmDiagStage >= 2 && !InterlockedCompareExchange(&navmesh::g_nmCache.nmCacheDisabled, 0, 0))
 	{
 		EnterCriticalSection(&nmCacheCS);
 
 		hitIdx = FindCacheEntry(key);
-		isHit = (hitIdx >= 0 && nmCache[hitIdx].cachedFaces != NULL && fn_navMeshCtor != NULL);
+		isHit = (hitIdx >= 0 && navmesh::g_nmL1.nmCache[hitIdx].cachedFaces != NULL && fn_navMeshCtor != NULL);
 
 		if (!isHit && fn_navMeshCtor != NULL)
 		{
@@ -395,7 +393,7 @@ void PjCtx::Lookup()
 				{
 					isHit = true;
 					isL2Hit = true;
-					InterlockedIncrement(&nmDiskHitCount);
+					InterlockedIncrement(&navmesh::g_nmCache.nmDiskHitCount);
 				}
 				else
 				{
@@ -404,26 +402,26 @@ void PjCtx::Lookup()
 			}
 			if (!l2Read)
 			{
-				InterlockedIncrement(&nmDiskMissCount);
+				InterlockedIncrement(&navmesh::g_nmCache.nmDiskMissCount);
 
-				long idx = InterlockedIncrement(&l2MissLogCount) - 1;
+				long idx = InterlockedIncrement(&navmesh::g_nmCache.l2MissLogCount) - 1;
 				if (idx < L2_MISS_LOG_MAX)
 				{
-					l2MissLog[idx].gridX = key.gridX;
-					l2MissLog[idx].gridY = key.gridY;
-					l2MissLog[idx].tileId = key.sectionTileId;
-					l2MissLog[idx].jobType = key.jobType;
-					l2MissLog[idx].aabbHash = key.aabbHash;
-					l2MissLog[idx].buildingHash = key.buildingHash;
+					navmesh::g_nmCache.l2MissLog[idx].gridX = key.gridX;
+					navmesh::g_nmCache.l2MissLog[idx].gridY = key.gridY;
+					navmesh::g_nmCache.l2MissLog[idx].tileId = key.sectionTileId;
+					navmesh::g_nmCache.l2MissLog[idx].jobType = key.jobType;
+					navmesh::g_nmCache.l2MissLog[idx].aabbHash = key.aabbHash;
+					navmesh::g_nmCache.l2MissLog[idx].buildingHash = key.buildingHash;
 					// Claim time, before missLock: the content may be gone.
 					// Guarded read, -1 when it is.
-					l2MissLog[idx].thingsCount = SafeZoneThingsCount(jobZone);
+					navmesh::g_nmCache.l2MissLog[idx].thingsCount = SafeZoneThingsCount(jobZone);
 				}
 			}
 
 			QueryPerformanceCounter(&tR1);
 			long readUs = (long)(QPCToMs(tR0, tR1) * 1000.0);
-			InterlockedExchangeAdd(&nmDiskReadUsTimes1, readUs);
+			InterlockedExchangeAdd(&navmesh::g_nmCache.nmDiskReadUsTimes1, readUs);
 		}
 		else
 		{
@@ -449,7 +447,7 @@ void PjCtx::Lookup()
 		}
 	}
 
-	InterlockedExchange(&nmDiagStep, 11);
+	InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 11);
 }
 
 void PjCtx::OwnHit()
@@ -457,9 +455,9 @@ void PjCtx::OwnHit()
 	if (isHit)
 	{
 		if (!isL2Hit)
-			InterlockedIncrement(&nmCacheHitCount);
-		InterlockedExchange(&nmDiagStep, 20);
-		InterlockedExchange(&nmDiagHitGrid, gridX * 100 + gridY);
+			InterlockedIncrement(&navmesh::g_nmCache.nmCacheHitCount);
+		InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 20);
+		InterlockedExchange(&navmesh::g_nmCache.nmDiagHitGrid, gridX * 100 + gridY);
 
 		LARGE_INTEGER t0, t1;
 		QueryPerformanceCounter(&t0);
@@ -485,7 +483,7 @@ void PjCtx::OwnHit()
 
 		if (isHit)
 		{
-			InterlockedExchange(&nmDiagStep, 23);
+			InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 23);
 			int resetReason = STALE_REASON_NONE;
 			if (ResetWaitAt(ZONE_RESET_SITE_BUILD, job, claimed->resetRaises, &resetReason))
 			{
@@ -497,30 +495,30 @@ void PjCtx::OwnHit()
 				NoteWorkerPhase(WPHASE_BUILDING);
 				fn_buildCollision(realNMG, (void*)job, 0, 0.0);
 			}
-			InterlockedExchange(&nmDiagStep, 24);
+			InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 24);
 		}
 
 		QueryPerformanceCounter(&t1);
 		if (isL2Hit)
 		{
 			long reconUs = (long)(QPCToMs(t0, t1) * 1000.0);
-			InterlockedExchangeAdd(&nmDiskReadUsTimes1, reconUs);
+			InterlockedExchangeAdd(&navmesh::g_nmCache.nmDiskReadUsTimes1, reconUs);
 		}
 		else if (isHit)
 		{
 			long ms10 = (long)(QPCToMs(t0, t1) * 10.0);
-			InterlockedExchangeAdd(&nmSavedMsTimes10, ms10);
+			InterlockedExchangeAdd(&navmesh::g_nmCache.nmSavedMsTimes10, ms10);
 		}
 	}
 }
 
 void PjCtx::MissSetup()
 {
-	InterlockedExchange(&nmDiagStep, 30);
+	InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 30);
 
 			QueryPerformanceCounter(&t0);
 
-	InterlockedExchange(&nmDiagStep, 31);
+	InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 31);
 
 	// The workBuffer fn_processJobAlt will see.
 	//   workNMG!=realNMG → CloneNMG already installed freshWB at workNMG+256,
@@ -567,10 +565,10 @@ bool PjCtx::CheckMissAfterLock(ProcessJobLock& missLock)
 				else
 				NoteStaleDrop(onBgThread ? STALE_SITE_BGMISS : STALE_SITE_WMISS,
 				              job, jobType, staleReason, claimQpc);
-				InterlockedExchange(&nmDiagStep, 36);   // 36 = dropped (zone unloaded, or the stop)
+				InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 36);   // 36 = dropped (zone unloaded, or the stop)
 
 				// The bridge is released by the caller's ClaimedJobFinish.
-				InterlockedExchange(&nmDiagStep, 50);
+				InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 50);
 				return true;   // the worker caller still frees its clone
 			}
 		}
@@ -587,8 +585,8 @@ void PjCtx::LateLookup()
 	// take the HIT instead of generating again.
 	NoteWorkerPhase(WPHASE_GENERATING);
 	lateMesh = NULL;
-	if (keyOk && nmDiagStage >= 2 && fn_navMeshCtor != NULL
-	    && !InterlockedCompareExchange(&nmCacheDisabled, 0, 0))
+	if (keyOk && navmesh::g_nmCache.nmDiagStage >= 2 && fn_navMeshCtor != NULL
+	    && !InterlockedCompareExchange(&navmesh::g_nmCache.nmCacheDisabled, 0, 0))
 	{
 		EnterCriticalSection(&nmCacheCS);
 		int lateIdx = FindCacheEntry(key);
@@ -605,8 +603,8 @@ void PjCtx::LateBuild(ProcessJobLock& missLock, InflightScope& inflight)
 
 	*(void**)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_mesh, 72)) = lateMesh;
 	*(void**)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_output, 80)) = NULL;
-	InterlockedIncrement(&nmCacheHitCount);
-	InterlockedIncrement(&nmLateHitCount);
+	InterlockedIncrement(&navmesh::g_nmCache.nmCacheHitCount);
+	InterlockedIncrement(&navmesh::g_nmCache.nmLateHitCount);
 	{
 		std::ostringstream ss;
 		ss << "Late HIT (duplicate job): grid=(" << gridX << "," << gridY
@@ -614,7 +612,7 @@ void PjCtx::LateBuild(ProcessJobLock& missLock, InflightScope& inflight)
 		LogMsg(ss.str());
 	}
 
-	InterlockedExchange(&nmDiagStep, 23);
+	InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 23);
 	int resetReason = STALE_REASON_NONE;
 	if (ResetWaitAt(ZONE_RESET_SITE_BUILD, job, claimed->resetRaises, &resetReason))
 	{
@@ -627,25 +625,25 @@ void PjCtx::LateBuild(ProcessJobLock& missLock, InflightScope& inflight)
 		NoteWorkerPhase(WPHASE_BUILDING);
 		fn_buildCollision(realNMG, (void*)job, 0, 0.0);
 	}
-	InterlockedExchange(&nmDiagStep, 24);
+	InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 24);
 
 	QueryPerformanceCounter(&t1);
 	long ms10 = (long)(QPCToMs(t0, t1) * 10.0);
-	InterlockedExchangeAdd(&nmSavedMsTimes10, ms10);
+	InterlockedExchangeAdd(&navmesh::g_nmCache.nmSavedMsTimes10, ms10);
 }
 
 void PjCtx::GenConstruct()
 {
-	InterlockedIncrement(&nmCacheMissCount);
+	InterlockedIncrement(&navmesh::g_nmCache.nmCacheMissCount);
 	// miss=w/bg splits by workNMG (a clone or the real generator), while
 	// stale=w/bg and pjWait wMiss/bgMiss split by thread (onBgThread). A
 	// worker whose CloneNMG failed runs on the real generator, so it
 	// counts as bg here and as w there: do not compare the two tokens
 	// as like for like.
 	if (workNMG != realNMG)
-		InterlockedIncrement(&nmWorkerMissCount);
+		InterlockedIncrement(&navmesh::g_nmCache.nmWorkerMissCount);
 	else
-		InterlockedIncrement(&nmBgMissCount);
+		InterlockedIncrement(&navmesh::g_nmCache.nmBgMissCount);
 
 	// The real work buffer is read only under processJobCS, so the
 	// fresh copy is built here rather than before the Enter above.
@@ -657,9 +655,9 @@ void PjCtx::GenConstruct()
 		localOrigWB = *(uintptr_t*)(KLIB_MEMBER(4, (uintptr_t)realNMG, NavMeshGenerator_settings, 256));
 		localFreshWB = ConstructFreshSettings(localOrigWB);
 		if (localFreshWB)
-			InterlockedIncrement(&nmCloneConstructCount);
+			InterlockedIncrement(&navmesh::g_nmCache.nmCloneConstructCount);
 		else
-			InterlockedIncrement(&nmCloneConstructFailCount);
+			InterlockedIncrement(&navmesh::g_nmCache.nmCloneConstructFailCount);
 	}
 	cloneActive = usingNMGClone || (localFreshWB != NULL);
 }
@@ -741,8 +739,8 @@ bool PjCtx::AfterProcessJobAlt(bool pjLockLost, ProcessJobLock& missLock)
 				WorkerCleanupEnd();
 				missLock.Abandon();
 				NoteStopDrop(STALE_SITE_WMISS, job, jobType, claimQpc);
-				InterlockedExchange(&nmDiagStep, 36);
-				InterlockedExchange(&nmDiagStep, 50);
+				InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 36);
+				InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 50);
 				return true;   // the worker caller frees its clone through the handshake
 			}
 
@@ -757,11 +755,11 @@ bool PjCtx::AfterProcessJobAlt(bool pjLockLost, ProcessJobLock& missLock)
 				                  ? (uintptr_t)localFreshWB
 				                  : (usingNMGClone ? *(uintptr_t*)(KLIB_MEMBER(4, (uintptr_t)workNMG, NavMeshGenerator_settings, 256)) : 0);
 				if (probeWB)
-					InterlockedExchange(&g_wbOverrideAfterPop, *(int*)(KLIB_MEMBER(4, probeWB + 520, ByteArray_m_size, 8)));
+					InterlockedExchange(&navmesh::g_nmCache.g_wbOverrideAfterPop, *(int*)(KLIB_MEMBER(4, probeWB + 520, ByteArray_m_size, 8)));
 			}
 #endif
 
-			InterlockedExchange(&nmDiagStep, 32);
+			InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 32);
 
 			if (jobType == 1 && PartialZoneStillLoaded(job))
 			{
@@ -790,7 +788,7 @@ bool PjCtx::AfterProcessJobAlt(bool pjLockLost, ProcessJobLock& missLock)
 				}
 				else
 					fn_partialFixup(realNMG, (void*)job);   // stitches two job-private meshes only
-				InterlockedIncrement(&nmPartialRealCount);
+				InterlockedIncrement(&navmesh::g_nmCache.nmPartialRealCount);
 			}
 			mpj.fixEnd = QpcNow();
 	return false;
@@ -811,7 +809,7 @@ void PjCtx::StoreGenerated(WbSwapRestore& swapRestore, ProcessJobLock& missLock,
 	// exactly what the HIT path feeds into buildCollision.
 	uintptr_t storedResult = 0;
 	int storeIdx = -1;
-	if (nmDiagStage >= 2 && !InterlockedCompareExchange(&nmCacheDisabled, 0, 0))
+	if (navmesh::g_nmCache.nmDiagStage >= 2 && !InterlockedCompareExchange(&navmesh::g_nmCache.nmCacheDisabled, 0, 0))
 	{
 		storedResult = *(uintptr_t*)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_mesh, 72));
 		if (storedResult)
@@ -850,13 +848,13 @@ void PjCtx::StoreGenerated(WbSwapRestore& swapRestore, ProcessJobLock& missLock,
 			bool storeOk = keyOk && ZoneContentUnchanged(jobZone, hashContent)
 			               && !certRefused;
 			if (keyOk && !storeOk && !certRefused)
-				InterlockedIncrement(&nmHashRaceCount);
+				InterlockedIncrement(&navmesh::g_nmCache.nmHashRaceCount);
 			if (storeOk)
 			{
 				EnterCriticalSection(&nmCacheCS);
 				storeIdx = StoreCacheEntry(key, storedResult);
 				if (storeIdx >= 0)
-					MissParNoteHash(nmCache[storeIdx], !onBgThread);
+					MissParNoteHash(navmesh::g_nmL1.nmCache[storeIdx], !onBgThread);
 				LeaveCriticalSection(&nmCacheCS);
 			}
 		}
@@ -881,21 +879,21 @@ void PjCtx::StoreGenerated(WbSwapRestore& swapRestore, ProcessJobLock& missLock,
 	// busy and late-HIT bookkeeping are untouched. Counted l2LateSkip=.
 	if (NbrSeedJobTakeLate() && storeIdx >= 0)
 	{
-		InterlockedIncrement(&nmNbrL2LateSkip);
+		InterlockedIncrement(&navmesh::g_nmCache.nmNbrL2LateSkip);
 		storeIdx = -1;
 	}
 	if (storeIdx >= 0)
 	{
 		EnterCriticalSection(&nmCacheCS);
-		if (CacheSlotMatches(nmCache[storeIdx], key))
-			BuildDiskCacheBlob(key, nmCache[storeIdx], pendingWrite);
+		if (CacheSlotMatches(navmesh::g_nmL1.nmCache[storeIdx], key))
+			BuildDiskCacheBlob(key, navmesh::g_nmL1.nmCache[storeIdx], pendingWrite);
 		LeaveCriticalSection(&nmCacheCS);
 	}
 }
 
 void PjCtx::BuildGenerated()
 {
-	InterlockedExchange(&nmDiagStep, 33);
+	InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 33);
 
 	// A reset drop still records the job, with a build phase of 0, and
 	// still frees the fresh WB and writes L2 below: the L1 entry was
@@ -916,11 +914,11 @@ void PjCtx::BuildGenerated()
 	}
 	MissParRecordJob(mpj);
 
-	InterlockedExchange(&nmDiagStep, 34);
+	InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 34);
 
 	QueryPerformanceCounter(&t1);
 	long ms10 = (long)(QPCToMs(t0, t1) * 10.0);
-	InterlockedExchangeAdd(&nmTotalMsTimes10, ms10);
+	InterlockedExchangeAdd(&navmesh::g_nmCache.nmTotalMsTimes10, ms10);
 
 	// Free the swap-path freshWB. FreeFreshSettings runs the
 	// game's settings dtor body on it, so the arrays processJobAlt grew
@@ -935,18 +933,18 @@ void PjCtx::Handoff()
 	if (label29NavInst)
 		*(int*)(KLIB_MEMBER(4, (uintptr_t)label29NavInst, NavInstance_hash, 64)) = *(int*)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_hash, 32));
 
-	InterlockedExchange(&nmDiagStep, 41);
+	InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 41);
 
 	uintptr_t navMeshResult = *(uintptr_t*)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_mesh, 72));
 	int faceCount = navMeshResult ? *(int*)(KLIB_MEMBER(4, navMeshResult + NMOFF_FACES, ByteArray_m_size, 8)) : 0;
 	if (!resetDrop && navMeshResult && faceCount > 0)
 	{
-		InterlockedExchange(&nmDiagStep, 42);
+		InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 42);
 		fn_enqueueToProcQueue((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_done, 184)), (void*)job);
 	}
 	else
 	{
-		InterlockedExchange(&nmDiagStep, 43);
+		InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 43);
 		void* delNavInst = *(void**)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_output, 80));
 		if (delNavInst)
 			fn_gameDelete(delNavInst);
@@ -958,13 +956,13 @@ void PjCtx::Handoff()
 		fn_gameDelete((void*)job);
 	}
 
-	InterlockedExchange(&nmDiagStep, 44);
+	InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 44);
 
 	// The file write is the last thing this job does. The game already has
 	// the mesh, so a slow disk no longer delays the result.
 	ClaimedJobWritePending(claimed);
 
-	InterlockedExchange(&nmDiagStep, 50);
+	InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 50);
 }
 
 } // namespace nm_workers_detail
@@ -1067,9 +1065,9 @@ void ProcessNavMeshJob(void* realNMG, void* workNMG, ClaimedJob* claimed)
 			c.StoreGenerated(swapRestore, missLock, inflight);
 			c.BuildGenerated();
 		}
-		InterlockedExchange(&nmDiagStep, 35);
+		InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 35);
 	}
-	InterlockedExchange(&nmDiagStep, 40);
+	InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 40);
 	NoteWorkerPhase(WPHASE_STORING);   // the hand-off below, then the L2 write
 	c.Handoff();
 }

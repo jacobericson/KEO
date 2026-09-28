@@ -109,7 +109,7 @@ void* CloneNMG(void* realNMG, bool* stoppedOut = NULL)
 	if (!freshWB)
 	{
 		HavokTlsFree(clone, NMG_STRUCT_SIZE);
-		InterlockedIncrement(&nmCloneConstructFailCount);
+		InterlockedIncrement(&navmesh::g_nmCache.nmCloneConstructFailCount);
 		return NULL;
 	}
 
@@ -128,7 +128,7 @@ void* CloneNMG(void* realNMG, bool* stoppedOut = NULL)
 	*(uintptr_t*)(KLIB_MEMBER(4, c, NavMeshGenerator_current, 232)) = 0;
 	*(uintptr_t*)(KLIB_MEMBER(4, c, NavMeshGenerator_settings, 256)) = (uintptr_t)freshWB;
 
-	InterlockedIncrement(&nmCloneConstructCount);
+	InterlockedIncrement(&navmesh::g_nmCache.nmCloneConstructCount);
 	return clone;
 }
 } // namespace nm_workers_detail
@@ -172,12 +172,12 @@ static void CloseClonedNMGLocks(void* clone)
 			if (!ch) continue;
 			if (real && ch == *(HANDLE*)(NmgLockAddress(real, i) + off))
 			{
-				InterlockedIncrement(&nmCloneHandleSkipped);
+				InterlockedIncrement(&navmesh::g_nmCache.nmCloneHandleSkipped);
 				continue;
 			}
 			CloseHandle(ch);
 			*(HANDLE*)(NmgLockAddress((uintptr_t)clone, i) + off) = NULL;
-			InterlockedIncrement(&nmCloneHandleClosed);
+			InterlockedIncrement(&navmesh::g_nmCache.nmCloneHandleClosed);
 		}
 	}
 }

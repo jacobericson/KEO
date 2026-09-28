@@ -69,7 +69,7 @@ BuildCollisionScope::BuildCollisionScope()
 	// Bumped before the lock, so the count reflects regions in flight
 	// rather than lock waits.
 	if (InterlockedIncrement(&g_inBuild) > 1)
-		InterlockedIncrement(&g_buildOverlapSeen);
+		InterlockedIncrement(&navmesh::g_nmCache.g_buildOverlapSeen);
 
 	LARGE_INTEGER w0;
 	QueryPerformanceCounter(&w0);
@@ -77,9 +77,9 @@ BuildCollisionScope::BuildCollisionScope()
 	QueryPerformanceCounter(&holdStart);
 
 	long waitUs = (long)(QPCToMs(w0, holdStart) * 1000.0);
-	InterlockedIncrement(&nmBcCount);
-	InterlockedExchangeAdd64(&nmBcWaitTotalUs, (LONGLONG)waitUs);
-	NoteBcMax(&nmBcWaitMaxUs, waitUs);
+	InterlockedIncrement(&navmesh::g_nmCache.nmBcCount);
+	InterlockedExchangeAdd64(&navmesh::g_nmCache.nmBcWaitTotalUs, (LONGLONG)waitUs);
+	NoteBcMax(&navmesh::g_nmCache.nmBcWaitMaxUs, waitUs);
 }
 
 BuildCollisionScope::~BuildCollisionScope()
@@ -87,8 +87,8 @@ BuildCollisionScope::~BuildCollisionScope()
 	LARGE_INTEGER h1;
 	QueryPerformanceCounter(&h1);
 	long holdUs = (long)(QPCToMs(holdStart, h1) * 1000.0);
-	InterlockedExchangeAdd64(&nmBcHoldTotalUs, (LONGLONG)holdUs);
-	NoteBcMax(&nmBcHoldMaxUs, holdUs);
+	InterlockedExchangeAdd64(&navmesh::g_nmCache.nmBcHoldTotalUs, (LONGLONG)holdUs);
+	NoteBcMax(&navmesh::g_nmCache.nmBcHoldMaxUs, holdUs);
 
 	LeaveCriticalSection(&buildCollisionCS);
 	InterlockedDecrement(&g_inBuild);
@@ -111,7 +111,6 @@ static stitchWithInteriors_t orig_stitchWithInteriors = NULL;
 static nmgLockZone_t         orig_lockZoneDiag        = NULL;
 
 static volatile LONG g_narrow = 0;             // decided once at install; never changes after
-static volatile LONG g_lockZoneDiagOn = 0;     // the blTry counter installed
 
 // The build mutex is held by this thread only between a builder's entry and its
 // first stitchUnloadedZone (R1), and between the last neighbour's return and the
@@ -153,7 +152,6 @@ static volatile LONG     g_bscOtherLogged = 0, g_swiOtherLogged = 0;
 volatile LONG g_buildLockOwnerTid   = 0;
 volatile LONG g_buildLockOwnerState = 0;   // BL_R1 or BL_TAIL
 
-volatile LONG g_buildCollisionHookInstalled = 0;
 
 static const int BL_ZERO_ZONE[2] = { 0, 0 };   // lockZone ignores the zone
 
@@ -227,7 +225,7 @@ struct NarrowBuilderScope
 	NarrowBuilderScope()
 	{
 		if (InterlockedIncrement(&g_inBuild) > 1)
-			InterlockedIncrement(&g_buildOverlapSeen);
+			InterlockedIncrement(&navmesh::g_nmCache.g_buildOverlapSeen);
 		if (t_bl != BL_NONE) { InterlockedIncrement(&nmBlRecur); BlRelease(); }
 		++t_blDepth;
 	}
@@ -426,7 +424,6 @@ void InstallBuildLockHooks()
 	bool bc = HookInstallRow(HOOK_BUILD_COLLISION_IMPL, (void*)hook_buildCollision,
 	                         (void**)&orig_buildCollisionHook, NULL, true) == NULL;
 	LogMsgDeferrable(bc ? "buildCollision hook: installed" : "buildCollision hook: install FAILED");
-	InterlockedExchange(&g_buildCollisionHookInstalled, bc ? 1 : 0);
 	bool bi = HookInstallRow(HOOK_BUILD_COLLISION_INTERIOR_IMPL, (void*)hook_buildCollisionInterior,
 	                         (void**)&orig_buildInteriorHook, NULL, true) == NULL;
 	LogMsgDeferrable(bi ? "buildCollisionInterior hook: installed" : "buildCollisionInterior hook: install FAILED");
@@ -452,7 +449,6 @@ void InstallBuildLockHooks()
 	if (HookInstallRow(HOOK_NMG_LOCK_ZONE, (void*)hook_lockZoneDiag, (void**)&orig_lockZoneDiag,
 	                   NULL, true) == NULL)
 	{
-		InterlockedExchange(&g_lockZoneDiagOn, 1);
 		LogMsgDeferrable("lockZone counter: installed");
 	}
 	else
@@ -476,7 +472,7 @@ std::string BuildLockStatsSuffix()
 	ss << std::fixed << std::setprecision(2);
 	bool narrow = BuildLockNarrowActive();
 	ss << " bcMode=" << (narrow ? "narrow" : "wide");
-	ss << " bcOverlap=" << InterlockedCompareExchange(&g_buildOverlapSeen, 0, 0);
+	ss << " bcOverlap=" << InterlockedCompareExchange(&navmesh::g_nmCache.g_buildOverlapSeen, 0, 0);
 
 	if (narrow)
 	{
@@ -488,11 +484,11 @@ std::string BuildLockStatsSuffix()
 	}
 	else
 	{
-		LONG n = InterlockedCompareExchange(&nmBcCount, 0, 0);
-		AppendAvgMax(ss, "bcWait", n, InterlockedCompareExchange64(&nmBcWaitTotalUs, 0, 0),
-			InterlockedCompareExchange(&nmBcWaitMaxUs, 0, 0));
-		AppendAvgMax(ss, "bcHold", n, InterlockedCompareExchange64(&nmBcHoldTotalUs, 0, 0),
-			InterlockedCompareExchange(&nmBcHoldMaxUs, 0, 0));
+		LONG n = InterlockedCompareExchange(&navmesh::g_nmCache.nmBcCount, 0, 0);
+		AppendAvgMax(ss, "bcWait", n, InterlockedCompareExchange64(&navmesh::g_nmCache.nmBcWaitTotalUs, 0, 0),
+			InterlockedCompareExchange(&navmesh::g_nmCache.nmBcWaitMaxUs, 0, 0));
+		AppendAvgMax(ss, "bcHold", n, InterlockedCompareExchange64(&navmesh::g_nmCache.nmBcHoldTotalUs, 0, 0),
+			InterlockedCompareExchange(&navmesh::g_nmCache.nmBcHoldMaxUs, 0, 0));
 	}
 	AppendAvgMax(ss, "bcTotal", InterlockedCompareExchange(&nmBcTotalN, 0, 0),
 		InterlockedCompareExchange64(&nmBcTotalUs, 0, 0), InterlockedCompareExchange(&nmBcTotalMaxUs, 0, 0));
@@ -505,7 +501,7 @@ std::string BuildLockStatsSuffix()
 		   << (double)InterlockedCompareExchange(&nmBscMaxUs, 0, 0) / 1000.0 << "ms";
 	}
 
-	if (InterlockedCompareExchange(&g_lockZoneDiagOn, 0, 0))
+	if (HookRowInstalled(HOOK_NMG_LOCK_ZONE))
 	{
 		ss << " blTry=" << InterlockedCompareExchange(&nmBlTryFail, 0, 0)
 		   << "/" << InterlockedCompareExchange(&nmBlTryN, 0, 0);

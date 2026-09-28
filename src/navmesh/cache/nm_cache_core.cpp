@@ -1,6 +1,5 @@
 // nm_cache_core.cpp - L1 navmesh ring, cache operations and lock ownership.
 
-#include "navmesh/cache/nm_cache_core_internal.h"
 #include "fixes/world/destroy_list_defer.h"
 #include "navmesh/cache/nm_cache_core.h"
 #include "diag/mem_probe.h"
@@ -13,185 +12,47 @@
 #include "navmesh/cache/nm_key_hash.h"
 
 
-NavMeshCacheEntry nmCache[NM_CACHE_SIZE];
-int nmCacheWriteIdx = 0;
-int nmCacheFill = 0;
-int nmDiagStage = 2;  // 0=bypass, 1=dequeue only, 2=full cache
+
+namespace navmesh {
+
+NavMeshCacheState g_nmCache =
+{
+	2,                   // nmDiagStage
+	-99,                 // nmDiagLastGridX
+	-99,                 // nmDiagLastGridY
+	-1,                  // nmDiagLastType
+	-99,                 // nmDiagHitGrid
+	-1,                  // nmStaleLastGridX
+	-1,                  // nmStaleLastGridY
+	-1,                  // nmStaleLastType
+	STALE_REASON_NONE,   // nmStaleLastReason
+	-1,                  // nmZeroFaceLastTri
+	-1,                  // nmZeroFaceLastVert
+	-1,                  // nmZeroFaceLastThings
+	-99,                 // nmZeroFaceLastGridX
+	-99,                 // nmZeroFaceLastGridY
+	-1,                  // nmZeroFaceLastType
+	-1                   // g_wbOverrideAfterPop
+};
+NavMeshL1Ring g_nmL1;
+
+} // namespace navmesh
+
+namespace nm_cache_core_detail {
+
+union NavMeshCacheStatePodCheck { navmesh::NavMeshCacheState s; };
+static_assert(__alignof(navmesh::NavMeshCacheState) >= 8, "NavMeshCacheState must be 8-byte aligned");
+union NavMeshL1RingPodCheck { navmesh::NavMeshL1Ring s; };
+
+} // namespace nm_cache_core_detail
+using namespace nm_cache_core_detail;
 
 static bool nmCacheCSInitialized = false;
 CRITICAL_SECTION nmCacheCS;
 CRITICAL_SECTION buildCollisionCS;
 CRITICAL_SECTION processJobCS;
-volatile long    nmCacheDisabled = 0;
 
-volatile long nmJobCount = 0;
-volatile long nmCacheHitCount = 0;
-volatile long nmCacheMissCount = 0;
-volatile long nmCacheSkipCount = 0;
-volatile long nmTotalMsTimes10 = 0;
-volatile long nmSavedMsTimes10 = 0;
-volatile long nmDiagLastGridX = -99;
-volatile long nmDiagLastGridY = -99;
-volatile long nmDiagLastType = -1;
-volatile long nmDiagStep = 0;
-volatile long nmDiagHitGrid = -99;
-namespace nm_cache_core_detail {
-double lastNMLogTime = 0.0;
-} // namespace nm_cache_core_detail
-
-volatile long  nmSettingsDumped = 0;
-volatile long  nmSettingsVerified = 0;
-volatile float probeEMP[14];
-volatile float probeGen[24];
-volatile float probeMisc[8];
-volatile float verifyEMP[7];
-
-volatile long wbProbeDone = 0;
-volatile long probeWBPtrLo = 0;
-volatile long probeWBPtrHi = 0;
-volatile long probeHavokPtrLo = 0;
-volatile long probeHavokPtrHi = 0;
-volatile long probeWBMatch = 0;
-volatile long probeNMGPtrLo = 0;
-volatile long probeNMGPtrHi = 0;
-volatile long probeWBMsize = 0;
-volatile long probeWBHeapSize = 0;
-volatile long probeWBFieldScan = 0;
-
-volatile long wbArrayScanDone = 0;
-int           wbArrayOffsets[WB_MAX_ARRAYS];
-volatile long wbArrayCount = 0;
-int           wbWritableOffsets[WB_MAX_ARRAYS];
-volatile long wbWritableCount = 0;
-WBArrayProbe  wbArrayProbes[WB_MAX_ARRAYS];
-int           wbSdkArrayOffsets[WB_MAX_SDK_ARRAYS];
-int           wbSdkArrayCount = 0;
-
-volatile long nmDiskHitCount = 0;
-volatile long nmDiskMissCount = 0;
-volatile long nmDiskWriteCount = 0;
-volatile long nmDiskReadUsTimes1 = 0;
-volatile long nmDiskWriteUsTimes1 = 0;
-
-L2MissEntry   l2MissLog[L2_MISS_LOG_MAX];
-volatile long l2MissLogCount = 0;
-volatile long l2MissLogReported = 0;
-
-volatile long workerBusyCount = 0;
-volatile long nmBusyBridgeViolCount = 0;
-volatile long g_slabAllocHits = 0;
-volatile long g_slabAllocWorkerHits = 0;
-
-volatile long g_workBufAllocSize = 0;
-
-volatile long lazyHooksInstalled = 0;
-volatile long nmCloneConstructCount = 0;
-volatile long nmCloneConstructFailCount = 0;
-volatile long nmWorkerMissCount = 0;
-volatile long nmBgMissCount = 0;
-volatile long nmLateHitCount = 0;
-
-volatile long l2RejCount[L2REJ_REASON_COUNT] = {};
-volatile long l2CapEvicted = 0;
-volatile long nmL2ZeroFaceSkip = 0;
-volatile long nmReconFailCount = 0;
-
-volatile long g_wbPruneSeen       = 0;
-volatile long g_wbPruneAreaBits   = 0;
-volatile long g_wbPruneSeedBits   = 0;
-volatile long g_wbPruneBorderBits = 0;
-volatile long g_wbPruneFlags      = 0;
-volatile long g_wbPruneBad        = 0;
-volatile long g_wbExtraVertexBad  = 0;
-volatile long g_l2Bypass          = 0;
-volatile long nmL2BypassReads     = 0;
-volatile long nmL2BypassWrites    = 0;
-
-volatile long g_nbrSeedHookState = 0;
-volatile long nmNbrSeedLive      = 0;
-volatile long nmNbrSeedTemp      = 0;
-volatile long nmNbrSeedNone      = 0;
-volatile long nmNbrSeedZero      = 0;
-
-volatile long     g_nbrSeedStandInRefused = 0;
-volatile long     nmNbrStandInShip   = 0;
-volatile long     nmNbrStandInPlace  = 0;
-volatile long     nmNbrStandInNoFile = 0;
-volatile long     nmNbrStandInLate   = 0;
-volatile long     nmNbrStandInHBad   = 0;
-volatile LONGLONG nmNbrStandInSeeds  = 0;
-volatile long     nmNbrLoadCount     = 0;
-volatile LONGLONG nmNbrLoadTotalUs   = 0;
-volatile long     nmNbrLoadMaxUs     = 0;
-volatile long     nmNbrRecordCount   = 0;
-volatile long     nmNbrL2LateSkip    = 0;
-
-volatile long nmPartialRealCount = 0;
-
-volatile long nmTripCount = 0;
-volatile long nmTripInstalled = 0;
-volatile long nmT234Count = 0;
-volatile long nmT234TotalMsTimes10 = 0;
-volatile long nmT234MaxMsTimes10 = 0;
-
-volatile long     g_buildOverlapSeen = 0;
-volatile long     nmBcCount = 0;
-volatile LONGLONG nmBcWaitTotalUs = 0;
-volatile long     nmBcWaitMaxUs = 0;
-volatile LONGLONG nmBcHoldTotalUs = 0;
-volatile long     nmBcHoldMaxUs = 0;
-
-volatile long nmCloneHandleClosed = 0;
-volatile long nmCloneHandleSkipped = 0;
-volatile LONGLONG nmWbFreedBytes = 0;
-
-volatile long nmHitStaleCount = 0;
-volatile long nmL1ReplacedCount = 0;
-volatile long nmDupL2Avoided = 0;
-volatile long nmL2FlightFull = 0;
-
-volatile long g_navMeshWorkersLive = 0;
-volatile long g_navMeshPoolRefusal = 0;
-
-volatile long     nmPjWaitCount[PJWAIT_SITE_COUNT]   = {};
-volatile LONGLONG nmPjWaitTotalUs[PJWAIT_SITE_COUNT] = {};
-volatile long     nmPjWaitMaxUs[PJWAIT_SITE_COUNT]   = {};
-volatile long     nmPjYieldCount = 0;
-volatile long     nmUlSkipJob   = 0;
-volatile long     nmUlSkipClaim = 0;
-volatile long     nmUlSkipPj    = 0;
-volatile long     nmUlHeld      = 0;
-volatile long     nmUlPrio      = 0;
-volatile long     nmUlPrioWin   = 0;
-
-volatile long     nmClaimAgeMissCount   = 0;
-volatile LONGLONG nmClaimAgeMissTotalUs = 0;
-volatile long     nmClaimAgeMissMaxUs   = 0;
-volatile long     nmClaimAgeMissBucket[CLAIMAGE_BUCKET_COUNT] = {};
-volatile long     nmClaimAgeHitCount    = 0;
-volatile LONGLONG nmClaimAgeHitTotalUs  = 0;
-volatile long     nmClaimAgeHitMaxUs    = 0;
-
-volatile long nmStaleCount[STALE_SITE_COUNT] = {};
-volatile long nmStaleLastGridX  = -1;
-volatile long nmStaleLastGridY  = -1;
-volatile long nmStaleLastType   = -1;
-volatile long nmStaleLastReason = STALE_REASON_NONE;
-volatile long nmStaleLastAgeUs  = 0;
-
-volatile long nmZeroFaceCount = 0;
-volatile long nmZeroFaceLastTri = -1;
-volatile long nmZeroFaceLastVert = -1;
-volatile long nmZeroFaceLastThings = -1;
-volatile long nmZeroFaceLastGridX = -99;
-volatile long nmZeroFaceLastGridY = -99;
-volatile long nmZeroFaceLastType = -1;
-volatile long nmZeroFaceEmptyInput = 0;
-volatile long nmZeroFaceAbort = 0;
-
-std::string   nmDiskCacheDir;
-char          nmDiskCacheDirBuf[MAX_PATH] = {};
-bool          nmDiskCacheDirChecked = false;
+static std::string   nmDiskCacheDir;
 
 // The L2 directory under the DLL folder. Every L2 path (lookups, writes, the
 // startup orphan sweep and the size cap) is built from nmDiskCacheDirBuf, which
@@ -213,7 +74,7 @@ void InitNavMeshCacheCS()
 	}
 
 	// Hoist disk cache dir init to main thread to eliminate lazy-init race
-	if (!nmDiskCacheDirChecked)
+	if (!navmesh::g_nmCache.nmDiskCacheDirChecked)
 	{
 		nmDiskCacheDir = GetDLLDirectory() + NM_L2_DIR_NAME;
 		// A directory that cannot be created loses every write of the session,
@@ -225,9 +86,9 @@ void InitNavMeshCacheCS()
 		if (!dirOk && dirErr == ERROR_ALREADY_EXISTS)
 			dirOk = true;
 		// char copy for the bg threads: they must not touch std::string
-		if (nmDiskCacheDir.size() < sizeof(nmDiskCacheDirBuf))
-			strcpy_s(nmDiskCacheDirBuf, sizeof(nmDiskCacheDirBuf), nmDiskCacheDir.c_str());
-		nmDiskCacheDirChecked = true;
+		if (nmDiskCacheDir.size() < sizeof(navmesh::g_nmCache.nmDiskCacheDirBuf))
+			strcpy_s(navmesh::g_nmCache.nmDiskCacheDirBuf, sizeof(navmesh::g_nmCache.nmDiskCacheDirBuf), nmDiskCacheDir.c_str());
+		navmesh::g_nmCache.nmDiskCacheDirChecked = true;
 		LogDebug("Disk cache dir hoisted: " + nmDiskCacheDir);
 		if (!dirOk)
 		{
@@ -236,7 +97,7 @@ void InitNavMeshCacheCS()
 			   << "\" (err=" << dirErr << ") - nothing will be banked this session";
 			LogMsg(ds.str());
 		}
-		if (!nmDiskCacheDirBuf[0])
+		if (!navmesh::g_nmCache.nmDiskCacheDirBuf[0])
 			LogMsg("L2 disk cache: the directory path does not fit MAX_PATH - nothing will be banked this session");
 	}
 
@@ -271,7 +132,7 @@ void InitNavMeshCacheCS()
 	{
 		std::ostringstream ss;
 		ss << "L2 startup scan: removed "
-		   << InterlockedCompareExchange(&l2CapEvicted, 0, 0) << " file(s)";
+		   << InterlockedCompareExchange(&navmesh::g_nmCache.l2CapEvicted, 0, 0) << " file(s)";
 		LogMsg(ss.str());
 	}
 }
@@ -289,31 +150,31 @@ void InitNavMeshCacheCS()
 // moves then. inputThings is the zone's things count, kept as a cross-check.
 void NoteZeroFaceMesh(const NavMeshCacheKey& key, int inputTri, int inputVert, int inputThings)
 {
-	InterlockedIncrement(&nmZeroFaceCount);
-	InterlockedExchange(&nmZeroFaceLastTri, (long)inputTri);
-	InterlockedExchange(&nmZeroFaceLastVert, (long)inputVert);
-	InterlockedExchange(&nmZeroFaceLastThings, (long)inputThings);
-	InterlockedExchange(&nmZeroFaceLastGridX, (long)key.gridX);
-	InterlockedExchange(&nmZeroFaceLastGridY, (long)key.gridY);
-	InterlockedExchange(&nmZeroFaceLastType, (long)key.jobType);
+	InterlockedIncrement(&navmesh::g_nmCache.nmZeroFaceCount);
+	InterlockedExchange(&navmesh::g_nmCache.nmZeroFaceLastTri, (long)inputTri);
+	InterlockedExchange(&navmesh::g_nmCache.nmZeroFaceLastVert, (long)inputVert);
+	InterlockedExchange(&navmesh::g_nmCache.nmZeroFaceLastThings, (long)inputThings);
+	InterlockedExchange(&navmesh::g_nmCache.nmZeroFaceLastGridX, (long)key.gridX);
+	InterlockedExchange(&navmesh::g_nmCache.nmZeroFaceLastGridY, (long)key.gridY);
+	InterlockedExchange(&navmesh::g_nmCache.nmZeroFaceLastType, (long)key.jobType);
 
 	if (inputTri == 0)
-		InterlockedIncrement(&nmZeroFaceEmptyInput);
+		InterlockedIncrement(&navmesh::g_nmCache.nmZeroFaceEmptyInput);
 	else if (inputTri > 0)
-		InterlockedIncrement(&nmZeroFaceAbort);
+		InterlockedIncrement(&navmesh::g_nmCache.nmZeroFaceAbort);
 }
 
 
 int FindCacheEntry(const NavMeshCacheKey& key)
 {
-	for (int i = 0; i < nmCacheFill; ++i)
+	for (int i = 0; i < navmesh::g_nmL1.nmCacheFill; ++i)
 	{
-		if (!nmCache[i].valid || !KeysMatch(nmCache[i].key, key))
+		if (!navmesh::g_nmL1.nmCache[i].valid || !KeysMatch(navmesh::g_nmL1.nmCache[i].key, key))
 			continue;
 		// Never serve a zero-face mesh, including one a build before this rule
 		// left in the ring buffer. Regenerating is right whether the tile is
 		// genuinely empty or the generation aborted.
-		if (nmCache[i].faceCount <= 0)
+		if (navmesh::g_nmL1.nmCache[i].faceCount <= 0)
 			continue;
 		return i;
 	}
@@ -323,20 +184,20 @@ int FindCacheEntry(const NavMeshCacheKey& key)
 void EvictCacheEntry(int idx)
 {
 	if (idx < 0 || idx >= NM_CACHE_SIZE) return;
-	if (!nmCache[idx].valid) return;
+	if (!navmesh::g_nmL1.nmCache[idx].valid) return;
 
-	if (nmCache[idx].cachedFaces)     fn_gameDelArr(nmCache[idx].cachedFaces);
-	if (nmCache[idx].cachedEdges)     fn_gameDelArr(nmCache[idx].cachedEdges);
-	if (nmCache[idx].cachedVertices)  fn_gameDelArr(nmCache[idx].cachedVertices);
-	if (nmCache[idx].cachedFaceData)  fn_gameDelArr(nmCache[idx].cachedFaceData);
-	if (nmCache[idx].cachedEdgeData)  fn_gameDelArr(nmCache[idx].cachedEdgeData);
+	if (navmesh::g_nmL1.nmCache[idx].cachedFaces)     fn_gameDelArr(navmesh::g_nmL1.nmCache[idx].cachedFaces);
+	if (navmesh::g_nmL1.nmCache[idx].cachedEdges)     fn_gameDelArr(navmesh::g_nmL1.nmCache[idx].cachedEdges);
+	if (navmesh::g_nmL1.nmCache[idx].cachedVertices)  fn_gameDelArr(navmesh::g_nmL1.nmCache[idx].cachedVertices);
+	if (navmesh::g_nmL1.nmCache[idx].cachedFaceData)  fn_gameDelArr(navmesh::g_nmL1.nmCache[idx].cachedFaceData);
+	if (navmesh::g_nmL1.nmCache[idx].cachedEdgeData)  fn_gameDelArr(navmesh::g_nmL1.nmCache[idx].cachedEdgeData);
 
-	nmCache[idx].cachedFaces = NULL;
-	nmCache[idx].cachedEdges = NULL;
-	nmCache[idx].cachedVertices = NULL;
-	nmCache[idx].cachedFaceData = NULL;
-	nmCache[idx].cachedEdgeData = NULL;
-	nmCache[idx].valid = false;
+	navmesh::g_nmL1.nmCache[idx].cachedFaces = NULL;
+	navmesh::g_nmL1.nmCache[idx].cachedEdges = NULL;
+	navmesh::g_nmL1.nmCache[idx].cachedVertices = NULL;
+	navmesh::g_nmL1.nmCache[idx].cachedFaceData = NULL;
+	navmesh::g_nmL1.nmCache[idx].cachedEdgeData = NULL;
+	navmesh::g_nmL1.nmCache[idx].valid = false;
 }
 
 // Deep-copies one array out of the generated mesh. Returns false on allocation
@@ -368,16 +229,16 @@ static void FreeEntryArrays(NavMeshCacheEntry& e)
 // Publishes a fully built entry into the ring buffer. Returns its slot index.
 static int PublishEntry(NavMeshCacheEntry& src)
 {
-	if (nmCache[nmCacheWriteIdx].valid)
-		EvictCacheEntry(nmCacheWriteIdx);
+	if (navmesh::g_nmL1.nmCache[navmesh::g_nmL1.nmCacheWriteIdx].valid)
+		EvictCacheEntry(navmesh::g_nmL1.nmCacheWriteIdx);
 
-	int idx = nmCacheWriteIdx;
-	nmCache[idx] = src;
-	nmCache[idx].valid = true;
+	int idx = navmesh::g_nmL1.nmCacheWriteIdx;
+	navmesh::g_nmL1.nmCache[idx] = src;
+	navmesh::g_nmL1.nmCache[idx].valid = true;
 
-	nmCacheWriteIdx = (nmCacheWriteIdx + 1) % NM_CACHE_SIZE;
-	if (nmCacheFill < NM_CACHE_SIZE)
-		nmCacheFill++;
+	navmesh::g_nmL1.nmCacheWriteIdx = (navmesh::g_nmL1.nmCacheWriteIdx + 1) % NM_CACHE_SIZE;
+	if (navmesh::g_nmL1.nmCacheFill < NM_CACHE_SIZE)
+		navmesh::g_nmL1.nmCacheFill++;
 
 	memset(&src, 0, sizeof(src));   // ownership moved into the ring buffer
 	return idx;
@@ -513,13 +374,13 @@ static void UnwindReconstruct(uintptr_t nm, void* mem)
 void* ReconstructNavMesh(const NavMeshCacheEntry& entry)
 {
 	void* mem = HavokTlsAlloc(176);
-	if (!mem) { InterlockedIncrement(&nmReconFailCount); return NULL; }
+	if (!mem) { InterlockedIncrement(&navmesh::g_nmCache.nmReconFailCount); return NULL; }
 
 	void* navMesh = fn_navMeshCtor(mem);
 	if (!navMesh)
 	{
 		HavokTlsFree(mem, 176);
-		InterlockedIncrement(&nmReconFailCount);
+		InterlockedIncrement(&navmesh::g_nmCache.nmReconFailCount);
 		return NULL;
 	}
 	uintptr_t nm = (uintptr_t)navMesh;
@@ -534,7 +395,7 @@ void* ReconstructNavMesh(const NavMeshCacheEntry& entry)
 	if (!ok)
 	{
 		UnwindReconstruct(nm, mem);
-		InterlockedIncrement(&nmReconFailCount);
+		InterlockedIncrement(&navmesh::g_nmCache.nmReconFailCount);
 		return NULL;
 	}
 
@@ -550,34 +411,34 @@ void* ReconstructNavMesh(const NavMeshCacheEntry& entry)
 
 void* ReconstructExpected(const NavMeshCacheKey& expected, int idx, bool* replacedOut)
 {
-	const bool matches = CacheSlotMatchesAt(nmCache, idx, expected);
+	const bool matches = CacheSlotMatchesAt(navmesh::g_nmL1.nmCache, idx, expected);
 	if (replacedOut)
 		*replacedOut = !matches;
 	if (!matches)
 	{
-		InterlockedIncrement(&nmL1ReplacedCount);
+		InterlockedIncrement(&navmesh::g_nmCache.nmL1ReplacedCount);
 		return NULL;
 	}
-	return ReconstructNavMesh(nmCache[idx]);
+	return ReconstructNavMesh(navmesh::g_nmL1.nmCache[idx]);
 }
 
 void ClearNavMeshCache()
 {
-	InterlockedExchange(&nmCacheDisabled, 1);
+	InterlockedExchange(&navmesh::g_nmCache.nmCacheDisabled, 1);
 
 	if (nmCacheCSInitialized)
 		EnterCriticalSection(&nmCacheCS);
 
-	int cleared = nmCacheFill;
+	int cleared = navmesh::g_nmL1.nmCacheFill;
 	for (int i = 0; i < NM_CACHE_SIZE; ++i)
 		EvictCacheEntry(i);
-	nmCacheWriteIdx = 0;
-	nmCacheFill = 0;
+	navmesh::g_nmL1.nmCacheWriteIdx = 0;
+	navmesh::g_nmL1.nmCacheFill = 0;
 
 	if (nmCacheCSInitialized)
 		LeaveCriticalSection(&nmCacheCS);
 
-	InterlockedExchange(&nmCacheDisabled, 0);
+	InterlockedExchange(&navmesh::g_nmCache.nmCacheDisabled, 0);
 
 	if (cleared > 0)
 	{

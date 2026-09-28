@@ -66,16 +66,16 @@ void NoteStaleDrop(int site, uintptr_t job, int jobType, int reason, LONGLONG cl
 
 	// Five separate writes: a racing reader may see a torn last event, which
 	// the stats line accepts (nm_cache_core.h).
-	InterlockedExchange(&nmStaleLastGridX, gx);
-	InterlockedExchange(&nmStaleLastGridY, gy);
-	InterlockedExchange(&nmStaleLastType, (long)jobType);
-	InterlockedExchange(&nmStaleLastReason, (long)reason);
-	InterlockedExchange(&nmStaleLastAgeUs, ageUs);
+	InterlockedExchange(&navmesh::g_nmCache.nmStaleLastGridX, gx);
+	InterlockedExchange(&navmesh::g_nmCache.nmStaleLastGridY, gy);
+	InterlockedExchange(&navmesh::g_nmCache.nmStaleLastType, (long)jobType);
+	InterlockedExchange(&navmesh::g_nmCache.nmStaleLastReason, (long)reason);
+	InterlockedExchange(&navmesh::g_nmCache.nmStaleLastAgeUs, ageUs);
 
 	// Counted after the last-event fields, so a reporter that sees a non-zero
 	// count always finds a real drop in them, never the initial values
 	// (staleLast=(-1,-1)t-1/none@0.0ms). Later drops can still tear the event.
-	InterlockedIncrement(&nmStaleCount[site]);
+	InterlockedIncrement(&navmesh::g_nmCache.nmStaleCount[site]);
 }
 } // namespace nm_workers_detail
 
@@ -140,7 +140,7 @@ int L2InFlightAcquire(const NavMeshCacheKey& key)
 	}
 	if (free < 0)
 	{
-		InterlockedIncrement(&nmL2FlightFull);
+		InterlockedIncrement(&navmesh::g_nmCache.nmL2FlightFull);
 		return L2FLIGHT_FULL;
 	}
 	g_l2InFlight[free] = key;
@@ -297,12 +297,12 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 	}
 
 	if (heldForUnload)
-		InterlockedIncrement(&nmUlHeld);
+		InterlockedIncrement(&navmesh::g_nmCache.nmUlHeld);
 
 	// Registers the claim; enforcing, a claim with no free entry is refused
 	// and the job stays queued.
 	if (adj && !NmAdjWorkerScanEndLocked(&adjScan, claimSlot, job ? &adjTakenDesc : NULL,
-	                                    InterlockedCompareExchange(&g_navMeshWorkersLive, 0, 0) > 0))
+	                                    InterlockedCompareExchange(&navmesh::g_nmCache.g_navMeshWorkersLive, 0, 0) > 0))
 		job = 0;
 
 	if (!job)
@@ -381,7 +381,7 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 	{
 		EnterCriticalSection(&nmCacheCS);
 		int found = FindCacheEntry(key);
-		if (found >= 0 && nmCache[found].cachedFaces != NULL && fn_navMeshCtor != NULL)
+		if (found >= 0 && navmesh::g_nmL1.nmCache[found].cachedFaces != NULL && fn_navMeshCtor != NULL)
 			hitIdx = found;
 		LeaveCriticalSection(&nmCacheCS);
 	}
@@ -399,7 +399,7 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 			// Another worker is reading this exact key. Skip the read and take
 			// the MISS path, where the late-HIT re-check under processJobCS
 			// picks up its result rather than generating again.
-			InterlockedIncrement(&nmDupL2Avoided);
+			InterlockedIncrement(&navmesh::g_nmCache.nmDupL2Avoided);
 		}
 		else
 		{
@@ -410,7 +410,7 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 			bool l2Hit = ReadDiskCache(key, diskEntry);
 			QueryPerformanceCounter(&tR1);
 			long readUs = (long)(QPCToMs(tR0, tR1) * 1000.0);
-			InterlockedExchangeAdd(&nmDiskReadUsTimes1, readUs);
+			InterlockedExchangeAdd(&navmesh::g_nmCache.nmDiskReadUsTimes1, readUs);
 
 			EnterCriticalSection(&nmCacheCS);
 			if (l2Hit)
@@ -420,13 +420,13 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 			LeaveCriticalSection(&nmCacheCS);
 
 			if (l2Hit && hitIdx >= 0)
-				InterlockedIncrement(&nmDiskHitCount);
+				InterlockedIncrement(&navmesh::g_nmCache.nmDiskHitCount);
 			else
-				InterlockedIncrement(&nmDiskMissCount);
+				InterlockedIncrement(&navmesh::g_nmCache.nmDiskMissCount);
 		}
 	}
 
-	InterlockedIncrement(&nmJobCount);
+	InterlockedIncrement(&navmesh::g_nmCache.nmJobCount);
 	*hitIdxOut = hitIdx;
 	*isMissOut = (hitIdx < 0);
 	*keyOut = key;

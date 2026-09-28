@@ -159,9 +159,9 @@ static inline void NoteMaxUs(volatile long* slot, long us)
 static inline void NotePjWait(int site, LONGLONG before, LONGLONG after)
 {
 	long us = QpcDeltaUs(before, after);
-	InterlockedIncrement(&nmPjWaitCount[site]);
-	InterlockedExchangeAdd64(&nmPjWaitTotalUs[site], (LONGLONG)us);
-	NoteMaxUs(&nmPjWaitMaxUs[site], us);
+	InterlockedIncrement(&navmesh::g_nmCache.nmPjWaitCount[site]);
+	InterlockedExchangeAdd64(&navmesh::g_nmCache.nmPjWaitTotalUs[site], (LONGLONG)us);
+	NoteMaxUs(&navmesh::g_nmCache.nmPjWaitMaxUs[site], us);
 }
 
 // claimQpc 0 means the caller had no claim time; nothing is recorded.
@@ -171,17 +171,17 @@ static inline void NoteClaimAge(bool isMiss, LONGLONG claimQpc, LONGLONG now)
 	long us = QpcDeltaUs(claimQpc, now);
 	if (isMiss)
 	{
-		InterlockedIncrement(&nmClaimAgeMissCount);
-		InterlockedExchangeAdd64(&nmClaimAgeMissTotalUs, (LONGLONG)us);
-		NoteMaxUs(&nmClaimAgeMissMaxUs, us);
+		InterlockedIncrement(&navmesh::g_nmCache.nmClaimAgeMissCount);
+		InterlockedExchangeAdd64(&navmesh::g_nmCache.nmClaimAgeMissTotalUs, (LONGLONG)us);
+		NoteMaxUs(&navmesh::g_nmCache.nmClaimAgeMissMaxUs, us);
 		int b = (us < 10000) ? 0 : (us < 100000) ? 1 : (us < 1000000) ? 2 : (us < 5000000) ? 3 : 4;
-		InterlockedIncrement(&nmClaimAgeMissBucket[b]);
+		InterlockedIncrement(&navmesh::g_nmCache.nmClaimAgeMissBucket[b]);
 	}
 	else
 	{
-		InterlockedIncrement(&nmClaimAgeHitCount);
-		InterlockedExchangeAdd64(&nmClaimAgeHitTotalUs, (LONGLONG)us);
-		NoteMaxUs(&nmClaimAgeHitMaxUs, us);
+		InterlockedIncrement(&navmesh::g_nmCache.nmClaimAgeHitCount);
+		InterlockedExchangeAdd64(&navmesh::g_nmCache.nmClaimAgeHitTotalUs, (LONGLONG)us);
+		NoteMaxUs(&navmesh::g_nmCache.nmClaimAgeHitMaxUs, us);
 	}
 }
 static inline uintptr_t UnloadingZone()
@@ -276,7 +276,7 @@ static inline void WorkerBusyLeave()
 	t_busyNmg = 0;
 	if (!nmg)
 	{
-		InterlockedDecrement(&workerBusyCount);   // no generator: nothing to lock or clear
+		InterlockedDecrement(&navmesh::g_nmCache.workerBusyCount);   // no generator: nothing to lock or clear
 		return;
 	}
 	NoteBusyBridge(BusyBridgeLeave(GameBusyBridgeOps(nmg)));

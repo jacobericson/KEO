@@ -215,7 +215,7 @@ void BackOffForPjPoll()
 	if (InterlockedCompareExchange(&g_processJobOwnerTid, 0, 0) == (long)GetCurrentThreadId())
 		return;
 
-	InterlockedIncrement(&nmPjYieldCount);
+	InterlockedIncrement(&navmesh::g_nmCache.nmPjYieldCount);
 	for (;;)
 	{
 		LONGLONG now = QpcNow();
@@ -241,7 +241,7 @@ bool NavMeshRequestPjPriority()
 		return false;                                     // cool-down after an expiry
 	InterlockedExchange64(&g_pjPrioNextAllow, now + QpcFromUs(2 * PJ_PRIO_TTL_US));
 	InterlockedExchange64(&g_pjPrioUntil, now + QpcFromUs(PJ_PRIO_TTL_US));
-	InterlockedIncrement(&nmUlPrio);
+	InterlockedIncrement(&navmesh::g_nmCache.nmUlPrio);
 	return true;
 }
 
@@ -268,7 +268,7 @@ NavMeshPjLockResult NavMeshTryLockProcessJobFor(DWORD timeoutMs, DWORD* waitedMs
 			// still up (not expired) counts ulPrioWin=; either way it is
 			// withdrawn and the next deferral may raise a fresh one at once.
 			if (PjPrioActiveAt(QpcNow()))
-				InterlockedIncrement(&nmUlPrioWin);
+				InterlockedIncrement(&navmesh::g_nmCache.nmUlPrioWin);
 			InterlockedExchange64(&g_pjPrioUntil, 0);
 			InterlockedExchange64(&g_pjPrioNextAllow, 0);
 			return NM_PJLOCK_HELD;
@@ -276,7 +276,7 @@ NavMeshPjLockResult NavMeshTryLockProcessJobFor(DWORD timeoutMs, DWORD* waitedMs
 		// A MISS (or a type 2/3/4 dispatch) holds it. During a mod unload that
 		// defers the unload to a later frame (ulSkipPj=).
 		if (UnloadingZone())
-			InterlockedIncrement(&nmUlSkipPj);
+			InterlockedIncrement(&navmesh::g_nmCache.nmUlSkipPj);
 		return NM_PJLOCK_TIMEOUT;
 	}
 
@@ -302,7 +302,7 @@ NavMeshPjLockResult NavMeshTryLockProcessJobFor(DWORD timeoutMs, DWORD* waitedMs
 		{
 			InterlockedDecrement(&g_pjPollWanting);
 			if (UnloadingZone())
-				InterlockedIncrement(&nmUlSkipPj);
+				InterlockedIncrement(&navmesh::g_nmCache.nmUlSkipPj);
 			if (waitedMs) *waitedMs = elapsedMs;
 			return NM_PJLOCK_TIMEOUT;
 		}

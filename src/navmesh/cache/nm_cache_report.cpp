@@ -1,7 +1,6 @@
 // nm_cache_report.cpp - L1/L2 cache and worker-window diagnostics.
 // Main thread; reads counters without acquiring nmCacheCS or processJobCS.
 
-#include "navmesh/cache/nm_cache_core_internal.h"
 #include "fixes/world/destroy_list_defer.h"
 #include "navmesh/cache/nm_cache_core.h"
 #include "diag/mem_probe.h"
@@ -12,9 +11,9 @@
 #include "navmesh/cache/nm_l2_writer.h"    // l2WrFail= token, the not-banking test
 #include "navmesh/workers/nm_worker_gate_policy.h"
 #include "navmesh/cache/nm_key_hash.h"
-using namespace nm_cache_core_detail;
 
 namespace nm_cache_core_detail {
+static double lastNMLogTime = 0.0;
 
 struct CacheStatsWindowCtx
 {
@@ -37,7 +36,7 @@ static void AppendCacheSummary(std::ostringstream& ss, const CacheStatsWindowCtx
 	   << " L2hit=" << diskHits
 	   << " miss=" << misses
 	   << " skips=" << skips
-	   << " fill=" << nmCacheFill << "/" << NM_CACHE_SIZE;
+	   << " fill=" << navmesh::g_nmL1.nmCacheFill << "/" << NM_CACHE_SIZE;
 
 	if (misses > 0)
 	{
@@ -70,7 +69,7 @@ static void AppendL2WriteState(std::ostringstream& ss, const CacheStatsWindowCtx
 		long rejTotal = 0;
 		for (int r = 0; r < L2REJ_REASON_COUNT; ++r)
 		{
-			rej[r] = InterlockedCompareExchange(&l2RejCount[r], 0, 0);
+			rej[r] = InterlockedCompareExchange(&navmesh::g_nmCache.l2RejCount[r], 0, 0);
 			rejTotal += rej[r];
 		}
 		ss << " l2Rej=" << rejTotal
@@ -83,10 +82,10 @@ static void AppendL2WriteState(std::ostringstream& ss, const CacheStatsWindowCtx
 		   << "/i" << rej[L2REJ_IO]
 		   << "/a" << rej[L2REJ_ALLOC]
 		   << "/p" << rej[L2REJ_PATHLONG] << ")";
-		ss << " l2Cap=" << InterlockedCompareExchange(&l2CapEvicted, 0, 0);
+		ss << " l2Cap=" << InterlockedCompareExchange(&navmesh::g_nmCache.l2CapEvicted, 0, 0);
 		// Zero-face entries the blob builder refused. L1 refuses
 		// them first today, so this should never print.
-		long l2Zero = InterlockedCompareExchange(&nmL2ZeroFaceSkip, 0, 0);
+		long l2Zero = InterlockedCompareExchange(&navmesh::g_nmCache.nmL2ZeroFaceSkip, 0, 0);
 		if (l2Zero)
 			ss << " l2ZeroSkip=" << l2Zero;
 
@@ -125,7 +124,7 @@ static void AppendL2WriteState(std::ostringstream& ss, const CacheStatsWindowCtx
 static void AppendReconstructFailures(std::ostringstream& ss)
 {
 	{
-		long reconFail = InterlockedCompareExchange(&nmReconFailCount, 0, 0);
+		long reconFail = InterlockedCompareExchange(&navmesh::g_nmCache.nmReconFailCount, 0, 0);
 		if (reconFail)
 			ss << " reconFail=" << reconFail;
 	}
@@ -138,19 +137,19 @@ static void AppendZeroFace(std::ostringstream& ss)
 	// was not captured). zfEmptyIn / zfAbort split every zero-face generation by
 	// that count; see NoteZeroFaceMesh.
 	{
-		long zeroFace = InterlockedCompareExchange(&nmZeroFaceCount, 0, 0);
+		long zeroFace = InterlockedCompareExchange(&navmesh::g_nmCache.nmZeroFaceCount, 0, 0);
 		ss << " zeroFace=" << zeroFace;
 		if (zeroFace)
 		{
-			ss << "(tri=" << InterlockedCompareExchange(&nmZeroFaceLastTri, 0, 0)
-			   << " vert=" << InterlockedCompareExchange(&nmZeroFaceLastVert, 0, 0)
-			   << " things=" << InterlockedCompareExchange(&nmZeroFaceLastThings, 0, 0)
-			   << " grid=" << InterlockedCompareExchange(&nmZeroFaceLastGridX, 0, 0)
-			   << "," << InterlockedCompareExchange(&nmZeroFaceLastGridY, 0, 0)
-			   << " type=" << InterlockedCompareExchange(&nmZeroFaceLastType, 0, 0) << ")";
+			ss << "(tri=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmZeroFaceLastTri, 0, 0)
+			   << " vert=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmZeroFaceLastVert, 0, 0)
+			   << " things=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmZeroFaceLastThings, 0, 0)
+			   << " grid=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmZeroFaceLastGridX, 0, 0)
+			   << "," << InterlockedCompareExchange(&navmesh::g_nmCache.nmZeroFaceLastGridY, 0, 0)
+			   << " type=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmZeroFaceLastType, 0, 0) << ")";
 		}
-		ss << " zfEmptyIn=" << InterlockedCompareExchange(&nmZeroFaceEmptyInput, 0, 0)
-		   << " zfAbort=" << InterlockedCompareExchange(&nmZeroFaceAbort, 0, 0);
+		ss << " zfEmptyIn=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmZeroFaceEmptyInput, 0, 0)
+		   << " zfAbort=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmZeroFaceAbort, 0, 0);
 	}
 }
 
@@ -162,21 +161,21 @@ static void AppendWorkerCounts(std::ostringstream& ss, const CacheStatsWindowCtx
 		ss << " lastGrid=(" << gx << "," << gy << ") type=" << jt;
 
 	ss << " step=" << step;
-	ss << " busy=" << InterlockedCompareExchange(&workerBusyCount, 0, 0);
+	ss << " busy=" << InterlockedCompareExchange(&navmesh::g_nmCache.workerBusyCount, 0, 0);
 #ifdef ZONEOPT_DEBUG
-	ss << " busyViol=" << InterlockedCompareExchange(&nmBusyBridgeViolCount, 0, 0);
+	ss << " busyViol=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmBusyBridgeViolCount, 0, 0);
 #endif
-	long cloneOk = InterlockedCompareExchange(&nmCloneConstructCount, 0, 0);
-	long cloneFail = InterlockedCompareExchange(&nmCloneConstructFailCount, 0, 0);
+	long cloneOk = InterlockedCompareExchange(&navmesh::g_nmCache.nmCloneConstructCount, 0, 0);
+	long cloneFail = InterlockedCompareExchange(&navmesh::g_nmCache.nmCloneConstructFailCount, 0, 0);
 	if (cloneOk || cloneFail)
 		ss << " clone=" << cloneOk << "/" << (cloneOk + cloneFail);
 
-	long workerMiss = InterlockedCompareExchange(&nmWorkerMissCount, 0, 0);
-	long bgMiss = InterlockedCompareExchange(&nmBgMissCount, 0, 0);
+	long workerMiss = InterlockedCompareExchange(&navmesh::g_nmCache.nmWorkerMissCount, 0, 0);
+	long bgMiss = InterlockedCompareExchange(&navmesh::g_nmCache.nmBgMissCount, 0, 0);
 	if (workerMiss || bgMiss)
 		ss << " miss=w" << workerMiss << "/bg" << bgMiss;
 
-	long lateHits = InterlockedCompareExchange(&nmLateHitCount, 0, 0);
+	long lateHits = InterlockedCompareExchange(&navmesh::g_nmCache.nmLateHitCount, 0, 0);
 	if (lateHits)
 		ss << " lateHit=" << lateHits;
 }
@@ -185,11 +184,11 @@ static void AppendWorkerCounts(std::ostringstream& ss, const CacheStatsWindowCtx
 static void AppendWorkBufferOverrides(std::ostringstream& ss)
 {
 	{
-		long slopeBad = InterlockedCompareExchange(&g_wbOverrideSlopeBad, 0, 0);
-		long ovSkip   = InterlockedCompareExchange(&g_wbOverrideSkipped, 0, 0);
-		ss << " wbOv=" << InterlockedCompareExchange(&g_wbOverrideInstalled, 0, 0);
+		long slopeBad = InterlockedCompareExchange(&navmesh::g_nmCache.g_wbOverrideSlopeBad, 0, 0);
+		long ovSkip   = InterlockedCompareExchange(&navmesh::g_nmCache.g_wbOverrideSkipped, 0, 0);
+		ss << " wbOv=" << InterlockedCompareExchange(&navmesh::g_nmCache.g_wbOverrideInstalled, 0, 0);
 #ifdef ZONEOPT_DEBUG
-		ss << "/" << InterlockedCompareExchange(&g_wbOverrideAfterPop, 0, 0);
+		ss << "/" << InterlockedCompareExchange(&navmesh::g_nmCache.g_wbOverrideAfterPop, 0, 0);
 #endif
 		if (slopeBad)
 			ss << " wbOvSlope=" << slopeBad;
@@ -203,7 +202,7 @@ static void AppendWorkBufferQuality(std::ostringstream& ss)
 {
 #ifdef ZONEOPT_DEBUG
 	{
-		long bits = InterlockedCompareExchange(&g_wbQualityLast, 0, 0);
+		long bits = InterlockedCompareExchange(&navmesh::g_nmCache.g_wbQualityLast, 0, 0);
 		float q;
 		memcpy(&q, &bits, sizeof(q));
 		ss << " wbQ=" << std::fixed << std::setprecision(2) << q;
@@ -220,12 +219,12 @@ static void AppendPruning(std::ostringstream& ss)
 	// shows Havok's area=5.0,seed=1.00,border=0.10.
 	{
 		ss << " prune=" << (NmVanillaPruningActive() ? "on" : "off");
-		if (InterlockedCompareExchange(&g_wbPruneSeen, 0, 0) == 2)
+		if (InterlockedCompareExchange(&navmesh::g_nmCache.g_wbPruneSeen, 0, 0) == 2)
 		{
-			long ab = InterlockedCompareExchange(&g_wbPruneAreaBits, 0, 0);
-			long sb = InterlockedCompareExchange(&g_wbPruneSeedBits, 0, 0);
-			long bb = InterlockedCompareExchange(&g_wbPruneBorderBits, 0, 0);
-			long fl = InterlockedCompareExchange(&g_wbPruneFlags, 0, 0);
+			long ab = InterlockedCompareExchange(&navmesh::g_nmCache.g_wbPruneAreaBits, 0, 0);
+			long sb = InterlockedCompareExchange(&navmesh::g_nmCache.g_wbPruneSeedBits, 0, 0);
+			long bb = InterlockedCompareExchange(&navmesh::g_nmCache.g_wbPruneBorderBits, 0, 0);
+			long fl = InterlockedCompareExchange(&navmesh::g_nmCache.g_wbPruneFlags, 0, 0);
 			float area, seed, border;
 			memcpy(&area, &ab, sizeof(area));
 			memcpy(&seed, &sb, sizeof(seed));
@@ -241,8 +240,8 @@ static void AppendPruning(std::ostringstream& ss)
 		{
 			ss << "(-)";   // no fresh work buffer built yet this session
 		}
-		long pruneBad = InterlockedCompareExchange(&g_wbPruneBad, 0, 0);
-		long xvBad    = InterlockedCompareExchange(&g_wbExtraVertexBad, 0, 0);
+		long pruneBad = InterlockedCompareExchange(&navmesh::g_nmCache.g_wbPruneBad, 0, 0);
+		long xvBad    = InterlockedCompareExchange(&navmesh::g_nmCache.g_wbExtraVertexBad, 0, 0);
 		if (pruneBad)
 			ss << " pruneBad=" << pruneBad;
 		if (xvBad)
@@ -251,8 +250,8 @@ static void AppendPruning(std::ostringstream& ss)
 		// differ from the settings hash's tables (nm_cache_core.h). Absent
 		// normally; r/w are the reads and writes refused since.
 		if (L2Bypassed())
-			ss << " l2Bypass=on(r" << InterlockedCompareExchange(&nmL2BypassReads, 0, 0)
-			   << "/w" << InterlockedCompareExchange(&nmL2BypassWrites, 0, 0) << ")";
+			ss << " l2Bypass=on(r" << InterlockedCompareExchange(&navmesh::g_nmCache.nmL2BypassReads, 0, 0)
+			   << "/w" << InterlockedCompareExchange(&navmesh::g_nmCache.nmL2BypassWrites, 0, 0) << ")";
 	}
 }
 
@@ -264,13 +263,13 @@ static void AppendNeighbourSeed(std::ostringstream& ss)
 	// false, off(hook) when the hook was refused (nothing counted then).
 	if (!NmNbrSeedHookWanted())
 		ss << " nbrSeed=off(ini)";
-	else if (InterlockedCompareExchange(&g_nbrSeedHookState, 0, 0) == 2)
+	else if (InterlockedCompareExchange(&navmesh::g_nmCache.g_nbrSeedHookState, 0, 0) == 2)
 		ss << " nbrSeed=off(hook)";
 	else
-		ss << " nbrSeed=live" << InterlockedCompareExchange(&nmNbrSeedLive, 0, 0)
-		   << "/temp" << InterlockedCompareExchange(&nmNbrSeedTemp, 0, 0)
-		   << "/none" << InterlockedCompareExchange(&nmNbrSeedNone, 0, 0)
-		   << "/zero" << InterlockedCompareExchange(&nmNbrSeedZero, 0, 0);
+		ss << " nbrSeed=live" << InterlockedCompareExchange(&navmesh::g_nmCache.nmNbrSeedLive, 0, 0)
+		   << "/temp" << InterlockedCompareExchange(&navmesh::g_nmCache.nmNbrSeedTemp, 0, 0)
+		   << "/none" << InterlockedCompareExchange(&navmesh::g_nmCache.nmNbrSeedNone, 0, 0)
+		   << "/zero" << InterlockedCompareExchange(&navmesh::g_nmCache.nmNbrSeedZero, 0, 0);
 
 }
 
@@ -279,32 +278,32 @@ static void AppendStandIn(std::ostringstream& ss)
 {
 	// The stand-in inject (nm_cache_core.h): what the stand-in did where the
 	// game added nothing. Printed while the feature is on; off(...) says why not.
-	if (NmNbrSeedHookWanted() && InterlockedCompareExchange(&g_nbrSeedHookState, 0, 0) != 2)
+	if (NmNbrSeedHookWanted() && InterlockedCompareExchange(&navmesh::g_nmCache.g_nbrSeedHookState, 0, 0) != 2)
 	{
-		if (InterlockedCompareExchange(&g_nbrSeedStandInRefused, 0, 0))
+		if (InterlockedCompareExchange(&navmesh::g_nmCache.g_nbrSeedStandInRefused, 0, 0))
 		{
 			ss << " standIn=off(callee)";
 		}
 		else
 		{
-			long ship = InterlockedCompareExchange(&nmNbrStandInShip, 0, 0);
+			long ship = InterlockedCompareExchange(&navmesh::g_nmCache.nmNbrStandInShip, 0, 0);
 			ss << " standIn=ship" << ship
-			   << "/place" << InterlockedCompareExchange(&nmNbrStandInPlace, 0, 0)
-			   << "/nofile" << InterlockedCompareExchange(&nmNbrStandInNoFile, 0, 0)
-			   << "/late" << InterlockedCompareExchange(&nmNbrStandInLate, 0, 0)
+			   << "/place" << InterlockedCompareExchange(&navmesh::g_nmCache.nmNbrStandInPlace, 0, 0)
+			   << "/nofile" << InterlockedCompareExchange(&navmesh::g_nmCache.nmNbrStandInNoFile, 0, 0)
+			   << "/late" << InterlockedCompareExchange(&navmesh::g_nmCache.nmNbrStandInLate, 0, 0)
 			   // Generations with a late stand-in kept out of L2.
-			   << " l2LateSkip=" << InterlockedCompareExchange(&nmNbrL2LateSkip, 0, 0);
+			   << " l2LateSkip=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmNbrL2LateSkip, 0, 0);
 			double seedsAvg = ship > 0
-				? (double)InterlockedCompareExchange64(&nmNbrStandInSeeds, 0, 0) / (double)ship : 0.0;
-			long   loads = InterlockedCompareExchange(&nmNbrLoadCount, 0, 0);
+				? (double)InterlockedCompareExchange64(&navmesh::g_nmCache.nmNbrStandInSeeds, 0, 0) / (double)ship : 0.0;
+			long   loads = InterlockedCompareExchange(&navmesh::g_nmCache.nmNbrLoadCount, 0, 0);
 			double loadAvg = loads > 0
-				? (double)InterlockedCompareExchange64(&nmNbrLoadTotalUs, 0, 0) / (1000.0 * loads) : 0.0;
-			double loadMax = (double)InterlockedCompareExchange(&nmNbrLoadMaxUs, 0, 0) / 1000.0;
+				? (double)InterlockedCompareExchange64(&navmesh::g_nmCache.nmNbrLoadTotalUs, 0, 0) / (1000.0 * loads) : 0.0;
+			double loadMax = (double)InterlockedCompareExchange(&navmesh::g_nmCache.nmNbrLoadMaxUs, 0, 0) / 1000.0;
 			ss << std::fixed << std::setprecision(1)
 			   << " siSeeds=" << seedsAvg
 			   << " siMs=" << loadAvg << "/" << loadMax
-			   << " siRec=" << InterlockedCompareExchange(&nmNbrRecordCount, 0, 0);
-			long hBad = InterlockedCompareExchange(&nmNbrStandInHBad, 0, 0);
+			   << " siRec=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmNbrRecordCount, 0, 0);
+			long hBad = InterlockedCompareExchange(&navmesh::g_nmCache.nmNbrStandInHBad, 0, 0);
 			if (hBad)
 				ss << " siHBad=" << hBad;
 		}
@@ -314,20 +313,20 @@ static void AppendStandIn(std::ostringstream& ss)
 // Neighbour lookups, build lock, tripwire and MISS data.
 static void AppendBuildAndTrip(std::ostringstream& ss)
 {
-	ss << " nbrLookup=" << InterlockedCompareExchange(&nmPartialRealCount, 0, 0);
+	ss << " nbrLookup=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmPartialRealCount, 0, 0);
 
 	ss << BuildLockStatsSuffix();
 
-	if (InterlockedCompareExchange(&nmTripInstalled, 0, 0))
-		ss << " trip=" << InterlockedCompareExchange(&nmTripCount, 0, 0);
+	if (InterlockedCompareExchange(&navmesh::g_nmCache.nmTripInstalled, 0, 0))
+		ss << " trip=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmTripCount, 0, 0);
 	else
 		ss << " trip=off";
 	{
-		long n = InterlockedCompareExchange(&nmT234Count, 0, 0);
+		long n = InterlockedCompareExchange(&navmesh::g_nmCache.nmT234Count, 0, 0);
 		if (n > 0)
 		{
-			double avg = (double)InterlockedCompareExchange(&nmT234TotalMsTimes10, 0, 0) / (10.0 * n);
-			double mx  = (double)InterlockedCompareExchange(&nmT234MaxMsTimes10, 0, 0) / 10.0;
+			double avg = (double)InterlockedCompareExchange(&navmesh::g_nmCache.nmT234TotalMsTimes10, 0, 0) / (10.0 * n);
+			double mx  = (double)InterlockedCompareExchange(&navmesh::g_nmCache.nmT234MaxMsTimes10, 0, 0) / 10.0;
 			ss << " t234=" << std::fixed << std::setprecision(1) << avg
 			   << "/" << std::fixed << std::setprecision(1) << mx << "ms";
 		}
@@ -347,12 +346,12 @@ static void AppendHandleCounts(std::ostringstream& ss)
 			handleCount = 0;
 		ss << " handles=" << handleCount;
 	}
-	ss << " hClosed=" << InterlockedCompareExchange(&nmCloneHandleClosed, 0, 0);
+	ss << " hClosed=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmCloneHandleClosed, 0, 0);
 #ifdef ZONEOPT_DEBUG
-	ss << " wbFreed=" << InterlockedCompareExchange64(&nmWbFreedBytes, 0, 0);
+	ss << " wbFreed=" << InterlockedCompareExchange64(&navmesh::g_nmCache.nmWbFreedBytes, 0, 0);
 #endif
 	{
-		long skipped = InterlockedCompareExchange(&nmCloneHandleSkipped, 0, 0);
+		long skipped = InterlockedCompareExchange(&navmesh::g_nmCache.nmCloneHandleSkipped, 0, 0);
 		if (skipped)
 			ss << " hSkip=" << skipped;
 	}
@@ -361,23 +360,23 @@ static void AppendHandleCounts(std::ostringstream& ss)
 // Replacement, worker and edge-arm counts.
 static void AppendCacheOwnership(std::ostringstream& ss)
 {
-	ss << " hitStale=" << InterlockedCompareExchange(&nmHitStaleCount, 0, 0)
-	   << " l1Replaced=" << InterlockedCompareExchange(&nmL1ReplacedCount, 0, 0)
-	   << " dupL2=" << InterlockedCompareExchange(&nmDupL2Avoided, 0, 0);
+	ss << " hitStale=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmHitStaleCount, 0, 0)
+	   << " l1Replaced=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmL1ReplacedCount, 0, 0)
+	   << " dupL2=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmDupL2Avoided, 0, 0);
 	const char* refused = NmPoolRefusalToken(
-		(NmPoolDecision)InterlockedCompareExchange(&g_navMeshPoolRefusal, 0, 0));
+		(NmPoolDecision)InterlockedCompareExchange(&navmesh::g_nmCache.g_navMeshPoolRefusal, 0, 0));
 	if (refused)
 		ss << " workers=" << refused;
 	else
-		ss << " workers=" << InterlockedCompareExchange(&g_navMeshWorkersLive, 0, 0);
+		ss << " workers=" << InterlockedCompareExchange(&navmesh::g_nmCache.g_navMeshWorkersLive, 0, 0);
 	{
-		long full = InterlockedCompareExchange(&nmL2FlightFull, 0, 0);
+		long full = InterlockedCompareExchange(&navmesh::g_nmCache.nmL2FlightFull, 0, 0);
 		if (full)
 			ss << " l2Full=" << full;
 	}
 
-	long edgeArmed = InterlockedCompareExchange(&g_edgeProcessArmedCount, 0, 0);
-	long edgeUnarmed = InterlockedCompareExchange(&g_edgeProcessUnarmedCount, 0, 0);
+	long edgeArmed = InterlockedCompareExchange(&navmesh::g_nmCache.g_edgeProcessArmedCount, 0, 0);
+	long edgeUnarmed = InterlockedCompareExchange(&navmesh::g_nmCache.g_edgeProcessUnarmedCount, 0, 0);
 	if (edgeArmed || edgeUnarmed)
 		ss << " edge=a" << edgeArmed << "/u" << edgeUnarmed;
 }
@@ -396,37 +395,37 @@ static void AppendClaimAndUnload(std::ostringstream& ss)
 		ss << " pjWait";
 		for (int s = 0; s < PJWAIT_SITE_COUNT; ++s)
 		{
-			long   n   = InterlockedCompareExchange(&nmPjWaitCount[s], 0, 0);
-			double avg = n > 0 ? (double)InterlockedCompareExchange64(&nmPjWaitTotalUs[s], 0, 0) / (1000.0 * n) : 0.0;
-			double mx  = (double)InterlockedCompareExchange(&nmPjWaitMaxUs[s], 0, 0) / 1000.0;
+			long   n   = InterlockedCompareExchange(&navmesh::g_nmCache.nmPjWaitCount[s], 0, 0);
+			double avg = n > 0 ? (double)InterlockedCompareExchange64(&navmesh::g_nmCache.nmPjWaitTotalUs[s], 0, 0) / (1000.0 * n) : 0.0;
+			double mx  = (double)InterlockedCompareExchange(&navmesh::g_nmCache.nmPjWaitMaxUs[s], 0, 0) / 1000.0;
 			ss << " " << PJ_NAMES[s] << "=" << avg << "/" << mx;
 		}
 		ss << "ms";
 		{
-			long yields = InterlockedCompareExchange(&nmPjYieldCount, 0, 0);
+			long yields = InterlockedCompareExchange(&navmesh::g_nmCache.nmPjYieldCount, 0, 0);
 			if (yields)
 				ss << " pjYield=" << yields;
 		}
 
-		long   mN   = InterlockedCompareExchange(&nmClaimAgeMissCount, 0, 0);
-		double mAvg = mN > 0 ? (double)InterlockedCompareExchange64(&nmClaimAgeMissTotalUs, 0, 0) / (1000.0 * mN) : 0.0;
-		double mMax = (double)InterlockedCompareExchange(&nmClaimAgeMissMaxUs, 0, 0) / 1000.0;
-		long   hN   = InterlockedCompareExchange(&nmClaimAgeHitCount, 0, 0);
-		double hAvg = hN > 0 ? (double)InterlockedCompareExchange64(&nmClaimAgeHitTotalUs, 0, 0) / (1000.0 * hN) : 0.0;
-		double hMax = (double)InterlockedCompareExchange(&nmClaimAgeHitMaxUs, 0, 0) / 1000.0;
+		long   mN   = InterlockedCompareExchange(&navmesh::g_nmCache.nmClaimAgeMissCount, 0, 0);
+		double mAvg = mN > 0 ? (double)InterlockedCompareExchange64(&navmesh::g_nmCache.nmClaimAgeMissTotalUs, 0, 0) / (1000.0 * mN) : 0.0;
+		double mMax = (double)InterlockedCompareExchange(&navmesh::g_nmCache.nmClaimAgeMissMaxUs, 0, 0) / 1000.0;
+		long   hN   = InterlockedCompareExchange(&navmesh::g_nmCache.nmClaimAgeHitCount, 0, 0);
+		double hAvg = hN > 0 ? (double)InterlockedCompareExchange64(&navmesh::g_nmCache.nmClaimAgeHitTotalUs, 0, 0) / (1000.0 * hN) : 0.0;
+		double hMax = (double)InterlockedCompareExchange(&navmesh::g_nmCache.nmClaimAgeHitMaxUs, 0, 0) / 1000.0;
 		ss << " claimAge miss=" << mAvg << "/" << mMax
 		   << " hit=" << hAvg << "/" << hMax << "ms";
 
-		ss << " [<10:"  << InterlockedCompareExchange(&nmClaimAgeMissBucket[0], 0, 0)
-		   << " <100:"  << InterlockedCompareExchange(&nmClaimAgeMissBucket[1], 0, 0)
-		   << " <1s:"   << InterlockedCompareExchange(&nmClaimAgeMissBucket[2], 0, 0)
-		   << " <5s:"   << InterlockedCompareExchange(&nmClaimAgeMissBucket[3], 0, 0)
-		   << " >=5s:"  << InterlockedCompareExchange(&nmClaimAgeMissBucket[4], 0, 0) << "]";
+		ss << " [<10:"  << InterlockedCompareExchange(&navmesh::g_nmCache.nmClaimAgeMissBucket[0], 0, 0)
+		   << " <100:"  << InterlockedCompareExchange(&navmesh::g_nmCache.nmClaimAgeMissBucket[1], 0, 0)
+		   << " <1s:"   << InterlockedCompareExchange(&navmesh::g_nmCache.nmClaimAgeMissBucket[2], 0, 0)
+		   << " <5s:"   << InterlockedCompareExchange(&navmesh::g_nmCache.nmClaimAgeMissBucket[3], 0, 0)
+		   << " >=5s:"  << InterlockedCompareExchange(&navmesh::g_nmCache.nmClaimAgeMissBucket[4], 0, 0) << "]";
 
-		long sw = InterlockedCompareExchange(&nmStaleCount[STALE_SITE_WMISS], 0, 0);
-		long sb = InterlockedCompareExchange(&nmStaleCount[STALE_SITE_BGMISS], 0, 0);
-		long sh = InterlockedCompareExchange(&nmStaleCount[STALE_SITE_HIT], 0, 0);
-		long se = InterlockedCompareExchange(&nmStaleCount[STALE_SITE_EARLY], 0, 0);
+		long sw = InterlockedCompareExchange(&navmesh::g_nmCache.nmStaleCount[STALE_SITE_WMISS], 0, 0);
+		long sb = InterlockedCompareExchange(&navmesh::g_nmCache.nmStaleCount[STALE_SITE_BGMISS], 0, 0);
+		long sh = InterlockedCompareExchange(&navmesh::g_nmCache.nmStaleCount[STALE_SITE_HIT], 0, 0);
+		long se = InterlockedCompareExchange(&navmesh::g_nmCache.nmStaleCount[STALE_SITE_EARLY], 0, 0);
 		ss << " stale=w" << sw << "/bg" << sb << "/hit" << sh << "/early" << se;
 
 		if (sw + sb + sh + se == 0)
@@ -438,27 +437,27 @@ static void AppendClaimAndUnload(std::ostringstream& ss)
 			// Torn reads across these five are possible and acceptable (see
 			// nm_cache_core.h).
 			static const char* REASONS[] = { "none", "noZone", "noContent", "noTerrain", "shutdown" };
-			long r = InterlockedCompareExchange(&nmStaleLastReason, 0, 0);
+			long r = InterlockedCompareExchange(&navmesh::g_nmCache.nmStaleLastReason, 0, 0);
 			if (r < 0 || r > STALE_REASON_SHUTDOWN) r = STALE_REASON_NONE;
-			ss << " staleLast=(" << InterlockedCompareExchange(&nmStaleLastGridX, 0, 0)
-			   << "," << InterlockedCompareExchange(&nmStaleLastGridY, 0, 0)
-			   << ")t" << InterlockedCompareExchange(&nmStaleLastType, 0, 0)
+			ss << " staleLast=(" << InterlockedCompareExchange(&navmesh::g_nmCache.nmStaleLastGridX, 0, 0)
+			   << "," << InterlockedCompareExchange(&navmesh::g_nmCache.nmStaleLastGridY, 0, 0)
+			   << ")t" << InterlockedCompareExchange(&navmesh::g_nmCache.nmStaleLastType, 0, 0)
 			   << "/" << REASONS[r]
-			   << "@" << (double)InterlockedCompareExchange(&nmStaleLastAgeUs, 0, 0) / 1000.0 << "ms";
+			   << "@" << (double)InterlockedCompareExchange(&navmesh::g_nmCache.nmStaleLastAgeUs, 0, 0) / 1000.0 << "ms";
 		}
 
 		// Claim-time building hashes (and L1 stores) refused
 		// because the zone's content changed or faulted under the read. Always
 		// printed; expected 0 outside zone unloads (nm_cache_core.h).
-		ss << " hashRace=" << InterlockedCompareExchange(&nmHashRaceCount, 0, 0);
+		ss << " hashRace=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmHashRaceCount, 0, 0);
 
 		// Mod-unload protocol deferrals (nm_workers.h). Always printed.
-		ss << " ulSkipJob="   << InterlockedCompareExchange(&nmUlSkipJob, 0, 0)
-		   << " ulSkipClaim=" << InterlockedCompareExchange(&nmUlSkipClaim, 0, 0)
-		   << " ulSkipPj="    << InterlockedCompareExchange(&nmUlSkipPj, 0, 0)
-		   << " ulPrio="      << InterlockedCompareExchange(&nmUlPrio, 0, 0)
-		   << " ulPrioWin="   << InterlockedCompareExchange(&nmUlPrioWin, 0, 0);
-		long ulHeld = InterlockedCompareExchange(&nmUlHeld, 0, 0);
+		ss << " ulSkipJob="   << InterlockedCompareExchange(&navmesh::g_nmCache.nmUlSkipJob, 0, 0)
+		   << " ulSkipClaim=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmUlSkipClaim, 0, 0)
+		   << " ulSkipPj="    << InterlockedCompareExchange(&navmesh::g_nmCache.nmUlSkipPj, 0, 0)
+		   << " ulPrio="      << InterlockedCompareExchange(&navmesh::g_nmCache.nmUlPrio, 0, 0)
+		   << " ulPrioWin="   << InterlockedCompareExchange(&navmesh::g_nmCache.nmUlPrioWin, 0, 0);
+		long ulHeld = InterlockedCompareExchange(&navmesh::g_nmCache.nmUlHeld, 0, 0);
 		if (ulHeld)
 			ss << " ulHeld=" << ulHeld;
 	}
@@ -477,7 +476,7 @@ static void AppendDestroyList(std::ostringstream& ss)
 // Main thread, from the bounded miss-log window.
 static void LogL2MissLine(long m)
 {
-			const L2MissEntry& e = l2MissLog[m];
+			const L2MissEntry& e = navmesh::g_nmCache.l2MissLog[m];
 			std::ostringstream ms;
 			const char* tag = (e.thingsCount == -2) ? "L2write" : "L2miss";
 			ms << tag << "[" << m << "] zone=(" << e.gridX << "," << e.gridY << ")"
@@ -494,8 +493,8 @@ static void LogL2MissLine(long m)
 static void LogL2MissLines()
 {
 	// L2 miss diagnostic
-	long missLogN = InterlockedCompareExchange(&l2MissLogCount, 0, 0);
-	long missReported = InterlockedCompareExchange(&l2MissLogReported, 0, 0);
+	long missLogN = InterlockedCompareExchange(&navmesh::g_nmCache.l2MissLogCount, 0, 0);
+	long missReported = InterlockedCompareExchange(&navmesh::g_nmCache.l2MissLogReported, 0, 0);
 	if (missLogN > missReported && missReported < L2_MISS_LOG_MAX)
 	{
 		long end = missLogN;
@@ -504,7 +503,7 @@ static void LogL2MissLines()
 		{
 			LogL2MissLine(m);
 		}
-		InterlockedExchange(&l2MissLogReported, end);
+		InterlockedExchange(&navmesh::g_nmCache.l2MissLogReported, end);
 	}
 }
 
@@ -514,13 +513,13 @@ static void LogEdgeMatchParamsLine()
 			std::ostringstream e;
 			e << std::fixed << std::setprecision(5);
 			e << "NavMesh EdgeMatchParams: "
-			  << "maxStepH=" << probeEMP[0]
-			  << " maxSep=" << probeEMP[1]
-			  << " maxOverhang=" << probeEMP[2]
-			  << " behindFaceTol=" << probeEMP[3]
-			  << " cosPlanarAlign=" << probeEMP[4]
-			  << " cosVertAlign=" << probeEMP[5]
-			  << " minEdgeOverlap=" << probeEMP[6];
+			  << "maxStepH=" << navmesh::g_nmCache.probeEMP[0]
+			  << " maxSep=" << navmesh::g_nmCache.probeEMP[1]
+			  << " maxOverhang=" << navmesh::g_nmCache.probeEMP[2]
+			  << " behindFaceTol=" << navmesh::g_nmCache.probeEMP[3]
+			  << " cosPlanarAlign=" << navmesh::g_nmCache.probeEMP[4]
+			  << " cosVertAlign=" << navmesh::g_nmCache.probeEMP[5]
+			  << " minEdgeOverlap=" << navmesh::g_nmCache.probeEMP[6];
 			LogMsg(e.str());
 }
 
@@ -530,13 +529,13 @@ static void LogEdgeMatchParams2Line()
 			std::ostringstream e;
 			e << std::fixed << std::setprecision(5);
 			e << "NavMesh EdgeMatchParams2: "
-			  << "travHorizEps=" << probeEMP[7]
-			  << " travVertEps=" << probeEMP[8]
-			  << " cosClimbFace=" << probeEMP[9]
-			  << " cosClimbEdge=" << probeEMP[10]
-			  << " minAngleFaces=" << probeEMP[11]
-			  << " edgeParallelTol=" << probeEMP[12]
-			  << " pad=" << probeEMP[13];
+			  << "travHorizEps=" << navmesh::g_nmCache.probeEMP[7]
+			  << " travVertEps=" << navmesh::g_nmCache.probeEMP[8]
+			  << " cosClimbFace=" << navmesh::g_nmCache.probeEMP[9]
+			  << " cosClimbEdge=" << navmesh::g_nmCache.probeEMP[10]
+			  << " minAngleFaces=" << navmesh::g_nmCache.probeEMP[11]
+			  << " edgeParallelTol=" << navmesh::g_nmCache.probeEMP[12]
+			  << " pad=" << navmesh::g_nmCache.probeEMP[13];
 			LogMsg(e.str());
 }
 
@@ -547,7 +546,7 @@ static void LogGenConfig336Line()
 			e << std::fixed << std::setprecision(5);
 			e << "NavMesh GenConfig+336: ";
 			for (int i = 0; i < 12; ++i)
-				e << "[" << i << "]=" << probeGen[i] << " ";
+				e << "[" << i << "]=" << navmesh::g_nmCache.probeGen[i] << " ";
 			LogMsg(e.str());
 }
 
@@ -558,7 +557,7 @@ static void LogGenConfig384Line()
 			e << std::fixed << std::setprecision(5);
 			e << "NavMesh GenConfig+384: ";
 			for (int i = 12; i < 24; ++i)
-				e << "[" << i << "]=" << probeGen[i] << " ";
+				e << "[" << i << "]=" << navmesh::g_nmCache.probeGen[i] << " ";
 			LogMsg(e.str());
 }
 
@@ -568,14 +567,14 @@ static void LogMiscParamsLine()
 			std::ostringstream e;
 			e << std::fixed << std::setprecision(4);
 			e << "NavMesh Misc: "
-			  << "quantGrid=" << probeMisc[0]
-			  << " degenArea=" << probeMisc[1]
-			  << " charWidth=" << probeMisc[2]
-			  << " edgeFilterThresh=" << probeMisc[3]
-			  << " maxEdgesPerFace=" << (int)probeMisc[4]
-			  << " edgeMatchMetric=" << (int)probeMisc[5]
-			  << " edgeConnIter=" << (int)probeMisc[6]
-			  << " maxPartSize=" << (int)probeMisc[7];
+			  << "quantGrid=" << navmesh::g_nmCache.probeMisc[0]
+			  << " degenArea=" << navmesh::g_nmCache.probeMisc[1]
+			  << " charWidth=" << navmesh::g_nmCache.probeMisc[2]
+			  << " edgeFilterThresh=" << navmesh::g_nmCache.probeMisc[3]
+			  << " maxEdgesPerFace=" << (int)navmesh::g_nmCache.probeMisc[4]
+			  << " edgeMatchMetric=" << (int)navmesh::g_nmCache.probeMisc[5]
+			  << " edgeConnIter=" << (int)navmesh::g_nmCache.probeMisc[6]
+			  << " maxPartSize=" << (int)navmesh::g_nmCache.probeMisc[7];
 			LogMsg(e.str());
 }
 
@@ -584,7 +583,7 @@ static void LogMiscParamsLine()
 static void LogSettingsLines()
 {
 	// One-time settings dump
-	if (InterlockedCompareExchange(&nmSettingsDumped, 3, 2) == 2)
+	if (InterlockedCompareExchange(&navmesh::g_nmCache.nmSettingsDumped, 3, 2) == 2)
 	{
 		LogEdgeMatchParamsLine();
 		LogEdgeMatchParams2Line();
@@ -602,18 +601,18 @@ static void LogSettingsStatementLine()
 	// read at the first dispatch (VerifyNavMeshSettings): the game's own values,
 	// since no mod code writes them. Expected maxSep=0.2
 	// cosPlanar=0.99619 minCorr=0.4 maxCorr=0.6 minChar=0.9 edgeIter=2.
-	if (InterlockedCompareExchange(&nmSettingsVerified, 3, 2) == 2)
+	if (InterlockedCompareExchange(&navmesh::g_nmCache.nmSettingsVerified, 3, 2) == 2)
 	{
 		std::ostringstream e;
 		e << std::fixed << std::setprecision(5);
 		e << "NavMesh generation settings: the game's own (no mod tuning):"
-		  << " maxStepH=" << verifyEMP[0]
-		  << " maxSep=" << verifyEMP[1]
-		  << " cosPlanar=" << verifyEMP[2]
-		  << " minCorr=" << verifyEMP[3]
-		  << " maxCorr=" << verifyEMP[4]
-		  << " minChar=" << verifyEMP[5]
-		  << " edgeIter=" << (int)verifyEMP[6]
+		  << " maxStepH=" << navmesh::g_nmCache.verifyEMP[0]
+		  << " maxSep=" << navmesh::g_nmCache.verifyEMP[1]
+		  << " cosPlanar=" << navmesh::g_nmCache.verifyEMP[2]
+		  << " minCorr=" << navmesh::g_nmCache.verifyEMP[3]
+		  << " maxCorr=" << navmesh::g_nmCache.verifyEMP[4]
+		  << " minChar=" << navmesh::g_nmCache.verifyEMP[5]
+		  << " edgeIter=" << (int)navmesh::g_nmCache.verifyEMP[6]
 		  << " | fresh-WB pruning: ";
 		if (NmVanillaPruningActive())
 			e << "on (NMPRUNE_STEP " << 2
@@ -628,12 +627,12 @@ static void LogSettingsStatementLine()
 // Main thread; reads the published probe fields without taking a mod lock.
 static void LogWorkBufferProbeLine()
 {
-		uintptr_t nmgAddr = ((uintptr_t)(unsigned long)probeNMGPtrHi << 32) | (unsigned long)probeNMGPtrLo;
-		uintptr_t wbAddr = ((uintptr_t)(unsigned long)probeWBPtrHi << 32) | (unsigned long)probeWBPtrLo;
-		uintptr_t havokAddr = ((uintptr_t)(unsigned long)probeHavokPtrHi << 32) | (unsigned long)probeHavokPtrLo;
-		long match = InterlockedCompareExchange(&probeWBMatch, 0, 0);
+		uintptr_t nmgAddr = ((uintptr_t)(unsigned long)navmesh::g_nmCache.probeNMGPtrHi << 32) | (unsigned long)navmesh::g_nmCache.probeNMGPtrLo;
+		uintptr_t wbAddr = ((uintptr_t)(unsigned long)navmesh::g_nmCache.probeWBPtrHi << 32) | (unsigned long)navmesh::g_nmCache.probeWBPtrLo;
+		uintptr_t havokAddr = ((uintptr_t)(unsigned long)navmesh::g_nmCache.probeHavokPtrHi << 32) | (unsigned long)navmesh::g_nmCache.probeHavokPtrLo;
+		long match = InterlockedCompareExchange(&navmesh::g_nmCache.probeWBMatch, 0, 0);
 
-		long fieldScan = InterlockedCompareExchange(&probeWBFieldScan, 0, 0);
+		long fieldScan = InterlockedCompareExchange(&navmesh::g_nmCache.probeWBFieldScan, 0, 0);
 
 		std::ostringstream e;
 		e << "WorkBuffer probe: NMG=" << (void*)nmgAddr
@@ -643,7 +642,7 @@ static void LogWorkBufferProbeLine()
 			e << " MATCH (size=688)";
 		else if (wbAddr && havokAddr)
 			e << " DIFFER offset=" << (__int64)((long long)wbAddr - (long long)havokAddr);
-		long lastReadable = InterlockedCompareExchange(&probeWBHeapSize, 0, 0);
+		long lastReadable = InterlockedCompareExchange(&navmesh::g_nmCache.probeWBHeapSize, 0, 0);
 		e << " lastContent=+" << fieldScan
 		  << " lastReadable=+" << lastReadable
 		  << " allocSize=" << (lastReadable + 8);
@@ -659,7 +658,7 @@ static void LogHkArraySummaryLine(long arrCount, long wrtCount)
 				a << "hkArray scan: " << arrCount << " arrays found, "
 				  << wrtCount << " classified writable. Offsets:";
 				for (int i = 0; i < arrCount && i < WB_MAX_ARRAYS; ++i)
-					a << " +" << wbArrayOffsets[i];
+					a << " +" << navmesh::g_nmCache.wbArrayOffsets[i];
 				LogMsg(a.str());
 			}
 }
@@ -669,11 +668,11 @@ static void LogHkArraySummaryLine(long arrCount, long wrtCount)
 static void LogHkArrayEntryLine(int i)
 {
 				std::ostringstream d;
-				d << "  wb+" << wbArrayProbes[i].offset
-				  << " ptr=" << (void*)wbArrayProbes[i].ptr
-				  << " count=" << wbArrayProbes[i].count
-				  << " cap=" << (wbArrayProbes[i].capFlags & 0x3FFFFFFF)
-				  << " flags=0x" << std::hex << ((unsigned int)wbArrayProbes[i].capFlags & 0xC0000000) << std::dec;
+				d << "  wb+" << navmesh::g_nmCache.wbArrayProbes[i].offset
+				  << " ptr=" << (void*)navmesh::g_nmCache.wbArrayProbes[i].ptr
+				  << " count=" << navmesh::g_nmCache.wbArrayProbes[i].count
+				  << " cap=" << (navmesh::g_nmCache.wbArrayProbes[i].capFlags & 0x3FFFFFFF)
+				  << " flags=0x" << std::hex << ((unsigned int)navmesh::g_nmCache.wbArrayProbes[i].capFlags & 0xC0000000) << std::dec;
 				LogMsg(d.str());
 }
 
@@ -689,11 +688,11 @@ static void LogHkArrayEmptyLine()
 static void LogWorkBufferLines()
 {
 	// WorkBuffer size probe dump
-	if (InterlockedCompareExchange(&wbProbeDone, 3, 2) == 2)
+	if (InterlockedCompareExchange(&navmesh::g_nmCache.wbProbeDone, 3, 2) == 2)
 	{
 		LogWorkBufferProbeLine();
-		long arrCount = InterlockedCompareExchange(&wbArrayCount, 0, 0);
-		long wrtCount = InterlockedCompareExchange(&wbWritableCount, 0, 0);
+		long arrCount = InterlockedCompareExchange(&navmesh::g_nmCache.wbArrayCount, 0, 0);
+		long wrtCount = InterlockedCompareExchange(&navmesh::g_nmCache.wbWritableCount, 0, 0);
 		if (arrCount > 0)
 		{
 			LogHkArraySummaryLine(arrCount, wrtCount);
@@ -728,23 +727,23 @@ void LogNavMeshCacheStats(double now)
 	lastNMLogTime = now;
 
 	CacheStatsWindowCtx ctx;
-	ctx.jobs = InterlockedCompareExchange(&nmJobCount, 0, 0);
-	ctx.hits = InterlockedCompareExchange(&nmCacheHitCount, 0, 0);
-	ctx.misses = InterlockedCompareExchange(&nmCacheMissCount, 0, 0);
-	ctx.skips = InterlockedCompareExchange(&nmCacheSkipCount, 0, 0);
-	ctx.totalMs = InterlockedCompareExchange(&nmTotalMsTimes10, 0, 0);
-	ctx.savedMs = InterlockedCompareExchange(&nmSavedMsTimes10, 0, 0);
-	ctx.gx = InterlockedCompareExchange(&nmDiagLastGridX, 0, 0);
-	ctx.gy = InterlockedCompareExchange(&nmDiagLastGridY, 0, 0);
-	ctx.jt = InterlockedCompareExchange(&nmDiagLastType, 0, 0);
-	ctx.step = InterlockedCompareExchange(&nmDiagStep, 0, 0);
-	ctx.hitGr = InterlockedCompareExchange(&nmDiagHitGrid, 0, 0);
+	ctx.jobs = InterlockedCompareExchange(&navmesh::g_nmCache.nmJobCount, 0, 0);
+	ctx.hits = InterlockedCompareExchange(&navmesh::g_nmCache.nmCacheHitCount, 0, 0);
+	ctx.misses = InterlockedCompareExchange(&navmesh::g_nmCache.nmCacheMissCount, 0, 0);
+	ctx.skips = InterlockedCompareExchange(&navmesh::g_nmCache.nmCacheSkipCount, 0, 0);
+	ctx.totalMs = InterlockedCompareExchange(&navmesh::g_nmCache.nmTotalMsTimes10, 0, 0);
+	ctx.savedMs = InterlockedCompareExchange(&navmesh::g_nmCache.nmSavedMsTimes10, 0, 0);
+	ctx.gx = InterlockedCompareExchange(&navmesh::g_nmCache.nmDiagLastGridX, 0, 0);
+	ctx.gy = InterlockedCompareExchange(&navmesh::g_nmCache.nmDiagLastGridY, 0, 0);
+	ctx.jt = InterlockedCompareExchange(&navmesh::g_nmCache.nmDiagLastType, 0, 0);
+	ctx.step = InterlockedCompareExchange(&navmesh::g_nmCache.nmDiagStep, 0, 0);
+	ctx.hitGr = InterlockedCompareExchange(&navmesh::g_nmCache.nmDiagHitGrid, 0, 0);
 
-	ctx.diskHits = InterlockedCompareExchange(&nmDiskHitCount, 0, 0);
-	ctx.diskMiss = InterlockedCompareExchange(&nmDiskMissCount, 0, 0);
-	ctx.diskWrites = InterlockedCompareExchange(&nmDiskWriteCount, 0, 0);
-	ctx.diskReadUs = InterlockedCompareExchange(&nmDiskReadUsTimes1, 0, 0);
-	ctx.diskWriteUs = InterlockedCompareExchange(&nmDiskWriteUsTimes1, 0, 0);
+	ctx.diskHits = InterlockedCompareExchange(&navmesh::g_nmCache.nmDiskHitCount, 0, 0);
+	ctx.diskMiss = InterlockedCompareExchange(&navmesh::g_nmCache.nmDiskMissCount, 0, 0);
+	ctx.diskWrites = InterlockedCompareExchange(&navmesh::g_nmCache.nmDiskWriteCount, 0, 0);
+	ctx.diskReadUs = InterlockedCompareExchange(&navmesh::g_nmCache.nmDiskReadUsTimes1, 0, 0);
+	ctx.diskWriteUs = InterlockedCompareExchange(&navmesh::g_nmCache.nmDiskWriteUsTimes1, 0, 0);
 
 	// The last published memory sample, not a fresh reading: the standalone
 	// mem: line owns the sampling, and this token exists so a session's cache

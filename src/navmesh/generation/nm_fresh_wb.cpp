@@ -49,11 +49,6 @@ static const int OVR_ENTRY_SIZE  = 240;                             // OverrideS
 static const int OVR_GUARD_CAP   = 8;                               // capacity; one append per job
 static const int OVR_GUARD_BYTES = OVR_ENTRY_SIZE * (OVR_GUARD_CAP + 1);  // + the guard slot at entry[-1]
 
-// DEV probe state for the material overrides (reported as wbOv= / wbOvSlope=).
-volatile long g_wbOverrideInstalled = 0;   // entries appended by the last construct
-volatile long g_wbOverrideAfterPop  = -1;  // count read back after processJobAlt
-volatile long g_wbOverrideSlopeBad  = 0;   // table slope != the real WB's slope
-volatile long g_wbOverrideSkipped   = 0;   // teardown left entries alone (count > capacity)
 
 // OverrideSettings::dtor is at 0xDD92F0, the address hook_edgeProcess patches.
 // Call the unhooked body through the trampoline so our teardown neither trips
@@ -78,7 +73,7 @@ static void AppendMaterialOverrides(char* dst, const char* src)
 
 	// Report 0 unless the whole run is installed below, so wbOv= describes this
 	// construct rather than the last successful one.
-	InterlockedExchange(&g_wbOverrideInstalled, 0);
+	InterlockedExchange(&navmesh::g_nmCache.g_wbOverrideInstalled, 0);
 
 	if (!srcArr || !dstArr || srcCnt < NM_MATERIAL_OVERRIDE_COUNT)
 		return;
@@ -116,11 +111,11 @@ static void AppendMaterialOverrides(char* dst, const char* src)
 		// The table is authoritative, but it is transcribed from the decompile,
 		// so check it against what the game actually installed.
 		if (*(const float*)(se + OVR_OFF_SLOPE) != NmMaterialSlope(i))
-			InterlockedIncrement(&g_wbOverrideSlopeBad);
+			InterlockedIncrement(&navmesh::g_nmCache.g_wbOverrideSlopeBad);
 	}
 
 	*(int*)(KLIB_MEMBER(4, dst + 520, ByteArray_m_size, 8)) = NM_MATERIAL_OVERRIDE_COUNT;
-	InterlockedExchange(&g_wbOverrideInstalled, NM_MATERIAL_OVERRIDE_COUNT);
+	InterlockedExchange(&navmesh::g_nmCache.g_wbOverrideInstalled, NM_MATERIAL_OVERRIDE_COUNT);
 }
 
 // --------------------------------------------------------------------
@@ -132,15 +127,15 @@ static void AppendMaterialOverrides(char* dst, const char* src)
 // or allocation; the claim makes it once even if two constructs overlap.
 static void NoteFreshWbPrune(const char* f)
 {
-	if (InterlockedCompareExchange(&g_wbPruneSeen, 1, 0) != 0)
+	if (InterlockedCompareExchange(&navmesh::g_nmCache.g_wbPruneSeen, 1, 0) != 0)
 		return;
 	const NmRegionPruningScalars* rp = (const NmRegionPruningScalars*)(f + WB_OFF_REGION_PRUNING);
-	InterlockedExchange(&g_wbPruneAreaBits,   (long)rp->minRegionAreaBits);
-	InterlockedExchange(&g_wbPruneSeedBits,   (long)rp->minDistanceToSeedPointsBits);
-	InterlockedExchange(&g_wbPruneBorderBits, (long)rp->borderPreservationToleranceBits);
-	InterlockedExchange(&g_wbPruneFlags,
+	InterlockedExchange(&navmesh::g_nmCache.g_wbPruneAreaBits,   (long)rp->minRegionAreaBits);
+	InterlockedExchange(&navmesh::g_nmCache.g_wbPruneSeedBits,   (long)rp->minDistanceToSeedPointsBits);
+	InterlockedExchange(&navmesh::g_nmCache.g_wbPruneBorderBits, (long)rp->borderPreservationToleranceBits);
+	InterlockedExchange(&navmesh::g_nmCache.g_wbPruneFlags,
 	                    (long)rp->preserveVerticalBorderRegions | ((long)rp->pruneBeforeTriangulation << 8));
-	InterlockedExchange(&g_wbPruneSeen, 2);
+	InterlockedExchange(&navmesh::g_nmCache.g_wbPruneSeen, 2);
 }
 
 #ifdef ZONEOPT_DEBUG
@@ -360,7 +355,7 @@ void* ConstructFreshSettings(uintptr_t origWB)
 	// already does.
 	if (!origWB)
 	{
-		InterlockedIncrement(&nmCloneConstructFailCount);
+		InterlockedIncrement(&navmesh::g_nmCache.nmCloneConstructFailCount);
 		return NULL;
 	}
 
@@ -442,8 +437,8 @@ void* ConstructFreshSettings(uintptr_t origWB)
 		bool pruneOk = true, xvOk = true;
 		if (!NmCheckGenerationSettingsKey(f, &pruneOk, &xvOk))
 		{
-			if (!pruneOk) InterlockedIncrement(&g_wbPruneBad);
-			if (!xvOk)    InterlockedIncrement(&g_wbExtraVertexBad);
+			if (!pruneOk) InterlockedIncrement(&navmesh::g_nmCache.g_wbPruneBad);
+			if (!xvOk)    InterlockedIncrement(&navmesh::g_nmCache.g_wbExtraVertexBad);
 		}
 	}
 
@@ -514,7 +509,7 @@ void* ConstructFreshSettings(uintptr_t origWB)
 	// No generation setting is written here: these fields keep
 	// the real WB's own values, copied above (+76..+143, +320..+335,
 	// +336..+423), so wbQ= reads the game's 0.90.
-	InterlockedExchange(&g_wbQualityLast, *(long*)(f + 328));
+	InterlockedExchange(&navmesh::g_nmCache.g_wbQualityLast, *(long*)(f + 328));
 
 	// Once per session: the prune= stats token, and in DEV the full comparison
 	// against the real WB (the "NavMesh freshWB diff:" line). Both read only.
@@ -566,7 +561,7 @@ void FreeFreshSettings(void* wb)
 			// the entry count is not one this code put there. Leaving it alone
 			// leaks those entries, which is the safe direction, but it should
 			// never happen: the capacity is 8 and a job appends one.
-			InterlockedIncrement(&g_wbOverrideSkipped);
+			InterlockedIncrement(&navmesh::g_nmCache.g_wbOverrideSkipped);
 		}
 	}
 
@@ -626,7 +621,7 @@ void FreeFreshSettings(void* wb)
 	freedBytes += WB_OBJECT_SIZE;
 
 #ifdef ZONEOPT_DEBUG
-	InterlockedExchangeAdd64(&nmWbFreedBytes, (LONGLONG)freedBytes);
+	InterlockedExchangeAdd64(&navmesh::g_nmCache.nmWbFreedBytes, (LONGLONG)freedBytes);
 #else
 	(void)freedBytes;
 #endif

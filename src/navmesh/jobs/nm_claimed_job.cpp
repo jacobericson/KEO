@@ -21,7 +21,7 @@ static void CjGameWrite(void* context)
 	WriteDiskCacheBlob(&claimed->pendingWrite);
 	QueryPerformanceCounter(&tW1);
 	long writeUs = (long)(QPCToMs(tW0, tW1) * 1000.0);
-	InterlockedExchangeAdd(&nmDiskWriteUsTimes1, writeUs);
+	InterlockedExchangeAdd(&navmesh::g_nmCache.nmDiskWriteUsTimes1, writeUs);
 }
 static bool CjGameCleanupBegin(void*) { return WorkerCleanupBegin(); }
 static void CjGameFreeClone(void* context)

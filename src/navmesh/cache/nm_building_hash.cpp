@@ -10,7 +10,6 @@ unsigned int HashAABB(const float* aabb6)
 	return NmAabbHash(aabb6);
 }
 
-volatile long nmHashRaceCount = 0;
 
 // Order-independent building hash: per-building FNV-1a of (position, rotation,
 // stringID), summed across all buildings (commutative). Position is the whole
@@ -126,7 +125,7 @@ bool ComputeBuildingHashChecked(uintptr_t jobZone, unsigned int* hashOut, uintpt
 	*contentOut = 0;
 	if (!jobZone || !BuildingHashGuarded(jobZone, hashOut, contentOut))
 	{
-		InterlockedIncrement(&nmHashRaceCount);
+		InterlockedIncrement(&navmesh::g_nmCache.nmHashRaceCount);
 		return false;
 	}
 	return true;

@@ -33,7 +33,7 @@ bool NmCheckGenerationSettingsKey(const char* wb, bool* pruneOkOut, bool* xvOkOu
 
 	// Different from the key: L2 off for the session. Only the thread that
 	// flips the latch writes the line, so it appears once.
-	if (InterlockedCompareExchange(&g_l2Bypass, 1, 0) != 0)
+	if (InterlockedCompareExchange(&navmesh::g_nmCache.g_l2Bypass, 1, 0) != 0)
 		return false;
 
 	char pruneVals[96];
@@ -88,38 +88,38 @@ void CheckGenerationSettingsKey(uintptr_t nmg)
 
 void ProbeNavMeshSettings(uintptr_t nmg)
 {
-	if (InterlockedCompareExchange(&nmSettingsDumped, 1, 0) != 0)
+	if (InterlockedCompareExchange(&navmesh::g_nmCache.nmSettingsDumped, 1, 0) != 0)
 		return;
 
 	uintptr_t wb = *(uintptr_t*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_settings, 256));
 	if (!wb)
 	{
-		InterlockedExchange(&nmSettingsDumped, 0);
+		InterlockedExchange(&navmesh::g_nmCache.nmSettingsDumped, 0);
 		return;
 	}
 
 	// No CRT strings on bg thread — only float writes + Interlocked
 	float* emp = (float*)(wb + 76);  // EdgeMatchingParameters (56 bytes = 14 floats)
 	for (int i = 0; i < 14; ++i)
-		probeEMP[i] = emp[i];
+		navmesh::g_nmCache.probeEMP[i] = emp[i];
 
 	float* gen = (float*)(wb + 336);
 	for (int i = 0; i < 24; ++i)
-		probeGen[i] = gen[i];
+		navmesh::g_nmCache.probeGen[i] = gen[i];
 
 	// Havok reflection (2026-09-14): +16 is m_characterHeight and +48 m_quantizationGridSize
 	// (m_degenerateAreaThreshold is +60); +472 is userVertices.m_size (m_maxPartitionSize is
 	// +372). The DEV log still prints these as quantGrid=/degenArea=/maxPartSize=.
-	probeMisc[0] = *(float*)(wb + 16);    // m_characterHeight
-	probeMisc[1] = *(float*)(wb + 48);    // m_quantizationGridSize
-	probeMisc[2] = *(float*)(wb + 328);   // m_minCharacterWidth
-	probeMisc[3] = *(float*)(wb + 400);   // m_boundaryEdgeFilterThreshold
-	probeMisc[4] = (float)*(int*)(wb + 72);   // m_maxNumEdgesPerFace
-	probeMisc[5] = (float)*(int*)(wb + 132);  // m_edgeMatchingMetric
-	probeMisc[6] = (float)*(int*)(wb + 136);  // m_edgeConnectionIterations
-	probeMisc[7] = (float)*(int*)(wb + 472);  // userVertices.m_size (logged as maxPartSize=)
+	navmesh::g_nmCache.probeMisc[0] = *(float*)(wb + 16);    // m_characterHeight
+	navmesh::g_nmCache.probeMisc[1] = *(float*)(wb + 48);    // m_quantizationGridSize
+	navmesh::g_nmCache.probeMisc[2] = *(float*)(wb + 328);   // m_minCharacterWidth
+	navmesh::g_nmCache.probeMisc[3] = *(float*)(wb + 400);   // m_boundaryEdgeFilterThreshold
+	navmesh::g_nmCache.probeMisc[4] = (float)*(int*)(wb + 72);   // m_maxNumEdgesPerFace
+	navmesh::g_nmCache.probeMisc[5] = (float)*(int*)(wb + 132);  // m_edgeMatchingMetric
+	navmesh::g_nmCache.probeMisc[6] = (float)*(int*)(wb + 136);  // m_edgeConnectionIterations
+	navmesh::g_nmCache.probeMisc[7] = (float)*(int*)(wb + 472);  // userVertices.m_size (logged as maxPartSize=)
 
-	InterlockedExchange(&nmSettingsDumped, 2);
+	InterlockedExchange(&navmesh::g_nmCache.nmSettingsDumped, 2);
 }
 
 // Six fields, read off the real work buffer as the
@@ -128,31 +128,31 @@ void ProbeNavMeshSettings(uintptr_t nmg)
 // 0.6, minCharacterWidth 0.9, edgeConnectionIterations 2.
 void VerifyNavMeshSettings(uintptr_t nmg)
 {
-	if (InterlockedCompareExchange(&nmSettingsVerified, 1, 0) != 0)
+	if (InterlockedCompareExchange(&navmesh::g_nmCache.nmSettingsVerified, 1, 0) != 0)
 		return;
 
 	uintptr_t wb = *(uintptr_t*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_settings, 256));
 	if (!wb)
 	{
-		InterlockedExchange(&nmSettingsVerified, 0);
+		InterlockedExchange(&navmesh::g_nmCache.nmSettingsVerified, 0);
 		return;
 	}
 
 	float* emp = (float*)(wb + 76);
-	verifyEMP[0] = emp[0];                    // m_maxStepHeight (+76)
-	verifyEMP[1] = emp[1];                    // m_maxSeparation (+80)
-	verifyEMP[2] = emp[4];                    // m_cosPlanarAlignmentAngle (+92)
-	verifyEMP[3] = *(float*)(wb + 344);       // m_minCorridorWidth
-	verifyEMP[4] = *(float*)(wb + 348);       // m_maxCorridorWidth
-	verifyEMP[5] = *(float*)(wb + 328);       // m_minCharacterWidth
-	verifyEMP[6] = (float)*(int*)(wb + 136);  // m_edgeConnectionIterations
-	InterlockedExchange(&nmSettingsVerified, 2);
+	navmesh::g_nmCache.verifyEMP[0] = emp[0];                    // m_maxStepHeight (+76)
+	navmesh::g_nmCache.verifyEMP[1] = emp[1];                    // m_maxSeparation (+80)
+	navmesh::g_nmCache.verifyEMP[2] = emp[4];                    // m_cosPlanarAlignmentAngle (+92)
+	navmesh::g_nmCache.verifyEMP[3] = *(float*)(wb + 344);       // m_minCorridorWidth
+	navmesh::g_nmCache.verifyEMP[4] = *(float*)(wb + 348);       // m_maxCorridorWidth
+	navmesh::g_nmCache.verifyEMP[5] = *(float*)(wb + 328);       // m_minCharacterWidth
+	navmesh::g_nmCache.verifyEMP[6] = (float)*(int*)(wb + 136);  // m_edgeConnectionIterations
+	InterlockedExchange(&navmesh::g_nmCache.nmSettingsVerified, 2);
 }
 
 // SEH-safe probes kept in standalone functions (MSVC 2010 can't mix __try with C++ destructors)
 void ProbeWorkBufferSize(uintptr_t nmg)
 {
-	if (InterlockedCompareExchange(&wbProbeDone, 1, 0) != 0)
+	if (InterlockedCompareExchange(&navmesh::g_nmCache.wbProbeDone, 1, 0) != 0)
 		return;
 
 	uintptr_t wb = *(uintptr_t*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_settings, 256));
@@ -161,13 +161,13 @@ void ProbeWorkBufferSize(uintptr_t nmg)
 	if (sectionMgr)
 		havokObj = *(uintptr_t*)(KLIB_MEMBER(4, sectionMgr, NavMesh_world, 136));
 
-	InterlockedExchange(&probeNMGPtrLo, (long)(nmg & 0xFFFFFFFF));
-	InterlockedExchange(&probeNMGPtrHi, (long)((nmg >> 32) & 0xFFFFFFFF));
-	InterlockedExchange(&probeWBPtrLo, (long)(wb & 0xFFFFFFFF));
-	InterlockedExchange(&probeWBPtrHi, (long)((wb >> 32) & 0xFFFFFFFF));
-	InterlockedExchange(&probeHavokPtrLo, (long)(havokObj & 0xFFFFFFFF));
-	InterlockedExchange(&probeHavokPtrHi, (long)((havokObj >> 32) & 0xFFFFFFFF));
-	InterlockedExchange(&probeWBMatch, (wb != 0 && wb == havokObj) ? 1 : 0);
+	InterlockedExchange(&navmesh::g_nmCache.probeNMGPtrLo, (long)(nmg & 0xFFFFFFFF));
+	InterlockedExchange(&navmesh::g_nmCache.probeNMGPtrHi, (long)((nmg >> 32) & 0xFFFFFFFF));
+	InterlockedExchange(&navmesh::g_nmCache.probeWBPtrLo, (long)(wb & 0xFFFFFFFF));
+	InterlockedExchange(&navmesh::g_nmCache.probeWBPtrHi, (long)((wb >> 32) & 0xFFFFFFFF));
+	InterlockedExchange(&navmesh::g_nmCache.probeHavokPtrLo, (long)(havokObj & 0xFFFFFFFF));
+	InterlockedExchange(&navmesh::g_nmCache.probeHavokPtrHi, (long)((havokObj >> 32) & 0xFFFFFFFF));
+	InterlockedExchange(&navmesh::g_nmCache.probeWBMatch, (wb != 0 && wb == havokObj) ? 1 : 0);
 
 	if (wb)
 	{
@@ -188,10 +188,10 @@ void ProbeWorkBufferSize(uintptr_t nmg)
 			__except(EXCEPTION_EXECUTE_HANDLER) { break; }
 		}
 		GuardLeave();
-		InterlockedExchange(&probeWBFieldScan, lastNonZero);
-		InterlockedExchange(&probeWBHeapSize, lastReadable);
+		InterlockedExchange(&navmesh::g_nmCache.probeWBFieldScan, lastNonZero);
+		InterlockedExchange(&navmesh::g_nmCache.probeWBHeapSize, lastReadable);
 
-		InterlockedExchange(&g_workBufAllocSize, lastReadable + 8);
+		InterlockedExchange(&navmesh::g_nmCache.g_workBufAllocSize, lastReadable + 8);
 
 		// hkArray scanner: find all arrays in the workBuffer
 		int scanLimit = lastReadable;
@@ -211,11 +211,11 @@ void ProbeWorkBufferSize(uintptr_t nmg)
 				    && count > 0 && count < 100000
 				    && cap >= count && cap < 500000)
 				{
-					wbArrayProbes[arrayCount].offset = off;
-					wbArrayProbes[arrayCount].ptr = ptr;
-					wbArrayProbes[arrayCount].count = count;
-					wbArrayProbes[arrayCount].capFlags = capFlags;
-					wbArrayOffsets[arrayCount++] = off;
+					navmesh::g_nmCache.wbArrayProbes[arrayCount].offset = off;
+					navmesh::g_nmCache.wbArrayProbes[arrayCount].ptr = ptr;
+					navmesh::g_nmCache.wbArrayProbes[arrayCount].count = count;
+					navmesh::g_nmCache.wbArrayProbes[arrayCount].capFlags = capFlags;
+					navmesh::g_nmCache.wbArrayOffsets[arrayCount++] = off;
 				}
 			}
 			__except(EXCEPTION_EXECUTE_HANDLER) { break; }
@@ -229,22 +229,22 @@ void ProbeWorkBufferSize(uintptr_t nmg)
 			bool found = false;
 			for (int a = 0; a < arrayCount; ++a)
 			{
-				if (wbArrayOffsets[a] == knownWritable[k])
+				if (navmesh::g_nmCache.wbArrayOffsets[a] == knownWritable[k])
 				{ found = true; break; }
 			}
 			if (!found && arrayCount < WB_MAX_ARRAYS)
-				wbArrayOffsets[arrayCount++] = knownWritable[k];
+				navmesh::g_nmCache.wbArrayOffsets[arrayCount++] = knownWritable[k];
 		}
 
-		InterlockedExchange(&wbArrayCount, arrayCount);
+		InterlockedExchange(&navmesh::g_nmCache.wbArrayCount, arrayCount);
 
 		// Classify all detected arrays as writable
 		int writableCount = 0;
 		for (int a = 0; a < arrayCount && writableCount < WB_MAX_ARRAYS; ++a)
-			wbWritableOffsets[writableCount++] = wbArrayOffsets[a];
-		InterlockedExchange(&wbWritableCount, writableCount);
+			navmesh::g_nmCache.wbWritableOffsets[writableCount++] = navmesh::g_nmCache.wbArrayOffsets[a];
+		InterlockedExchange(&navmesh::g_nmCache.wbWritableCount, writableCount);
 	}
 
-	InterlockedExchange(&wbProbeDone, 2);
+	InterlockedExchange(&navmesh::g_nmCache.wbProbeDone, 2);
 }
 
