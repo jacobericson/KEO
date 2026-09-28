@@ -13,11 +13,6 @@
 #include "zone/readiness/zone_readiness_ledger_bridge.h"
 #include "zone/readiness/zone_readiness_classify.h"
 
-// Bindings declared in game.h and resolved in InitGameBindings. Defined here
-// because game.cpp's own lines for them are only inside InitGameBindings.
-lookupSection_t      fn_lookupSection      = NULL;
-boostUnlock_t        fn_boostUnlock        = NULL;
-boostUnlockShared_t  fn_boostUnlockShared  = NULL;
 
 
 // =========================================================================
@@ -451,7 +446,7 @@ bool hook_isContentPending(void* manager, void* zonePos)
 		prioritizedThisTransition = true;
 	}
 
-	bool result = orig_isContentPending(manager, zonePos);
+	bool result = game::g_hookOrig.orig_isContentPending(manager, zonePos);
 	int sectionCount = *(int*)(KLIB_MEMBER(4, (uintptr_t)manager, NavMesh_addList_count, OFF_RDY_SM_PENDING_SECTIONS));
 	IslandCountReadiness(!result, !result && sectionCount > 0);
 

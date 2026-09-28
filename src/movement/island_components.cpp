@@ -144,8 +144,8 @@ bool AppendLektor(uintptr_t lek, uintptr_t z)
 	unsigned int cap   = *(unsigned int*)(KLIB_MEMBER(2, lek, ZoneLektor_maxSize, OFF_LEKTOR_CAPACITY));
 	if (count >= cap)
 	{
-		if (!fn_lektorReserve) return false;
-		fn_lektorReserve((void*)lek, 2 * cap);   // 0 -> 10 inside the game
+		if (!game::g_gameFn.fn_lektorReserve) return false;
+		game::g_gameFn.fn_lektorReserve((void*)lek, 2 * cap);   // 0 -> 10 inside the game
 		cap = *(unsigned int*)(KLIB_MEMBER(2, lek, ZoneLektor_maxSize, OFF_LEKTOR_CAPACITY));
 		if (count >= cap) return false;
 	}

@@ -58,30 +58,20 @@ typedef void  (__fastcall *setQueuesAreClear_t)(void* physics, bool on);
 typedef void* (__fastcall *addToTrackingSet_t)(void* set, void* outPair,
                                                void** key, void*** value);
 
-extern loadSingleZone_t        fn_loadSingleZone;
-extern flushPendingWork_t      fn_flushPendingWork;
-extern registerZoneSections_t  fn_registerZoneSections;
-extern setQueuesAreClear_t     fn_setQueuesAreClear;
-extern addToTrackingSet_t      fn_addToTrackingSet;
 
 // Handle resolution for selected character iteration
 typedef void* (*resolveHandle_t)(void* table, void* handle);
-extern resolveHandle_t fn_resolveHandle;
 extern void*           g_handleTable;
 
 // NavMesh queue lock functions (acquire/release input queue lock at navMeshGen+152)
 typedef void* (*pathBuilderInit_t)(void* outBuffer);
 typedef void  (*pathBuilderFinalize_t)(void* lockAddr, void* initResult);
 typedef void  (*readerUnlock_t)(void* lockAddr);
-extern pathBuilderInit_t      fn_pathBuilderInit;
-extern pathBuilderFinalize_t  fn_pathBuilderFinalize;
-extern readerUnlock_t         fn_readerUnlock;
 
 // NavMesh queue lock initializer (despite the name, this IS the CS init function —
 // called 5 times from NavMeshGen_struct_ctor at +72/+104/+152/+200/+272 to initialize
 // the CSes/locks embedded in the NavMeshGenerator struct). Needed for NMG cloning.
 typedef void (*queueLockInit_t)(void* lockAddr);
-extern queueLockInit_t fn_queueLockInit;
 
 // NavMesh active cache: called functions (zone optimization -- all builds)
 typedef void (*processJobAlt_t)(void* thisNavMeshGen, void* job);
@@ -111,18 +101,6 @@ typedef void  (*gameDelete_t)(void* ptr);
 typedef void* (*gameNewArr_t)(size_t size);
 typedef void  (*gameDelArr_t)(void* ptr);
 
-extern navMeshCtor_t        fn_navMeshCtor;
-extern settingsCtor_t       fn_settingsCtor;
-extern simplSettingsCopy_t  fn_simplSettingsCopy;
-extern settingsDtorBody_t   fn_settingsDtorBody;
-extern processJobAlt_t      fn_processJobAlt;
-extern buildCollision_t     fn_buildCollision;
-extern partialFixup_t       fn_partialFixup;
-extern enqueueToProcQueue_t fn_enqueueToProcQueue;
-extern gameNew_t            fn_gameNew;
-extern gameDelete_t         fn_gameDelete;
-extern gameNewArr_t         fn_gameNewArr;
-extern gameDelArr_t         fn_gameDelArr;
 
 // Havok thread init: called functions (for worker thread TLS initialization)
 // Step 3 (register) is a virtual call resolved at runtime, not stored as a global fn ptr.
@@ -132,19 +110,12 @@ typedef void  (*havokPostRegInit_t)(void* buf8, void* ctx128);
 typedef void  (*havokCleanup_t)(void* buf8);
 typedef void  (*havokCtxCleanup_t)(void* ctx128);
 
-extern havokContextInit_t   fn_havokContextInit;
-extern havokGetManager_t    fn_havokGetManager;
-extern havokPostRegInit_t   fn_havokPostRegInit;
-extern havokCleanup_t       fn_havokCleanup;
-extern havokCtxCleanup_t    fn_havokCtxCleanup;
 
 // Island routing: lektor<ZoneMap*> growth (thunk 0x16630 -> 0x37E3A0)
 typedef void (*lektorReserve_t)(void* lektor, unsigned int newCapacity);
-extern lektorReserve_t fn_lektorReserve;
 
 // Path request queue enqueue
 typedef void (*enqueuePathReq_t)(void* queueBase, void** itemPtr);
-extern enqueuePathReq_t fn_enqueuePathReq;
 
 
 // Havok::contentStreamCallee_0x8869 (path-result extraction loop). 4-arg
@@ -159,8 +130,6 @@ typedef unsigned __int64 (*contentStreamCallee0x8869_t)(void* manager,
 typedef void (*addInstance_t)(void* collection, __int64 sectionData,
                               __int64 param3, __int64 param4, int param5);
 
-extern contentStreamCallee0x8869_t orig_contentStreamCallee0x8869;
-extern addInstance_t               orig_addInstance;
 
 
 // =========================================================================
@@ -175,24 +144,16 @@ typedef void (*addOrderSelected_t)(void* thisPI, void* destIndoors, int task,
                                     const float* location);
 typedef char (*dispatchJob_t)(void* thisNMG);
 
-extern showLoadingMessage_t    orig_showLoadingMessage;
-extern isContentPending_t      orig_isContentPending;
-extern updateCameraZone_t      orig_updateCameraZone;
-extern addOrderSelected_t      orig_addOrderSelected;
-extern dispatchJob_t           orig_dispatchJob;
 
 // 4 register arguments, no stack argument: the wrapper writes its own 5th
 // (timeLowPart = 0) into the shadow space before tail-calling realGenerate
 // (disassembly of 0xE0AFF0). The old 5-parameter declaration made the hook read
 // uninitialized shadow space.
 typedef void (*nmResultPopulate_t)(void* navData, void* localData, void* result, int param);
-extern nmResultPopulate_t      orig_nmResultPopulate;
 
 // Island routing hooks
 typedef bool  (*isInIsland_t)(void* zoneA, void* zoneB);
 typedef void* (*getIsland_t)(void* zoneMgr, void* zone, void* lektorOut);
-extern isInIsland_t            orig_isInIsland;
-extern getIsland_t             orig_getIsland;
 
 // Player-cancel hooks (island_cancel_hooks.cpp detours, hook_manifest.cpp installs). The player's own ways to end a move order, so the island tracker
 // can tell a player cancel from an order the engine deleted. All three are
@@ -240,12 +201,8 @@ typedef void (*addJobSelected_t)(void* thisPI, int task, void* subject, bool shi
                                  bool add, const float* location);
 typedef void (*addTaskNearest_t)(void* thisPI, void* dest, int task, void* subject,
                                  bool shift, const float* location, bool noAnimals);
-extern stopCharactersMovement_t orig_stopCharactersMovement;
-extern addJobSelected_t         orig_addJobSelected;
-extern addTaskNearest_t         orig_addTaskNearest;
 
 typedef void (*realGenerate_t)(void* workBuffer, void* localData, void* hkaiNavMesh, int param, int timeLowPart);
-extern realGenerate_t          orig_realGenerate;
 
 typedef char (*csFindPath_t)(void* manager, unsigned int startFaceKey, void* startPos,
                               void* destPos, float radius, char param5, void* resultBuf);
@@ -257,13 +214,108 @@ typedef char (*csFindPathFallback_t)(void* manager, unsigned int startFaceKey, v
                                       unsigned int destFaceKey, void* destPos, float radius,
                                       float param6, char param7, void* resultBuf);
 
-extern csFindPath_t            orig_csFindPath;
-extern csCheckFaceConn_t       orig_csCheckFaceConn;
-extern findPathFull_t          orig_findPathFull;
-extern requestPath_t           orig_requestPath;
-extern pathReqSubmit_t         orig_pathReqSubmit;
-extern csFindPathFallback_t    orig_csFindPathFallback;
 
 
+
+namespace game {
+
+// The game functions InitGameBindings resolves. Written once, on the main
+// thread in startPlugin before hooks that use these bindings install;
+// read-only afterwards, on any thread.
+struct GameFunctions
+{
+	// Zone loading
+	loadSingleZone_t         fn_loadSingleZone;
+	flushPendingWork_t       fn_flushPendingWork;
+	registerZoneSections_t   fn_registerZoneSections;
+	setQueuesAreClear_t      fn_setQueuesAreClear;
+	addToTrackingSet_t       fn_addToTrackingSet;
+
+	// Handle resolution for selected character iteration
+	resolveHandle_t          fn_resolveHandle;
+
+	// NavMesh queue lock functions (acquire/release input queue lock at navMeshGen+152)
+	pathBuilderInit_t        fn_pathBuilderInit;
+	pathBuilderFinalize_t    fn_pathBuilderFinalize;
+	readerUnlock_t           fn_readerUnlock;
+
+	// NavMesh queue lock initializer
+	queueLockInit_t          fn_queueLockInit;
+
+	// NavMesh active cache: called functions (zone optimization -- all builds)
+	navMeshCtor_t            fn_navMeshCtor;
+	settingsCtor_t           fn_settingsCtor;
+	simplSettingsCopy_t      fn_simplSettingsCopy;
+	settingsDtorBody_t       fn_settingsDtorBody;
+	processJobAlt_t          fn_processJobAlt;
+	buildCollision_t         fn_buildCollision;
+	partialFixup_t           fn_partialFixup;
+	enqueueToProcQueue_t     fn_enqueueToProcQueue;
+	gameNew_t                fn_gameNew;
+	gameDelete_t             fn_gameDelete;
+	gameNewArr_t             fn_gameNewArr;
+	gameDelArr_t             fn_gameDelArr;
+
+	// Havok thread init: called functions (for worker thread TLS initialization)
+	havokContextInit_t       fn_havokContextInit;
+	havokGetManager_t        fn_havokGetManager;
+	havokPostRegInit_t       fn_havokPostRegInit;
+	havokCleanup_t           fn_havokCleanup;
+	havokCtxCleanup_t        fn_havokCtxCleanup;
+
+	// Island routing: lektor<ZoneMap*> growth (thunk 0x16630 -> 0x37E3A0)
+	lektorReserve_t          fn_lektorReserve;
+
+	// Path request queue enqueue
+	enqueuePathReq_t         fn_enqueuePathReq;
+};
+
+// The main-thread installs write these trampolines through HookInstallRow's
+// out-argument. The first NavMesh bg dispatch's lazy install writes
+// orig_nmResultPopulate. KenshiLib fills each slot before enabling its hook;
+// a refused or unwanted install leaves it NULL. orig_realGenerate has no
+// install and stays NULL. Detours read their own slot on whichever thread
+// the game calls them.
+struct HookOriginals
+{
+	// Path-result extraction and navmesh instance mutation
+	contentStreamCallee0x8869_t  orig_contentStreamCallee0x8869;
+	addInstance_t                orig_addInstance;
+
+	// Zone, movement order and dispatch hooks
+	showLoadingMessage_t         orig_showLoadingMessage;
+	isContentPending_t           orig_isContentPending;
+	updateCameraZone_t           orig_updateCameraZone;
+	addOrderSelected_t           orig_addOrderSelected;
+	dispatchJob_t                orig_dispatchJob;
+
+	// Generation input diagnostics
+	nmResultPopulate_t           orig_nmResultPopulate;
+
+	// Island routing hooks
+	isInIsland_t                 orig_isInIsland;
+	getIsland_t                  orig_getIsland;
+
+	// Player-cancel hooks
+	stopCharactersMovement_t     orig_stopCharactersMovement;
+	addJobSelected_t             orig_addJobSelected;
+	addTaskNearest_t             orig_addTaskNearest;
+
+	// No install; stays NULL
+	realGenerate_t               orig_realGenerate;
+
+	// Pathfinding hooks
+	csFindPath_t                 orig_csFindPath;
+	csCheckFaceConn_t            orig_csCheckFaceConn;
+	findPathFull_t               orig_findPathFull;
+	requestPath_t                orig_requestPath;
+	pathReqSubmit_t              orig_pathReqSubmit;
+	csFindPathFallback_t         orig_csFindPathFallback;
+};
+
+extern GameFunctions g_gameFn;
+extern HookOriginals g_hookOrig;
+
+} // namespace game
 
 #endif // KENSHI_ZONE_OPT_BINDINGS_H

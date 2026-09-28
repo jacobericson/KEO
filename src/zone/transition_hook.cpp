@@ -295,7 +295,7 @@ void hook_showLoadingMessage(void* thisPtr, bool on)
 		GatePassNoteDismissal(transitionEndQpc.QuadPart, transitionEndGen, IsMainThread());
 	}
 
-	orig_showLoadingMessage(thisPtr, on);
+	game::g_hookOrig.orig_showLoadingMessage(thisPtr, on);
 }
 
 

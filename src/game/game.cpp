@@ -12,44 +12,25 @@ void* g_cachedZoneMgr = NULL;
 
 
 // =========================================================================
-// Function pointers (called, not hooked)
+// Central binding tables and module-owned function pointers
 // =========================================================================
 
-loadSingleZone_t        fn_loadSingleZone        = NULL;
-flushPendingWork_t      fn_flushPendingWork       = NULL;
-registerZoneSections_t  fn_registerZoneSections   = NULL;
-setQueuesAreClear_t     fn_setQueuesAreClear      = NULL;
-addToTrackingSet_t      fn_addToTrackingSet       = NULL;
+namespace game {
 
-resolveHandle_t fn_resolveHandle = NULL;
+GameFunctions g_gameFn;
+HookOriginals g_hookOrig;
+
+} // namespace game
+
+namespace game_detail {
+
+union GameFunctionsPodCheck { game::GameFunctions s; };
+union HookOriginalsPodCheck { game::HookOriginals s; };
+
+} // namespace game_detail
+using namespace game_detail;
+
 void*           g_handleTable    = NULL;
-
-pathBuilderInit_t      fn_pathBuilderInit     = NULL;
-pathBuilderFinalize_t  fn_pathBuilderFinalize = NULL;
-readerUnlock_t         fn_readerUnlock        = NULL;
-queueLockInit_t        fn_queueLockInit       = NULL;
-
-navMeshCtor_t        fn_navMeshCtor         = NULL;
-settingsCtor_t       fn_settingsCtor        = NULL;
-simplSettingsCopy_t  fn_simplSettingsCopy   = NULL;
-settingsDtorBody_t   fn_settingsDtorBody    = NULL;
-processJobAlt_t      fn_processJobAlt       = NULL;
-buildCollision_t     fn_buildCollision       = NULL;
-partialFixup_t       fn_partialFixup         = NULL;
-enqueueToProcQueue_t fn_enqueueToProcQueue   = NULL;
-gameNew_t            fn_gameNew              = NULL;
-gameDelete_t         fn_gameDelete           = NULL;
-gameNewArr_t         fn_gameNewArr           = NULL;
-gameDelArr_t         fn_gameDelArr           = NULL;
-
-havokContextInit_t   fn_havokContextInit     = NULL;
-havokGetManager_t    fn_havokGetManager      = NULL;
-havokPostRegInit_t   fn_havokPostRegInit     = NULL;
-havokCleanup_t       fn_havokCleanup         = NULL;
-havokCtxCleanup_t    fn_havokCtxCleanup      = NULL;
-
-lektorReserve_t      fn_lektorReserve        = NULL;
-enqueuePathReq_t     fn_enqueuePathReq       = NULL;
 
 // Preload pipeline zone-ready query (called, not hooked; game.h).
 isZoneReady_t        fn_isZoneReady          = NULL;
@@ -72,6 +53,11 @@ zmGetZoneMap_t        fn_zmGetZoneMap        = NULL;
 sortedArrayGrow_t     fn_sortedArrayGrow     = NULL;
 gameStringRelease_t   fn_gameStringRelease   = NULL;
 
+// The readiness classifier's three bindings.
+lookupSection_t      fn_lookupSection      = NULL;
+boostUnlock_t        fn_boostUnlock        = NULL;
+boostUnlockShared_t  fn_boostUnlockShared  = NULL;
+
 // `mov [rsp+10h],rsi; push rdi; sub rsp,20h; mov eax,[rdx+8]; mov esi,r8d`
 extern const unsigned char g_sortedArrayGrowBytes[16] =
 	{ 0x48,0x89,0x74,0x24,0x10,0x57,0x48,0x83,0xEC,0x20,0x8B,0x42,0x08,0x41,0x8B,0xF0 };
@@ -79,32 +65,11 @@ extern const unsigned char g_sortedArrayGrowBytes[16] =
 extern const unsigned char g_gameStringReleaseBytes[16] =
 	{ 0x40,0x53,0x48,0x83,0xEC,0x20,0x48,0x83,0x79,0x18,0x10,0x48,0x8B,0xD9,0x72,0x08 };
 
-
 // =========================================================================
 // Hook original function pointers
 // =========================================================================
 
-showLoadingMessage_t    orig_showLoadingMessage    = NULL;
-isContentPending_t      orig_isContentPending      = NULL;
-updateCameraZone_t      orig_updateCameraZone      = NULL;
-addOrderSelected_t      orig_addOrderSelected      = NULL;
-dispatchJob_t           orig_dispatchJob           = NULL;
-nmResultPopulate_t      orig_nmResultPopulate      = NULL;
-realGenerate_t          orig_realGenerate          = NULL;
-isInIsland_t            orig_isInIsland            = NULL;
-getIsland_t             orig_getIsland             = NULL;
 resetUnloadZones_t      orig_resetUnloadZones      = NULL;   // save-load reset
-stopCharactersMovement_t orig_stopCharactersMovement = NULL; // player cancel hooks
-addJobSelected_t        orig_addJobSelected        = NULL;
-addTaskNearest_t        orig_addTaskNearest        = NULL;
-csFindPath_t            orig_csFindPath            = NULL;
-csCheckFaceConn_t       orig_csCheckFaceConn       = NULL;
-findPathFull_t          orig_findPathFull          = NULL;
-requestPath_t           orig_requestPath           = NULL;
-pathReqSubmit_t         orig_pathReqSubmit         = NULL;
-csFindPathFallback_t    orig_csFindPathFallback    = NULL;
-contentStreamCallee0x8869_t orig_contentStreamCallee0x8869 = NULL;
-addInstance_t               orig_addInstance               = NULL;
 
 // Path-worker-pool instrumentation hooks + isPriorityPath (game.h's
 // path-worker-pool block). Storage only; the hooks' orig_ pointers are filled
@@ -114,7 +79,6 @@ dequeueWork_t        orig_dequeueWork        = NULL;
 enqueueThreadSafe_t  orig_enqueueThreadSafe  = NULL;
 gatesUpdateCodes_t   orig_gatesUpdateCodes   = NULL;
 isPriorityPath_t     fn_isPriorityPath       = NULL;
-
 
 // =========================================================================
 // InitGameBindings — resolve all function pointers from gameBase
@@ -132,47 +96,47 @@ void InitGameBindings(uintptr_t base)
 	SetDestroyListBase((uintptr_t)GameAddr(RVA_GLOBAL_GAMEWORLD));
 
 	// Zone loading
-	fn_loadSingleZone        = (loadSingleZone_t)       GameAddr(RVA_LOAD_SINGLE_ZONE);
-	fn_flushPendingWork      = (flushPendingWork_t)      GameAddr(RVA_FLUSH_PENDING_WORK);
-	fn_registerZoneSections  = (registerZoneSections_t)  GameAddr(RVA_REGISTER_ZONE_SECTIONS);
-	fn_setQueuesAreClear     = (setQueuesAreClear_t)     GameAddr(RVA_SET_QUEUES_CLEAR);
-	fn_addToTrackingSet      = (addToTrackingSet_t)      GameAddr(RVA_ADD_TO_TRACKING_SET);
+	game::g_gameFn.fn_loadSingleZone        = (loadSingleZone_t)       GameAddr(RVA_LOAD_SINGLE_ZONE);
+	game::g_gameFn.fn_flushPendingWork      = (flushPendingWork_t)      GameAddr(RVA_FLUSH_PENDING_WORK);
+	game::g_gameFn.fn_registerZoneSections  = (registerZoneSections_t)  GameAddr(RVA_REGISTER_ZONE_SECTIONS);
+	game::g_gameFn.fn_setQueuesAreClear     = (setQueuesAreClear_t)     GameAddr(RVA_SET_QUEUES_CLEAR);
+	game::g_gameFn.fn_addToTrackingSet      = (addToTrackingSet_t)      GameAddr(RVA_ADD_TO_TRACKING_SET);
 
 	// Handle resolution
-	fn_resolveHandle         = (resolveHandle_t)         GameAddr(RVA_RESOLVE_HANDLE);
+	game::g_gameFn.fn_resolveHandle         = (resolveHandle_t)         GameAddr(RVA_RESOLVE_HANDLE);
 	g_handleTable            = (void*)(base + RVA_HANDLE_TABLE);
 
 	// NavMesh queue locks
-	fn_pathBuilderInit       = (pathBuilderInit_t)      GameAddr(RVA_PATH_BUILDER_INIT);
-	fn_pathBuilderFinalize   = (pathBuilderFinalize_t)  GameAddr(RVA_PATH_BUILDER_FINALIZE);
-	fn_readerUnlock          = (readerUnlock_t)         GameAddr(RVA_READER_UNLOCK);
-	fn_queueLockInit         = (queueLockInit_t)        GameAddr(RVA_QUEUE_LOCK_INIT);
+	game::g_gameFn.fn_pathBuilderInit       = (pathBuilderInit_t)      GameAddr(RVA_PATH_BUILDER_INIT);
+	game::g_gameFn.fn_pathBuilderFinalize   = (pathBuilderFinalize_t)  GameAddr(RVA_PATH_BUILDER_FINALIZE);
+	game::g_gameFn.fn_readerUnlock          = (readerUnlock_t)         GameAddr(RVA_READER_UNLOCK);
+	game::g_gameFn.fn_queueLockInit         = (queueLockInit_t)        GameAddr(RVA_QUEUE_LOCK_INIT);
 
 	// NavMesh active cache
-	fn_navMeshCtor           = (navMeshCtor_t)           GameAddr(RVA_NAVMESH_CTOR);
-	fn_settingsCtor          = (settingsCtor_t)          GameAddr(RVA_SETTINGS_CTOR);
-	fn_simplSettingsCopy     = (simplSettingsCopy_t)     GameAddr(RVA_SIMPL_SETTINGS_COPY);
-	fn_settingsDtorBody      = (settingsDtorBody_t)      GameAddr(RVA_SETTINGS_DTOR_BODY);
-	fn_processJobAlt         = (processJobAlt_t)        GameAddr(RVA_PROCESS_JOB_ALT);
-	fn_buildCollision        = (buildCollision_t)        GameAddr(RVA_BUILD_COLLISION);
-	fn_partialFixup          = (partialFixup_t)          GameAddr(RVA_PARTIAL_FIXUP);
-	fn_enqueueToProcQueue    = (enqueueToProcQueue_t)    GameAddr(RVA_ENQUEUE_TO_PROC_QUEUE);
-	fn_gameNew               = (gameNew_t)               GameAddr(RVA_GAME_NEW);
-	fn_gameDelete            = (gameDelete_t)            GameAddr(RVA_GAME_DELETE);
-	fn_gameNewArr            = (gameNewArr_t)            GameAddr(RVA_GAME_NEW_ARR);
-	fn_gameDelArr            = (gameDelArr_t)            GameAddr(RVA_GAME_DEL_ARR);
+	game::g_gameFn.fn_navMeshCtor           = (navMeshCtor_t)           GameAddr(RVA_NAVMESH_CTOR);
+	game::g_gameFn.fn_settingsCtor          = (settingsCtor_t)          GameAddr(RVA_SETTINGS_CTOR);
+	game::g_gameFn.fn_simplSettingsCopy     = (simplSettingsCopy_t)     GameAddr(RVA_SIMPL_SETTINGS_COPY);
+	game::g_gameFn.fn_settingsDtorBody      = (settingsDtorBody_t)      GameAddr(RVA_SETTINGS_DTOR_BODY);
+	game::g_gameFn.fn_processJobAlt         = (processJobAlt_t)        GameAddr(RVA_PROCESS_JOB_ALT);
+	game::g_gameFn.fn_buildCollision        = (buildCollision_t)        GameAddr(RVA_BUILD_COLLISION);
+	game::g_gameFn.fn_partialFixup          = (partialFixup_t)          GameAddr(RVA_PARTIAL_FIXUP);
+	game::g_gameFn.fn_enqueueToProcQueue    = (enqueueToProcQueue_t)    GameAddr(RVA_ENQUEUE_TO_PROC_QUEUE);
+	game::g_gameFn.fn_gameNew               = (gameNew_t)               GameAddr(RVA_GAME_NEW);
+	game::g_gameFn.fn_gameDelete            = (gameDelete_t)            GameAddr(RVA_GAME_DELETE);
+	game::g_gameFn.fn_gameNewArr            = (gameNewArr_t)            GameAddr(RVA_GAME_NEW_ARR);
+	game::g_gameFn.fn_gameDelArr            = (gameDelArr_t)            GameAddr(RVA_GAME_DEL_ARR);
 
 	// Havok thread init
-	fn_havokContextInit      = (havokContextInit_t)      GameAddr(RVA_HAVOK_CONTEXT_INIT);
-	fn_havokGetManager       = (havokGetManager_t)       GameAddr(RVA_HAVOK_GET_MANAGER);
-	fn_havokPostRegInit      = (havokPostRegInit_t)      GameAddr(RVA_HAVOK_POST_REG_INIT);
-	fn_havokCleanup          = (havokCleanup_t)          GameAddr(RVA_HAVOK_CLEANUP);
-	fn_havokCtxCleanup       = (havokCtxCleanup_t)       GameAddr(RVA_HAVOK_CTX_CLEANUP);
+	game::g_gameFn.fn_havokContextInit      = (havokContextInit_t)      GameAddr(RVA_HAVOK_CONTEXT_INIT);
+	game::g_gameFn.fn_havokGetManager       = (havokGetManager_t)       GameAddr(RVA_HAVOK_GET_MANAGER);
+	game::g_gameFn.fn_havokPostRegInit      = (havokPostRegInit_t)      GameAddr(RVA_HAVOK_POST_REG_INIT);
+	game::g_gameFn.fn_havokCleanup          = (havokCleanup_t)          GameAddr(RVA_HAVOK_CLEANUP);
+	game::g_gameFn.fn_havokCtxCleanup       = (havokCtxCleanup_t)       GameAddr(RVA_HAVOK_CTX_CLEANUP);
 
 	// Island routing
-	fn_lektorReserve         = (lektorReserve_t)         GameAddr(RVA_LEKTOR_RESERVE);
+	game::g_gameFn.fn_lektorReserve         = (lektorReserve_t)         GameAddr(RVA_LEKTOR_RESERVE);
 
-	fn_enqueuePathReq        = (enqueuePathReq_t)        GameAddr(RVA_ENQUEUE_PATH_REQ);
+	game::g_gameFn.fn_enqueuePathReq        = (enqueuePathReq_t)        GameAddr(RVA_ENQUEUE_PATH_REQ);
 
 
 	fn_isPriorityPath        = (isPriorityPath_t)        GameAddr(RVA_IS_PRIORITY_PATH);

@@ -149,10 +149,10 @@ static bool ZlSectionsDrained(void* zone)
 		return true;
 	if (*(int*)(KLIB_MEMBER(2, sectionMgr, NavMesh_addList_count, 632)) == 0)
 		return true;
-	if (orig_isContentPending)
+	if (game::g_hookOrig.orig_isContentPending)
 	{
 		int gridCoords[2] = { GetZoneGridX(zone), GetZoneGridY(zone) };
-		if (orig_isContentPending((void*)sectionMgr, (void*)gridCoords))
+		if (game::g_hookOrig.orig_isContentPending((void*)sectionMgr, (void*)gridCoords))
 			return true;
 	}
 	return false;

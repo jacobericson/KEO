@@ -52,7 +52,7 @@ char hook_csFindPath(void* manager, unsigned int startFaceKey, void* startPos,
 {
 	InterlockedIncrement(&pathfind::g_pathDiag.diagPrimaryAttempts);
 
-	char result = orig_csFindPath(manager, startFaceKey, startPos, destPos,
+	char result = game::g_hookOrig.orig_csFindPath(manager, startFaceKey, startPos, destPos,
 	                               radius, param5, resultBuf);
 
 	if (result)
@@ -184,7 +184,7 @@ char hook_csCheckFaceConn(void* manager, unsigned int startFace, unsigned int de
 	if (pathfind::g_pathfindCfg.clusterGraphBypassMode == CGB_MEASURE || pathfind::g_pathfindCfg.clusterGraphBypassMode == CGB_PLAYER)
 		gateOwner = ConnGateOwner();
 
-	char result = orig_csCheckFaceConn(manager, startFace, destFace);
+	char result = game::g_hookOrig.orig_csCheckFaceConn(manager, startFace, destFace);
 	if (!result)
 	{
 		InterlockedIncrement(&pathfind::g_pathDiag.diagConnFail);
@@ -593,7 +593,7 @@ void hook_findPathFull(void* streamingCollection, void* searchState, void* findP
 
 	// Default path: call original A*
 	QueryPerformanceCounter(&c.pathPoolQpcBefore);
-	orig_findPathFull(streamingCollection, searchState, findPathOutput);
+	game::g_hookOrig.orig_findPathFull(streamingCollection, searchState, findPathOutput);
 
 	c.status = *(unsigned char*)((uintptr_t)findPathOutput + 60);
 	c.cause  = *(unsigned char*)((uintptr_t)findPathOutput + 61);
@@ -633,7 +633,7 @@ void hook_requestPath(void* havokChar, float* destination, int priority)
 	squadBoostTier = decision.tier;
 	squadBoostFromRepathTier = (decision.source == PRT_SOURCE_STATE6 && decision.tier > 0);
 
-	orig_requestPath(havokChar, destination, priority);
+	game::g_hookOrig.orig_requestPath(havokChar, destination, priority);
 
 	squadBoostTier = 0;
 
@@ -649,7 +649,7 @@ void hook_requestPath(void* havokChar, float* destination, int priority)
 
 void hook_pathReqSubmit(void* sectionMgr, void* requestObj, bool highPriority)
 {
-	orig_pathReqSubmit(sectionMgr, requestObj, highPriority);
+	game::g_hookOrig.orig_pathReqSubmit(sectionMgr, requestObj, highPriority);
 
 	if (squadBoostTier > 0)
 	{
@@ -704,7 +704,7 @@ char hook_csFindPathFallback(void* manager, unsigned int startFaceKey, void* sta
 	t_waveAuth = param7 ? 1 : 2;
 
 
-	char result = orig_csFindPathFallback(manager, startFaceKey, startPos,
+	char result = game::g_hookOrig.orig_csFindPathFallback(manager, startFaceKey, startPos,
 	                                       destFaceKey, destPos, radius,
 	                                       param6, param7, resultBuf);
 	t_waveAuth = 0;
@@ -723,7 +723,7 @@ char hook_csFindPathFallback(void* manager, unsigned int startFaceKey, void* sta
 void hook_addInstance(void* collection, __int64 sectionData,
                       __int64 param3, __int64 param4, int param5)
 {
-	orig_addInstance(collection, sectionData, param3, param4, param5);
+	game::g_hookOrig.orig_addInstance(collection, sectionData, param3, param4, param5);
 	InterlockedIncrement(&addInstanceHookCalls);
 	NavMeshLifeOnAdd(collection, sectionData);
 	StitchSourceOnAdd(collection, sectionData, param4);
@@ -752,7 +752,7 @@ unsigned __int64 hook_contentStreamCallee0x8869(void* manager,
 	// the rescue counter records it. Keep it out of the crash recorder.
 	GuardEnter();
 	__try {
-		result = orig_contentStreamCallee0x8869(manager, faceKey, searchOutput, resultBuf);
+		result = game::g_hookOrig.orig_contentStreamCallee0x8869(manager, faceKey, searchOutput, resultBuf);
 	} __except (EXCEPTION_EXECUTE_HANDLER) {
 		InterlockedIncrement(&extractionCrashRescue);
 		if (resultBuf) (*(unsigned int*)KLIB_MEMBER(5, resultBuf, ResultPathArray_m_size, 8)) = origCount;

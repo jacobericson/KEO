@@ -361,9 +361,9 @@ void ProcessPreloadQueue(void* zoneMgr)
 	//
 	// preloadKeepAliveSeconds makes it tunable so a change to preloaded zones'
 	// unload timing can be A/B'd (0 vs 3600) without a rebuild.
-	bool result = fn_loadSingleZone(zoneEntry, 0, 0, zone::g_zoneCfg.cfg_preloadKeepAliveSeconds);
-	if (physics && savedReady && fn_setQueuesAreClear)
-		fn_setQueuesAreClear((void*)physics, true);
+	bool result = game::g_gameFn.fn_loadSingleZone(zoneEntry, 0, 0, zone::g_zoneCfg.cfg_preloadKeepAliveSeconds);
+	if (physics && savedReady && game::g_gameFn.fn_setQueuesAreClear)
+		game::g_gameFn.fn_setQueuesAreClear((void*)physics, true);
 
 	pz.pending = (result != 0);
 	if (result != 0)

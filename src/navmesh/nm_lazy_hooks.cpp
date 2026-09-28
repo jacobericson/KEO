@@ -134,7 +134,7 @@ void InstallNavMeshLazyHooks()
 	// input triangle count for the zero-face rule. Installed here rather than in
 	// startPlugin so it shares the first-dispatch timing of the guard above.
 	if (HookInstallRow(HOOK_NM_RESULT_POPULATE, (void*)hook_nmResultPopulate_diag,
-	                   (void**)&orig_nmResultPopulate, NULL, true) == NULL)
+	                   (void**)&game::g_hookOrig.orig_nmResultPopulate, NULL, true) == NULL)
 		LogMsgDeferrable("populate hook: installed (input triangle counts)");
 	else
 		LogMsgDeferrable("populate hook: install FAILED (tri counts unavailable)");

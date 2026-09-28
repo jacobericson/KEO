@@ -91,10 +91,10 @@ static void hook_finalizeZoneResources(void* sectionEntry)
 
 	uintptr_t sectionMgr = *(uintptr_t*)((uintptr_t)GameAddr(RVA_GLOBAL_SECTION_MGR));
 	bool meshReady = true;  // no section manager or readiness function: fail open, run as before
-	if (sectionMgr && orig_isContentPending)
+	if (sectionMgr && game::g_hookOrig.orig_isContentPending)
 	{
 		int gridCoords[2] = { (int)rec[0], (int)rec[1] };
-		meshReady = orig_isContentPending((void*)sectionMgr, (void*)gridCoords);
+		meshReady = game::g_hookOrig.orig_isContentPending((void*)sectionMgr, (void*)gridCoords);
 	}
 
 	NestValidationDecision d = NestValidationDecide(meshReady, s_skipped[cellIndex] != 0);

@@ -1,5 +1,6 @@
 #include "game/klib_members.h"
 // game.h - Umbrella over the game binding headers (rva.h, offsets.h, bindings.h and the module binding headers).
+// Module binding headers keep bare pointers beside their RVAs; only bindings.h's own fn_ and orig_ pointers are tables.
 
 #ifndef KENSHI_ZONE_OPT_GAME_H
 #define KENSHI_ZONE_OPT_GAME_H

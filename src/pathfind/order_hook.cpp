@@ -254,7 +254,7 @@ void hook_addOrderSelected(void* thisPI, void* destIndoors, int task,
 		}
 	}
 
-	orig_addOrderSelected(thisPI, destIndoors, task, subject, shift, addDontClear, location);
+	game::g_hookOrig.orig_addOrderSelected(thisPI, destIndoors, task, subject, shift, addDontClear, location);
 
 	// Immediate reprio: the player just named one or more route zones, so the
 	// jobs already queued for them float to the top now. Requests the AI task

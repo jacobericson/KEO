@@ -134,13 +134,13 @@ void Wake()
 void LockQueue(uintptr_t nmg)
 {
 	char initBuf[16];
-	void* t = fn_pathBuilderInit(initBuf);
-	fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)), t);
+	void* t = game::g_gameFn.fn_pathBuilderInit(initBuf);
+	game::g_gameFn.fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)), t);
 }
 
 void UnlockQueue(uintptr_t nmg)
 {
-	fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
 }
 
 } // namespace nm_adjacency_detail

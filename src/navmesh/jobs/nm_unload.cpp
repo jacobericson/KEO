@@ -140,7 +140,7 @@ NavMeshUnloadBegin NavMeshBeginZoneUnload(void* zone)
 	if (!InterlockedCompareExchange(&g_pjLockReady, 0, 0))
 		return NM_UL_REFUSED;
 	uintptr_t nmg = g_navMeshGen;
-	if (!nmg || !fn_pathBuilderInit || !fn_pathBuilderFinalize || !fn_readerUnlock)
+	if (!nmg || !game::g_gameFn.fn_pathBuilderInit || !game::g_gameFn.fn_pathBuilderFinalize || !game::g_gameFn.fn_readerUnlock)
 		return NM_UL_REFUSED;   // no dispatch yet: transient
 	// One unload at a time: a Begin not yet matched by its End still owns the
 	// skip. (The caller is the main thread only, so this is its own bug.)
@@ -148,8 +148,8 @@ NavMeshUnloadBegin NavMeshBeginZoneUnload(void* zone)
 		return NM_UL_REFUSED;
 
 	char initBuf[16];
-	void* initResult = fn_pathBuilderInit(initBuf);
-	fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)), initResult);
+	void* initResult = game::g_gameFn.fn_pathBuilderInit(initBuf);
+	game::g_gameFn.fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)), initResult);
 
 	bool queued = false;
 	int walked = 0;
@@ -166,14 +166,14 @@ NavMeshUnloadBegin NavMeshBeginZoneUnload(void* zone)
 
 	if (queued)
 	{
-		fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+		game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
 		InterlockedIncrement(&navmesh::g_nmCache.nmUlSkipJob);
 		return NM_UL_REFUSED;
 	}
 
 	// Published under +152: see point 2 above.
 	InterlockedExchangePointer(&g_unloadingZone, zone);
-	fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
 
 	for (int i = 0; i < CLAIM_SLOT_COUNT; ++i)
 	{
@@ -199,17 +199,17 @@ void NavMeshEndZoneUnload()
 void NavMeshRaiseResetGateLocked(ZoneResetGate* g)
 {
 	uintptr_t nmg = g_navMeshGen;
-	if (!nmg || !fn_pathBuilderInit || !fn_pathBuilderFinalize || !fn_readerUnlock)
+	if (!nmg || !game::g_gameFn.fn_pathBuilderInit || !game::g_gameFn.fn_pathBuilderFinalize || !game::g_gameFn.fn_readerUnlock)
 	{
 		ZoneResetGateRaise(g);
 		return;
 	}
 	char initBuf[16];
-	void* initResult = fn_pathBuilderInit(initBuf);
-	fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)), initResult);
+	void* initResult = game::g_gameFn.fn_pathBuilderInit(initBuf);
+	game::g_gameFn.fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)), initResult);
 	// Published under +152: see point 5 above.
 	ZoneResetGateRaise(g);
-	fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
 }
 
 // Main thread, no mod lock held. Takes the generator queue lock (+152) around
@@ -218,16 +218,16 @@ void NavMeshRaiseResetGateLocked(ZoneResetGate* g)
 void NavMeshLowerResetGateLocked(ZoneResetGate* g)
 {
 	uintptr_t nmg = g_navMeshGen;
-	if (!nmg || !fn_pathBuilderInit || !fn_pathBuilderFinalize || !fn_readerUnlock)
+	if (!nmg || !game::g_gameFn.fn_pathBuilderInit || !game::g_gameFn.fn_pathBuilderFinalize || !game::g_gameFn.fn_readerUnlock)
 	{
 		ZoneResetGateLower(g);
 		return;
 	}
 	char initBuf[16];
-	void* initResult = fn_pathBuilderInit(initBuf);
-	fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)), initResult);
+	void* initResult = game::g_gameFn.fn_pathBuilderInit(initBuf);
+	game::g_gameFn.fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)), initResult);
 	ZoneResetGateLower(g);
-	fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
 }
 
 bool NavMeshWorkersIdle()

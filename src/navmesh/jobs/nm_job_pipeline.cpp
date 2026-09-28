@@ -150,7 +150,7 @@ bool WorkerProcessHit(void* nmg, uintptr_t job, int jobType, int hitIdx,
 		else
 		{
 			NoteWorkerPhase(WPHASE_BUILDING);
-			fn_buildCollision(nmg, (void*)job, 0, 0.0);
+			game::g_gameFn.fn_buildCollision(nmg, (void*)job, 0, 0.0);
 			NoteWorkerPhase(WPHASE_STORING);
 		}
 	}
@@ -163,15 +163,15 @@ bool WorkerProcessHit(void* nmg, uintptr_t job, int jobType, int hitIdx,
 	int faceCount = navMeshResult ? *(int*)(KLIB_MEMBER(4, navMeshResult + NMOFF_FACES, ByteArray_m_size, 8)) : 0;
 	if (!resetDrop && navMeshResult && faceCount > 0)
 	{
-		fn_enqueueToProcQueue((void*)(KLIB_MEMBER(4, (uintptr_t)nmg, NavMeshGenerator_done, 184)), (void*)job);
+		game::g_gameFn.fn_enqueueToProcQueue((void*)(KLIB_MEMBER(4, (uintptr_t)nmg, NavMeshGenerator_done, 184)), (void*)job);
 	}
 	else
 	{
 		void* delNavInst = *(void**)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_output, 80));
-		if (delNavInst) fn_gameDelete(delNavInst);
+		if (delNavInst) game::g_gameFn.fn_gameDelete(delNavInst);
 		void* buildingRef = *(void**)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_buildings_stuff, 24));
-		if (buildingRef) fn_gameDelArr(buildingRef);
-		fn_gameDelete((void*)job);
+		if (buildingRef) game::g_gameFn.fn_gameDelArr(buildingRef);
+		game::g_gameFn.fn_gameDelete((void*)job);
 	}
 
 
@@ -371,9 +371,9 @@ void PjCtx::Lookup()
 		EnterCriticalSection(&nmCacheCS);
 
 		hitIdx = FindCacheEntry(key);
-		isHit = (hitIdx >= 0 && navmesh::g_nmL1.nmCache[hitIdx].cachedFaces != NULL && fn_navMeshCtor != NULL);
+		isHit = (hitIdx >= 0 && navmesh::g_nmL1.nmCache[hitIdx].cachedFaces != NULL && game::g_gameFn.fn_navMeshCtor != NULL);
 
-		if (!isHit && fn_navMeshCtor != NULL)
+		if (!isHit && game::g_gameFn.fn_navMeshCtor != NULL)
 		{
 			LeaveCriticalSection(&nmCacheCS);
 
@@ -493,7 +493,7 @@ void PjCtx::OwnHit()
 			else
 			{
 				NoteWorkerPhase(WPHASE_BUILDING);
-				fn_buildCollision(realNMG, (void*)job, 0, 0.0);
+				game::g_gameFn.fn_buildCollision(realNMG, (void*)job, 0, 0.0);
 			}
 			InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 24);
 		}
@@ -585,7 +585,7 @@ void PjCtx::LateLookup()
 	// take the HIT instead of generating again.
 	NoteWorkerPhase(WPHASE_GENERATING);
 	lateMesh = NULL;
-	if (keyOk && navmesh::g_nmCache.nmDiagStage >= 2 && fn_navMeshCtor != NULL
+	if (keyOk && navmesh::g_nmCache.nmDiagStage >= 2 && game::g_gameFn.fn_navMeshCtor != NULL
 	    && !InterlockedCompareExchange(&navmesh::g_nmCache.nmCacheDisabled, 0, 0))
 	{
 		EnterCriticalSection(&nmCacheCS);
@@ -623,7 +623,7 @@ void PjCtx::LateBuild(ProcessJobLock& missLock, InflightScope& inflight)
 	else
 	{
 		NoteWorkerPhase(WPHASE_BUILDING);
-		fn_buildCollision(realNMG, (void*)job, 0, 0.0);
+		game::g_gameFn.fn_buildCollision(realNMG, (void*)job, 0, 0.0);
 	}
 	InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 24);
 
@@ -784,10 +784,10 @@ bool PjCtx::AfterProcessJobAlt(bool pjLockLost, ProcessJobLock& missLock)
 				if (!BuildLockNarrowActive())
 				{
 					BuildCollisionScope guard;
-					fn_partialFixup(realNMG, (void*)job);
+					game::g_gameFn.fn_partialFixup(realNMG, (void*)job);
 				}
 				else
-					fn_partialFixup(realNMG, (void*)job);   // stitches two job-private meshes only
+					game::g_gameFn.fn_partialFixup(realNMG, (void*)job);   // stitches two job-private meshes only
 				InterlockedIncrement(&navmesh::g_nmCache.nmPartialRealCount);
 			}
 			mpj.fixEnd = QpcNow();
@@ -909,7 +909,7 @@ void PjCtx::BuildGenerated()
 	{
 		NoteWorkerPhase(WPHASE_BUILDING);
 		mpj.bcStart = QpcNow();
-		fn_buildCollision(realNMG, (void*)job, 0, 0.0);
+		game::g_gameFn.fn_buildCollision(realNMG, (void*)job, 0, 0.0);
 		mpj.bcEnd = QpcNow();
 	}
 	MissParRecordJob(mpj);
@@ -940,20 +940,20 @@ void PjCtx::Handoff()
 	if (!resetDrop && navMeshResult && faceCount > 0)
 	{
 		InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 42);
-		fn_enqueueToProcQueue((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_done, 184)), (void*)job);
+		game::g_gameFn.fn_enqueueToProcQueue((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_done, 184)), (void*)job);
 	}
 	else
 	{
 		InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 43);
 		void* delNavInst = *(void**)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_output, 80));
 		if (delNavInst)
-			fn_gameDelete(delNavInst);
+			game::g_gameFn.fn_gameDelete(delNavInst);
 
 		void* buildingRef = *(void**)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_buildings_stuff, 24));
 		if (buildingRef)
-			fn_gameDelArr(buildingRef);
+			game::g_gameFn.fn_gameDelArr(buildingRef);
 
-		fn_gameDelete((void*)job);
+		game::g_gameFn.fn_gameDelete((void*)job);
 	}
 
 	InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 44);
@@ -1055,7 +1055,7 @@ void ProcessNavMeshJob(void* realNMG, void* workNMG, ClaimedJob* claimed)
 				// Only a clone's run may release processJobCS inside populate;
 				// processJobAlt is still entered, and normally left, under it.
 				MissParArmScope arm(c.usingNMGClone, c.realNMG);
-				fn_processJobAlt(c.workNMG, (void*)c.job);
+				game::g_gameFn.fn_processJobAlt(c.workNMG, (void*)c.job);
 				pjLockLost = MissParLockLost();
 			}
 			c.mpj.jobAltEnd = QpcNow();
@@ -1082,7 +1082,7 @@ void hook_realGenerate(void* workBuffer, void* localData, void* hkaiNavMesh, int
 	// MinHook can't relocate the first instructions of the 61K-byte realGenerate,
 	// so this hook is never actually installed. Body kept as a passthrough for
 	// the function-pointer slot.
-	orig_realGenerate(workBuffer, localData, hkaiNavMesh, param, timeLowPart);
+	game::g_hookOrig.orig_realGenerate(workBuffer, localData, hkaiNavMesh, param, timeLowPart);
 }
 
 // Pass-through over the 49-byte wrapper that calls realGenerate. Its second
@@ -1101,5 +1101,5 @@ void hook_nmResultPopulate_diag(void* navData, void* localData, void* result, in
 		t_lastInputTriCount  = *(int*)(KLIB_MEMBER(4, (uintptr_t)localData + 32, ByteArray_m_size, 8));
 		t_lastInputVertCount = *(int*)(KLIB_MEMBER(4, (uintptr_t)localData + 16, ByteArray_m_size, 8));
 	}
-	MissParPopulate(orig_nmResultPopulate, navData, localData, result, param);
+	MissParPopulate(game::g_hookOrig.orig_nmResultPopulate, navData, localData, result, param);
 }

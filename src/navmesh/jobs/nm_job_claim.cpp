@@ -205,8 +205,8 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 
 	// Phase 1: claim a job under the queue lock.
 	char initBuf[16];
-	void* initResult = fn_pathBuilderInit(initBuf);
-	fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)), initResult);
+	void* initResult = game::g_gameFn.fn_pathBuilderInit(initBuf);
+	game::g_gameFn.fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)), initResult);
 
 	uintptr_t head = *(uintptr_t*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_front, 136));
 	if (!head)
@@ -214,7 +214,7 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 		// Empty under the lock: the event is only ever cleared while holding
 		// this lock, so a worker cannot miss a job queued after the check.
 		ClearJobAvailable();
-		fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+		game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
 		return 0;
 	}
 
@@ -224,7 +224,7 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 	if (ZoneResetGateUp(&g_zoneResetGate) && ZoneResetAdmit(true, NavMeshStopRequested(), ZONE_RESET_SITE_CLAIM) == ZONE_RESET_DEFER_RESET)
 	{
 		ClearJobAvailable();
-		fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+		game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
 		ZoneResetGateNoteDeferred(&g_zoneResetGate, ZONE_RESET_SITE_CLAIM);
 		return 0;
 	}
@@ -316,7 +316,7 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 		// the first eligible job wakes everyone; the 500 ms wait is the
 		// backstop. The list is not touched.
 		ClearJobAvailable();
-		fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+		game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
 		if (adj)
 			NmAdjAfterScan(&adjScan);
 		return 0;
@@ -347,7 +347,7 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 	ClaimZoneSet(claimSlot, jobZone);
 	claimedOut->resetRaises = ZoneResetGateRaises(&g_zoneResetGate);
 
-	fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
 	if (adj)
 		NmAdjAfterScan(&adjScan);
 
@@ -381,12 +381,12 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 	{
 		EnterCriticalSection(&nmCacheCS);
 		int found = FindCacheEntry(key);
-		if (found >= 0 && navmesh::g_nmL1.nmCache[found].cachedFaces != NULL && fn_navMeshCtor != NULL)
+		if (found >= 0 && navmesh::g_nmL1.nmCache[found].cachedFaces != NULL && game::g_gameFn.fn_navMeshCtor != NULL)
 			hitIdx = found;
 		LeaveCriticalSection(&nmCacheCS);
 	}
 
-	if (keyOk && hitIdx < 0 && fn_navMeshCtor != NULL)
+	if (keyOk && hitIdx < 0 && game::g_gameFn.fn_navMeshCtor != NULL)
 	{
 		// Duplicate jobs for one zone do exist, so two workers can hold
 		// different jobs with the same key. Only one of them reads the file.

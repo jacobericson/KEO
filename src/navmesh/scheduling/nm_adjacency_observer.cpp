@@ -65,15 +65,15 @@ static void ObserveDrain(uintptr_t nmg)
 	const long seq = g_reg.pubSeq;
 	{
 		char initBuf[16];
-		void* t = fn_pathBuilderInit(initBuf);
-		fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_done_mutex, 200)), t);
+		void* t = game::g_gameFn.fn_pathBuilderInit(initBuf);
+		game::g_gameFn.fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_done_mutex, 200)), t);
 		for (uintptr_t node = *(uintptr_t*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_done_front, 184));
 		     node; node = *(uintptr_t*)(KLIB_MEMBER(4, node, NavMeshGenerator__Task_next, 96)))
 		{
 			if (n == kDoneCap) { overflow = true; break; }
 			done[n++] = (unsigned __int64)node;
 		}
-		fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_done_mutex, 200)));
+		game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_done_mutex, 200)));
 	}
 	int freed = 0;
 	if (!overflow)

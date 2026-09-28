@@ -81,8 +81,8 @@ bool hook_isInIsland(void* zoneA, void* zoneB)
 	uintptr_t a = (uintptr_t)zoneA;
 	uintptr_t b = (uintptr_t)zoneB;
 
-	bool vanilla = orig_isInIsland
-		? orig_isInIsland(zoneA, zoneB)
+	bool vanilla = game::g_hookOrig.orig_isInIsland
+		? game::g_hookOrig.orig_isInIsland(zoneA, zoneB)
 		: (b != 0 && a != 0 && ZoneLabel(a) == ZoneLabel(b));
 
 	InterlockedIncrement(vanilla ? &g_isInVanTrue : &g_isInVanFalse);
@@ -154,7 +154,7 @@ void* hook_getIsland(void* zoneMgr, void* zone, void* lektorOut)
 
 	if (!t || !out)
 	{
-		result = orig_getIsland(zoneMgr, zone, lektorOut);
+		result = game::g_hookOrig.orig_getIsland(zoneMgr, zone, lektorOut);
 	}
 	else
 	{
@@ -165,11 +165,11 @@ void* hook_getIsland(void* zoneMgr, void* zone, void* lektorOut)
 		if (n < 0)
 		{
 			InterlockedIncrement(&g_getIslFallback);
-			result = orig_getIsland(zoneMgr, zone, lektorOut);
+			result = game::g_hookOrig.orig_getIsland(zoneMgr, zone, lektorOut);
 		}
 		else if (ct < 0 || snapZm != zm || !ZoneAccess(t))
 		{
-			result = orig_getIsland(zoneMgr, zone, lektorOut);
+			result = game::g_hookOrig.orig_getIsland(zoneMgr, zone, lektorOut);
 		}
 		else
 		{
@@ -181,7 +181,7 @@ void* hook_getIsland(void* zoneMgr, void* zone, void* lektorOut)
 			// 0 (including zones that just entered Set B), which can capture the
 			// router's ray. Answer from the component only.
 			if (tl > 0 || !live)
-				result = orig_getIsland(zoneMgr, zone, lektorOut);
+				result = game::g_hookOrig.orig_getIsland(zoneMgr, zone, lektorOut);
 
 			long appended = 0;
 			for (int i = 0; i < n; ++i)

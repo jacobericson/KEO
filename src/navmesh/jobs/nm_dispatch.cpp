@@ -33,7 +33,7 @@ static char CallOrigDispatchLocked(void* thisNMG, bool measure)
 	LARGE_INTEGER t0, t1;
 	if (measure) QueryPerformanceCounter(&t0);
 
-	char r = orig_dispatchJob(thisNMG);
+	char r = game::g_hookOrig.orig_dispatchJob(thisNMG);
 
 	if (measure)
 	{
@@ -69,10 +69,10 @@ static char NmAdjBgLeave(uintptr_t nmg, NmAdjWaitResult w, LONGLONG* adjSlice)
 	if (w != NMADJ_WAIT_STOP)
 		return 0;
 	char initBuf[16];
-	void* initResult = fn_pathBuilderInit(initBuf);
-	fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)), initResult);
+	void* initResult = game::g_gameFn.fn_pathBuilderInit(initBuf);
+	game::g_gameFn.fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)), initResult);
 	NmAdjBgReleaseLocked();
-	fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
 	return 0;
 }
 
@@ -234,8 +234,8 @@ bool BgDispatchCtx::Pick(char* result)
 	const bool adj = NmAdjActive();
 	LONGLONG adjSlice = 0;
 	adjRetry:
-	void* initResult = fn_pathBuilderInit(initBuf);
-	fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)), initResult);
+	void* initResult = game::g_gameFn.fn_pathBuilderInit(initBuf);
+	game::g_gameFn.fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)), initResult);
 
 	job = *(uintptr_t*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_front, 136));
 	if (!job)
@@ -248,7 +248,7 @@ bool BgDispatchCtx::Pick(char* result)
 		// Still under +152 here, so the read-and-clear is atomic against a
 		// worker's WorkerBusyEnter without taking the lock a second time.
 		ClearBusyBridgeIfIdle(nmg, true);
-		fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+		game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
 		*result = 0;
 		return false;
 	}
@@ -259,7 +259,7 @@ bool BgDispatchCtx::Pick(char* result)
 	{
 		if (adj)
 			NmAdjBgWaitDone(&adjSlice, false);
-		fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+		game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
 		ZoneResetGateNoteDeferred(&g_zoneResetGate, ZONE_RESET_SITE_CLAIM);
 		*result = 0;
 		return false;
@@ -276,7 +276,7 @@ bool BgDispatchCtx::Pick(char* result)
 			NmAdjBgForwardLocked(job);
 			NmAdjBgWaitDone(&adjSlice, false);
 		}
-		fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+		game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
 		// Wake the workers once this forward has consumed the head. A worker
 		// that found the queue all-ineligible cleared the event, and nothing
 		// else re-sets it on this path, so eligible jobs queued behind the head
@@ -319,7 +319,7 @@ bool BgDispatchCtx::Pick(char* result)
 		NmAdjBgDecision decision = NmAdjBgScanEndLocked(&scan, &pick, adjSlice == 0);
 		if (decision != NMADJ_BG_CLAIM)
 		{
-			fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+			game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
 			// Workers may take what the bg thread cannot. Once per episode:
 			// every release wakes them again (Wake in nm_adjacency.cpp).
 			if (!adjSlice)
@@ -375,7 +375,7 @@ char BgDispatchCtx::ProcessPicked()
 		// and the original would re-pop that one; with it the head is pinned
 		// (the prioritizer leaves a pinned head in place), because the job
 		// registered by the scan above must be the job the original processes.
-		fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+		game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
 		InterlockedIncrement(&navmesh::g_nmCache.nmJobCount);
 		InterlockedIncrement(&navmesh::g_nmCache.nmCacheSkipCount);
 		// Same wake as the bad-zone forward: a stitching job at the head is
@@ -407,7 +407,7 @@ char BgDispatchCtx::ProcessPicked()
 	// this head, so wake them if anything is behind it.
 	if (peekZone == UnloadingZone())
 	{
-		fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+		game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
 		InterlockedIncrement(&navmesh::g_nmCache.nmUlHeld);
 		if (nextJob)
 			SignalJobAvailable();
@@ -442,7 +442,7 @@ char BgDispatchCtx::ProcessPicked()
 	ClaimZoneSet(CLAIM_SLOT_BG, peekZone);
 	LONG resetRaises = ZoneResetGateRaises(&g_zoneResetGate);
 
-	fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
 
 	// Claim time: the bg thread took ownership of `job` in the unlink just
 	// above (either arm). Stored in ClaimedJob for ProcessNavMeshJob.

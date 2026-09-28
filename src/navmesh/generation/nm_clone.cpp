@@ -53,7 +53,7 @@ namespace nm_workers_detail {
 void* CloneNMG(void* realNMG, bool* stoppedOut = NULL)
 {
 	if (stoppedOut) *stoppedOut = false;
-	if (!realNMG || !fn_queueLockInit || !fn_settingsCtor) return NULL;
+	if (!realNMG || !game::g_gameFn.fn_queueLockInit || !game::g_gameFn.fn_settingsCtor) return NULL;
 
 	void* clone = HavokTlsAlloc(NMG_STRUCT_SIZE);
 	if (!clone) return NULL;
@@ -119,11 +119,11 @@ void* CloneNMG(void* realNMG, bool* stoppedOut = NULL)
 	*(uintptr_t*)(KLIB_MEMBER(4, c, NavMeshGenerator_done_front, 184)) = 0;
 	*(uintptr_t*)(KLIB_MEMBER(4, c, NavMeshGenerator_done_back, 192)) = (uintptr_t)(KLIB_MEMBER(4, c, NavMeshGenerator_done_front, 184));
 
-	fn_queueLockInit((void*)KLIB_MEMBER(4, c, ThreadClass_runMute, 72));
-	fn_queueLockInit((void*)KLIB_MEMBER(4, c, ThreadClass_lockedWhileRunningMute, 104));
-	fn_queueLockInit((void*)KLIB_MEMBER(4, c, NavMeshGenerator_queue_mutex, 152));
-	fn_queueLockInit((void*)KLIB_MEMBER(4, c, NavMeshGenerator_done_mutex, 200));
-	fn_queueLockInit((void*)KLIB_MEMBER(4, c, NavMeshGenerator_taskMutex, 272));
+	game::g_gameFn.fn_queueLockInit((void*)KLIB_MEMBER(4, c, ThreadClass_runMute, 72));
+	game::g_gameFn.fn_queueLockInit((void*)KLIB_MEMBER(4, c, ThreadClass_lockedWhileRunningMute, 104));
+	game::g_gameFn.fn_queueLockInit((void*)KLIB_MEMBER(4, c, NavMeshGenerator_queue_mutex, 152));
+	game::g_gameFn.fn_queueLockInit((void*)KLIB_MEMBER(4, c, NavMeshGenerator_done_mutex, 200));
+	game::g_gameFn.fn_queueLockInit((void*)KLIB_MEMBER(4, c, NavMeshGenerator_taskMutex, 272));
 
 	*(uintptr_t*)(KLIB_MEMBER(4, c, NavMeshGenerator_current, 232)) = 0;
 	*(uintptr_t*)(KLIB_MEMBER(4, c, NavMeshGenerator_settings, 256)) = (uintptr_t)freshWB;

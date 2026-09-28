@@ -186,11 +186,11 @@ void EvictCacheEntry(int idx)
 	if (idx < 0 || idx >= NM_CACHE_SIZE) return;
 	if (!navmesh::g_nmL1.nmCache[idx].valid) return;
 
-	if (navmesh::g_nmL1.nmCache[idx].cachedFaces)     fn_gameDelArr(navmesh::g_nmL1.nmCache[idx].cachedFaces);
-	if (navmesh::g_nmL1.nmCache[idx].cachedEdges)     fn_gameDelArr(navmesh::g_nmL1.nmCache[idx].cachedEdges);
-	if (navmesh::g_nmL1.nmCache[idx].cachedVertices)  fn_gameDelArr(navmesh::g_nmL1.nmCache[idx].cachedVertices);
-	if (navmesh::g_nmL1.nmCache[idx].cachedFaceData)  fn_gameDelArr(navmesh::g_nmL1.nmCache[idx].cachedFaceData);
-	if (navmesh::g_nmL1.nmCache[idx].cachedEdgeData)  fn_gameDelArr(navmesh::g_nmL1.nmCache[idx].cachedEdgeData);
+	if (navmesh::g_nmL1.nmCache[idx].cachedFaces)     game::g_gameFn.fn_gameDelArr(navmesh::g_nmL1.nmCache[idx].cachedFaces);
+	if (navmesh::g_nmL1.nmCache[idx].cachedEdges)     game::g_gameFn.fn_gameDelArr(navmesh::g_nmL1.nmCache[idx].cachedEdges);
+	if (navmesh::g_nmL1.nmCache[idx].cachedVertices)  game::g_gameFn.fn_gameDelArr(navmesh::g_nmL1.nmCache[idx].cachedVertices);
+	if (navmesh::g_nmL1.nmCache[idx].cachedFaceData)  game::g_gameFn.fn_gameDelArr(navmesh::g_nmL1.nmCache[idx].cachedFaceData);
+	if (navmesh::g_nmL1.nmCache[idx].cachedEdgeData)  game::g_gameFn.fn_gameDelArr(navmesh::g_nmL1.nmCache[idx].cachedEdgeData);
 
 	navmesh::g_nmL1.nmCache[idx].cachedFaces = NULL;
 	navmesh::g_nmL1.nmCache[idx].cachedEdges = NULL;
@@ -209,7 +209,7 @@ static bool CopyMeshArray(uintptr_t navMeshPtr, int arrayOff, int count, int uni
 	const void* src = hkArrayGetPtr(navMeshPtr, arrayOff);
 	if (!src) return false;
 	size_t sz = (size_t)count * (size_t)unit;
-	void* buf = fn_gameNewArr(sz);
+	void* buf = game::g_gameFn.fn_gameNewArr(sz);
 	if (!buf) return false;
 	memcpy(buf, src, sz);
 	*dest = buf;
@@ -218,11 +218,11 @@ static bool CopyMeshArray(uintptr_t navMeshPtr, int arrayOff, int count, int uni
 
 static void FreeEntryArrays(NavMeshCacheEntry& e)
 {
-	if (e.cachedFaces)    { fn_gameDelArr(e.cachedFaces);    e.cachedFaces = NULL; }
-	if (e.cachedEdges)    { fn_gameDelArr(e.cachedEdges);    e.cachedEdges = NULL; }
-	if (e.cachedVertices) { fn_gameDelArr(e.cachedVertices); e.cachedVertices = NULL; }
-	if (e.cachedFaceData) { fn_gameDelArr(e.cachedFaceData); e.cachedFaceData = NULL; }
-	if (e.cachedEdgeData) { fn_gameDelArr(e.cachedEdgeData); e.cachedEdgeData = NULL; }
+	if (e.cachedFaces)    { game::g_gameFn.fn_gameDelArr(e.cachedFaces);    e.cachedFaces = NULL; }
+	if (e.cachedEdges)    { game::g_gameFn.fn_gameDelArr(e.cachedEdges);    e.cachedEdges = NULL; }
+	if (e.cachedVertices) { game::g_gameFn.fn_gameDelArr(e.cachedVertices); e.cachedVertices = NULL; }
+	if (e.cachedFaceData) { game::g_gameFn.fn_gameDelArr(e.cachedFaceData); e.cachedFaceData = NULL; }
+	if (e.cachedEdgeData) { game::g_gameFn.fn_gameDelArr(e.cachedEdgeData); e.cachedEdgeData = NULL; }
 	e.valid = false;
 }
 
@@ -376,7 +376,7 @@ void* ReconstructNavMesh(const NavMeshCacheEntry& entry)
 	void* mem = HavokTlsAlloc(176);
 	if (!mem) { InterlockedIncrement(&navmesh::g_nmCache.nmReconFailCount); return NULL; }
 
-	void* navMesh = fn_navMeshCtor(mem);
+	void* navMesh = game::g_gameFn.fn_navMeshCtor(mem);
 	if (!navMesh)
 	{
 		HavokTlsFree(mem, 176);

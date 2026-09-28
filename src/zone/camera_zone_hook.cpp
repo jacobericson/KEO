@@ -202,7 +202,7 @@ void CameraZoneFramePreamble(void* zoneMgr, void* cameraPos)
 	TransitionCompleteIfPending();
 
 	// Always call original first (visual activate/deactivate)
-	orig_updateCameraZone(zoneMgr, cameraPos);
+	game::g_hookOrig.orig_updateCameraZone(zoneMgr, cameraPos);
 
 	g_cachedZoneMgr = zoneMgr;
 

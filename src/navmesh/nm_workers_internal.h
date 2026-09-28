@@ -197,7 +197,7 @@ static inline void EnsureGlobalScratchBuffer()
 	{
 		unsigned int n = *(unsigned int*)(gameBase + RVA_SCRATCH_SIZE);
 		if (n == 0) n = 4096;
-		*scratchPtr = (uintptr_t)fn_gameNewArr((size_t)n * 8);
+		*scratchPtr = (uintptr_t)game::g_gameFn.fn_gameNewArr((size_t)n * 8);
 	}
 }
 typedef void (__fastcall *edgeProcess_t)(void* entry);

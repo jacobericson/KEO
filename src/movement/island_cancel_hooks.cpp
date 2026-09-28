@@ -115,14 +115,14 @@ void IslandNoteCancelNearestTask(void* playerInterface)
 
 void hook_stopCharactersMovement(void* thisPI)
 {
-	orig_stopCharactersMovement(thisPI);
+	game::g_hookOrig.orig_stopCharactersMovement(thisPI);
 	IslandNoteCancelStop(thisPI);
 }
 
 void hook_addJobSelected(void* thisPI, int task, void* subject, bool shift,
                          bool add, const float* location)
 {
-	orig_addJobSelected(thisPI, task, subject, shift, add, location);
+	game::g_hookOrig.orig_addJobSelected(thisPI, task, subject, shift, add, location);
 	IslandNoteCancelJob(thisPI, add);
 }
 
@@ -133,7 +133,7 @@ void hook_addTaskNearest(void* thisPI, void* dest, int task, void* subject, bool
 	// function; the depth count keeps one from overwriting it).
 	bool outer = (g_k7NearDepth++ == 0);
 	if (outer) K7SnapshotTracked();
-	orig_addTaskNearest(thisPI, dest, task, subject, shift, location, noAnimals);
+	game::g_hookOrig.orig_addTaskNearest(thisPI, dest, task, subject, shift, location, noAnimals);
 	if (outer) IslandNoteCancelNearestTask(thisPI);
 	g_k7NearDepth--;
 }

@@ -301,13 +301,13 @@ static int FindPreloadedSlot(void* zoneEntry)
 // same thing to the caller: it is no longer the mod's.
 static bool InsertIntoPendingSet(void* zoneMgr, void* zoneEntry)
 {
-	if (!fn_addToTrackingSet || !zoneMgr || !zoneEntry)
+	if (!game::g_gameFn.fn_addToTrackingSet || !zoneMgr || !zoneEntry)
 		return false;
 	void*  value  = zoneEntry;
 	void** pValue = &value;
 	unsigned char outPair[16];
 	memset(outPair, 0, sizeof(outPair));
-	fn_addToTrackingSet((void*)(KLIB_MEMBER(2, (uintptr_t)zoneMgr, ZoneManager_processingNewActiveZones, OFF_ZM_SET_A)),
+	game::g_gameFn.fn_addToTrackingSet((void*)(KLIB_MEMBER(2, (uintptr_t)zoneMgr, ZoneManager_processingNewActiveZones, OFF_ZM_SET_A)),
 	                    outPair, &value, &pValue);
 	if (outPair[8] == 0)
 		g_insertDuplicate++;
@@ -472,10 +472,10 @@ bool ZoneHandoffPhysicsCountsClear()
 static bool MeshReportedIn(int gx, int gy)
 {
 	uintptr_t sectionMgr = *(uintptr_t*)((uintptr_t)GameAddr(RVA_GLOBAL_SECTION_MGR));
-	if (!sectionMgr || !orig_isContentPending)
+	if (!sectionMgr || !game::g_hookOrig.orig_isContentPending)
 		return false;
 	int coords[2] = { gx, gy };
-	return orig_isContentPending((void*)sectionMgr, (void*)coords) != 0;
+	return game::g_hookOrig.orig_isContentPending((void*)sectionMgr, (void*)coords) != 0;
 }
 
 static bool ContentInitialized(void* zoneEntry)

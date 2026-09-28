@@ -48,7 +48,7 @@ void TryRegisterPreloadedZones(void* zoneMgr, double now)
 	uintptr_t sectionMgr = *(uintptr_t*)((uintptr_t)GameAddr(RVA_GLOBAL_SECTION_MGR));
 	if (!sectionMgr)
 		return;
-	if (!fn_registerZoneSections)
+	if (!game::g_gameFn.fn_registerZoneSections)
 		return;
 
 	int order[MAX_PRELOADED];
@@ -246,7 +246,7 @@ void TryRegisterPreloadedZones(void* zoneMgr, double now)
 			continue;
 #endif
 
-		fn_registerZoneSections((void*)sectionMgr, ze);
+		game::g_gameFn.fn_registerZoneSections((void*)sectionMgr, ze);
 		// Post-condition: every game caller of registerZoneSections clears
 		// ZoneMap+0xCC afterwards, and each writes a single byte. Writing an
 		// int here would zero the three bytes that follow it.

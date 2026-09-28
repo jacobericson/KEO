@@ -244,7 +244,7 @@ void PrioritizeNavMeshQueue(int camGridX, int camGridY,
                             const SchedMoverInfo* movers, int moverCount,
                             const SchedZoneInfo* preloaded, int preloadedCount)
 {
-	if (!fn_pathBuilderInit || !fn_pathBuilderFinalize || !fn_readerUnlock)
+	if (!game::g_gameFn.fn_pathBuilderInit || !game::g_gameFn.fn_pathBuilderFinalize || !game::g_gameFn.fn_readerUnlock)
 		return;
 
 	uintptr_t sectionMgr = *(uintptr_t*)((uintptr_t)GameAddr(RVA_GLOBAL_SECTION_MGR));
@@ -261,8 +261,8 @@ void PrioritizeNavMeshQueue(int camGridX, int camGridY,
 
 	// Acquire input queue lock at navMeshGen+152
 	char initBuf[16];
-	void* initResult = fn_pathBuilderInit(initBuf);
-	fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, navMeshGen, NavMeshGenerator_queue_mutex, 152)), initResult);
+	void* initResult = game::g_gameFn.fn_pathBuilderInit(initBuf);
+	game::g_gameFn.fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, navMeshGen, NavMeshGenerator_queue_mutex, 152)), initResult);
 
 	head = *(uintptr_t*)(KLIB_MEMBER(4, navMeshGen, NavMeshGenerator_queue_front, 136));
 	// The list is rebuilt behind `anchor`: the queue's front, or the next
@@ -276,7 +276,7 @@ void PrioritizeNavMeshQueue(int camGridX, int camGridY,
 	}
 	if (!head)
 	{
-		fn_readerUnlock((void*)(KLIB_MEMBER(4, navMeshGen, NavMeshGenerator_queue_mutex, 152)));
+		game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, navMeshGen, NavMeshGenerator_queue_mutex, 152)));
 		return;
 	}
 
@@ -427,7 +427,7 @@ void PrioritizeNavMeshQueue(int camGridX, int camGridY,
 	}
 
 	// Release lock
-	fn_readerUnlock((void*)(KLIB_MEMBER(4, navMeshGen, NavMeshGenerator_queue_mutex, 152)));
+	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, navMeshGen, NavMeshGenerator_queue_mutex, 152)));
 
 	// Grow the spill buffer OUTSIDE the lock if this pass needed more than
 	// it had. Nothrow + NULL-checked: a failed grow just means the next

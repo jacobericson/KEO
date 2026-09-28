@@ -77,7 +77,7 @@ static void AppendMaterialOverrides(char* dst, const char* src)
 
 	if (!srcArr || !dstArr || srcCnt < NM_MATERIAL_OVERRIDE_COUNT)
 		return;
-	if (!fn_simplSettingsCopy)
+	if (!game::g_gameFn.fn_simplSettingsCopy)
 		return;
 
 	// Validate the whole run before copying any of it, so a layout that has
@@ -106,7 +106,7 @@ static void AppendMaterialOverrides(char* dst, const char* src)
 		*(char*)(de + OVR_OFF_FLAG)    = *(const char*)(se + OVR_OFF_FLAG);
 		*(float*)(de + OVR_OFF_SLOPE)  = NmMaterialSlope(i);
 		memcpy(de + OVR_OFF_EMP, se + OVR_OFF_EMP, 56);
-		fn_simplSettingsCopy(de + OVR_OFF_SIMPL, (void*)(se + OVR_OFF_SIMPL));
+		game::g_gameFn.fn_simplSettingsCopy(de + OVR_OFF_SIMPL, (void*)(se + OVR_OFF_SIMPL));
 
 		// The table is authoritative, but it is transcribed from the decompile,
 		// so check it against what the game actually installed.
@@ -362,7 +362,7 @@ void* ConstructFreshSettings(uintptr_t origWB)
 	void* mem = HavokTlsAlloc(WB_OBJECT_SIZE);
 	if (!mem) return NULL;
 
-	void* fresh = fn_settingsCtor(mem);
+	void* fresh = game::g_gameFn.fn_settingsCtor(mem);
 	if (!fresh) { HavokTlsFree(mem, WB_OBJECT_SIZE); return NULL; }
 	char* f = (char*)fresh;
 	char* o = (char*)origWB;
@@ -599,8 +599,8 @@ void FreeFreshSettings(void* wb)
 	// shallow copy would crash are still at ctor defaults. Runs on the
 	// thread that ran processJobAlt, after it returned, so the buffers go back
 	// to the allocator they came from.
-	if (fn_settingsDtorBody)
-		fn_settingsDtorBody(wb);
+	if (game::g_gameFn.fn_settingsDtorBody)
+		game::g_gameFn.fn_settingsDtorBody(wb);
 
 	size_t freedBytes = 0;
 

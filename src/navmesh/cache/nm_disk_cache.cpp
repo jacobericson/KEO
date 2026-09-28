@@ -540,11 +540,11 @@ bool WriteDiskCacheBlob(L2WriteBlob* blob)
 
 static void L2FreeEntryArrays(NavMeshCacheEntry& e)
 {
-	if (e.cachedFaces)     { fn_gameDelArr(e.cachedFaces);     e.cachedFaces = NULL; }
-	if (e.cachedEdges)     { fn_gameDelArr(e.cachedEdges);     e.cachedEdges = NULL; }
-	if (e.cachedVertices)  { fn_gameDelArr(e.cachedVertices);  e.cachedVertices = NULL; }
-	if (e.cachedFaceData)  { fn_gameDelArr(e.cachedFaceData);  e.cachedFaceData = NULL; }
-	if (e.cachedEdgeData)  { fn_gameDelArr(e.cachedEdgeData);  e.cachedEdgeData = NULL; }
+	if (e.cachedFaces)     { game::g_gameFn.fn_gameDelArr(e.cachedFaces);     e.cachedFaces = NULL; }
+	if (e.cachedEdges)     { game::g_gameFn.fn_gameDelArr(e.cachedEdges);     e.cachedEdges = NULL; }
+	if (e.cachedVertices)  { game::g_gameFn.fn_gameDelArr(e.cachedVertices);  e.cachedVertices = NULL; }
+	if (e.cachedFaceData)  { game::g_gameFn.fn_gameDelArr(e.cachedFaceData);  e.cachedFaceData = NULL; }
+	if (e.cachedEdgeData)  { game::g_gameFn.fn_gameDelArr(e.cachedEdgeData);  e.cachedEdgeData = NULL; }
 	e.valid = false;
 }
 
@@ -556,7 +556,7 @@ static bool L2TakeArray(const unsigned char* payload, size_t* cursor,
 	*dest = NULL;
 	if (count <= 0) return true;
 	size_t sz = (size_t)count * (size_t)unit;
-	void* buf = fn_gameNewArr(sz);
+	void* buf = game::g_gameFn.fn_gameNewArr(sz);
 	if (!buf) return false;
 	memcpy(buf, payload + *cursor, sz);
 	*cursor += sz;

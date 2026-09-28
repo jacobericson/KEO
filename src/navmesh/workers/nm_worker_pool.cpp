@@ -149,13 +149,13 @@ namespace nm_workers_detail
 void BridgeLockQueue(void* nmg)
 {
 	char initBuf[16];
-	void* initResult = fn_pathBuilderInit(initBuf);
-	fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, (uintptr_t)nmg, NavMeshGenerator_queue_mutex, 152)), initResult);
+	void* initResult = game::g_gameFn.fn_pathBuilderInit(initBuf);
+	game::g_gameFn.fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, (uintptr_t)nmg, NavMeshGenerator_queue_mutex, 152)), initResult);
 }
 
 void BridgeUnlockQueue(void* nmg)
 {
-	fn_readerUnlock((void*)(KLIB_MEMBER(4, (uintptr_t)nmg, NavMeshGenerator_queue_mutex, 152)));
+	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, (uintptr_t)nmg, NavMeshGenerator_queue_mutex, 152)));
 }
 
 long BridgeIncrement(void*) { return InterlockedIncrement(&navmesh::g_nmCache.workerBusyCount); }
@@ -222,9 +222,9 @@ static bool WorkerInitHavok(int workerId, char (&ctx128)[128], char (&buf8)[8], 
 	// Step 3 populates both Havok TLS slots — workers can't call the
 	// router-dependent allocator without it.
 	memset(ctx128, 0, sizeof(ctx128));
-	fn_havokContextInit(ctx128);
+	game::g_gameFn.fn_havokContextInit(ctx128);
 
-	void* mgr = fn_havokGetManager(0);
+	void* mgr = game::g_gameFn.fn_havokGetManager(0);
 	if (!mgr)
 	{
 		LogMsg("Worker: HavokGetManager returned NULL, aborting");
@@ -244,7 +244,7 @@ static bool WorkerInitHavok(int workerId, char (&ctx128)[128], char (&buf8)[8], 
 	fn_reg(mgr, ctx128, name, 3);
 
 	memset(buf8, 0, sizeof(buf8));
-	fn_havokPostRegInit(buf8, ctx128);
+	game::g_gameFn.fn_havokPostRegInit(buf8, ctx128);
 	_mm_setcsr(_mm_getcsr() | 0x8000);
 
 	// Did the registration actually take?
@@ -284,8 +284,8 @@ static bool WorkerInitHavok(int workerId, char (&ctx128)[128], char (&buf8)[8], 
 			// (0xBA9580) only rewrites the context's vtable pointer. Neither
 			// touches the thread table or reads router[14], so the
 			// out-of-range index cannot propagate through them.
-			fn_havokCleanup(buf8);
-			fn_havokCtxCleanup(ctx128);
+			game::g_gameFn.fn_havokCleanup(buf8);
+			game::g_gameFn.fn_havokCtxCleanup(ctx128);
 
 			// Flag first, then clear the handle: CreateThread may not have
 			// stored it yet, and the flag is what the loops actually test.
@@ -460,8 +460,8 @@ DWORD WINAPI NavMeshWorkerProc(LPVOID param)
 	// vtable pointer, a stack local, but it pairs with the cleanup.
 	if (WorkerCleanupBegin())
 	{
-		fn_havokCleanup(buf8);
-		fn_havokCtxCleanup(ctx128);
+		game::g_gameFn.fn_havokCleanup(buf8);
+		game::g_gameFn.fn_havokCtxCleanup(ctx128);
 		WorkerCleanupEnd();
 	}
 
@@ -479,7 +479,7 @@ DWORD WINAPI NavMeshWorkerProc(LPVOID param)
 
 void CreateNavMeshWorkers()
 {
-	if (!fn_havokContextInit || !fn_havokGetManager || !fn_havokPostRegInit)
+	if (!game::g_gameFn.fn_havokContextInit || !game::g_gameFn.fn_havokGetManager || !game::g_gameFn.fn_havokPostRegInit)
 	{
 		LogMsgDeferrable("NavMesh workers: SKIPPED (Havok fn ptrs missing)");
 		return;
