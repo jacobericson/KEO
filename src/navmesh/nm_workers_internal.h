@@ -16,7 +16,6 @@
 #include "navmesh/workers/nm_retire_policy.h"
 namespace nm_workers_detail {
 enum { CLAIM_SLOT_BG = NAVMESH_WORKER_COUNT, CLAIM_SLOT_COUNT = NAVMESH_WORKER_COUNT + 1 };
-extern volatile long g_cloneProcessing;
 extern volatile long g_processJobOwnerTid;
 extern __declspec(thread) int t_pjDepth;
 extern HANDLE g_pjReleaseEvent;
@@ -27,7 +26,6 @@ extern volatile long g_nmStopDropCount;
 extern volatile LONG g_workerPhase[];
 extern volatile long g_pjLockReady;
 extern nmgGetSeedPointsAdj_t orig_getSeedPointsAdj;
-extern __declspec(thread) uintptr_t t_busyNmg;
 
 bool WorkerCleanupBegin();
 bool EnterProcessJobCSStopAware();
@@ -202,42 +200,11 @@ static inline void EnsureGlobalScratchBuffer()
 }
 typedef void (__fastcall *edgeProcess_t)(void* entry);
 extern edgeProcess_t orig_edgeProcess;
-void NbrSeedFreeTable();   // the neighbour-seed records (below)
 enum { NBR_DIR_W = 0, NBR_DIR_E, NBR_DIR_S, NBR_DIR_N, NBR_DIR_COUNT };
-// The current type-0 generation on this thread, armed by ProcessNavMeshJob
-// around its processJobAlt call and read back after it for the DEV line. POD,
-// zero-initialised per thread. The hook records into it only while armed, so a
-// call from any other context (none exists today) only counts.
-struct NbrSeedJobTls
-{
-	int           armed;
-	int           gridX;
-	int           gridY;
-	unsigned char cls[NBR_DIR_COUNT];      // NBR_CLASS_*
-	int           seeds[NBR_DIR_COUNT];    // the original's return value
-	unsigned char standIn[NBR_DIR_COUNT];  // NBR_SI_* (the stand-in inject)
-	int           standInSeeds[NBR_DIR_COUNT];
-	// Some direction needed a stand-in and its record
-	// was not there yet (NBR_SI_LATE). Set by the hook, reset by
-	// NbrSeedJobBegin, and read and cleared at the job's L2 decision in
-	// ProcessNavMeshJob (NbrSeedJobTakeLate), so it outlives NbrSeedJobEnd.
-	int           late;
-};
-extern __declspec(thread) NbrSeedJobTls t_nbrJob;
-// True when this thread's current type-0 generation had a
-// direction whose stand-in was late, then clears the flag. Read once, at the
-// L2 decision in ProcessNavMeshJob's generate branch (the only place a blob is
-// built from a fresh generation); NbrSeedJobBegin also resets it per job.
-static inline bool NbrSeedJobTakeLate()
-{
-	bool late = t_nbrJob.late != 0;
-	t_nbrJob.late = 0;
-	return late;
-}
-void FreeFreshSettings(void* wb);   // below; also the failure-path teardown
+bool NbrSeedJobTakeLate();
+void FreeFreshSettings(void* wb);   // also the failure-path teardown
 // Signals "the queue may be non-empty". Every observer of a non-empty queue
-// sets it; a worker clears it when the queue holds nothing it can take. See the
-// wake protocol note above the worker loop.
+// sets it; a worker clears it when the queue holds nothing it can take.
 static inline void SignalJobAvailable()
 {
 	if (g_jobEvent)
@@ -258,23 +225,9 @@ static inline uintptr_t JobZoneContent(uintptr_t job)
 	uintptr_t zone = *(uintptr_t*)KLIB_MEMBER(4, job, NavMeshGenerator__Task_zone, 0);
 	return zone ? *(volatile uintptr_t*)KLIB_MEMBER(4, zone, ZoneMap_mapContent, OFF_ZONE_CONTENT) : 0;
 }
-static inline void WorkerBusyEnter(uintptr_t nmg)
-{
-	t_busyNmg = nmg;
-	NoteBusyBridge(BusyBridge(GameBusyBridgeOps(nmg), BUSY_BRIDGE_ENTER, true));
-}
+void WorkerBusyEnter(uintptr_t nmg);
 
-static inline void WorkerBusyLeave()
-{
-	uintptr_t nmg = t_busyNmg;
-	t_busyNmg = 0;
-	if (!nmg)
-	{
-		InterlockedDecrement(&navmesh::g_nmCache.workerBusyCount);   // no generator: nothing to lock or clear
-		return;
-	}
-	NoteBusyBridge(BusyBridgeLeave(GameBusyBridgeOps(nmg)));
-}
+void WorkerBusyLeave();
 void ClaimZoneSet(int slot, uintptr_t zone);
 
 void ClaimZoneClear(int slot);

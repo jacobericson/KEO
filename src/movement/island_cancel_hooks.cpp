@@ -16,10 +16,27 @@
 #include <cstring>
 #include "movement/islands_reissue_internal.h"
 #include "movement/islands_reissue_counters.h"
-namespace islands_reissue_detail {
-int        g_k7NearDepth     = 0;   // the snapshot belongs to the outermost call
-} // namespace islands_reissue_detail
-using namespace islands_reissue_detail;
+using namespace order_tracker_detail;
+namespace island_cancel_hooks_detail {
+// addTaskNearestSelectedCharacter orders one selected character, unknown in
+// advance (or a carried one's player-owned carrier, which need not be
+// selected), so the detour snapshots every tracked live character's order
+// state before the original and IslandNoteCancelNearestTask compares after.
+struct K7NearSnap {
+	uintptr_t     character;
+	K7OrderState  st;
+};
+}
+using namespace island_cancel_hooks_detail;
+namespace order_tracker_detail {
+// Which cancel hooks hook_manifest.cpp installed (IslandSetCancelHooksInstalled).
+bool g_cancelStopInstalled = false;
+bool g_cancelJobInstalled  = false;
+bool g_cancelTaskInstalled = false;
+static K7NearSnap g_k7NearSnap[MAX_ISLAND_ORDERS];
+static int        g_k7NearSnapCount = 0;
+static int        g_k7NearDepth     = 0;   // the snapshot belongs to the outermost call
+} // namespace order_tracker_detail
 
 // =========================================================================
 // K7: PlayerInterface cancel hooks (main thread only)
@@ -32,8 +49,30 @@ using namespace islands_reissue_detail;
 // still gated on K7FormOn (islandDeletedReissue=false leaves the tracker
 // without the deleted-order form), but both also detach the selected characters
 // from any formation group unconditionally, whether or not the deleted-order
-// form is on. The installed flags and counters keep their single definitions
-// with the tracker state in islands_reissue.cpp.
+// form is on. The installed flags are defined here; the K7 cancel counters
+// have their definitions with the tracker state in islands_reissue.cpp.
+
+namespace order_tracker_detail {
+static void K7SnapshotTracked()
+{
+	g_k7NearSnapCount = 0;
+	if (!K7FormOn() || g_orderCount == 0) return;
+	uintptr_t* stuff;
+	unsigned int count;
+	if (!TrackerPlayerList(&stuff, &count)) return;
+	for (int i = 0; i < g_orderCount && g_k7NearSnapCount < MAX_ISLAND_ORDERS; ++i)
+	{
+		if (!g_orders[i].active) continue;
+		uintptr_t ch = g_orders[i].character;
+		if (!TrackerListHas(stuff, count, ch)) continue;
+		K7NearSnap& s = g_k7NearSnap[g_k7NearSnapCount];
+		if (!K7ReadOrders(ch, &s.st)) continue;
+		s.character = ch;
+		g_k7NearSnapCount++;
+	}
+}
+}
+using namespace order_tracker_detail;
 
 void IslandSetCancelHooksInstalled(bool stop, bool job, bool task)
 {

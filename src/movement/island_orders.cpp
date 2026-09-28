@@ -15,7 +15,36 @@
 #include <cstring>
 #include "movement/islands_reissue_internal.h"
 #include "movement/islands_reissue_counters.h"
-namespace islands_reissue_detail {
+namespace island_orders_detail {
+struct PollOrdersCtx {
+	uintptr_t zm;
+	double now;
+	bool k7On;
+	uintptr_t* scStuff;
+	unsigned int scCount;
+	bool haveLastCell;
+	int lastCellGX, lastCellGY, lastCellCls;
+	uintptr_t cm;
+	float posX, posZ, lastX, lastZ, wpX, wpZ;
+	bool edge;
+	bool k7Deleted, forceCharacterOnly;
+	int gx, gy;
+	bool edgeParked, stoppedParked, parkedNow;
+	uintptr_t charZone;
+};
+}
+using namespace island_orders_detail;
+namespace order_tracker_detail {
+static double        g_lastOrderPoll = 0.0;
+const double ORDER_POLL_INTERVAL = 0.25;
+const float  PARK_WP_DIST        = 20.0f;   // pathDestination within this of pos
+const float  MISSED_ADVANCE_DIST = 350.0f;  // 300-unit snap + arrival tolerance
+const float  GROWTH_THRESHOLD_SQ = 40.0f;   // the router's own threshold (squared)
+const float  UNPARK_DIST         = 50.0f;
+// REISSUE_COOLDOWN (2.0 s) lives in islands.h: formation.cpp's group check
+// uses the same constant.
+const double RETRY_DELAY         = 1.5;
+
 // -------------------------------------------------------------------------
 // The tracker's "still a live player character" test.
 //
@@ -59,8 +88,8 @@ bool TrackerIsLivePlayerCharacter(uintptr_t character)
 	if (!TrackerPlayerList(&stuff, &count)) return false;
 	return TrackerListHas(stuff, count, character);
 }
-} // namespace islands_reissue_detail
-namespace islands_reissue_detail {
+} // namespace order_tracker_detail
+namespace order_tracker_detail {
 
 
 
@@ -139,27 +168,12 @@ bool IsCharacterParkedNow(uintptr_t character, float destX, float destZ, double 
 	}
 	return edgeParked || stoppedParked;
 }
-} // namespace islands_reissue_detail
-namespace islands_reissue_detail {
+} // namespace order_tracker_detail
+namespace order_tracker_detail {
 
 
 
-struct PollOrdersCtx {
-	uintptr_t zm;
-	double now;
-	bool k7On;
-	uintptr_t* scStuff;
-	unsigned int scCount;
-	bool haveLastCell;
-	int lastCellGX, lastCellGY, lastCellCls;
-	uintptr_t cm;
-	float posX, posZ, lastX, lastZ, wpX, wpZ;
-	bool edge;
-	bool k7Deleted, forceCharacterOnly;
-	int gx, gy;
-	bool edgeParked, stoppedParked, parkedNow;
-	uintptr_t charZone;
-};
+
 
 // Main-thread order poll: validate the tracked character and read one movement snapshot.
 static bool PollOrderRead(IslandOrder& o, PollOrdersCtx& c)
@@ -582,7 +596,7 @@ void PollOrders(uintptr_t zm, double now)
 }
 
 } // namespace
-using namespace islands_reissue_detail;
+using namespace order_tracker_detail;
 
 void IslandNoteOrder(uintptr_t character, const float* location)
 {

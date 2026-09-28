@@ -67,14 +67,11 @@ void AstarCostTick();
 // completed-transition denominator AstarCap:'s rate divides by.
 void AstarCostOnTransitionClosed();
 
-// True once hook_findPathFull's own AddHook call has succeeded (set next to
-// that call in hook_manifest.cpp), independent of pathfindDiagEnabled, which a
-// sibling hook's later failure can still clear after findPathFull installed
-// cleanly. Every printer here, and PathBusy: in path_pool_report.cpp, calls this
-// instead of reading g_astarCostHookInstalled directly.
+// The manifest row records whether hook_findPathFull installed successfully,
+// independent of pathfindDiagEnabled, which a sibling failure can clear.
+// Every printer here, and PathBusy: in path_pool_report.cpp, uses this answer.
 bool AstarCostHookInstalled();
 
-extern bool g_astarCostHookInstalled;
 
 
 #endif // KENSHI_ZONE_OPT_ASTAR_COST_H

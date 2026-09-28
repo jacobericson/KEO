@@ -217,7 +217,6 @@ src\movement\island_reissue.cpp
 src\movement\k7_observe.cpp
 src\movement\k7_reissue.cpp
 src\movement\island_cancel_hooks.cpp
-src\movement\island_reissue_diag.cpp
 src\navmesh\workers\nm_worker_pool.cpp
 src\navmesh\workers\nm_retire_ops.cpp
 src\navmesh\jobs\nm_process_job_lock.cpp

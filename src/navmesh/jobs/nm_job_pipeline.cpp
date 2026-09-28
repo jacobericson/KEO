@@ -21,6 +21,7 @@ using namespace nm_workers_detail;
 // (Restore) before the L1 store, exactly where it always did. The fresh work
 // buffer itself is left to leak on the unwind path: freeing one processJobAlt
 // may have been part-way through with is the worse risk.
+namespace nm_job_pipeline_detail {
 struct WbSwapRestore
 {
 	uintptr_t* slot;
@@ -43,6 +44,8 @@ private:
 	WbSwapRestore(const WbSwapRestore&);
 	WbSwapRestore& operator=(const WbSwapRestore&);
 };
+}
+using namespace nm_job_pipeline_detail;
 // Input geometry size of the generation running on this thread, captured by
 // hook_nmResultPopulate_diag and read back at the store site. -1 means the hook
 // did not run for this job (not installed, or the job never reached populate).
@@ -80,7 +83,7 @@ static __declspec(thread) int t_lastInputVertCount = -1;
 namespace nm_workers_detail {
 // No lock is held here. A job that waited, or crossed a whole reset since
 // claim, must still hold the content read immediately before this wait.
-bool ResetWaitAt(ZoneResetSite site, uintptr_t job, LONG raisesAtClaim, int* reasonOut)
+static bool ResetWaitAt(ZoneResetSite site, uintptr_t job, LONG raisesAtClaim, int* reasonOut)
 {
 	uintptr_t contentBefore = JobZoneContent(job);
 	return ZoneResetGateWaitSince(&g_zoneResetGate, site, &NavMeshStopSeen, raisesAtClaim)
@@ -250,7 +253,7 @@ static inline bool PartialZoneStillLoaded(uintptr_t job)
 	return true;
 }
 
-namespace nm_workers_detail {
+namespace nm_job_pipeline_detail {
 // Per-claim scalar/POD state. Live lock and unwind guards stay on the
 // ProcessNavMeshJob stack and are passed to the phases that release them.
 struct PjCtx
@@ -965,11 +968,13 @@ void PjCtx::Handoff()
 	InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 50);
 }
 
-} // namespace nm_workers_detail
+} // namespace nm_job_pipeline_detail
+
+using namespace nm_job_pipeline_detail;
 
 void ProcessNavMeshJob(void* realNMG, void* workNMG, ClaimedJob* claimed)
 {
-	nm_workers_detail::PjCtx c;
+	nm_job_pipeline_detail::PjCtx c;
 	c.realNMG = realNMG;
 	c.workNMG = workNMG;
 	c.job = claimed->job;

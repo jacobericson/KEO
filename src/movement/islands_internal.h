@@ -19,7 +19,7 @@
 
 // Defined in islands.cpp: adapters for zone accessibility (+177) and the rebuild
 // generation / Set B signature the K7 tracker's staleness check compares
-// against (o.seenGen/o.seenSig in islands_reissue.cpp).
+// against (o.seenGen/o.seenSig in island_orders.cpp).
 bool         IslandOverlayZoneAccessible(uintptr_t z);
 unsigned int IslandOverlayGen();
 unsigned int IslandOverlaySetBSig();
@@ -36,7 +36,7 @@ int IslandZoneIndexOf(uintptr_t zm, uintptr_t z);
 void IslandReissueReset();          // IslandTick's save-load path (both tables)
 void IslandReissueResetChecks();    // IslandReset()'s path (checks table only)
 void IslandReissuePollTick(uintptr_t zm, double now);
-// Defined in island_reissue_diag.cpp.
+// Defined in islands_reissue.cpp.
 void IslandReissueAppendDiag(std::ostringstream& ss);
 
 // delRefuse=/k7Hold=/gameDropWhy=, appended to the PROD-visible IslandSpan:

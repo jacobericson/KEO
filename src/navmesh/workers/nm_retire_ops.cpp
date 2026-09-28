@@ -13,7 +13,7 @@
 #include "navmesh/workers/nm_retire_policy.h"
 #include "navmesh/nm_workers_internal.h"
 using namespace nm_workers_detail;
-namespace nm_workers_detail
+namespace nm_retire_ops_detail
 {
 
 // The retire's view of the pool: the one handle snapshot and each handle's
@@ -26,7 +26,7 @@ struct RetireCtx
 	int    slot[NAVMESH_WORKER_COUNT];
 };
 
-unsigned RetireOpNowMs(void*)
+static unsigned RetireOpNowMs(void*)
 {
 	return (unsigned)(ElapsedSec() * 1000.0);
 }
@@ -34,7 +34,7 @@ unsigned RetireOpNowMs(void*)
 // The larger of the live counter and the snapshot threads still running: the
 // counter drops just before a worker's last line and its return, and it also
 // covers a thread whose handle can no longer be waited on.
-int RetireOpLiveCount(void* ctx)
+static int RetireOpLiveCount(void* ctx)
 {
 	const RetireCtx* c = (const RetireCtx*)ctx;
 	int running = 0;
@@ -45,7 +45,7 @@ int RetireOpLiveCount(void* ctx)
 	return counted > running ? (int)counted : running;
 }
 
-RetireWait RetireOpWaitSlice(void* ctx, unsigned ms, unsigned long* gle)
+static RetireWait RetireOpWaitSlice(void* ctx, unsigned ms, unsigned long* gle)
 {
 	const RetireCtx* c = (const RetireCtx*)ctx;
 	const DWORD w = WaitForMultipleObjects((DWORD)c->activeCount, c->active, TRUE, ms);
@@ -62,13 +62,13 @@ RetireWait RetireOpWaitSlice(void* ctx, unsigned ms, unsigned long* gle)
 	return RETIRE_WAIT_FAILED;
 }
 
-long RetireOpStopDrops(void*)
+static long RetireOpStopDrops(void*)
 {
 	return InterlockedCompareExchange(&g_nmStopDropCount, 0, 0);
 }
 
 // "w<slot>:<phase>" for each snapshot thread still running, space-separated.
-void RetireOpPhases(void* ctx, char* out, size_t cap)
+static void RetireOpPhases(void* ctx, char* out, size_t cap)
 {
 	const RetireCtx* c = (const RetireCtx*)ctx;
 	if (cap == 0)
@@ -88,17 +88,17 @@ void RetireOpPhases(void* ctx, char* out, size_t cap)
 	}
 }
 
-bool RetireOpLog(void*, const char* line)
+static bool RetireOpLog(void*, const char* line)
 {
 	return LogMsgBounded(line, RETIRE_LOG_BOUND_MS);
 }
 
-void RetireOpLogFallback(void*, const char* line)
+static void RetireOpLogFallback(void*, const char* line)
 {
 	LogRetireFallback(line);
 }
 
-void RetireOpTerminate(void*, unsigned code)
+static void RetireOpTerminate(void*, unsigned code)
 {
 	TerminateProcess(GetCurrentProcess(), code);
 	// Reached only if that call failed: this still ends every worker before any
@@ -106,7 +106,7 @@ void RetireOpTerminate(void*, unsigned code)
 	ExitProcess(code);
 }
 
-RetireOps RetireRealOps(RetireCtx* ctx)
+static RetireOps RetireRealOps(RetireCtx* ctx)
 {
 	RetireOps ops;
 	ops.ctx         = ctx;
@@ -121,8 +121,9 @@ RetireOps RetireRealOps(RetireCtx* ctx)
 	return ops;
 }
 
-} // namespace nm_workers_detail
+} // namespace nm_retire_ops_detail
 using namespace nm_workers_detail;
+using namespace nm_retire_ops_detail;
 
 // Retires the worker pool before the game tears the NavMesh down: returns only
 // once no worker is live; at the cap it ends the process. NavMesh::stop

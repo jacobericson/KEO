@@ -56,8 +56,41 @@ static inline int NbrDirIndex(int dx, int dy)
 	return -1;
 }
 
+namespace nm_nbr_seeds_detail {
+// The current type-0 generation on this thread, armed by ProcessNavMeshJob
+// around its processJobAlt call and read back after it for the DEV line. POD,
+// zero-initialised per thread. The hook records into it only while armed, so a
+// call from any other context (none exists today) only counts.
+struct NbrSeedJobTls
+{
+	int           armed;
+	int           gridX;
+	int           gridY;
+	unsigned char cls[NBR_DIR_COUNT];      // NBR_CLASS_*
+	int           seeds[NBR_DIR_COUNT];    // the original's return value
+	unsigned char standIn[NBR_DIR_COUNT];  // NBR_SI_* (the stand-in inject)
+	int           standInSeeds[NBR_DIR_COUNT];
+	// Some direction needed a stand-in and its record
+	// was not there yet (NBR_SI_LATE). Set by the hook, reset by
+	// NbrSeedJobBegin, and read and cleared at the job's L2 decision in
+	// ProcessNavMeshJob (NbrSeedJobTakeLate), so it outlives NbrSeedJobEnd.
+	int           late;
+};
+static __declspec(thread) NbrSeedJobTls t_nbrJob;
+}
+using namespace nm_nbr_seeds_detail;
+
 namespace nm_workers_detail {
-__declspec(thread) NbrSeedJobTls t_nbrJob;
+// True when this thread's current type-0 generation had a
+// direction whose stand-in was late, then clears the flag. Read once, at the
+// L2 decision in ProcessNavMeshJob's generate branch (the only place a blob is
+// built from a fresh generation); NbrSeedJobBegin also resets it per job.
+bool NbrSeedJobTakeLate()
+{
+	bool late = t_nbrJob.late != 0;
+	t_nbrJob.late = 0;
+	return late;
+}
 } // namespace nm_workers_detail
 
 namespace nm_workers_detail {

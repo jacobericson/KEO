@@ -1,11 +1,11 @@
 // islands_reissue_internal.h - main-thread private tracker types and helpers.
-// The shared mutable definitions are in islands_reissue.cpp; this header
-// carries declarations, POD types and the inline distance helper.
+// The record table and K7 counters are defined in islands_reissue.cpp; other
+// shared state lives beside its writers. This header declares the private contract.
 #ifndef KENSHI_ZONE_OPT_ISLANDS_REISSUE_INTERNAL_H
 #define KENSHI_ZONE_OPT_ISLANDS_REISSUE_INTERNAL_H
 #include "movement/islands.h"
 
-namespace islands_reissue_detail {
+namespace order_tracker_detail {
 // PollOrders and IsCharacterParkedNow use this private order-type reader for
 // the stopped-form check. Its one definition is in island_reissue.cpp, beside
 // the discriminator trace; it is not part of islands.h's public API.
@@ -86,6 +86,17 @@ struct IslandOrder {
 };
 const int    REISSUE_LABEL_LEN      = 40;    // "group 7 member 29 char@ffff", "char@ffff"
 
+const int    MAX_ISLAND_ORDERS   = 64;
+const float  PARK_MIN_DEST_DIST  = 100.0f;  // farther than this from the order destination
+const int    MAX_REISSUES        = 8;
+// (c) The stopped form of the park test in island_orders.cpp must hold
+// continuously for this long before it counts as parked -- a single bad poll
+// (mid-frame state change, a still-settling order) must not park a character
+// about to move again. The edge form keeps its existing (unhysteresised)
+// behaviour.
+const double STOPPED_HYSTERESIS  = 3.0;
+const int    MAX_REISSUE_CHECKS     = 256;
+
 struct ReissueCheck {
 	bool      active;
 	uintptr_t character;     // key only: never dereferenced before the live test
@@ -101,8 +112,8 @@ inline float Dist2(float ax, float az, float bx, float bz)
 	float dx = ax - bx, dz = az - bz;
 	return dx * dx + dz * dz;
 }
-} // namespace islands_reissue_detail
-namespace islands_reissue_detail {
+} // namespace order_tracker_detail
+namespace order_tracker_detail {
 // A character's order state, read in one go.
 struct K7OrderState {
 	bool      ok;        // AI -> task system readable, deque size sane
@@ -111,43 +122,23 @@ struct K7OrderState {
 	int       headType;  // its TaskData::key, -1 = none
 	int       curType;   // CharBody::currentAction type (ReadCharOrderType), -1 = none
 };
-// addTaskNearestSelectedCharacter orders one selected character, unknown in
-// advance (or a carried one's player-owned carrier, which need not be
-// selected), so the detour snapshots every tracked live character's order
-// state before the original and IslandNoteCancelNearestTask compares after.
-struct K7NearSnap {
-	uintptr_t     character;
-	K7OrderState  st;
-};
 
-extern const int MAX_ISLAND_ORDERS;
-extern const double ORDER_POLL_INTERVAL;
-extern const float PARK_WP_DIST;
-extern const float PARK_MIN_DEST_DIST;
-extern const float MISSED_ADVANCE_DIST;
-extern const float GROWTH_THRESHOLD_SQ;
-extern const float UNPARK_DIST;
-extern const int MAX_REISSUES;
-extern const double RETRY_DELAY;
-extern const double STOPPED_HYSTERESIS;
-extern const int MAX_REISSUE_CHECKS;
-extern IslandOrder g_orders[];
+// Shared order table and count, defined in islands_reissue.cpp.
+extern IslandOrder g_orders[MAX_ISLAND_ORDERS];
 extern int g_orderCount;
-extern double g_lastOrderPoll;
+// Session reissue tally, defined in island_reissue.cpp.
 extern volatile long g_reissues;
+// Installed cancel-hook flags, defined in island_cancel_hooks.cpp.
 extern bool g_cancelStopInstalled;
 extern bool g_cancelJobInstalled;
 extern bool g_cancelTaskInstalled;
-extern ReissueCheck g_reissueChecks[];
+// Pending-check table and session tallies, defined in island_reissue.cpp.
+extern ReissueCheck g_reissueChecks[MAX_REISSUE_CHECKS];
 extern long g_reissuePostSent;
 extern long g_reissuePostLast;
 extern long g_reissuePostOther;
 extern long g_reissueCheckDropped;
 extern long g_reissueCheckEarly;
-extern K7NearSnap g_k7NearSnap[];
-extern int g_k7NearSnapCount;
-extern bool g_k7WasPaused;
-extern double g_k7PauseStarted;
 
 long K7ArrivalOpenWaits();
 void ResetOrders();
@@ -170,9 +161,8 @@ bool K7TryDeletedReissue(IslandOrder& o, uintptr_t zm, uintptr_t cm, float posX,
 bool K7TryArrivalReissue(IslandOrder& o, uintptr_t zm, uintptr_t cm, float posX, float posZ, int gx, int gy, double now);
 void IslandDetachSelectedFromFormation(uintptr_t pi);
 int K7DropSelected(uintptr_t pi);
-void K7SnapshotTracked();
 void PollOrders(uintptr_t zm, double now);
 void ResetReissueChecks();
 void K7RebasePausedClocks(bool paused, double now);
-} // namespace islands_reissue_detail
+} // namespace order_tracker_detail
 #endif // KENSHI_ZONE_OPT_ISLANDS_REISSUE_INTERNAL_H

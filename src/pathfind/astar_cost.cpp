@@ -8,16 +8,16 @@
 // string work, no logging outside AstarCostTick (main thread only).
 
 #include "pathfind/astar_cost.h"
+#include "plugin/hook_manifest.h"
 
 
 #include "game/game.h"   // gameBase
 #include <cmath>
 
-bool g_astarCostHookInstalled = false;
 
 bool AstarCostHookInstalled()
 {
-	return g_astarCostHookInstalled;
+	return HookRowInstalled(HOOK_FIND_PATH_FULL);
 }
 
 // =========================================================================

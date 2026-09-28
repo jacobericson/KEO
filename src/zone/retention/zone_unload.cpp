@@ -74,6 +74,11 @@ static bool   g_zlUnavailLogged     = false;
 
 
 namespace zone_life_detail {
+int    g_zlLastDefer         = ZLD_STATE;
+int    g_zlLastOutcome       = ZLO_DEFERRED;
+double g_zlLastUnloadSec     = -1.0e9;
+static unsigned char g_zlRetain[ZONE_GRID_COUNT];
+
 
 // Non-NULL when the unload protocol can never pass in this build and
 // session (nm_workers.h). Logged once (PROD) the first time it is seen.
@@ -572,11 +577,8 @@ namespace zone_life_detail {
 void ZlClearStep3State()
 {
 	g_zlCandCount     = 0;
-	g_zlRecentCount   = 0;
 	g_zlNextRefresh   = 0.0;
 	g_zlNextAttempt   = 0.0;
-	memset(g_ftLateCell, 0, sizeof(g_ftLateCell));
-	memset(g_ftKeptLateCell, 0, sizeof(g_ftKeptLateCell));
 }
 
 } // namespace

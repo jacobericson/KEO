@@ -19,12 +19,6 @@
 #include <string>
 
 
-// =========================================================================
-// Timing state (defined in core.cpp; the base/clock.h helpers read it)
-// =========================================================================
-
-extern LARGE_INTEGER qpcFrequency;
-extern LARGE_INTEGER pluginStartTime;
 
 // Captured on first hook_dispatchJob call (by nm_dispatch.cpp).
 // Read by NavMeshCrashHandler in plugin/crash_record.cpp to compare against GetCurrentThreadId()

@@ -359,7 +359,7 @@ static void InstallPathfindHooks(int* installed, int*)
 
 		if (HookInstallRow(HOOK_FIND_PATH_FULL, hook_findPathFull,
 				(void**)&game::g_hookOrig.orig_findPathFull, installed, false) == NULL)
-			{ diagInstalled++; g_astarCostHookInstalled = true; }
+			{ diagInstalled++;  }
 		else
 			ErrorLog("FAILED to hook findPathFull");
 

@@ -1,9 +1,21 @@
 // zone_first_time.cpp - First-time prediction and untouched-content handoff.
 // Main thread, before processContent.
 
+#include <cstring>
 #include "zone/zone_life.h"
 #include "zone/zone_life_internal.h"
 
+namespace zone_life_detail {
+static unsigned char g_ftLateCell[ZONE_GRID_COUNT];     // cells caught late: predicted first-time from then on
+static unsigned char g_ftKeptLateCell[ZONE_GRID_COUNT]; // cells counted in keptLate (once each)
+}
+namespace zone_life_detail {
+void ZlClearFirstTimeState()
+{
+	memset(g_ftLateCell, 0, sizeof(g_ftLateCell));
+	memset(g_ftKeptLateCell, 0, sizeof(g_ftKeptLateCell));
+}
+}
 using namespace zone_life_detail;
 
 // =========================================================================

@@ -91,7 +91,6 @@ extern double lastCharScanTime;
 extern int charZonesQueued;
 
 // Debug: camera zone logging
-extern double lastCamLogTime;
 extern int lastCameraGX;
 extern int lastCameraGY;
 

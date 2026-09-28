@@ -168,7 +168,10 @@ static void NoteFreshWbPrune(const char* f)
 // The fields are collected into this POD on the thread that builds the WB and
 // formatted into a fixed buffer for LogMsgDeferrable: no CRT strings, streams
 // or LogMsg off the main thread.
+namespace nm_fresh_wb_detail {
 struct WbAuditField { short off; short len; short unit; };
+}
+using namespace nm_fresh_wb_detail;
 
 static const WbAuditField kWbAuditTop[] = {
 	{  16,  4, 4 },   // characterHeight
@@ -229,6 +232,7 @@ static const int WB_AUDIT_MAX_RANGES = 20;
 static const short WB_AUDIT_OV_TOP   = -1;   // a range in the WB itself
 static const short WB_AUDIT_OV_COUNT = 99;   // the override count differs
 
+namespace nm_fresh_wb_detail {
 struct WbAuditCollector {
 	int   fields;                 // fields compared
 	int   total;                  // ranges found
@@ -239,6 +243,8 @@ struct WbAuditCollector {
 	short start[WB_AUDIT_MAX_RANGES];
 	short end[WB_AUDIT_MAX_RANGES];
 };
+}
+using namespace nm_fresh_wb_detail;
 
 static void WbAuditNote(WbAuditCollector* c, short ov, short s, short e)
 {

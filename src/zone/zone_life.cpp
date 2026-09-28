@@ -55,12 +55,6 @@ using namespace zone_life_detail;
 // large late-game factions passed the old 200, which turned every unload off
 // without a word. A count above it is logged once.
 
-namespace zone_life_detail {
-
-const unsigned int ZL_PLAYER_CAP = 1024;
-
-} // namespace
-using namespace zone_life_detail;
 
 static bool g_zlPlayerCapLogged = false;
 
@@ -201,25 +195,14 @@ bool ContentUntouched(void* content)
 
 namespace zone_life_detail {
 
-const double ZL_SPACING_SEC        = 2.0;    // at least this long between two unloads
-int    g_zlLastDefer         = ZLD_STATE;
-int    g_zlLastOutcome       = ZLO_DEFERRED;
 long   g_zlZombieUnloads     = 0;     // zombieUl=
-double g_zlLastUnloadSec     = -1.0e9;
 long   g_zlZombieClear       = 0;     // zombieClr=: +176 clears while the unload is unavailable
-int    g_zlZombieRetryCell   = -1;    // a zombie deferred pj, retried per frame while the priority request is up
 
 } // namespace
 using namespace zone_life_detail;
 
 static const double ZONELEAK_INTERVAL = 30.0;   // seconds between ZoneLeak: lines
 
-namespace zone_life_detail {
-
-unsigned char g_zlRetain[ZONE_GRID_COUNT];
-
-} // namespace
-using namespace zone_life_detail;
 
 static double g_zlNextLeak = 0.0;
 void ZoneLifeTick(void* zoneMgr, double now)
@@ -257,8 +240,9 @@ void ZlClearAll()
 		ZlResetRecord(c);
 	g_zlLive    = 0;
 	g_zlOrphans = -1;
-	g_zlZombieRetryCell = -1;
+	ZlClearEvictState();
 	ZlClearStep3State();
+	ZlClearFirstTimeState();
 }
 
 
@@ -267,7 +251,6 @@ namespace zone_life_detail {
 
 long   g_zlReload        = 0;       // zlReload=<n>/..: content back within 60 s of our unload
 long   g_zlReloadMod     = 0;       //          ../<m>: of those, the mod has it again
-int            g_zlRecentCount = 0;
 
 } // namespace
 using namespace zone_life_detail;
@@ -279,8 +262,6 @@ namespace zone_life_detail {
 long   g_ftCleared       = 0;       //   ../<cleared>/../..: loaded, +176 cleared untouched (the P3 step)
 long   g_ftLate          = 0;       //   ../../<late>/..: read first-time after the finalize, left to the zombie unload
 long   g_ftKeptLate      = 0;       //   ../../../<keptLate>: caught late with the unload unavailable, kept (cells)
-unsigned char g_ftLateCell[ZONE_GRID_COUNT];     // cells caught late: predicted first-time from then on
-unsigned char g_ftKeptLateCell[ZONE_GRID_COUNT]; // cells counted in keptLate (once each)
 
 } // namespace
 using namespace zone_life_detail;

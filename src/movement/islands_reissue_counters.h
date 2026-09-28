@@ -2,7 +2,7 @@
 // The 36 counters have their single definitions in islands_reissue.cpp.
 #ifndef KENSHI_ZONE_OPT_ISLANDS_REISSUE_COUNTERS_H
 #define KENSHI_ZONE_OPT_ISLANDS_REISSUE_COUNTERS_H
-namespace islands_reissue_detail {
+namespace order_tracker_detail {
 extern long g_k7DelPark;
 extern long g_k7DelReissue;
 extern long g_k7CancelStop;
@@ -39,5 +39,5 @@ extern long g_k7ArrivalSent;
 extern long g_k7ArrivalExpired;
 extern long g_k7ArrivalLiveSent;
 extern long g_k7ArrivalResumed;
-} // namespace islands_reissue_detail
+} // namespace order_tracker_detail
 #endif // KENSHI_ZONE_OPT_ISLANDS_REISSUE_COUNTERS_H

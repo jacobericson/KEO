@@ -16,7 +16,6 @@ void CountBracketFrame(void* zm);
 void ReadinessReportTick(double now);
 
 } // namespace hooks_detail
-using namespace ::hooks_detail;
 
 
 #endif // KENSHI_ZONE_OPT_HOOKS_INTERNAL_H

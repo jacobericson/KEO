@@ -19,12 +19,14 @@ using namespace nm_workers_detail;
 // Worker pool state
 // --------------------------------------------------------------------
 
-HANDLE          g_workerHandles[NAVMESH_WORKER_COUNT] = {};
+static HANDLE          g_workerHandles[NAVMESH_WORKER_COUNT] = {};
 volatile long   g_workerShutdown     = 0;
 HANDLE          g_jobEvent           = NULL;
 uintptr_t       g_navMeshGen         = 0;
-int             g_workerSavedPriority[NAVMESH_WORKER_COUNT] = {};
-volatile long   g_workerInitFailed[NAVMESH_WORKER_COUNT] = {};
+// Set by a worker whose Havok registration failed, before it clears its handle
+// slot. The flag, not the handle, is the race-free signal: CreateThread may not
+// have stored the handle yet when the worker gives up.
+static volatile long   g_workerInitFailed[NAVMESH_WORKER_COUNT] = {};
 
 HANDLE WorkerSlotHandle(int i)
 {
@@ -66,8 +68,6 @@ namespace nm_workers_detail {
 volatile long g_retireReturned        = 0;
 volatile long g_workerCleanupInFlight = 0;
 
-// Every job dropped because NavMesh::stop was seen: stopDrop= on the retire line.
-volatile long g_nmStopDropCount = 0;
 } // namespace nm_workers_detail
 
 namespace nm_workers_detail {
@@ -138,7 +138,27 @@ void NavMeshWakeWorkersIfQueued()
 // same byte the claim did rather than re-reading a global that a future change
 // could move underneath it.
 namespace nm_workers_detail {
-__declspec(thread) uintptr_t t_busyNmg = 0;
+static __declspec(thread) uintptr_t t_busyNmg = 0;
+
+// Caller holds the generator queue lock +152 and releases it after publishing the claim.
+void WorkerBusyEnter(uintptr_t nmg)
+{
+	t_busyNmg = nmg;
+	NoteBusyBridge(BusyBridge(GameBusyBridgeOps(nmg), BUSY_BRIDGE_ENTER, true));
+}
+
+// Called with no lock held; BusyBridgeLeave takes the generator queue lock +152 itself.
+void WorkerBusyLeave()
+{
+	uintptr_t nmg = t_busyNmg;
+	t_busyNmg = 0;
+	if (!nmg)
+	{
+		InterlockedDecrement(&navmesh::g_nmCache.workerBusyCount);   // no generator: nothing to lock or clear
+		return;
+	}
+	NoteBusyBridge(BusyBridgeLeave(GameBusyBridgeOps(nmg)));
+}
 } // namespace nm_workers_detail
 
 namespace nm_workers_detail
@@ -158,16 +178,16 @@ void BridgeUnlockQueue(void* nmg)
 	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, (uintptr_t)nmg, NavMeshGenerator_queue_mutex, 152)));
 }
 
-long BridgeIncrement(void*) { return InterlockedIncrement(&navmesh::g_nmCache.workerBusyCount); }
-long BridgeDecrement(void*) { return InterlockedDecrement(&navmesh::g_nmCache.workerBusyCount); }
-long BridgeReadCount(void*) { return InterlockedCompareExchange(&navmesh::g_nmCache.workerBusyCount, 0, 0); }
+static long BridgeIncrement(void*) { return InterlockedIncrement(&navmesh::g_nmCache.workerBusyCount); }
+static long BridgeDecrement(void*) { return InterlockedDecrement(&navmesh::g_nmCache.workerBusyCount); }
+static long BridgeReadCount(void*) { return InterlockedCompareExchange(&navmesh::g_nmCache.workerBusyCount, 0, 0); }
 
-unsigned char BridgeReadFlag(void* nmg)
+static unsigned char BridgeReadFlag(void* nmg)
 {
 	return *(volatile unsigned char*)(KLIB_MEMBER(4, (uintptr_t)nmg, NavMeshGenerator_doingStuff, 265));
 }
 
-void BridgeWriteFlag(void* nmg, unsigned char value)
+static void BridgeWriteFlag(void* nmg, unsigned char value)
 {
 	*(volatile unsigned char*)(KLIB_MEMBER(4, (uintptr_t)nmg, NavMeshGenerator_doingStuff, 265)) = value;
 }

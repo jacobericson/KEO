@@ -2,10 +2,9 @@
 // Main thread only; reads slots, records refusals and drops tracked entries.
 
 #include "zone/zone_life.h"
-#include "zone/zone_life_internal.h"
+#include "zone/preload/preload_internal.h"
 #include "zone/handoff/zone_handoff.h"
 
-using namespace zone_life_detail;
 
 // =========================================================================
 // Registry guard (defence in depth)

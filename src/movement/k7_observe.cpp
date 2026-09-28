@@ -15,7 +15,7 @@
 #include <cstring>
 #include "movement/islands_reissue_internal.h"
 #include "movement/islands_reissue_counters.h"
-namespace islands_reissue_detail {
+namespace order_tracker_detail {
 // -------------------------------------------------------------------------
 // K7: deleted-order form (main thread only).
 //
@@ -89,8 +89,8 @@ bool K7FormOnLogged()
 	}
 	return on;
 }
-} // namespace islands_reissue_detail
-namespace islands_reissue_detail {
+} // namespace order_tracker_detail
+namespace order_tracker_detail {
 
 
 bool K7ReadOrders(uintptr_t character, K7OrderState* st)
@@ -475,5 +475,5 @@ bool K7Observe(IslandOrder& o, uintptr_t cm, double now, bool* deleted)
 	}
 	return false;
 }
-} // namespace islands_reissue_detail
-using namespace islands_reissue_detail;
+} // namespace order_tracker_detail
+using namespace order_tracker_detail;

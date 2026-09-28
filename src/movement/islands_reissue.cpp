@@ -1,8 +1,8 @@
 // islands_reissue.cpp - main-thread reissue tracker state and adapters.
 //
-// Owns the single definitions of the IslandOrder table, pending checks, K7
-// counters, nearest-task snapshot and pause clocks. Orders, sends, K7
-// observation, cancel hooks and diagnostics live in adjacent movement files.
+// Owns the IslandOrder table, K7 counters, main-thread adapters and diagnostic
+// appenders. Order polling, deferred checks, cancel snapshots and pause clocks
+// live in the adjacent files that use them.
 // The tracker reads only these values from the component overlay (islands.cpp): the
 // rebuild generation and Set B signature (IslandOverlayGen/IslandOverlaySetBSig, for
 // staleness detection) and a zone's accessible flag (IslandOverlayZoneAccessible);
@@ -27,31 +27,12 @@
 #include "movement/islands_reissue_counters.h"
 
 
-namespace islands_reissue_detail {
+namespace order_tracker_detail {
 
-const int    MAX_ISLAND_ORDERS   = 64;
-const double ORDER_POLL_INTERVAL = 0.25;
-const float  PARK_WP_DIST        = 20.0f;   // pathDestination within this of pos
-const float  PARK_MIN_DEST_DIST  = 100.0f;  // farther than this from the order destination
-const float  MISSED_ADVANCE_DIST = 350.0f;  // 300-unit snap + arrival tolerance
-const float  GROWTH_THRESHOLD_SQ = 40.0f;   // the router's own threshold (squared)
-const float  UNPARK_DIST         = 50.0f;
-const int    MAX_REISSUES        = 8;
-// REISSUE_COOLDOWN (2.0 s) lives in islands.h: formation.cpp's group check
-// uses the same constant.
-const double RETRY_DELAY         = 1.5;
-// (c) The stopped form of the park test in island_orders.cpp must hold
-// continuously for this long before it counts as parked -- a single bad poll
-// (mid-frame state change, a still-settling order) must not park a character
-// about to move again. The edge form keeps its existing (unhysteresised)
-// behaviour.
-const double STOPPED_HYSTERESIS  = 3.0;
 
 
 IslandOrder   g_orders[MAX_ISLAND_ORDERS];
 int           g_orderCount = 0;
-double        g_lastOrderPoll = 0.0;
-volatile long g_reissues = 0;
 
 // K7 counters for the Islands: diag line (main thread only; the
 // cancel detours run on the main thread too).
@@ -151,10 +132,6 @@ long K7ArrivalOpenWaits()
 	return n;
 }
 
-// Which cancel hooks hook_manifest.cpp installed (IslandSetCancelHooksInstalled).
-bool g_cancelStopInstalled = false;
-bool g_cancelJobInstalled  = false;
-bool g_cancelTaskInstalled = false;
 
 void ResetOrders()
 {
@@ -166,27 +143,8 @@ void ResetOrders()
 	}
 	g_orderCount = 0;
 }
-// One pending check per character at most (a newer order resolves the old
-// one). Checks come from solo IslandOrders (MAX_ISLAND_ORDERS = 64) AND from
-// every member of a group dispatch (MAX_FORMATION_GROUPS 8 x
-// MAX_FORMATION_MEMBERS 30), which are not IslandOrders. The worst case is
-// therefore 64 + 240 = 304 distinct characters with a check pending inside
-// the same 1 s window, which 256 does NOT cover. The table is left at 256
-// (squads that large parking together are not expected): past 256, a new
-// check resolves the oldest one early with its current state instead of
-// dropping a line, counted as reissueCheckEarly= and visible as a short dt=.
-const int    MAX_REISSUE_CHECKS     = 256;
-ReissueCheck    g_reissueChecks[MAX_REISSUE_CHECKS];
-// Islands: summary-line counters (cumulative for the session, main thread).
-long g_reissuePostSent     = 0;
-long g_reissuePostLast     = 0;
-long g_reissuePostOther    = 0;
-long g_reissueCheckDropped = 0;
-long g_reissueCheckEarly   = 0;   // resolved before the delay because the table was full
-K7NearSnap g_k7NearSnap[MAX_ISLAND_ORDERS];
-int        g_k7NearSnapCount = 0;
-} // namespace islands_reissue_detail
-using namespace islands_reissue_detail;
+} // namespace order_tracker_detail
+using namespace order_tracker_detail;
 
 // =========================================================================
 // Adapter (main thread only) -- islands.cpp's IslandTick / IslandReset
@@ -210,11 +168,9 @@ void IslandReissueResetChecks()
 	ResetReissueChecks();
 }
 
-namespace islands_reissue_detail {
-bool   g_k7WasPaused    = false;
-double g_k7PauseStarted = 0.0;
+namespace order_tracker_detail {
 }
-using namespace islands_reissue_detail;
+using namespace order_tracker_detail;
 // IslandTick, every frame: resolve due checks, sample K7's end-of-frame
 // signatures, then poll every tracked order.
 // While paused, only the clock rebase in k7_reissue.cpp runs -- no check resolves, no
@@ -232,3 +188,58 @@ void IslandReissuePollTick(uintptr_t zm, double now)
 	PollOrders(zm, now);
 }
 
+
+// Main-thread reissue and K7 diagnostic appenders.
+// Field and line order are the shipped log format for both output variants; do not reorder.
+// IslandTick's ZONEOPT_DEBUG "Islands:" line: the reissue/K7 fields.
+void IslandReissueAppendDiag(std::ostringstream& ss)
+{
+	ss << " reissue=" << InterlockedCompareExchange(&g_reissues, 0, 0)
+	   << " reissuePost=s" << g_reissuePostSent << "/l" << g_reissuePostLast
+	   << "/o" << g_reissuePostOther
+	   << " reissueCheckDropped=" << g_reissueCheckDropped
+	   << " reissueCheckEarly=" << g_reissueCheckEarly;
+	// K7 (all 0 while the deleted-order form is off).
+	ss << " delPark=" << g_k7DelPark
+	   << " delReissue=" << g_k7DelReissue
+	   << " cancelDrop=s" << g_k7CancelStop << "/j" << g_k7CancelJob << "/t" << g_k7CancelTask
+	   << " gameDrop=" << g_k7GameDrop
+	   << " gameDropWhy=u" << g_k7DropUnconcious
+	   << "/h" << g_k7DropOrderHead
+	   << "/x" << g_k7DropTaskSwap
+	   << "/xo" << g_k7DropTaskSwapNonCombat
+	   << "/xe" << g_k7DropTaskSwapExpired
+	   << " apdDrop=" << g_k7ApdDrop;
+	IslandReissueAppendSpanDiag(ss);
+}
+
+// Printed on the PROD-visible IslandSpan: line (islands.cpp) every mode, and
+// folded into the DEV Islands: line above (which is compiled out entirely in
+// PROD).
+void IslandReissueAppendSpanDiag(std::ostringstream& ss)
+{
+	ss << " delRefuse=h" << g_k7RefuseHyst
+	   << "/g" << g_k7RefuseSig
+	   << "/d" << g_k7RefuseDest29
+	   << "/n" << g_k7RefuseDestNow
+	   << "/c" << g_k7RefuseCarried
+	   << "/s" << g_k7RefuseInSomething
+	   << "/a" << g_k7RefuseHit
+	   << "/e" << g_k7RefuseEnemies
+	   << "/t" << g_k7RefuseThreats
+	   << "/o" << g_k7RefuseHold
+	   << "/f" << g_k7RefuseNear
+	   << "/z" << g_k7RefuseZones
+	   << "/r" << g_k7RefuseDestReady
+	   << "/k" << g_k7RefuseCooldown
+	   << "/b" << g_k7RefuseBudget
+	   << " k7Hold=s" << g_k7HoldStarted << "/r" << g_k7HoldResumedSend
+	   << " k7HoldWould=" << g_k7HoldWould
+	   << " k7DestReadyTimeout=" << g_k7DestReadyTimeout
+	   << " k7Arrive=w" << g_k7ArrivalArmed
+	   << "/s" << g_k7ArrivalSent
+	   << "/x" << g_k7ArrivalExpired
+	   << "/v" << g_k7ArrivalLiveSent
+	   << "/r" << g_k7ArrivalResumed
+	   << "/open" << K7ArrivalOpenWaits();
+}

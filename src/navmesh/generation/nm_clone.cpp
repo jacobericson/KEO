@@ -13,10 +13,6 @@
 #include "navmesh/workers/nm_retire_policy.h"
 #include "navmesh/nm_workers_internal.h"
 using namespace nm_workers_detail;
-namespace nm_workers_detail {
-// Always 0 in shipped code; hook_edgeProcess's nonzero branch is unarmed.
-volatile long g_cloneProcessing = 0;
-} // namespace nm_workers_detail
 // --------------------------------------------------------------------
 // NavMeshGenerator clone (352 bytes)
 // --------------------------------------------------------------------

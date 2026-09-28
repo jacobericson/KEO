@@ -80,6 +80,9 @@ void NoteStaleDrop(int site, uintptr_t job, int jobType, int reason, LONGLONG cl
 } // namespace nm_workers_detail
 
 namespace nm_workers_detail {
+// Every job dropped because NavMesh::stop was seen: stopDrop= on the retire line.
+volatile long g_nmStopDropCount = 0;
+
 // A job dropped because NavMesh::stop was seen: recorded as a stale
 // drop with reason shutdown, and counted once in stopDrop=. The job itself is
 // left exactly as a stale drop leaves it: unlinked, not freed, not enqueued

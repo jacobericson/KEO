@@ -184,6 +184,8 @@ static void CameraFocusApply(float eyeX, float eyeZ, double now, float* outX, fl
 }
 
 
+static double lastCamLogTime = 0.0;
+
 namespace hooks_detail
 {
 

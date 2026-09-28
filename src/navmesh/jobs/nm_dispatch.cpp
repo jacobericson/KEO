@@ -82,7 +82,7 @@ namespace nm_workers_detail
 // No pool this session: recorded for the stats line, and said once with its
 // cause. The bg thread serves every job alone, as it does before the pool
 // exists.
-void RefuseNavMeshWorkers(NmPoolDecision decision)
+static void RefuseNavMeshWorkers(NmPoolDecision decision)
 {
 	InterlockedExchange(&navmesh::g_nmCache.g_navMeshPoolRefusal, (long)decision);
 	const char* why = decision == NMPOOL_REFUSE_STOPHOOK
@@ -97,7 +97,7 @@ void RefuseNavMeshWorkers(NmPoolDecision decision)
 } // namespace nm_workers_detail
 using namespace nm_workers_detail;
 
-namespace nm_workers_detail {
+namespace nm_dispatch_detail {
 static uintptr_t BgFirstDispatchPhase(void* thisNMG)
 {
 	if (!g_navMeshBgThreadId)
@@ -480,7 +480,9 @@ char BgDispatchCtx::ProcessPicked()
 	return 1;
 }
 
-} // namespace nm_workers_detail
+} // namespace nm_dispatch_detail
+
+using namespace nm_dispatch_detail;
 
 // NavMesh bg thread entry. Runs the step-3 probes, then dequeues
 // one job and processes it (HIT via cache reconstruction, MISS via

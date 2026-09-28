@@ -1,5 +1,5 @@
 // zone_life_internal.h - Private lifecycle records, outcomes, state and helpers.
-// Main thread only. Shared state has one definition in zone_life.cpp.
+// Main thread only. Each shared group has one definition owner.
 
 #ifndef KENSHI_ZONE_OPT_ZONE_LIFE_INTERNAL_H
 #define KENSHI_ZONE_OPT_ZONE_LIFE_INTERNAL_H
@@ -34,27 +34,29 @@ enum ZlOutcome
 	ZLO_UNAVAILABLE     // the unload protocol can never pass here
 };
 
+const unsigned int ZL_PLAYER_CAP = 1024;
+const double ZL_SPACING_SEC        = 2.0;    // at least this long between two unloads
+
+// Lifecycle record table, defined in zone_life.cpp.
 extern ZoneLifeRecord g_zl[ZONE_GRID_COUNT];
+
+// ZoneLeak session totals, defined in zone_life.cpp: never reset;
+// g_zlOrphans is reset to -1 at load.
 extern int  g_zlOrphans;
 extern long g_zlRelSetAB;
 extern long g_zlRelGone;
-extern const unsigned int ZL_PLAYER_CAP;
-extern const double ZL_SPACING_SEC;
-extern int    g_zlLastDefer;
-extern int    g_zlLastOutcome;
 extern long   g_zlZombieUnloads;
-extern double g_zlLastUnloadSec;
 extern long   g_zlZombieClear;
-extern int    g_zlZombieRetryCell;
-extern unsigned char g_zlRetain[ZONE_GRID_COUNT];
 extern long   g_zlReload;
 extern long   g_zlReloadMod;
-extern int            g_zlRecentCount;
 extern long   g_ftCleared;
 extern long   g_ftLate;
 extern long   g_ftKeptLate;
-extern unsigned char g_ftLateCell[ZONE_GRID_COUNT];
-extern unsigned char g_ftKeptLateCell[ZONE_GRID_COUNT];
+
+// Unload out-channel, defined in zone_unload.cpp; written only by UnloadModZone.
+extern int    g_zlLastDefer;
+extern int    g_zlLastOutcome;
+extern double g_zlLastUnloadSec;
 
 void ZlNotePlayerCap(unsigned int count);
 void ZlRelease(int cell);
@@ -66,7 +68,9 @@ bool ZlBuildRetention(void* zoneMgr);
 void ZlAppendStep3Tokens(std::ostringstream& ss);
 void ZoneLeakReport(void* zoneMgr, double now);
 void ZoneLifeUnloadPass(void* zoneMgr, double now);
+void ZlClearEvictState();
 void ZlClearStep3State();
+void ZlClearFirstTimeState();
 void ZlZombieFastRetry(void* zoneMgr, double now);
 void ZlCheckReloads(void* zoneMgr, double now);
 

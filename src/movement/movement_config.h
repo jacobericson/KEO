@@ -10,7 +10,7 @@
 // default: on. K7_HOLD_OBSERVE classifies and logs "K7 hold (observe)" but
 // drops exactly as today; K7_HOLD_OFF is today's behaviour with no
 // classification. The would-hold and refusal counters count in every mode
-// (island_reissue_diag.cpp IslandReissueAppendDiag).
+// (islands_reissue.cpp IslandReissueAppendDiag).
 enum K7HoldMode { K7_HOLD_OFF = 0, K7_HOLD_OBSERVE = 1, K7_HOLD_ON = 2 };
 
 namespace movement {

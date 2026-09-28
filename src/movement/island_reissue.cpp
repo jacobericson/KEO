@@ -15,7 +15,19 @@
 #include <cstring>
 #include "movement/islands_reissue_internal.h"
 #include "movement/islands_reissue_counters.h"
-namespace islands_reissue_detail {
+namespace island_reissue_detail {
+// One summary-mode FormationReissueTravel call (group above 6 members).
+struct ReissueDispatch {
+	bool active;
+	bool closed;    // IslandEndReissueDispatch ran: no more members will be recorded
+	int  slot;      // formation group slot, for the summary line
+	int  total;     // members recorded (dropped ones included)
+	int  sent;      // members resolved with post=sent
+	int  pending;   // members recorded and not yet resolved or dropped
+};
+}
+using namespace island_reissue_detail;
+namespace order_tracker_detail {
 // -------------------------------------------------------------------------
 // Deferred (a) discriminator (main thread only).
 //
@@ -35,16 +47,25 @@ namespace islands_reissue_detail {
 
 const double REISSUE_RESULT_DELAY   = 1.0;   // must stay < REISSUE_COOLDOWN (2.0)
 const int    MAX_REISSUE_DISPATCHES = 16;    // 2x MAX_FORMATION_GROUPS (group cooldown 2 s > delay 1 s)
-// One summary-mode FormationReissueTravel call (group above 6 members).
-struct ReissueDispatch {
-	bool active;
-	bool closed;    // IslandEndReissueDispatch ran: no more members will be recorded
-	int  slot;      // formation group slot, for the summary line
-	int  total;     // members recorded (dropped ones included)
-	int  sent;      // members resolved with post=sent
-	int  pending;   // members recorded and not yet resolved or dropped
-};
 
+
+volatile long g_reissues = 0;
+// One pending check per character at most (a newer order resolves the old
+// one). Checks come from solo IslandOrders (MAX_ISLAND_ORDERS = 64) AND from
+// every member of a group dispatch (MAX_FORMATION_GROUPS 8 x
+// MAX_FORMATION_MEMBERS 30), which are not IslandOrders. The worst case is
+// therefore 64 + 240 = 304 distinct characters with a check pending inside
+// the same 1 s window, which 256 does NOT cover. The table is left at 256
+// (squads that large parking together are not expected): past 256, a new
+// check resolves the oldest one early with its current state instead of
+// dropping a line, counted as reissueCheckEarly= and visible as a short dt=.
+ReissueCheck    g_reissueChecks[MAX_REISSUE_CHECKS];
+// Islands: summary-line counters (cumulative for the session, main thread).
+long g_reissuePostSent     = 0;
+long g_reissuePostLast     = 0;
+long g_reissuePostOther    = 0;
+long g_reissueCheckDropped = 0;
+long g_reissueCheckEarly   = 0;   // resolved before the delay because the table was full
 static int             g_reissueCheckActive = 0;
 static ReissueDispatch g_reissueDispatches[MAX_REISSUE_DISPATCHES];
 
@@ -283,8 +304,8 @@ bool ReissueOrder(IslandOrder& o, double now, const char* why, bool haveCross, f
 	return true;
 }
 
-} // namespace islands_reissue_detail
-using namespace islands_reissue_detail;
+} // namespace order_tracker_detail
+using namespace order_tracker_detail;
 
 // =========================================================================
 // (a) Discriminator trace: shared by ReissueCharacter (this file) and
@@ -294,7 +315,7 @@ using namespace islands_reissue_detail;
 // Current order type from Character::playerMoveOrderDefault's (0x5D1820)
 // cached-order chain (game.h). Every link is null-checked; -1 = no cached
 // order (or any link is null), meaning the fresh-AddOrder path always runs.
-namespace islands_reissue_detail {
+namespace order_tracker_detail {
 int ReadCharOrderType(uintptr_t character)
 {
 	if (!character) return -1;
@@ -306,8 +327,8 @@ int ReadCharOrderType(uintptr_t character)
 	if (!orderObj) return -1;
 	return *(int*)(KLIB_MEMBER(3, orderObj, TaskData_key, OFF_ORDER_TYPE));
 }
-} // namespace islands_reissue_detail
-using namespace islands_reissue_detail;
+} // namespace order_tracker_detail
+using namespace order_tracker_detail;
 
 void IslandCaptureReissueTrace(uintptr_t character, IslandReissueTrace* out)
 {
@@ -468,7 +489,7 @@ void IslandEndReissueDispatch(int dispatch)
 	FinishDispatchIfDone(dispatch);   // frees at once when nothing was recorded
 }
 
-namespace islands_reissue_detail {
+namespace order_tracker_detail {
 // Called from IslandReset (preload_saveload.cpp ClearPreloadStateImpl) and IslandTick's
 // save-load / new-ZoneManager reset. Drops every pending check and dispatch
 // without reading any stored pointer.
@@ -483,8 +504,8 @@ void ResetReissueChecks()
 	for (int d = 0; d < MAX_REISSUE_DISPATCHES; ++d)
 		g_reissueDispatches[d].active = false;
 }
-} // namespace islands_reissue_detail
-using namespace islands_reissue_detail;
+} // namespace order_tracker_detail
+using namespace order_tracker_detail;
 
 // Has `character` been re-issued
 // (solo or as a formation member) within REISSUE_COOLDOWN of `now`? Scans the

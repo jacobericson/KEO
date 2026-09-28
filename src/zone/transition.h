@@ -23,11 +23,10 @@ extern LARGE_INTEGER  transitionStartTime;
 // calling thread id, then raises transitionEndPending. hook_updateCameraZone
 // claims the flag with InterlockedCompareExchange and runs the completion body
 // (thread restore, both log lines, preload reset) on the main thread.
-// transitionEndQpc and transitionEndTid are written before the flag is raised
-// and read after it is claimed; the interlocked pair on the flag orders them.
+// transitionEndQpc is written before transitionEndPending is raised and read
+// after it is claimed; the interlocked pair on the flag orders the stamp.
 extern volatile LONG  transitionEndPending;
 extern LARGE_INTEGER  transitionEndQpc;
-extern DWORD          transitionEndTid;
 
 // Runs the deferred completion if one is pending. Main thread only.
 // Bracket instrumentation is owned by transition_hook.cpp: the target 3x3

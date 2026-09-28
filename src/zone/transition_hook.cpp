@@ -26,7 +26,7 @@ LARGE_INTEGER  transitionStartTime;
 // diagnostic stamps are tolerated; the claim clears pending each completion.
 volatile LONG  transitionEndPending  = 0;
 LARGE_INTEGER  transitionEndQpc;
-DWORD          transitionEndTid      = 0;
+static DWORD          transitionEndTid      = 0;
 
 namespace hooks_detail
 { // namespace hooks_detail
@@ -167,8 +167,7 @@ void CountBracketFrame(void* zm)
 } // namespace hooks_detail
 using namespace ::hooks_detail;
 
-namespace hooks_detail
-{ // namespace hooks_detail
+static int             g_workerSavedPriority[NAVMESH_WORKER_COUNT] = {};
 
 void CallPrioritizeNavMeshQueue()
 {
@@ -177,6 +176,9 @@ void CallPrioritizeNavMeshQueue()
 	PrioritizeNavMeshQueue(ctx.camX, ctx.camY, ctx.movers, ctx.moverCount,
 	                       ctx.zones, ctx.zoneCount);
 }
+
+namespace hooks_detail
+{ // namespace hooks_detail
 
 static void BoostWorkerThreads()
 {

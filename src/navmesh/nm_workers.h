@@ -9,13 +9,8 @@
 
 
 // Worker pool state
-extern HANDLE          g_workerHandles[NAVMESH_WORKER_COUNT];
 extern volatile long   g_workerShutdown;
 extern HANDLE          g_jobEvent;
-// Set by a worker whose Havok registration failed, before it clears its handle
-// slot. The flag, not the handle, is the race-free signal: CreateThread may not
-// have stored the handle yet when the worker gives up.
-extern volatile long   g_workerInitFailed[NAVMESH_WORKER_COUNT];
 // The handle of slot i when it belongs to a worker that registered and may
 // still be running, or NULL. Returns the handle rather than a bool so callers
 // use one snapshot: a worker whose registration fails clears its own slot, and
@@ -33,7 +28,6 @@ extern uintptr_t       g_navMeshGen;
 // Sets the workers' wake event when the queue is non-empty (a skipped job may
 // be claimable now). No lock held.
 void NavMeshWakeWorkersIfQueued();
-extern int             g_workerSavedPriority[NAVMESH_WORKER_COUNT];
 
 // Hook functions
 char hook_dispatchJob(void* thisNMG);

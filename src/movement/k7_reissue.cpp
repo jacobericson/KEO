@@ -15,7 +15,7 @@
 #include <cstring>
 #include "movement/islands_reissue_internal.h"
 #include "movement/islands_reissue_counters.h"
-namespace islands_reissue_detail {
+namespace order_tracker_detail {
 // Pinned by klib_member_fields.inc rows, verified against the typed IDB, and
 // read through KLIB_MEMBER. Character::inSomething, Character::stats
 // and CharStats::_holdPositionMode are shared with formation.cpp and live in game.h
@@ -453,26 +453,8 @@ int K7DropSelected(uintptr_t pi)
 	return dropped;
 }
 
-void K7SnapshotTracked()
-{
-	g_k7NearSnapCount = 0;
-	if (!K7FormOn() || g_orderCount == 0) return;
-	uintptr_t* stuff;
-	unsigned int count;
-	if (!TrackerPlayerList(&stuff, &count)) return;
-	for (int i = 0; i < g_orderCount && g_k7NearSnapCount < MAX_ISLAND_ORDERS; ++i)
-	{
-		if (!g_orders[i].active) continue;
-		uintptr_t ch = g_orders[i].character;
-		if (!TrackerListHas(stuff, count, ch)) continue;
-		K7NearSnap& s = g_k7NearSnap[g_k7NearSnapCount];
-		if (!K7ReadOrders(ch, &s.st)) continue;
-		s.character = ch;
-		g_k7NearSnapCount++;
-	}
-}
-} // namespace islands_reissue_detail
-using namespace islands_reissue_detail;
+} // namespace order_tracker_detail
+using namespace order_tracker_detail;
 bool IslandK7Preempted(uintptr_t character)
 {
 	if (!character || !K7FormOn()) return false;
@@ -525,7 +507,7 @@ bool IslandReadHc136(uintptr_t character, int* outHc136)
 	return true;
 }
 
-namespace islands_reissue_detail {
+namespace order_tracker_detail {
 // A paused game (GameWorld::paused, kept behind the escape menu through a
 // loader unpause -- zone_pause.cpp) must not advance any K7/tracker timer:
 // nothing is simulating, so an elapsed-wall-clock read across the pause would
@@ -543,6 +525,8 @@ namespace islands_reissue_detail {
 // K7ClassifySwap from HOLD to DROP -- so every field below moves together.
 static inline void ShiftStamp(double& t, double d) { if (t > 0.0) t += d; }
 
+static bool   g_k7WasPaused    = false;
+static double g_k7PauseStarted = 0.0;
 void K7RebasePausedClocks(bool paused, double now)
 {
 	if (paused)
@@ -583,5 +567,11 @@ void K7RebasePausedClocks(bool paused, double now)
 	FormationRebaseReissueClocks(pausedFor);
 }
 
-} // namespace islands_reissue_detail
-using namespace islands_reissue_detail;
+// A field added to either struct changes its size and stops the build here:
+// decide whether K7RebasePausedClocks must shift it, then update the size. A
+// field that fits in existing padding leaves the size as it was.
+static_assert(sizeof(IslandOrder) == 272, "IslandOrder changed: K7RebasePausedClocks must shift every clock field");
+static_assert(sizeof(ReissueCheck) == 128, "ReissueCheck changed: K7RebasePausedClocks must shift every clock field");
+
+} // namespace order_tracker_detail
+using namespace order_tracker_detail;

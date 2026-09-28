@@ -7,7 +7,8 @@ ClaimedJob::ClaimedJob() : job(0), jobType(0), claimQpc(0), resetRaises(0), clai
 	memset(&pendingWrite, 0, sizeof(pendingWrite));
 }
 
-namespace nm_workers_detail {
+using namespace nm_workers_detail;
+namespace nm_claimed_job_detail {
 struct CjGameContext
 {
 	ClaimedJob* claimed;
@@ -46,25 +47,27 @@ static CjReleaseOps CjGameOps(CjGameContext* context)
 	                     &CjGameIdle };
 	return ops;
 }
-} // namespace nm_workers_detail
+} // namespace nm_claimed_job_detail
+
+using namespace nm_claimed_job_detail;
 
 void ClaimedJobWritePending(ClaimedJob* claimed)
 {
 	CjReleaseFacts facts = { claimed->pendingWrite.data != NULL, false, false };
-	nm_workers_detail::CjGameContext context = { claimed };
-	CjRunReleases(CjReleasePlanFor(CJ_RELEASE_PIPELINE_WRITE, facts), nm_workers_detail::CjGameOps(&context));
+	nm_claimed_job_detail::CjGameContext context = { claimed };
+	CjRunReleases(CjReleasePlanFor(CJ_RELEASE_PIPELINE_WRITE, facts), nm_claimed_job_detail::CjGameOps(&context));
 }
 
 void ClaimedJobReleaseClone(ClaimedJob* claimed)
 {
 	CjReleaseFacts facts = { false, claimed->clone != NULL, false };
-	nm_workers_detail::CjGameContext context = { claimed };
-	CjRunReleases(CjReleasePlanFor(CJ_RELEASE_WORKER_CLONE, facts), nm_workers_detail::CjGameOps(&context));
+	nm_claimed_job_detail::CjGameContext context = { claimed };
+	CjRunReleases(CjReleasePlanFor(CJ_RELEASE_WORKER_CLONE, facts), nm_claimed_job_detail::CjGameOps(&context));
 }
 
 void ClaimedJobFinish(ClaimedJob* claimed, CjReleasePoint point, bool bgAdj)
 {
 	CjReleaseFacts facts = { false, false, bgAdj };
-	nm_workers_detail::CjGameContext context = { claimed };
-	CjRunReleases(CjReleasePlanFor(point, facts), nm_workers_detail::CjGameOps(&context));
+	nm_claimed_job_detail::CjGameContext context = { claimed };
+	CjRunReleases(CjReleasePlanFor(point, facts), nm_claimed_job_detail::CjGameOps(&context));
 }

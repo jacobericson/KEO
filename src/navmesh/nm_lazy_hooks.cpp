@@ -50,6 +50,8 @@ static void hook_processJobAltTrip(void* thisNMG, void* job)
 // writer in shipped code. The nonzero skip branch below is unarmed.
 
 namespace nm_workers_detail {
+// Always 0 in shipped code; hook_edgeProcess's nonzero branch is unarmed.
+static volatile long g_cloneProcessing = 0;
 edgeProcess_t orig_edgeProcess = NULL;
 } // namespace nm_workers_detail
 static volatile long g_edgeProcessLogged = 0;

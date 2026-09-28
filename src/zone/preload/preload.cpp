@@ -18,7 +18,6 @@ int charQueueNext  = 0;
 
 double lastCharScanTime = 0.0;
 int charZonesQueued     = 0;
-double lastCamLogTime   = 0.0;
 int preloadSkipLoaded   = 0;
 int lastCameraGX         = -1;
 int lastCameraGY         = -1;

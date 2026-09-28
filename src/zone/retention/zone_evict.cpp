@@ -32,15 +32,27 @@ static const double ZL_RELOAD_SEC   = 60.0;   // zlReload= window after an unloa
 static const int    ZL_RECENT_CAP   = 32;
 
 
+namespace zone_evict_detail {
 struct ZlRecentUnload
 {
 	int    cell;
 	double t;
 };
+}
+using namespace zone_evict_detail;
 static ZlRecentUnload g_zlRecent[ZL_RECENT_CAP];
 
 
 namespace zone_life_detail {
+static int    g_zlZombieRetryCell   = -1;    // a zombie deferred pj, retried per frame while the priority request is up
+static int            g_zlRecentCount = 0;
+
+
+void ZlClearEvictState()
+{
+	g_zlRecentCount   = 0;
+	g_zlZombieRetryCell = -1;
+}
 
 void ZlNoteUnloaded(int cell, double now)
 {

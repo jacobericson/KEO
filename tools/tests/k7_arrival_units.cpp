@@ -55,7 +55,7 @@ int main()
 	      "edge: cell already in, transition too old (6s) -> not armed");
 	Check(!K7ArrivalArmEdge(false, false, false, false, FAR, NOT_IN, -1.0),
 	      "edge: no signal at all -> no arm");
-	// Defense-in-depth only: islands_reissue.cpp never calls this with
+	// Defense-in-depth only: k7_observe.cpp never calls this with
 	// paused=true (IslandReissuePollTick returns before K7SampleSignatures
 	// runs at all while paused), so this does not by itself prove "no arm
 	// while paused" -- that property rests entirely on the early return,

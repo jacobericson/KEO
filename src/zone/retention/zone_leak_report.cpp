@@ -131,7 +131,7 @@ void ZoneLeakReport(void* zoneMgr, double now)
 				continue;
 			}
 
-			if (retainOk && !g_zlRetain[cell])
+			if (retainOk && !ZlRetentionNear(cell))
 			{
 				nFar++;
 				// How long the longest-idle recorded zone has been
