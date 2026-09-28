@@ -235,7 +235,7 @@ static bool PPReadCharListHead(uintptr_t base, void** headOut)
 
 // pauseState.charUpdateListMain: pauseState+0x750 (IDA-confirmed, 2
 // references, one of them consumePathResults' own sentinel-branch walk of
-// the same list). pauseState itself is RVA_GLOBAL_GAMEWORLD (game.h).
+// the same list). pauseState itself is RVA_GLOBAL_GAMEWORLD (rva.h).
 static const size_t OFF_PAUSESTATE_CHAR_UPDATE_LIST_MAIN = 0x750;
 
 NpcWaitWalkResult g_lastWalk;
@@ -263,7 +263,7 @@ void RunNpcWaitDiagnostic(double now)
 	}
 
 	// Skip the walk itself while loading (ZM+8 set), same as IslandTick's gate
-	// around WalkSetB (islands.cpp) -- the character list and
+	// around WalkSetB (island_components.cpp) -- the character list and
 	// CharMovement/HavokCharacter fields it reads are least stable exactly
 	// while a save or zone load is in progress.
 	if (loading)

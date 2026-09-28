@@ -133,7 +133,7 @@ int main()
 	      "past the wait cap -> force allow regardless of class");
 
 	// -------------------------------------------------------------------
-	// Pin B1's invariant: K7RebasePausedClocks (islands_reissue.cpp) must
+	// Pin B1's invariant: K7RebasePausedClocks (k7_reissue.cpp) must
 	// shift every timestamp a K7 comparison reads together, never one alone.
 	// A uniform shift of every input by the same delta must never change the
 	// verdict; shifting deletedSince alone (the partial-rebase regression)

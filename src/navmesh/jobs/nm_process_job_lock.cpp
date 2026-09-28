@@ -315,7 +315,7 @@ void NavMeshUnlockProcessJob()
 	LeaveProcessJobCS();
 }
 
-// The populate split's view of processJobCS (nm_misspar.cpp).
+// The populate split's view of processJobCS (nm_cache_core.cpp).
 int  NavMeshProcessJobDepth()      { return t_pjDepth; }
 void NavMeshLeaveForGenerate()     { LeaveProcessJobCS(); }
 bool NavMeshStopSeen()             { return NavMeshStopRequested(); }
