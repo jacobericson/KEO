@@ -394,7 +394,7 @@ static void PrintAstarSlowLine()
 // classes (no calls this session) are skipped.
 static void PrintAstarClassLine()
 {
-	if (!pathCostLinesEnabled)
+	if (!pathfind::g_pathfindCfg.pathCostLinesEnabled)
 		return;
 	if (!AstarCostHookInstalled())
 	{

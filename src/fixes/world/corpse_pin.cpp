@@ -48,7 +48,7 @@ static Ogre::Vector3* __fastcall hook_calculateCurrentPos(ActivePlatoon* self, O
 {
 	InterlockedIncrement(&s_calls);
 	Ogre::Vector3* result = orig_calculateCurrentPos(self, out);
-	if (!corpsePinEnabled || !self || !self->things.stuff)
+	if (!fixes::g_fixesCfg.corpsePinEnabled || !self || !self->things.stuff)
 		return result;
 
 	unsigned int count = self->things.count;
@@ -128,7 +128,7 @@ void CorpsePinTick(double now)
 	s_nextBeat = now + kBeatSeconds;
 
 	std::ostringstream ss;
-	ss << "CorpsePin: enabled=" << (corpsePinEnabled ? 1 : 0)
+	ss << "CorpsePin: enabled=" << (fixes::g_fixesCfg.corpsePinEnabled ? 1 : 0)
 	   << " installed=" << (s_installed ? 1 : 0)
 	   << " calls=" << InterlockedCompareExchange(&s_calls, 0, 0)
 	   << " overrides=" << InterlockedCompareExchange(&s_overrideCount, 0, 0)

@@ -337,7 +337,7 @@ static bool HookSite(size_t rva, void* klibAddr, void* detour, void** orig, cons
 
 void InstallSettingsPanel()
 {
-	if (!settingsPanelEnabled)
+	if (!zoneopt_gui::g_guiCfg.settingsPanelEnabled)
 	{
 		s_token = "off(ini)";
 		return;
@@ -366,7 +366,7 @@ void InstallSettingsPanel()
 
 const char* SettingsPanelToken()
 {
-	if (!settingsPanelEnabled)
+	if (!zoneopt_gui::g_guiCfg.settingsPanelEnabled)
 		return "off(ini)";
 	return s_token;
 }

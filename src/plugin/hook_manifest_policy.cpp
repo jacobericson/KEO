@@ -34,28 +34,28 @@ bool HookWantEval(HookWant want, const HookWantInputs& in)
 HookWantInputs HookWantInputsFromConfig()
 {
 	HookWantInputs in;
-	in.destroyListDiag     = destroyListDiagEnabled;
-	in.destroyListDefer    = destroyListDeferEnabled;
-	in.escapePauseGuard    = escapePauseGuardEnabled;
-	in.corpsePin           = corpsePinEnabled;
-	in.nestValidationGuard = nestValidationGuardEnabled;
-	in.unstitchGuard       = unstitchGuardEnabled;
-	in.graphVisitorGuard   = graphVisitorGuardEnabled;
-	in.graphExpandGuard    = graphExpandGuardEnabled;
-	in.meshFaceGuard       = meshFaceGuardEnabled;
-	in.navMeshLife         = navMeshLifeEnabled;
+	in.destroyListDiag     = fixes::g_fixesCfg.destroyListDiagEnabled;
+	in.destroyListDefer    = fixes::g_fixesCfg.destroyListDeferEnabled;
+	in.escapePauseGuard    = zone::g_zoneCfg.escapePauseGuardEnabled;
+	in.corpsePin           = fixes::g_fixesCfg.corpsePinEnabled;
+	in.nestValidationGuard = fixes::g_fixesCfg.nestValidationGuardEnabled;
+	in.unstitchGuard       = fixes::g_fixesCfg.unstitchGuardEnabled;
+	in.graphVisitorGuard   = fixes::g_fixesCfg.graphVisitorGuardEnabled;
+	in.graphExpandGuard    = fixes::g_fixesCfg.graphExpandGuardEnabled;
+	in.meshFaceGuard       = fixes::g_fixesCfg.meshFaceGuardEnabled;
+	in.navMeshLife         = fixes::g_fixesCfg.navMeshLifeEnabled;
 #ifdef ZONEOPT_DEBUG
-	in.unstitchProbe       = unstitchProbeEnabled;
-	in.sectionKeyProbe     = sectionKeyProbeEnabled;
+	in.unstitchProbe       = fixes::g_fixesCfg.unstitchProbeEnabled;
+	in.sectionKeyProbe     = fixes::g_fixesCfg.sectionKeyProbeEnabled;
 #else
 	in.unstitchProbe       = false;
 	in.sectionKeyProbe     = false;
 #endif
-	in.movementAware       = movementAwareEnabled;
-	in.caching             = cachingEnabled;
-	in.pathfindDiag        = pathfindDiagEnabled;
-	in.pathExtractGuard    = pathExtractGuardEnabled;
-	in.sectionStamp        = sectionStampEnabled;
-	in.gatePassDiag        = gatePassDiagEnabled;
+	in.movementAware       = zone::g_zoneCfg.movementAwareEnabled;
+	in.caching             = navmesh::g_navmeshCfg.cachingEnabled;
+	in.pathfindDiag        = pathfind::g_pathfindCfg.pathfindDiagEnabled;
+	in.pathExtractGuard    = fixes::g_fixesCfg.pathExtractGuardEnabled;
+	in.sectionStamp        = fixes::g_fixesCfg.sectionStampEnabled;
+	in.gatePassDiag        = pathfind::g_pathfindCfg.gatePassDiagEnabled;
 	return in;
 }

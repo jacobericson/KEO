@@ -57,7 +57,7 @@ static bool hook_processLoading(void* zoneMgr)
 	// is what the wedge machine needs; an unread phase is not a sample and
 	// would disable it. The call's own duration only feeds the stats totals,
 	// but taking it either way keeps one set of totals rather than two.
-	bool sample = (zoneCycleStatsEnabled || zoneWedgeGuardEnabled) && zoneMgr != NULL;
+	bool sample = (zone::g_zoneCfg.zoneCycleStatsEnabled || zone::g_zoneCfg.zoneWedgeGuardEnabled) && zoneMgr != NULL;
 	int phaseBefore = sample ? GetZoneState(zoneMgr) : -1;
 	LARGE_INTEGER t0, t1;
 	t0.QuadPart = 0;

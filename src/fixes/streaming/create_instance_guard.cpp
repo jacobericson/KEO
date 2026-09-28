@@ -322,7 +322,7 @@ static void hook_createInstance(void* navMesh, void* n)
 void InstallCreateInstanceGuard(int* installed, int*)
 {
 	// The key chooses skip or observe, never whether the site is watched.
-	s_actMode = createInstanceGuardEnabled;
+	s_actMode = fixes::g_fixesCfg.createInstanceGuardEnabled;
 
 	const char* why = HookInstallRow(HOOK_NAVMESH_CREATE_INSTANCE, hook_createInstance,
 			(void**)&orig_createInstance, installed, true);

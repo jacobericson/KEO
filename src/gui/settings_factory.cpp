@@ -9,7 +9,10 @@
 #include <cstring>
 #include <float.h>
 
+namespace settings_factory_detail {
 enum StageWidget { SW_NONE, SW_CHECKBOX, SW_SLIDER, SW_INT_SLIDER, SW_DROPBOX };
+}
+using namespace settings_factory_detail;
 
 // CK_BOOL: a checkbox. CK_FLOAT and CK_DOUBLE: a slider. A row with choices:
 // a drop box. CK_INT without choices but with a range: a slider in whole
@@ -32,7 +35,7 @@ static StageWidget WidgetOf(const ConfigKey& k)
 
 static bool Shown(const ConfigKey& k, bool devBuild)
 {
-	return k.label && !k.retired && k.kind != CK_TEXT && WidgetOf(k) != SW_NONE && (devBuild || !k.devOnly);
+	return k.label && !k.retired && k.kind != CK_TEXT && WidgetOf(k) != SW_NONE && (devBuild || (!k.devOnly && !k.debugOnlyReader));
 }
 
 // An offset row's widget writes the state field itself, so only a widget
@@ -40,6 +43,13 @@ static bool Shown(const ConfigKey& k, bool devBuild)
 static bool OffsetWidgetFits(const ConfigKey& k)
 {
 	return k.kind == CK_BOOL || k.kind == CK_FLOAT || (k.kind == CK_INT && k.choices);
+}
+
+// INI-only offset rows keep their state fields; a widget that cannot bind its
+// field edits a slot instead.
+static bool SlotBoundOffset(const ConfigKey& k)
+{
+	return k.label && !k.retired && !OffsetWidgetFits(k) && WidgetOf(k) != SW_NONE;
 }
 
 // The int the INI would hold for a slider value. Beyond the int range it
@@ -101,8 +111,12 @@ void StageModule(const ConfigModule& m, ConfigModuleStage* s)
 	for (int i = 0; i < CONFIG_STAGE_MAX && m.keys[i].name; ++i)
 	{
 		const ConfigKey& k = m.keys[i];
-		if (k.target && !k.retired)
-			s->slots[i] = ReadTarget(k);
+		if (!k.retired && (k.target || (m.state && SlotBoundOffset(k))))
+		{
+			ConfigKey local = k;
+			if (!local.target) local.target = (char*)s->state + k.offset;
+			s->slots[i] = ReadTarget(local);
+		}
 	}
 }
 
@@ -123,16 +137,21 @@ static SettingsRow NewRow(SettingsRowKind kind, const std::string& label, const 
 
 void AddModuleRows(const ConfigModule& m, ConfigModuleStage* s, bool devBuild, std::vector<SettingsRow>* out)
 {
-	out->push_back(NewRow(SR_HEADER, m.title, NULL));
+	bool headerAdded = false;
 	for (int i = 0; i < CONFIG_STAGE_MAX && m.keys[i].name; ++i)
 	{
 		const ConfigKey& k = m.keys[i];
-		if (!Shown(k, devBuild) || (!k.target && !OffsetWidgetFits(k)))
+		if (!Shown(k, devBuild))
 			continue;
+		if (!headerAdded)
+		{
+			out->push_back(NewRow(SR_HEADER, m.title, NULL));
+			headerAdded = true;
+		}
 		std::string label = k.label;
 		if (!k.live)
 			label += " (restart)";
-		char* field = k.target ? NULL : (char*)s->state + k.offset;
+		char* field = !k.target && OffsetWidgetFits(k) ? (char*)s->state + k.offset : NULL;
 		ConfigStageValue* slot = &s->slots[i];
 		switch (WidgetOf(k))
 		{
@@ -292,14 +311,30 @@ static void ClampField(const ConfigKey& k, char* field, const char* saved, Confi
 		memcpy(field, saved, width);
 }
 
+// A slot-bound offset row is copied at its own width before state comparisons.
+static void WriteSlotField(const ConfigKey& k, const ConfigStageValue& slot, void* state)
+{
+	char* field = (char*)state + k.offset;
+	switch (k.kind)
+	{
+	case CK_INT: *(int*)field = WidgetOf(k) == SW_INT_SLIDER ? RoundSlot(slot.f) : slot.i; break;
+	case CK_DOUBLE: *(double*)field = (double)slot.f; break;
+	case CK_CUSTOM:
+		if (k.size == 1) *(bool*)field = slot.i != 0;
+		else if (k.size == sizeof(int)) *(int*)field = slot.i;
+		break;
+	default: break;
+	}
+}
+
 void ClampModuleStage(const ConfigModule& m, ConfigModuleStage* s, const ConfigModuleStage& saved, ConfigLogFn log)
 {
 	for (int i = 0; i < CONFIG_STAGE_MAX && m.keys[i].name; ++i)
 	{
 		const ConfigKey& k = m.keys[i];
-		if (k.retired || (k.kind != CK_INT && k.kind != CK_FLOAT && k.kind != CK_DOUBLE))
+		if (k.retired)
 			continue;
-		if (k.target)
+		if (k.target || (m.state && SlotBoundOffset(k)))
 		{
 			// A slot that writes the same value as its saved one takes it back
 			// exactly, so an integer slider's fraction is never kept.
@@ -307,6 +342,12 @@ void ClampModuleStage(const ConfigModule& m, ConfigModuleStage* s, const ConfigM
 				ClampSlot(k, &s->slots[i], saved.slots[i], log);
 			else
 				s->slots[i] = saved.slots[i];
+			if (!k.target)
+			{
+				if (SlotDiffers(k, s->slots[i], saved.slots[i]))
+					WriteSlotField(k, s->slots[i], s->state);
+				else memcpy((char*)s->state + k.offset, (const char*)saved.state + k.offset, k.size);
+			}
 		}
 		else if (m.state && !ConfigOffsetValueEqual(k, s->state, saved.state))
 		{
@@ -319,6 +360,7 @@ int ModuleStageEntries(const ConfigModule& m, const ConfigModuleStage& staged, c
                        std::vector<IniEntry>* out)
 {
 	int n = 0;
+	ConfigModuleStage stagedState = staged;
 	for (int i = 0; i < CONFIG_STAGE_MAX && m.keys[i].name; ++i)
 	{
 		const ConfigKey& k = m.keys[i];
@@ -327,13 +369,14 @@ int ModuleStageEntries(const ConfigModule& m, const ConfigModuleStage& staged, c
 		IniEntry e;
 		e.key = k.name;
 		e.kind = ConfigIniKind(k.kind);
-		if (k.target)
+		if (k.target || (m.state && SlotBoundOffset(k)))
 		{
 			// A custom row without choices has no INI text for its value.
 			if ((k.kind == CK_CUSTOM && !k.choices) || k.kind == CK_TEXT)
 				continue;
 			if (!SlotDiffers(k, staged.slots[i], saved.slots[i]))
 				continue;
+			if (!k.target) WriteSlotField(k, staged.slots[i], stagedState.state);
 			e.value = FormatSlot(m, k, staged.slots[i]);
 		}
 		else
@@ -342,7 +385,7 @@ int ModuleStageEntries(const ConfigModule& m, const ConfigModuleStage& staged, c
 				continue;
 			e.value = ConfigFormatValue(m, k, staged.state);
 		}
-		e.append = ConfigEntryAppends(k, e.value, staged.state, m.defaults);
+		e.append = ConfigEntryAppends(k, e.value, stagedState.state, m.defaults);
 		out->push_back(e);
 		++n;
 	}

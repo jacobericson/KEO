@@ -172,6 +172,16 @@ void ConfigApplyLine(const std::string& key, const std::string& val, int lineNo,
 
 	if (matched)
 	{
+#ifndef ZONEOPT_DEBUG
+		if (k && k->debugOnlyReader)
+		{
+			for (size_t i = 0; i < st->debugIgnored.size(); ++i)
+				if (st->debugIgnored[i] == key) return;
+			log("Config: DEV-only key '" + key + "' ignored in this build");
+			st->debugIgnored.push_back(key);
+			return;
+		}
+#endif
 		st->overrides++;
 		IniNoteAppliedKey(st->dupSeen, key, lineNo);
 		return;
@@ -190,6 +200,20 @@ void ConfigApplyLine(const std::string& key, const std::string& val, int lineNo,
 	}
 	log("Config: unknown or invalid key '" + key + "'");
 	st->unrecognised++;
+}
+
+std::string ConfigSummaryLine(const ConfigLoadState& st, int dupCount)
+{
+	if (st.overrides <= 0 && st.unrecognised <= 0 && st.retired <= 0 && dupCount <= 0 && st.debugIgnored.empty())
+		return "";
+	std::ostringstream ss;
+	ss << "Config: " << st.overrides << " setting(s) loaded from INI, "
+	   << st.unrecognised << " unrecognised, " << st.retired << " retired, "
+	   << "dup=" << dupCount;
+	if (!st.debugIgnored.empty()) ss << ", " << st.debugIgnored.size() << " DEV-only ignored";
+	if (st.unrecognised > 0)
+		ss << " (unrecognised listed above, left at their defaults)";
+	return ss.str();
 }
 
 // The clamp order the log has always shown.

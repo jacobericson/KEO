@@ -130,7 +130,7 @@ static void InstallLoadingHooks(int* installed, int*)
 			(void**)&orig_isContentPending, installed, false) != NULL)
 	{
 		ErrorLog("FAILED to hook isContentPending");
-		preloadEnabled = false;  // registration readiness requires isContentPending
+		zone::g_zoneCfg.preloadEnabled = false;  // registration readiness requires isContentPending
 	}
 
 	// Camera-zone orchestrator hook
@@ -146,7 +146,7 @@ static void InstallLoadingHooks(int* installed, int*)
 // VerifyPrologue before the patch, and the table row is fatal.
 static void InstallDestroyListHook(int* installed, int*)
 {
-	SetDestroyListDefer(destroyListDeferEnabled);
+	SetDestroyListDefer(fixes::g_fixesCfg.destroyListDeferEnabled);
 	if (HookRowWanted(HOOK_DESTROYLIST_INSERT))
 	{
 		if (HookInstallRow(HOOK_DESTROYLIST_INSERT, hook_destroyListInsert,
@@ -154,8 +154,8 @@ static void InstallDestroyListHook(int* installed, int*)
 		{
 			std::ostringstream dls;
 			dls << "destroyListOE inserter hook installed: defer="
-			    << (destroyListDeferEnabled ? "on" : "off")
-			    << " diag=" << (destroyListDiagEnabled ? "on" : "off");
+			    << (fixes::g_fixesCfg.destroyListDeferEnabled ? "on" : "off")
+			    << " diag=" << (fixes::g_fixesCfg.destroyListDiagEnabled ? "on" : "off");
 			LogMsg(dls.str());
 		}
 		else
@@ -180,7 +180,7 @@ static void InstallResetUnloadHook(int* installed, int*)
 			(void**)&orig_resetUnloadZones, installed, true) == NULL)
 	{
 		LogMsg(std::string("Save-load reset hook installed: saveLoadUnload=")
-		       + (saveLoadUnloadEnabled ? "on" : "off"));
+		       + (zone::g_zoneCfg.saveLoadUnloadEnabled ? "on" : "off"));
 	}
 	else
 	{
@@ -305,7 +305,7 @@ static void InstallCacheHook(int* installed, int*)
 		else
 		{
 			ErrorLog("FAILED to hook dispatchJob");
-			cachingEnabled = false;
+			navmesh::g_navmeshCfg.cachingEnabled = false;
 		}
 
 		// The populate hook is no longer installed here. It
@@ -318,18 +318,18 @@ static void InstallCacheHook(int* installed, int*)
 // Group cohesion: binary-patch scatter branch
 static void CohesionPatchStep(int*, int*)
 {
-	if (groupCohesionEnabled && orig_addOrderSelected)
+	if (movement::g_movementCfg.groupCohesionEnabled && orig_addOrderSelected)
 	{
 		if (!ApplyScatterPatch())
 		{
 			LogMsg("Scatter patch failed, cohesion disabled");
-			groupCohesionEnabled = false;
+			movement::g_movementCfg.groupCohesionEnabled = false;
 		}
 	}
-	else if (groupCohesionEnabled)
+	else if (movement::g_movementCfg.groupCohesionEnabled)
 	{
 		LogMsg("addOrderSelected hook required for cohesion");
-		groupCohesionEnabled = false;
+		movement::g_movementCfg.groupCohesionEnabled = false;
 	}
 }
 
@@ -370,7 +370,7 @@ static void InstallPathfindHooks(int* installed, int*)
 			ErrorLog("FAILED to hook requestPath");
 
 		if (diagInstalled < 4)
-			pathfindDiagEnabled = false;
+			pathfind::g_pathfindCfg.pathfindDiagEnabled = false;
 
 		LogMsg("Pathfinding step 1: " +
 		       std::string(diagInstalled == 4 ? "all 4 hooks installed" : "PARTIAL install"));
@@ -484,7 +484,7 @@ static void InstallPathPoolHooks(int* installed, int*)
 		else
 		{
 			ErrorLog("FAILED to hook Gates__updateCodes (PathPool)");
-			gatePassDiagEnabled = false;
+			pathfind::g_pathfindCfg.gatePassDiagEnabled = false;
 		}
 		if (orig_gatesUpdateCodes
 		    && HookInstallRow(HOOK_GATES_FIND_PATH, hook_gatesFindPath,
@@ -496,8 +496,8 @@ static void InstallPathPoolHooks(int* installed, int*)
 
 	std::ostringstream ps;
 	ps << "PathPool Step 1: " << poolInstalled << "/" << poolTotal
-	   << " hooks installed npcWaitDiag=" << (npcWaitDiagEnabled ? "on" : "off")
-	   << " gatePassDiag=" << (gatePassDiagEnabled ? "on" : "off");
+	   << " hooks installed npcWaitDiag=" << (pathfind::g_pathfindCfg.npcWaitDiagEnabled ? "on" : "off")
+	   << " gatePassDiag=" << (pathfind::g_pathfindCfg.gatePassDiagEnabled ? "on" : "off");
 	LogMsg(ps.str());
 }
 

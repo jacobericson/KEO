@@ -716,7 +716,7 @@ void LogNavMeshCacheStats(double now)
 {
 	// The deferred NavMesh-thread lines (core.h, LogMsgDeferrable) are
 	// flushed from the top of hook_updateCameraZone, before its early returns.
-	if (!cachingEnabled)
+	if (!navmesh::g_navmeshCfg.cachingEnabled)
 		return;
 #ifdef ZONEOPT_DEBUG
 	if (now - lastNMLogTime < 10.0)

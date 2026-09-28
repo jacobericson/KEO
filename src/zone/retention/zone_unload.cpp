@@ -452,7 +452,7 @@ static void ZlStamp(int gx, int gy, int r)
 static bool ZlBuildRetentionImpl(void* zoneMgr)
 {
 	memset(g_zlRetain, 0, sizeof(g_zlRetain));
-	int r = cfg_zoneLifeRetainRadius;
+	int r = zone::g_zoneCfg.cfg_zoneLifeRetainRadius;
 	if (!zoneMgr || !gridCalibrated)
 		return false;
 
@@ -609,7 +609,7 @@ void ZoneLifeUnloadPass(void* zoneMgr, double now)
 				g_zl[c].lastInRadius = now;
 				continue;
 			}
-			if (now - g_zl[c].lastInRadius >= cfg_zoneLifeIdleSeconds && g_zlCandCount < ZL_CAND_CAP)
+			if (now - g_zl[c].lastInRadius >= zone::g_zoneCfg.cfg_zoneLifeIdleSeconds && g_zlCandCount < ZL_CAND_CAP)
 				g_zlCand[g_zlCandCount++] = c;
 		}
 	}
@@ -646,7 +646,7 @@ void ZoneLifeUnloadPass(void* zoneMgr, double now)
 	// The bitmap is up to 1 s old. A cell queued,
 	// adopted or near a live anchor since then is back in use: count it as
 	// retained now.
-	if (ZlCellInUse(bgx, bgy) || ZlNearAnchors(zoneMgr, bgx, bgy, cfg_zoneLifeRetainRadius))
+	if (ZlCellInUse(bgx, bgy) || ZlNearAnchors(zoneMgr, bgx, bgy, zone::g_zoneCfg.cfg_zoneLifeRetainRadius))
 	{
 		g_zl[best].lastInRadius = now;
 		g_zlNextAttempt = now;
@@ -725,7 +725,7 @@ void ZlAppendStep3Tokens(std::ostringstream& ss)
 	   << " zlKeep=" << g_zlKeep
 	   << " zlReload=" << g_zlReload << "/" << g_zlReloadMod
 	   << " cand=" << g_zlCandCount
-	   << " zlUnloadKey=" << (zoneLifeUnloadEnabled ? "on" : "off");
+	   << " zlUnloadKey=" << (zone::g_zoneCfg.zoneLifeUnloadEnabled ? "on" : "off");
 }
 
 } // namespace

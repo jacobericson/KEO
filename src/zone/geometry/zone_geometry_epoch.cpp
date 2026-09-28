@@ -60,7 +60,7 @@ void ZoneGeometryNoteBoundary()  { GeomUpdate(0, 1); }
 
 ZoneGeometryMode ZoneGeometryActiveMode()
 {
-	return zoneGeometryMode;
+	return zone::g_zoneCfg.zoneGeometryMode;
 }
 
 // Per-thread certificate. POD, so the thread-local initializer is a constant

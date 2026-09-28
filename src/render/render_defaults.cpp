@@ -9,7 +9,7 @@
 #define RENDER_DEV_DEFAULT false
 #endif
 
-static const RenderConfig s_renderDefaults =
+const RenderConfig kRenderDefaults =
 {
 	true,                // renderLevers
 	true,                // reflectionHalfRate
@@ -35,9 +35,9 @@ static const RenderConfig s_renderDefaults =
 	120.0f               // adoptOgrePurgeMaxSkipSeconds
 };
 
-RenderConfig g_renderCfg = s_renderDefaults;
+RenderConfig g_renderCfg = kRenderDefaults;
 
 const RenderConfig& RenderConfigDefaults()
 {
-	return s_renderDefaults;
+	return kRenderDefaults;
 }

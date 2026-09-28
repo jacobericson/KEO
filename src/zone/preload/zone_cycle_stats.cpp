@@ -108,7 +108,7 @@ static int WalkSetBFlags(uintptr_t set, int* outNativeLoading)
 
 int ZoneCycleSetBSize(void* zoneMgr)
 {
-	if (!zoneCycleStatsEnabled || !zoneMgr)
+	if (!zone::g_zoneCfg.zoneCycleStatsEnabled || !zoneMgr)
 		return -1;
 	return WalkSetBFlags(KLIB_MEMBER(2, (uintptr_t)zoneMgr, ZoneManager_activeZones, OFF_ZM_SET_B), NULL);
 }
@@ -334,8 +334,8 @@ static void PrintSummary()
 
 void ZoneCycleOnProcessLoading(void* zoneMgr, int phaseBefore, int phaseAfter, double callMs)
 {
-	bool statsOn = zoneCycleStatsEnabled;
-	bool wedgeOn = zoneWedgeGuardEnabled;
+	bool statsOn = zone::g_zoneCfg.zoneCycleStatsEnabled;
+	bool wedgeOn = zone::g_zoneCfg.zoneWedgeGuardEnabled;
 	if ((!statsOn && !wedgeOn) || !zoneMgr)
 		return;
 	EnsureInit();
@@ -407,14 +407,14 @@ void ZoneCycleOnProcessLoading(void* zoneMgr, int phaseBefore, int phaseAfter, d
 
 void ZoneCyclePauseRestored()
 {
-	if (!zoneCycleStatsEnabled)
+	if (!zone::g_zoneCfg.zoneCycleStatsEnabled)
 		return;
 	++g_pauseRestores;
 }
 
 void ZoneCycleSampleLeases(void* zoneMgr, double now)
 {
-	if (!zoneCycleStatsEnabled || !zoneMgr || !IsMainThread())
+	if (!zone::g_zoneCfg.zoneCycleStatsEnabled || !zoneMgr || !IsMainThread())
 		return;
 	if (now < g_nextLease)
 		return;

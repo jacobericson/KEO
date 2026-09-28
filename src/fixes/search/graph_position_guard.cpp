@@ -244,7 +244,7 @@ void InstallGraphPositionGuard(int* installed, int*)
 	// graphPositionGuard=false still classifies and counts every call, and
 	// the fault's base rate stays measurable in exactly the run meant to
 	// measure it.
-	s_actMode = graphPositionGuardEnabled;
+	s_actMode = fixes::g_fixesCfg.graphPositionGuardEnabled;
 
 	LARGE_INTEGER f;
 	QueryPerformanceFrequency(&f);

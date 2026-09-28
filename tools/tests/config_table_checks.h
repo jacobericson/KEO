@@ -94,6 +94,7 @@ const char* BuildDefault(const ConfigKey& k)
 // initialisation left them.
 struct Snapshot
 {
+	std::vector<std::string> states;
 	std::vector<std::string> targets;   // one per core row, empty when it has no target
 	RenderConfig render;
 	BenchSlot slots[BENCH_SLOT_COUNT];
@@ -109,6 +110,12 @@ void TakeSnapshot(const ConfigModule& core)
 {
 	Snapshot& s = Initial();
 	s.targets.clear();
+	s.states.clear();
+	for (int m = 0; m < kConfigModuleCount; ++m)
+	{
+		const ConfigModule& mod = kConfigModules[m];
+		s.states.push_back(mod.state ? std::string((const char*)mod.state, mod.stateSize) : std::string());
+	}
 	for (int i = 0; core.keys[i].name; ++i)
 	{
 		const ConfigKey& k = core.keys[i];
@@ -124,6 +131,9 @@ void TakeSnapshot(const ConfigModule& core)
 void RestoreSnapshot(const ConfigModule& core)
 {
 	const Snapshot& s = Initial();
+	for (int m = 0; m < kConfigModuleCount; ++m)
+		if (kConfigModules[m].state)
+			memcpy(kConfigModules[m].state, s.states[m].data(), s.states[m].size());
 	for (int i = 0; core.keys[i].name; ++i)
 	{
 		const ConfigKey& k = core.keys[i];
@@ -216,12 +226,6 @@ std::vector<KeyValue> TemplateKeys(const std::string& text)
 	return out;
 }
 
-// Compiled only under ZONEOPT_DEBUG (the two probe keys); not the devOnly column, which marks rows shown on the DEV tab.
-bool IsDevOnlyKey(const std::string& key)
-{
-	return key == "unstitchProbe" || key == "sectionKeyProbe";
-}
-
 const char* const kUndocumented[] =
 {
 	"caching", "camLogInterval", "deferral", "destroyListDefer", "destroyListDiag", "gatePassDiag",
@@ -272,20 +276,8 @@ void CheckTemplateAndDefaults(const ConfigModule& core, const ConfigModule& rend
 		}
 		CheckNamed(k->documented && !k->retired, "template names an undocumented row " + tmpl[i].first);
 	}
-	if (IsDev())
-	{
-		for (size_t i = 0; i < missing.size(); ++i)
-			CheckNamed(false, "template line has no row " + missing[i]);
-	}
-	else
-	{
-		std::sort(missing.begin(), missing.end());
-		CheckNamed(missing.size() == 2 && missing[0] == "sectionKeyProbe" && missing[1] == "unstitchProbe",
-		           "PROD: only the two DEV-only template lines have no row");
-		for (size_t i = 0; i < missing.size(); ++i)
-			if (!IsDevOnlyKey(missing[i]))
-				CheckNamed(false, "template line has no row " + missing[i]);
-	}
+	for (size_t i = 0; i < missing.size(); ++i)
+		CheckNamed(false, "template line has no row " + missing[i]);
 	// ...and every documented row has a line.
 	for (int m = 0; m < kConfigModuleCount; ++m)
 	{
@@ -318,54 +310,31 @@ void CheckTemplateAndDefaults(const ConfigModule& core, const ConfigModule& rend
 			CheckNamed(std::binary_search(undoc.begin(), undoc.end(), want[i]), "undocumented " + want[i]);
 	}
 
-	// 3a. Every core row's global holds its default for this build.
-	for (int i = 0; core.keys[i].name; ++i)
+	// Every offset row starts at its module's constant defaults.
+	for (int m = 0; m < kConfigModuleCount; ++m)
 	{
-		const ConfigKey& k = core.keys[i];
-		if (k.retired || !k.target)
-			continue;
-		const char* def = BuildDefault(k);
-		if (!def)
-		{
-			CheckNamed(false, std::string("default missing ") + k.name);
-			continue;
-		}
-		if (k.kind == CK_CUSTOM)
-			CheckNamed(CustomParsesToInitial(core, i, def), std::string("default ") + k.name);
-		else
-			CheckNamed(IniValueEquals(IniKindOf(k.kind), def, ConfigFormatValue(core, k, NULL)),
-			           std::string("default ") + k.name);
+		const ConfigModule& mod = kConfigModules[m];
+		if (!mod.state) continue;
+		CheckNamed(mod.defaults && memcmp(mod.state, mod.defaults, mod.stateSize) == 0,
+		           std::string("default object ") + mod.name);
 	}
-
-	// 3b. Every documented row's template value is its default: PROD, or DEV
-	// for the two keys only a DEV build has.
+	// The template describes PROD defaults; the probe fields use their DEV
+	// defaults in both builds. A parser's storage is restored after comparison.
 	for (size_t t = 0; t < tmpl.size(); ++t)
 	{
-		const ConfigModule* m = NULL;
-		const ConfigKey* k = FindConfigKey(tmpl[t].first, &m);
-		if (!k)
-			continue;
-		const std::string& tv = tmpl[t].second;
+		const ConfigModule* mod = NULL;
+		const ConfigKey* k = FindConfigKey(tmpl[t].first, &mod);
+		if (!k || !mod->state || (IsDev() && !k->debugOnlyReader)) continue;
 		std::string what = "template default " + tmpl[t].first;
-		if (m == &render)
+		if (k->kind == CK_CUSTOM)
 		{
-			// The render defaults are the build's (renderDiag differs), so only
-			// the PROD suite holds them against the PROD template.
-			if (!IsDev())
-				CheckNamed(IniValueEquals(IniKindOf(k->kind), tv, ConfigFormatValue(render, *k, render.defaults)), what);
-			continue;
+			std::string held((const char*)mod->state, mod->stateSize);
+			bool parsed = ConfigApplyValue(*mod, *k, tmpl[t].second, &DiscardLog);
+			CheckNamed(parsed && mod->defaults && ConfigOffsetValueEqual(*k, mod->state, mod->defaults), what);
+			memcpy(mod->state, held.data(), held.size());
 		}
-		const char* def = IsDevOnlyKey(k->name) ? k->devDefault : k->prodDefault;
-		if (k->kind == CK_CUSTOM && k->target)
-		{
-			int i = (int)(k - core.keys);
-			// The template documents PROD; a custom row's PROD value is its DEV one.
-			CheckNamed(def && strcmp(k->devDefault, k->prodDefault) == 0 && CustomParsesToInitial(core, i, tv), what);
-		}
-		else
-		{
-			CheckNamed(def && IniValueEquals(IniKindOf(k->kind), tv, def), what);
-		}
+		else CheckNamed(IniValueEquals(IniKindOf(k->kind), tmpl[t].second,
+		                              ConfigFormatValue(*mod, *k, mod->defaults)), what);
 	}
 }
 
@@ -392,20 +361,26 @@ void CheckGoldenSample(const ConfigModule& core)
 			ConfigApplyLine(key, val, i + 1, &st, &CaptureLog);
 	}
 
-	Check(preloadEnabled == true, "sample preloadEnabled");
-	Check(cfg_islandFarSpan == 5, "sample cfg_islandFarSpan");
-	Check(cfg_camFocusHardMult == 2.5f, "sample cfg_camFocusHardMult");
-	Check(cfg_camLogInterval == 20.0, "sample cfg_camLogInterval");
-	Check(cfg_stitchSourceLines == 32, "sample cfg_stitchSourceLines");
-	Check(islandEdgeRingEnabled == false, "sample islandEdgeRingEnabled");
-	Check(cfg_k7PostDeathHold == K7_HOLD_OBSERVE, "sample cfg_k7PostDeathHold");
-	Check(clusterGraphBypassMode == CGB_MEASURE, "sample clusterGraphBypassMode");
+	Check(zone::g_zoneCfg.preloadEnabled == true, "sample preloadEnabled");
+	Check(movement::g_movementCfg.cfg_islandFarSpan == 5, "sample cfg_islandFarSpan");
+	Check(zone::g_zoneCfg.cfg_camFocusHardMult == 2.5f, "sample cfg_camFocusHardMult");
+	Check(zone::g_zoneCfg.cfg_camLogInterval == 20.0, "sample cfg_camLogInterval");
+	Check(fixes::g_fixesCfg.cfg_stitchSourceLines == 32, "sample cfg_stitchSourceLines");
+	Check(movement::g_movementCfg.islandEdgeRingEnabled == false, "sample islandEdgeRingEnabled");
+	Check(movement::g_movementCfg.cfg_k7PostDeathHold == K7_HOLD_OBSERVE, "sample cfg_k7PostDeathHold");
+	Check(pathfind::g_pathfindCfg.clusterGraphBypassMode == CGB_MEASURE, "sample clusterGraphBypassMode");
 	Check(g_renderCfg.particleStepCapSpeed == 4.0f, "sample g_renderCfg.particleStepCapSpeed");
 	Check(g_benchSlots[0].hour == 12.0f, "sample g_benchSlots[0].hour");
 
 	Check(st.overrides == (IsDev() ? 15 : 14), "sample overrides");
-	Check(st.unrecognised == (IsDev() ? 2 : 3), "sample unrecognised");
+	Check(st.unrecognised == 2, "sample unrecognised");
 	Check(st.retired == 1, "sample retired");
+	Check(st.debugIgnored.size() == (IsDev() ? 0u : 1u), "sample DEV-only ignored");
+	Check(ConfigSummaryLine(ConfigLoadState(), 0).empty(), "empty config summary");
+	std::string summary = IsDev()
+		? "Config: 15 setting(s) loaded from INI, 2 unrecognised, 1 retired, dup=2 (unrecognised listed above, left at their defaults)"
+		: "Config: 14 setting(s) loaded from INI, 2 unrecognised, 1 retired, dup=2, 1 DEV-only ignored (unrecognised listed above, left at their defaults)";
+	Check(ConfigSummaryLine(st, 2) == summary, "sample summary");
 
 	std::vector<std::string> want;
 	want.push_back("Config: unknown or invalid key 'stitchSourceLines'");
@@ -414,7 +389,7 @@ void CheckGoldenSample(const ConfigModule& core)
 	want.push_back("Config: retired key 'squadPathCache' ignored");
 	want.push_back("Config: unknown or invalid key 'foo'");
 	if (!IsDev())
-		want.push_back("Config: unknown or invalid key 'sectionKeyProbe'");
+		want.push_back("Config: DEV-only key 'sectionKeyProbe' ignored in this build");
 	want.push_back("Bench: unknown lever 'nosuchLever' in bench.levers, ignored");
 	want.push_back("Bench: bench.levers named no known lever, using every lever");
 	Check(Captured() == want, "sample captured lines");
@@ -444,7 +419,7 @@ void CheckGoldenSample(const ConfigModule& core)
 void CheckLastValueWins(const ConfigModule& core)
 {
 	RestoreSnapshot(core);
-	Check(preloadEnabled == true, "last value wins: preload's default is true");
+	Check(zone::g_zoneCfg.preloadEnabled == true, "last value wins: preload's default is true");
 	const char* const text[] = { "preload=true", "preload=false", NULL };
 	Captured().clear();
 	ConfigLoadState st;
@@ -454,7 +429,7 @@ void CheckLastValueWins(const ConfigModule& core)
 		if (SplitIniLine(text[i], &key, &val))
 			ConfigApplyLine(key, val, i + 1, &st, &CaptureLog);
 	}
-	Check(preloadEnabled == false, "last value wins: preload=true then preload=false reads false");
+	Check(zone::g_zoneCfg.preloadEnabled == false, "last value wins: preload=true then preload=false reads false");
 	bool dup = false;
 	for (size_t i = 0; i < st.dupSeen.size(); ++i)
 		if (st.dupSeen[i].key == "preload" && st.dupSeen[i].firstLine == 1 && st.dupSeen[i].lastLine == 2)
@@ -469,9 +444,9 @@ void CheckLastValueWins(const ConfigModule& core)
 void CheckClamps(const ConfigModule& core)
 {
 	RestoreSnapshot(core);
-	cfg_navmeshWorkerCount = 99;
-	cfg_camFocusMaxDist = 100.0f;
-	cfg_camFocusHardMult = 0.5f;
+	navmesh::g_navmeshCfg.cfg_navmeshWorkerCount = 99;
+	zone::g_zoneCfg.cfg_camFocusMaxDist = 100.0f;
+	zone::g_zoneCfg.cfg_camFocusHardMult = 0.5f;
 	Captured().clear();
 	ConfigClampLoaded(&CaptureLog);
 	std::vector<std::string> want;
@@ -479,35 +454,35 @@ void CheckClamps(const ConfigModule& core)
 	want.push_back("Config: camFocusMaxDist=100 clamped to min 500");
 	want.push_back("Config: camFocusHardMult=0.5 clamped to min 1");
 	Check(Captured() == want, "clamp lines");
-	Check(cfg_navmeshWorkerCount == 6 && cfg_camFocusMaxDist == 500.0f && cfg_camFocusHardMult == 1.0f,
+	Check(navmesh::g_navmeshCfg.cfg_navmeshWorkerCount == 6 && zone::g_zoneCfg.cfg_camFocusMaxDist == 500.0f && zone::g_zoneCfg.cfg_camFocusHardMult == 1.0f,
 	      "clamped values");
 
 	const float unclamped[] = { 0.0f, -5.0f };
 	for (int i = 0; i < 2; ++i)
 	{
 		RestoreSnapshot(core);
-		cfg_camFocusMaxDist = unclamped[i];
+		zone::g_zoneCfg.cfg_camFocusMaxDist = unclamped[i];
 		Captured().clear();
 		ConfigClampLoaded(&CaptureLog);
 		bool line = false;
 		for (size_t j = 0; j < Captured().size(); ++j)
 			line = line || Captured()[j].find("camFocusMaxDist") != std::string::npos;
-		Check(!line && cfg_camFocusMaxDist == unclamped[i], "camFocusMaxDist at or below 0 is not clamped");
+		Check(!line && zone::g_zoneCfg.cfg_camFocusMaxDist == unclamped[i], "camFocusMaxDist at or below 0 is not clamped");
 	}
 
 	// Each bound, from the other side.
 	RestoreSnapshot(core);
-	cfg_preloadKeepAliveSeconds = 90000.0f;
-	cfg_navmeshGenConcurrency = -1;
-	cfg_navmeshDiskCacheMaxMB = 9000;
-	cfg_camLogInterval = 0.5;
-	cfg_reprioritizeInterval = 31.0;
-	cfg_camFocusMaxDist = 60000.0f;
-	cfg_camFocusHardMult = 11.0f;
-	cfg_camFocusHysteresis = -1.0f;
-	cfg_zoneLifeRetainRadius = 5;
-	cfg_islandFarSpan = 9;
-	cfg_zoneLifeIdleSeconds = 4.0;
+	zone::g_zoneCfg.cfg_preloadKeepAliveSeconds = 90000.0f;
+	navmesh::g_navmeshCfg.cfg_navmeshGenConcurrency = -1;
+	navmesh::g_navmeshCfg.cfg_navmeshDiskCacheMaxMB = 9000;
+	zone::g_zoneCfg.cfg_camLogInterval = 0.5;
+	navmesh::g_navmeshCfg.cfg_reprioritizeInterval = 31.0;
+	zone::g_zoneCfg.cfg_camFocusMaxDist = 60000.0f;
+	zone::g_zoneCfg.cfg_camFocusHardMult = 11.0f;
+	zone::g_zoneCfg.cfg_camFocusHysteresis = -1.0f;
+	zone::g_zoneCfg.cfg_zoneLifeRetainRadius = 5;
+	movement::g_movementCfg.cfg_islandFarSpan = 9;
+	zone::g_zoneCfg.cfg_zoneLifeIdleSeconds = 4.0;
 	Captured().clear();
 	ConfigClampLoaded(&CaptureLog);
 	want.clear();
@@ -568,19 +543,23 @@ void CheckCoreWriter(const ConfigModule& core)
 {
 	RestoreSnapshot(core);
 	std::vector<IniEntry> e;
-	ConfigIniEntries(core, NULL, NULL, &e);
-	Check(e.size() == (IsDev() ? 73u : 71u),
+	for (int m = 0; m < kConfigModuleCount; ++m)
+		if (kConfigModules[m].state && strcmp(kConfigModules[m].name, "render"))
+			ConfigIniEntries(kConfigModules[m], kConfigModules[m].state, kConfigModules[m].defaults, &e);
+	Check(e.size() == 73u,
 	      "writer: core entries, every active row but the custom rows without choices");
 	bool appends = false;
 	for (size_t i = 0; i < e.size(); ++i)
 		appends = appends || e[i].append;
 	Check(!appends, "writer: core entries at the defaults append nothing");
 
-	preloadEnabled = false;
-	cfg_islandFarSpan = 5;
-	clusterGraphBypassMode = CGB_MEASURE;
+	zone::g_zoneCfg.preloadEnabled = false;
+	movement::g_movementCfg.cfg_islandFarSpan = 5;
+	pathfind::g_pathfindCfg.clusterGraphBypassMode = CGB_MEASURE;
 	e.clear();
-	ConfigIniEntries(core, NULL, NULL, &e);
+	for (int m = 0; m < kConfigModuleCount; ++m)
+		if (kConfigModules[m].state && strcmp(kConfigModules[m].name, "render"))
+			ConfigIniEntries(kConfigModules[m], kConfigModules[m].state, kConfigModules[m].defaults, &e);
 	int changed = 0;
 	bool preload = false, span = false, cgb = false;
 	for (size_t i = 0; i < e.size(); ++i)
@@ -642,7 +621,7 @@ void CheckGoldenRecord(const ConfigModule& core)
 		if (!fl[i].empty() && eq != std::string::npos)
 			want.push_back(KeyValue(fl[i].substr(0, eq), fl[i].substr(eq + 1)));
 	}
-	Check(want.size() == (IsDev() ? 96u : 94u), "golden record key count");
+	Check(want.size() == 96u, "golden record key count");
 	CheckNamed(got.size() == want.size(), "golden count");
 	for (size_t i = 0; i < got.size(); ++i)
 	{
@@ -688,9 +667,9 @@ void CheckTables()
 		}
 		Check(mod.keys[i].name == NULL, "tables end");
 	}
-	Check(kConfigModuleCount == 2, "tables end: two modules");
-	Check(active == (IsDev() ? 98 : 96) && retired == 22, "tables end: active and retired rows");
-	Check(coreActive == (IsDev() ? 76 : 74) && renderActive == 22, "tables end: rows per module");
+	Check(kConfigModuleCount == 8, "tables end: eight modules");
+	Check(active == 98 && retired == 22, "tables end: active and retired rows");
+	Check(coreActive == 2 && renderActive == 22, "tables end: rows per module");
 	std::printf("  tables: %d module(s), %d active row(s) (core %d, render %d), %d retired\n",
 	            kConfigModuleCount, active, coreActive, renderActive, retired);
 }

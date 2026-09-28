@@ -440,7 +440,7 @@ bool PollFormationGather(FormationGroup& grp, PollFormationGroupCtx& c)
 
 			// Arm multi-call path probe to capture the path request flow
 			// for this formation dispatch (8s capture window)
-			if (pathfindDiagEnabled)
+			if (pathfind::g_pathfindCfg.pathfindDiagEnabled)
 				ArmPathProbe();
 
 			// Send all alive members to the destination

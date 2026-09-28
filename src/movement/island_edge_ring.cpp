@@ -95,7 +95,7 @@ void IslandEdgeRingApply(void* ra, uintptr_t zm, uintptr_t t, uintptr_t lektorOu
 	InterlockedIncrement(&g_filt);
 	InterlockedExchangeAdd(&g_rm, (long)(n - (unsigned int)kept));
 
-	if (!IslandRingShouldWrite(islandEdgeRingEnabled, kept))
+	if (!IslandRingShouldWrite(movement::g_movementCfg.islandEdgeRingEnabled, kept))
 		return;   // false: computed and counted, list left untouched
 
 	// posBuf[j] >= j always (IslandRingCompact walks idx[] in order), so this
@@ -122,5 +122,5 @@ void IslandEdgeRingAppendSummary(std::ostringstream& ss)
 
 const char* IslandEdgeRingModeStr()
 {
-	return islandEdgeRingEnabled ? "true" : "false";
+	return movement::g_movementCfg.islandEdgeRingEnabled ? "true" : "false";
 }

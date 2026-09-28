@@ -236,7 +236,7 @@ void ZoneLifeTick(void* zoneMgr, double now)
 	// Not in a frame that has already admitted a cohort: both start a
 	// loading cycle's worth of work, and the pass's own spacing bounds how
 	// often it runs, not what it runs alongside.
-	if (zoneLifeUnloadEnabled && !ZoneHandoffAdoptedThisFrame())
+	if (zone::g_zoneCfg.zoneLifeUnloadEnabled && !ZoneHandoffAdoptedThisFrame())
 		ZoneLifeUnloadPass(zoneMgr, now);
 
 	if (isTransitionActive || InterlockedCompareExchange(&transitionEndPending, 0, 0) != 0)

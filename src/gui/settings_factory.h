@@ -22,22 +22,22 @@ const int CONFIG_MODULE_MAX = 8;
 const int CONFIG_STAGE_MAX  = 128;    // rows per module table, retired rows included
 const int CONFIG_STATE_MAX  = 1024;   // bytes of one module's state struct
 
-// One module's staged copy. An offset row edits state at its offset (the
-// double array aligns any state struct); a target row edits slots[i], i the
-// row's index in its module's table.
+// One module's staged copy. Offset fields live in state (the double array
+// aligns it); widgets that cannot bind a field edit slots[i], as target rows do.
 struct ConfigModuleStage
 {
 	double           state[CONFIG_STATE_MAX / sizeof(double)];
 	ConfigStageValue slots[CONFIG_STAGE_MAX];
 };
 
-// Copies m.stateSize bytes of m.state (none without state) and reads each
-// target row's global into its slot.
+// Copies m.stateSize bytes of m.state and reads target rows and offset rows
+// whose widget cannot bind their field into their slots.
 void StageModule(const ConfigModule& m, ConfigModuleStage* s);
 
-// A header (the module's title), then one row per shown key, bound into s.
+// A header only when a row shows, then one row per shown key, bound into s.
+// Offset fields that fit bind directly; other rows bind their staged slots.
 // A key shows when it has a label, is not retired or CK_TEXT, has a widget,
-// and devBuild holds or it is not devOnly. Reads only the table and s.
+// and devBuild holds or neither devOnly nor debugOnlyReader holds.
 void AddModuleRows(const ConfigModule& m, ConfigModuleStage* s, bool devBuild, std::vector<SettingsRow>* out);
 
 // Holds each numeric value that differs from its saved one to the loader's
@@ -51,6 +51,7 @@ void ClampModuleStage(const ConfigModule& m, ConfigModuleStage* s, const ConfigM
 // One INI entry per row whose staged value differs from the saved one,
 // offset and target rows alike; returns the count. An entry is appended to a
 // file without a line for its key only when its value differs from the
-// build's default.
+// build's default. Slot-bound offset fields are synchronized before comparison;
+// custom rows with choices write their choice's INI text.
 int ModuleStageEntries(const ConfigModule& m, const ConfigModuleStage& staged, const ConfigModuleStage& saved,
                        std::vector<IniEntry>* out);

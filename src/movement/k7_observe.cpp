@@ -65,7 +65,7 @@ const double    K7_HOLD_MAX    = 60.0;    // maximum hold duration before it exp
 // detours call it too.
 bool K7FormOn()
 {
-	return islandDeletedReissueEnabled && IslandCancelHooksLive();
+	return movement::g_movementCfg.islandDeletedReissueEnabled && IslandCancelHooksLive();
 }
 
 // PollOrders' copy: logs the reason once (DEV) when the form is off.
@@ -78,7 +78,7 @@ bool K7FormOnLogged()
 		logged = true;
 		std::ostringstream ss;
 		ss << "Islands: deleted-order re-issue off (";
-		if (!islandDeletedReissueEnabled)
+		if (!movement::g_movementCfg.islandDeletedReissueEnabled)
 			ss << "islandDeletedReissue=false";
 		else
 			ss << "cancel hooks not all installed: stop=" << (g_cancelStopInstalled ? 1 : 0)
@@ -418,9 +418,9 @@ bool K7Observe(IslandOrder& o, uintptr_t cm, double now, bool* deleted)
 		                                       K7_HOLD_MARGIN, K7_HOLD_MAX);
 		if (verdict == K7_SWAP_HOLD) g_k7HoldWould++;   // counts in every mode, including off
 
-		if (cfg_k7PostDeathHold != K7_HOLD_OFF && verdict == K7_SWAP_HOLD)
+		if (movement::g_movementCfg.cfg_k7PostDeathHold != K7_HOLD_OFF && verdict == K7_SWAP_HOLD)
 		{
-			bool observeOnly = (cfg_k7PostDeathHold == K7_HOLD_OBSERVE);
+			bool observeOnly = (movement::g_movementCfg.cfg_k7PostDeathHold == K7_HOLD_OBSERVE);
 			if (!o.k7PostDeathHold)
 			{
 				g_k7HoldStarted++;

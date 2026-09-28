@@ -309,9 +309,9 @@ void ReadinessReportTick(double now)
 		configLogged = true;
 		std::ostringstream cs;
 		cs << "Readiness config: readinessOverrides="
-		   << (readinessOverridesEnabled ? "ON" : "OFF")
-		   << " islandReadinessRule=" << (islandReadinessRuleEnabled ? "ON" : "OFF")
-		   << " deferral=" << (deferralEnabled ? "ON" : "OFF");
+		   << (zone::g_zoneCfg.readinessOverridesEnabled ? "ON" : "OFF")
+		   << " islandReadinessRule=" << (zone::g_zoneCfg.islandReadinessRuleEnabled ? "ON" : "OFF")
+		   << " deferral=" << (zone::g_zoneCfg.deferralEnabled ? "ON" : "OFF");
 		LogMsg(cs.str());
 	}
 
@@ -363,7 +363,7 @@ void ReadinessReportTick(double now)
 
 	// Off-main calls are sampled 1 in 16 while the rule is off (see
 	// g_rdyOffSample); the label says so.
-	const char* offName = islandReadinessRuleEnabled ? "off" : "off(1/16)";
+	const char* offName = zone::g_zoneCfg.islandReadinessRuleEnabled ? "off" : "off(1/16)";
 	const char* callerName[RC_COUNT] = { "poll4", "main", offName };
 
 	double freq     = (double)qpcFrequency.QuadPart;
@@ -381,7 +381,7 @@ void ReadinessReportTick(double now)
 #if ZONEHAND_STEP >= 2
 	   << " rule=superseded"   // the readiness contract answers every cell before this rule is reached
 #else
-	   << " rule=" << ((islandReadinessRuleEnabled && readinessOverridesEnabled) ? "on" : "off")
+	   << " rule=" << ((zone::g_zoneCfg.islandReadinessRuleEnabled && zone::g_zoneCfg.readinessOverridesEnabled) ? "on" : "off")
 #endif
 	   << " ruleReady=" << rReady << " ruleWait=" << rWait
 #if ZONEHAND_STEP >= 2
@@ -394,7 +394,7 @@ void ReadinessReportTick(double now)
 	ss << std::fixed << std::setprecision(1)
 	   << " scan=" << scanAvg << "/" << scanMaxU << "us"
 	   << std::setprecision(0) << " slots=" << slotsAvg;
-	if (!readinessOverridesEnabled)
+	if (!zone::g_zoneCfg.readinessOverridesEnabled)
 		ss << " overrides=off";
 	LogMsg(ss.str());
 }
@@ -487,7 +487,7 @@ bool hook_isContentPending(void* manager, void* zonePos)
 	if (result)
 		return true;
 
-	if (!deferralEnabled)
+	if (!zone::g_zoneCfg.deferralEnabled)
 		return false;
 
 	// Classification. The caller class uses the thread and, on the main
@@ -501,12 +501,12 @@ bool hook_isContentPending(void* manager, void* zonePos)
 	int caller = RC_OFF;
 	if (onMainThread)
 		caller = IsStatePoll4() ? RC_POLL4 : RC_MAIN;
-	bool classify = onMainThread || islandReadinessRuleEnabled
+	bool classify = onMainThread || zone::g_zoneCfg.islandReadinessRuleEnabled
 	             || (InterlockedIncrement(&g_rdyOffSample) & RDY_OFF_SAMPLE_MASK) == 0;
 	// The +0x1E0 split (diagnostic) runs on the main thread and in the sampled
 	// rule-off calls; off the main thread with the rule on it is skipped, so
 	// the rule path adds no contention against the game's blocking map lookups.
-	bool splitMap = onMainThread || !islandReadinessRuleEnabled;
+	bool splitMap = onMainThread || !zone::g_zoneCfg.islandReadinessRuleEnabled;
 	int cls = RZ_UNKNOWN;
 	if (classify)
 	{
@@ -516,7 +516,7 @@ bool hook_isContentPending(void* manager, void* zonePos)
 
 	// readinessOverrides off: the original's answer for every caller. The queue
 	// reprioritization above has already run.
-	if (!readinessOverridesEnabled)
+	if (!zone::g_zoneCfg.readinessOverridesEnabled)
 		return false;
 
 #if ZONEHAND_STEP >= 2
@@ -544,7 +544,7 @@ bool hook_isContentPending(void* manager, void* zonePos)
 	// in the world, whatever the global section count. noSection,
 	// outdoorMissing and notInWorld all answer 0; only RZ_UNKNOWN (the outdoor
 	// fact was not read) falls through to today's rule.
-	if (islandReadinessRuleEnabled && classify && caller != RC_POLL4 && cls != RZ_UNKNOWN)
+	if (zone::g_zoneCfg.islandReadinessRuleEnabled && classify && caller != RC_POLL4 && cls != RZ_UNKNOWN)
 	{
 		bool ready = (cls == RZ_BUILDINGS_PENDING);
 		InterlockedIncrement(ready ? &g_rdyRuleReady : &g_rdyRuleWait);

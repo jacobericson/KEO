@@ -133,9 +133,9 @@ void AppendPathfindDiagBase(std::ostringstream& ss, const PathfindDiagReportCtx&
 	ss << "PathDiag:"
 	   << " primary=" << c.pAttempts << "/" << c.pSuccess << "/" << c.pFail
 	   << " conn=" << c.cAttempts
-	   << (clusterGraphBypassMode == CGB_BYPASS ? "/bypass"
-	       : (clusterGraphBypassMode == CGB_MEASURE ? "/measure"
-	       : (clusterGraphBypassMode == CGB_PLAYER ? "/player" : "/orig")))
+	   << (pathfind::g_pathfindCfg.clusterGraphBypassMode == CGB_BYPASS ? "/bypass"
+	       : (pathfind::g_pathfindCfg.clusterGraphBypassMode == CGB_MEASURE ? "/measure"
+	       : (pathfind::g_pathfindCfg.clusterGraphBypassMode == CGB_PLAYER ? "/player" : "/orig")))
 	   << "/fail=" << c.cFail
 	   << " astar=" << c.aAttempts << "/" << c.aSuccess
 	   << "/" << c.aUnreach << "unreach"
@@ -167,7 +167,7 @@ void AppendPathfindDiagWave(std::ostringstream& ss, const PathfindDiagReportCtx&
 	// because a waved search whose request could not be identified is a fact
 	// about the measurement, not a zero on either side.
 	ss << " wave=";
-	if (clusterGraphBypassMode == CGB_MEASURE || clusterGraphBypassMode == CGB_PLAYER)
+	if (pathfind::g_pathfindCfg.clusterGraphBypassMode == CGB_MEASURE || pathfind::g_pathfindCfg.clusterGraphBypassMode == CGB_PLAYER)
 	{
 		ss << c.wStarted
 		   << "/" << c.wSuccess << "succ"
@@ -416,7 +416,7 @@ using namespace pathfind_diag_detail;
 
 void LogPathfindDiagStats(double now)
 {
-	if (!pathfindDiagEnabled)
+	if (!pathfind::g_pathfindCfg.pathfindDiagEnabled)
 		return;
 
 #ifdef ZONEOPT_DEBUG

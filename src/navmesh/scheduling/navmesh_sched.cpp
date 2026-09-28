@@ -102,7 +102,7 @@ volatile long reprioOrderFires  = 0;
 
 void BoostNavMeshThread()
 {
-	if (!priorityBoostEnabled)
+	if (!navmesh::g_navmeshCfg.priorityBoostEnabled)
 		return;
 
 	uintptr_t mgr = *(uintptr_t*)((uintptr_t)GameAddr(RVA_GLOBAL_SECTION_MGR));
@@ -155,7 +155,7 @@ int ComputeZonePriority(int gridX, int gridY,
 	// 3x3 does not already cover it. ComputeZonePriority also orders
 	// registration and adoption, and a zone can only move up here, so
 	// nothing it displaces is dropped.
-	if (routeTierEnabled)
+	if (navmesh::g_navmeshCfg.routeTierEnabled)
 	{
 		for (int w = 0; w < moverCount; ++w)
 		{

@@ -387,7 +387,7 @@ static const char* TryArm()
 void InstallStitchByteGuard(bool allowed)
 {
 	// The key chooses skip or keep, never whether the site is watched.
-	s_actMode = stitchByteGuardEnabled;
+	s_actMode = fixes::g_fixesCfg.stitchByteGuardEnabled;
 
 	LARGE_INTEGER f;
 	s_qpcFreq = QueryPerformanceFrequency(&f) ? f.QuadPart : 0;

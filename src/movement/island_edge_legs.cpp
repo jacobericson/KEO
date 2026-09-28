@@ -53,7 +53,7 @@ long  g_handover = 0, g_edgeDrop = 0;
 long  g_arrNear = 0, g_arrFar = 0;
 long  g_legLen[ISLAND_LEGLEN_BUCKETS] = { 0 };   // leg length in cells at leg start
 
-int Threshold() { return IslandFarSpanArmed() ? cfg_islandFarSpan : WOULD_SPAN; }
+int Threshold() { return IslandFarSpanArmed() ? movement::g_movementCfg.cfg_islandFarSpan : WOULD_SPAN; }
 
 } // namespace
 using namespace island_edge_legs_detail;

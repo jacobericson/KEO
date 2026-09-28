@@ -21,7 +21,7 @@ static double lastP12LogTime = 0.0;
 void LogPhase12Stats(double now)
 {
 	// Gated on pathfindDiagEnabled, the umbrella flag for every path diagnostic.
-	if (!pathfindDiagEnabled)
+	if (!pathfind::g_pathfindCfg.pathfindDiagEnabled)
 		return;
 	if (now - lastP12LogTime < 30.0)
 		return;

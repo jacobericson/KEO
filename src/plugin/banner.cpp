@@ -29,31 +29,31 @@ void LogInitBanner(int installed, int totalHooks, const std::string& gateTok,
 
 	std::ostringstream msg;
 	msg << "Initialized - " << installed << "/" << totalHooks << " hooks installed"
-	    << ", deferral=" << (deferralEnabled ? "ON" : "OFF")
-	    << ", priorityBoost=" << (priorityBoostEnabled ? "ON" : "OFF")
-	    << ", preload=" << (preloadEnabled ? "ON" : "OFF")
-	    << ", movementAware=" << (movementAwareEnabled ? "ON" : "OFF")
-	    << ", caching=" << (cachingEnabled ? "ON" : "OFF")
-	    << ", cohesion=" << (groupCohesionEnabled ? "ON" : "OFF")
-	    << ", pathDiag=" << (pathfindDiagEnabled ? "ON" : "OFF")
+	    << ", deferral=" << (zone::g_zoneCfg.deferralEnabled ? "ON" : "OFF")
+	    << ", priorityBoost=" << (navmesh::g_navmeshCfg.priorityBoostEnabled ? "ON" : "OFF")
+	    << ", preload=" << (zone::g_zoneCfg.preloadEnabled ? "ON" : "OFF")
+	    << ", movementAware=" << (zone::g_zoneCfg.movementAwareEnabled ? "ON" : "OFF")
+	    << ", caching=" << (navmesh::g_navmeshCfg.cachingEnabled ? "ON" : "OFF")
+	    << ", cohesion=" << (movement::g_movementCfg.groupCohesionEnabled ? "ON" : "OFF")
+	    << ", pathDiag=" << (pathfind::g_pathfindCfg.pathfindDiagEnabled ? "ON" : "OFF")
 	    << ", pathStep=" << 4
-	    << ", routeTier=" << (routeTierEnabled ? "ON" : "OFF")
-	    << ", clusterGraphBypass=" << (clusterGraphBypassMode == CGB_BYPASS ? "ON"
-	        : (clusterGraphBypassMode == CGB_MEASURE ? "MEASURE"
-	        : (clusterGraphBypassMode == CGB_PLAYER ? "PLAYER" : "OFF")))
-	    << ", unstitchGuard=" << (unstitchGuardEnabled ? "ON" : "OFF")
-	    << ", stitchSourceLines=" << cfg_stitchSourceLines
-	    << ", graphVisitorGuard=" << (graphVisitorGuardEnabled ? "ON" : "OFF")
-	    << ", graphExpandGuard=" << (graphExpandGuardEnabled ? "ON" : "OFF")
-	    << ", graphPositionGuard=" << (graphPositionGuardEnabled ? "ON" : "OFF")
-	    << ", createInstanceGuard=" << (createInstanceGuardEnabled ? "ON" : "OFF")
-	    << ", hullDoublePushGuard=" << (hullDoublePushGuardEnabled ? "ON" : "OFF")
-	    << ", stitchByteGuard=" << (stitchByteGuardEnabled ? "ON" : "OFF")
+	    << ", routeTier=" << (navmesh::g_navmeshCfg.routeTierEnabled ? "ON" : "OFF")
+	    << ", clusterGraphBypass=" << (pathfind::g_pathfindCfg.clusterGraphBypassMode == CGB_BYPASS ? "ON"
+	        : (pathfind::g_pathfindCfg.clusterGraphBypassMode == CGB_MEASURE ? "MEASURE"
+	        : (pathfind::g_pathfindCfg.clusterGraphBypassMode == CGB_PLAYER ? "PLAYER" : "OFF")))
+	    << ", unstitchGuard=" << (fixes::g_fixesCfg.unstitchGuardEnabled ? "ON" : "OFF")
+	    << ", stitchSourceLines=" << fixes::g_fixesCfg.cfg_stitchSourceLines
+	    << ", graphVisitorGuard=" << (fixes::g_fixesCfg.graphVisitorGuardEnabled ? "ON" : "OFF")
+	    << ", graphExpandGuard=" << (fixes::g_fixesCfg.graphExpandGuardEnabled ? "ON" : "OFF")
+	    << ", graphPositionGuard=" << (fixes::g_fixesCfg.graphPositionGuardEnabled ? "ON" : "OFF")
+	    << ", createInstanceGuard=" << (fixes::g_fixesCfg.createInstanceGuardEnabled ? "ON" : "OFF")
+	    << ", hullDoublePushGuard=" << (fixes::g_fixesCfg.hullDoublePushGuardEnabled ? "ON" : "OFF")
+	    << ", stitchByteGuard=" << (fixes::g_fixesCfg.stitchByteGuardEnabled ? "ON" : "OFF")
 #ifdef ZONEOPT_DEBUG
-	    << ", unstitchProbe=" << (unstitchProbeEnabled ? "ON" : "OFF")
+	    << ", unstitchProbe=" << (fixes::g_fixesCfg.unstitchProbeEnabled ? "ON" : "OFF")
 #endif
-	    << ", islandFix=" << (islandFixEnabled ? "ON" : "OFF")
-	    << ", islandFarSpan=" << cfg_islandFarSpan
+	    << ", islandFix=" << (movement::g_movementCfg.islandFixEnabled ? "ON" : "OFF")
+	    << ", islandFarSpan=" << movement::g_movementCfg.cfg_islandFarSpan
 	    << ", islandEdgeRing=" << IslandEdgeRingModeStr()
 	    // The *Step= tokens are fixed values, kept for the line's format.
 	    << ", islandStep=" << 4
@@ -64,14 +64,14 @@ void LogInitBanner(int installed, int totalHooks, const std::string& gateTok,
 	    // Fresh navmesh work buffers get the game's region pruning and
 	    // extra-vertex settings; off = Havok's defaults.
 	    << ", nmPrune=" << 2 << "/"
-	    << (navmeshVanillaPruningEnabled ? "on" : "off")
+	    << (navmesh::g_navmeshCfg.navmeshVanillaPruningEnabled ? "on" : "off")
 	    // Neighbour-seed instrumentation and the shipped-tile stand-in seeds;
 	    // off = the INI key is false.
 	    << ", nmNbrSeed=" << 2 << "/"
-	    << (navmeshNeighbourSeedsEnabled ? "on" : "off")
+	    << (navmesh::g_navmeshCfg.navmeshNeighbourSeedsEnabled ? "on" : "off")
 	    // Adjacent navmesh jobs are deferred unless the key is false (count only).
 	    << ", nmAdj=" << 2 << "/"
-	    << (navmeshAdjExclusionEnabled ? "enforce" : "count");
+	    << (navmesh::g_navmeshCfg.navmeshAdjExclusionEnabled ? "enforce" : "count");
 	msg << ", render=" << renderTok.str();
 	msg << ", gui=" << SettingsPanelToken();
 	msg << ", bench=" << benchTok;

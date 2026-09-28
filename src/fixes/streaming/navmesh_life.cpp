@@ -233,7 +233,7 @@ static int Sample(const unsigned char* inst, const void* collection,
 
 void NavMeshLifeOnAdd(void* collection, __int64 instance)
 {
-	if (!navMeshLifeEnabled)
+	if (!fixes::g_fixesCfg.navMeshLifeEnabled)
 		return;
 	InterlockedIncrement(&s_adds);
 	Sample((const unsigned char*)instance, collection, "ADD", -1);

@@ -215,7 +215,7 @@ void InstallNavMeshAdjacency(int* installed, int*)
 	if (!s_observerInstalled)
 		orig_nmgUpdate = NULL;
 
-	const bool enforceWanted = navmeshAdjExclusionEnabled;
+	const bool enforceWanted = navmesh::g_navmeshCfg.navmeshAdjExclusionEnabled;
 	if (!g_adjEvent)
 	{
 		s_mode = MODE_COUNT_NO_OBSERVER;

@@ -53,7 +53,7 @@ char hook_contentStream(void* sectionMgr)
 	// A fault inside the pass kills this thread with the SectionManager's
 	// changeMutex still held exclusively. The guard does not undo that; it
 	// records the fault and the lock state before the process reacts to it.
-	char served = navMeshUpdateGuardEnabled
+	char served = fixes::g_fixesCfg.navMeshUpdateGuardEnabled
 		? NavMeshUpdateGuardCall(sectionMgr, orig_contentStream)
 		: orig_contentStream(sectionMgr);
 

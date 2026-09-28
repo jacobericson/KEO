@@ -132,8 +132,8 @@ static void CameraFocusApply(float eyeX, float eyeZ, double now, float* outX, fl
 	fin.haveAnchor = FindNearestPlayerCharacterXZ(refX, refZ, &fin.anchorX, &fin.anchorZ);
 
 	float zoneWidth = (zoneStepX > 0.0f && zoneStepZ > 0.0f) ? (zoneStepX + zoneStepZ) * 0.5f : 8192.0f;
-	float maxDist  = (cfg_camFocusMaxDist > 0.0f) ? cfg_camFocusMaxDist : zoneWidth;
-	float hardDist = maxDist * cfg_camFocusHardMult;
+	float maxDist  = (zone::g_zoneCfg.cfg_camFocusMaxDist > 0.0f) ? zone::g_zoneCfg.cfg_camFocusMaxDist : zoneWidth;
+	float hardDist = maxDist * zone::g_zoneCfg.cfg_camFocusHardMult;
 
 	CameraFocusResult res = ComputeCameraFocusPoint(fin, maxDist, hardDist);
 
@@ -167,7 +167,7 @@ static void CameraFocusApply(float eyeX, float eyeZ, double now, float* outX, fl
 	s_camFocusWasFocusSrc = isFocusSrc;
 	s_camFocusHaveSource  = true;
 
-	if (now - s_camFocusLastLog > cfg_camLogInterval)
+	if (now - s_camFocusLastLog > zone::g_zoneCfg.cfg_camLogInterval)
 	{
 		s_camFocusLastLog = now;
 		std::ostringstream ss;
@@ -347,7 +347,7 @@ double CameraZoneReports(void* zoneMgr)
 // Main thread: preload and camera-pointer gates run after all reports.
 bool CameraZonePreloadGates(void* cameraPos)
 {
-	if (!preloadEnabled)
+	if (!zone::g_zoneCfg.preloadEnabled)
 		return false;
 
 	if (!cameraPos)
@@ -362,7 +362,7 @@ bool CameraZoneFocusAndPreload(void* zoneMgr, void* cameraPos, double now)
 	float eyeX = (*(const float*)KLIB_MEMBER(5, cameraPos, Ogre__Vector3_x, 0));
 	float eyeZ = (*(const float*)KLIB_MEMBER(5, cameraPos, Ogre__Vector3_z, 8));
 	float focusX = eyeX, focusZ = eyeZ;
-	if (gridCalibrated && cfg_camFocusEnabled)
+	if (gridCalibrated && zone::g_zoneCfg.cfg_camFocusEnabled)
 		CameraFocusApply(eyeX, eyeZ, now, &focusX, &focusZ);
 
 	// Compute camera grid coords once for jump detection + debug logging
@@ -437,9 +437,9 @@ bool CameraZoneFocusAndPreload(void* zoneMgr, void* cameraPos, double now)
 		// empty queue returns before taking the queue lock; without it the
 		// slow backstop runs only while something is tracked or queued.
 		bool hasWork = (numWatched > 0 || pendingCount > 0);
-		double interval = reprioFastEnabled ? cfg_reprioritizeInterval : 3.0;
+		double interval = navmesh::g_navmeshCfg.reprioFastEnabled ? navmesh::g_navmeshCfg.cfg_reprioritizeInterval : 3.0;
 		int reason = ReprioDue(false, now, lastReprioritizeTime, interval,
-		                       hasWork, reprioFastEnabled);
+		                       hasWork, navmesh::g_navmeshCfg.reprioFastEnabled);
 		if (reason != REPRIO_NONE)
 		{
 			CallPrioritizeNavMeshQueue();
@@ -505,7 +505,7 @@ bool CameraZoneFocusAndPreload(void* zoneMgr, void* cameraPos, double now)
 
 			// Per-axis hysteresis only while camFocus is on; camFocus=false
 			// reproduces the original plain-threshold check exactly (margin 0).
-			float margin = cfg_camFocusEnabled ? cfg_camFocusHysteresis : 0.0f;
+			float margin = zone::g_zoneCfg.cfg_camFocusEnabled ? zone::g_zoneCfg.cfg_camFocusHysteresis : 0.0f;
 			CameraFocusAxisResult rx = CameraFocusAxisHysteresis(s_predOffsetX, dx, PRELOAD_THRESHOLD, margin);
 			CameraFocusAxisResult rz = CameraFocusAxisHysteresis(s_predOffsetZ, dz, PRELOAD_THRESHOLD, margin);
 			s_predOffsetX = rx.offset;
@@ -554,7 +554,7 @@ bool CameraZoneFocusAndPreload(void* zoneMgr, void* cameraPos, double now)
 	// --- Character polling (tiered, or a periodic scan fallback) ---
 	if (gridCalibrated)
 	{
-		if (movementAwareEnabled)
+		if (zone::g_zoneCfg.movementAwareEnabled)
 			TieredCharacterPoll(zoneMgr, now);
 		else if (now - lastCharScanTime > CHAR_SCAN_INTERVAL)
 		{
@@ -564,7 +564,7 @@ bool CameraZoneFocusAndPreload(void* zoneMgr, void* cameraPos, double now)
 	}
 
 	// --- Group cohesion: poll formation groups for arrival scatter ---
-	if (groupCohesionEnabled && scatterPatchApplied)
+	if (movement::g_movementCfg.groupCohesionEnabled && scatterPatchApplied)
 		PollFormationGroups();
 	return true;
 }

@@ -177,9 +177,9 @@ void InitializeLogAndConfig(const EntryCtx& ctx)
 	SetCoreGameBase(gameBase);
 	// Before any hook is installed, so the navmesh/path thread can never reach
 	// the wrapper while the guard is half-initialised.
-	NavMeshUpdateGuardInit(ctx.dllDir, (unsigned __int64)gameBase, navMeshUpdateGuardEnabled);
+	NavMeshUpdateGuardInit(ctx.dllDir, (unsigned __int64)gameBase, fixes::g_fixesCfg.navMeshUpdateGuardEnabled);
 	// Armed-but-never-fired must not read the same as switched off.
-	LogMsg(navMeshUpdateGuardEnabled ? "navMeshUpdateGuard: armed" : "navMeshUpdateGuard: off");
+	LogMsg(fixes::g_fixesCfg.navMeshUpdateGuardEnabled ? "navMeshUpdateGuard: armed" : "navMeshUpdateGuard: off");
 
 	// DEV only: names who calls TerminateProcess when the game vanishes with
 	// no dialog, no crash_dump.txt and no WER dump. A no-op outside
@@ -333,15 +333,15 @@ bool CheckBuildGate(EntryCtx& ctx)
 
 		// Every feature off, so anything that reads a flag later (and the
 		// banner below) sees a plugin that does nothing at all.
-		deferralEnabled      = false;
-		priorityBoostEnabled = false;
-		preloadEnabled       = false;
-		movementAwareEnabled = false;
-		cachingEnabled       = false;
-		islandFixEnabled     = false;
-		cfg_islandFarSpan    = 0;
-		groupCohesionEnabled = false;
-		pathfindDiagEnabled   = false;
+		zone::g_zoneCfg.deferralEnabled      = false;
+		navmesh::g_navmeshCfg.priorityBoostEnabled = false;
+		zone::g_zoneCfg.preloadEnabled       = false;
+		zone::g_zoneCfg.movementAwareEnabled = false;
+		navmesh::g_navmeshCfg.cachingEnabled       = false;
+		movement::g_movementCfg.islandFixEnabled     = false;
+		movement::g_movementCfg.cfg_islandFarSpan    = 0;
+		movement::g_movementCfg.groupCohesionEnabled = false;
+		pathfind::g_pathfindCfg.pathfindDiagEnabled   = false;
 		LogInitBanner(0, 0, "FAILED", 0, 0, "off(gate)");
 		return false;
 	}
@@ -435,7 +435,7 @@ void InstallHooksAndGuards(const EntryCtx& ctx)
 	// that gate does track. PhysXCore64.dll is usually not loaded yet here;
 	// this first attempt just covers the case where it already is, and
 	// PurecallRecordTick (hook_updateCameraZone) retries the rest.
-	InstallPurecallRecorder(ctx.gateOk && physPurecallRecordEnabled);
+	InstallPurecallRecorder(ctx.gateOk && fixes::g_fixesCfg.physPurecallRecordEnabled);
 
 	// Not a gate row either, and for a sharper reason: the site is six bytes
 	// in the middle of a function body, and the gate's byte check accepts a
@@ -443,7 +443,7 @@ void InstallHooksAndGuards(const EntryCtx& ctx)
 	// wrong, so this verifies its own three addresses exactly and fails
 	// closed. It installs no hook, so it moves neither gate=ok(N sites) nor
 	// the hook count in the banner.
-	InstallPhysQueryGuard(ctx.gateOk && physQueryGuardEnabled);
+	InstallPhysQueryGuard(ctx.gateOk && fixes::g_fixesCfg.physQueryGuardEnabled);
 
 	// The same kind of mid-function patch, off the gate banner for the same
 	// reason. Its eight bytes cannot be written atomically, so it must arm

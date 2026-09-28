@@ -22,6 +22,7 @@
 #include "gui/settings_rows.h"
 #include "gui/settings_factory.h"
 #include "base/config_table.h"
+#include "navmesh/navmesh_config.h"
 #include <vector>
 #include <math.h>
 #include <emmintrin.h>
@@ -1658,7 +1659,7 @@ static void SettingsRowsTests()
 	for (int m = 0; m < kConfigModuleCount; ++m)
 	{
 		StageModule(kConfigModules[m], &st.module[m]);
-		if (strcmp(kConfigModules[m].name, "core") == 0)
+		if (strcmp(kConfigModules[m].name, "navmesh") == 0)
 			core = m;
 	}
 	for (int i = 0; core >= 0 && kConfigModules[core].keys[i].name; ++i)
@@ -1670,7 +1671,7 @@ static void SettingsRowsTests()
 	if (core < 0 || workerKey < 0)
 		return;
 	StagedRender(&st) = SampleRenderConfig();
-	st.module[core].slots[workerKey].i = 0;
+	((navmesh::NavMeshConfig*)st.module[core].state)->cfg_navmeshWorkerCount = 0;
 	std::vector<SettingsRow> dev, prod;
 	BuildSettingsRows(&st, true, NULL, &dev);
 	BuildSettingsRows(&st, false, NULL, &prod);
@@ -1734,7 +1735,7 @@ static void SettingsRowsTests()
 	if (!wp)
 		return;
 	const SettingsRow& w = *wp;
-	Check(w.kind == SR_DROPBOX && w.intPtr == &st.module[core].slots[workerKey].i && w.label.find("(restart)") != std::string::npos,
+	Check(w.kind == SR_DROPBOX && w.intPtr == &((navmesh::NavMeshConfig*)st.module[core].state)->cfg_navmeshWorkerCount && w.label.find("(restart)") != std::string::npos,
 	      "worker drop box bound to staging, marked restart");
 	Check(w.choices.size() == 7 && w.choices[0].first == "Auto" && w.choices[0].second == 0
 	      && w.choices[6].first == "6" && w.choices[6].second == 6, "worker choices Auto, 1..capacity");
@@ -1754,7 +1755,7 @@ static void SettingsRowsTests()
 		d = DiffSettings(staged, live, saved);
 		Check(d.applied == 0 && d.saved == 1, "renderLevers: saved, never applied");
 		staged = st;
-		staged.module[core].slots[workerKey].i = 3;
+		((navmesh::NavMeshConfig*)staged.module[core].state)->cfg_navmeshWorkerCount = 3;
 		d = DiffSettings(staged, live, saved);
 		Check(d.applied == 0 && d.saved == 1, "worker count: saved, never applied");
 		staged = st;
@@ -1765,14 +1766,14 @@ static void SettingsRowsTests()
 
 	{
 		SettingsStaging saved = st, staged = st;
-		staged.module[core].slots[workerKey].i = 4;
+		((navmesh::NavMeshConfig*)staged.module[core].state)->cfg_navmeshWorkerCount = 4;
 		std::vector<IniEntry> set, automatic;
 		int n = ModuleStageEntries(kConfigModules[core], staged.module[core], saved.module[core], &set);
 		Check(n == 1 && set.size() == 1, "worker entry: the one changed key");
 		IniEntry e = set.empty() ? IniEntry() : set[0];
 		Check(e.key == "navmeshWorkerCount" && e.value == "4" && e.kind == INI_INT && e.append, "worker entry appends a set count");
-		saved.module[core].slots[workerKey].i = 4;
-		staged.module[core].slots[workerKey].i = 0;
+		((navmesh::NavMeshConfig*)saved.module[core].state)->cfg_navmeshWorkerCount = 4;
+		((navmesh::NavMeshConfig*)staged.module[core].state)->cfg_navmeshWorkerCount = 0;
 		n = ModuleStageEntries(kConfigModules[core], staged.module[core], saved.module[core], &automatic);
 		Check(n == 1 && automatic.size() == 1 && !automatic[0].append, "automatic is not appended");
 		CheckText(RewriteIniKeys("navmeshWorkerCount=2\n", automatic, NULL),

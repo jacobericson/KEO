@@ -226,11 +226,11 @@ static void LogIslandSpan(double now)
 	long flipped = InterlockedCompareExchange(&g_isInRuleFlip, 0, 0);
 	const char* state;
 	if (!installed)                    state = "not-installed";
-	else if (cfg_islandFarSpan <= 0)   state = "off";
+	else if (movement::g_movementCfg.cfg_islandFarSpan <= 0)   state = "off";
 	else if (calls == 0)               state = "armed-idle";
 	else if (flipped == 0)             state = "armed-quiet";
 	else                               state = "armed-active";
-	ss << " rule=" << state << " farSpan=" << cfg_islandFarSpan;
+	ss << " rule=" << state << " farSpan=" << movement::g_movementCfg.cfg_islandFarSpan;
 	if (!installed)
 	{
 		ss << " calls=? vanT=? vanF=? flipped=?";
@@ -306,7 +306,7 @@ void IslandTick(void* zoneMgr, double now)
 			// part gated on preload: the rest above observes and is wanted in
 			// a preload=false control, while re-issuing there would make that
 			// control carry a behaviour it is supposed to be without.
-			if (preloadEnabled)
+			if (zone::g_zoneCfg.preloadEnabled)
 				IslandReissuePollTick(zm, now);
 		}
 	}
@@ -359,7 +359,7 @@ void IslandTick(void* zoneMgr, double now)
 		// cannot tell "no group" from "a group standing on one spot". off
 		// means group cohesion is not built or not enabled, so nothing can
 		// form a group at all.
-		if (groupCohesionEnabled)
+		if (movement::g_movementCfg.groupCohesionEnabled)
 		{
 			int cohGroups = 0, cohLive = 0, cohWorstId = -1;
 			float cohWorst = 0.0f;

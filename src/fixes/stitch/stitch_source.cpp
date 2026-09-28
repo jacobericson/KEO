@@ -545,7 +545,7 @@ void StitchSourceOnSetDrops(const void* graphInstance, int ownUid, int oppUid, i
 	const bool addHit = s_addObserved
 		&& LfTableGet(&s_add, UidKey(oppUid), 0, &addNow, &addWriting) == LF_GET_HIT;
 
-	if (InterlockedIncrement(&s_lines) > cfg_stitchSourceLines)
+	if (InterlockedIncrement(&s_lines) > fixes::g_fixesCfg.cfg_stitchSourceLines)
 	{
 		InterlockedDecrement(&s_lines);
 		return;
@@ -672,7 +672,7 @@ static void EmitHeartbeat()
 	FlbStr(&p, " raceHint=");     FlbDec(&p, Read(&s_raceHint));
 	FlbStr(&p, " dblGen=");       FlbDec(&p, Read(&s_dblGen));
 	FlbStr(&p, " lines=");        FlbDec(&p, Read(&s_lines));
-	FlbStr(&p, "/");              FlbDec(&p, cfg_stitchSourceLines);
+	FlbStr(&p, "/");              FlbDec(&p, fixes::g_fixesCfg.cfg_stitchSourceLines);
 	LogMsgDeferrable(FlbDone(&p));
 }
 

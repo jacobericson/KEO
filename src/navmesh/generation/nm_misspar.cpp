@@ -66,7 +66,7 @@ void MissParRecordJob(const MissParJob& j)
 
 void MissParNoteHash(const NavMeshCacheEntry& e, bool worker)
 {
-	if (!navmeshMissHashEnabled)
+	if (!navmesh::g_navmeshCfg.navmeshMissHashEnabled)
 		return;
 	MissParSpan spans[11] = {
 		{ e.cachedFaces,    e.faceCount * HKAI_FACE_SIZE },
@@ -238,9 +238,9 @@ void MissParInit()
 {
 	SYSTEM_INFO si;
 	GetSystemInfo(&si);
-	g_genCap = MissParGenConcurrency(cfg_navmeshGenConcurrency, (int)si.dwNumberOfProcessors, 4);
-	LogMsg(MissParGenConcurrencyMessage(cfg_navmeshGenConcurrency, g_genCap,
-	                                     (int)si.dwNumberOfProcessors, !navmeshMissSplitEnabled));
+	g_genCap = MissParGenConcurrency(navmesh::g_navmeshCfg.cfg_navmeshGenConcurrency, (int)si.dwNumberOfProcessors, 4);
+	LogMsg(MissParGenConcurrencyMessage(navmesh::g_navmeshCfg.cfg_navmeshGenConcurrency, g_genCap,
+	                                     (int)si.dwNumberOfProcessors, !navmesh::g_navmeshCfg.navmeshMissSplitEnabled));
 	// Room above the cap for the shutdown wake's releases.
 	g_genSlots = CreateSemaphore(NULL, g_genCap, g_genCap + NAVMESH_WORKER_COUNT + 1, NULL);
 	InflightInit();
@@ -261,7 +261,7 @@ void MissParArm(bool clone, void* realNMG)
 	// reads the count, and leaving it at zero keeps canonSkip= meaningful in
 	// that arm. The flag makes the pair symmetric whatever the setting does
 	// between the arm and the disarm.
-	if (!clone && navmeshMissSplitBgEnabled)
+	if (!clone && navmesh::g_navmeshCfg.navmeshMissSplitBgEnabled)
 	{
 		t_swapCounted = true;
 		InterlockedIncrement(&s_swapArmed);
@@ -287,7 +287,7 @@ static int ClassifyRelease(void* wb)
 		return MP_REL_NONE;
 	MissParReleaseInputs in;
 	in.armKind          = t_arm;
-	in.splitEnabled     = navmeshMissSplitEnabled;
+	in.splitEnabled     = navmesh::g_navmeshCfg.navmeshMissSplitEnabled;
 	in.slotsReady       = (g_genSlots != NULL);
 	in.pjDepth          = NavMeshProcessJobDepth();
 	in.keycodesReady    = MissParKeycodesReady();
@@ -298,7 +298,7 @@ static int ClassifyRelease(void* wb)
 	in.holderIsBg       = (MissParHolderGet() == MP_HOLD_BGMISS);
 	in.wb               = wb;
 	in.installedWb      = *WbSlot(t_realNmg);
-	in.bgSplitEnabled   = navmeshMissSplitBgEnabled;
+	in.bgSplitEnabled   = navmesh::g_navmeshCfg.navmeshMissSplitBgEnabled;
 	in.swapOutstanding  = InterlockedCompareExchange(&s_swapArmed, 0, 0);
 	in.canonicalWb      = MissParCanonConfirmed(s_canon, CANON_AGREE);
 	return MissParClassifyRelease(in);
@@ -498,7 +498,7 @@ void MissParPopulate(nmResultPopulate_t orig, void* wb, void* local, void* mesh,
 		if (kind == MP_REL_SWAP)
 			InterlockedIncrement(&s_bgPassBlocked);
 	}
-	else if (t_arm == MP_ARM_SWAP && navmeshMissSplitEnabled && navmeshMissSplitBgEnabled
+	else if (t_arm == MP_ARM_SWAP && navmesh::g_navmeshCfg.navmeshMissSplitEnabled && navmesh::g_navmeshCfg.navmeshMissSplitBgEnabled
 	         && MissParCanonConfirmed(s_canon, CANON_AGREE) == NULL)
 		InterlockedIncrement(&s_bgPassNoCanon);
 	InterlockedIncrement(&s_splitPassed);

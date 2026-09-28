@@ -106,7 +106,7 @@ void hook_addOrderSelected(void* thisPI, void* destIndoors, int task,
 						IslandNoteOrder(character, location);
 
 						// Movement-aware preload tracking: cross-zone movers
-						if (preloadEnabled && movementAwareEnabled && haveDest)
+						if (zone::g_zoneCfg.preloadEnabled && zone::g_zoneCfg.movementAwareEnabled && haveDest)
 						{
 							float charX = GetCharPosX(character);
 							float charZ = GetCharPosZ(character);
@@ -179,7 +179,7 @@ void hook_addOrderSelected(void* thisPI, void* destIndoors, int task,
 
 		// Group cohesion: create formation group for arrival scatter.
 		bool formedGroup = false;
-		if (groupCohesionEnabled && scatterPatchApplied && collectedCount > 1)
+		if (movement::g_movementCfg.groupCohesionEnabled && scatterPatchApplied && collectedCount > 1)
 		{
 			bool allGrouped = true;
 			for (int c = 0; c < collectedCount; ++c)
@@ -259,7 +259,7 @@ void hook_addOrderSelected(void* thisPI, void* destIndoors, int task,
 	// Immediate reprio: the player just named one or more route zones, so the
 	// jobs already queued for them float to the top now. Requests the AI task
 	// system makes later ride the backstop instead.
-	if (reprioFastEnabled && charsAdded > 0)
+	if (navmesh::g_navmeshCfg.reprioFastEnabled && charsAdded > 0)
 	{
 		CallPrioritizeNavMeshQueue();
 		InterlockedIncrement(&reprioOrderFires);

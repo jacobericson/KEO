@@ -154,7 +154,7 @@ void GetDiskCachePath(const NavMeshCacheKey& key, char* out, size_t outSize)
 	L2FormatPathQuiet(out, outSize, "%s%d_%d_%d_%d_%x_%x_%x.bin",
 	                  navmesh::g_nmCache.nmDiskCacheDirBuf,
 	                  key.gridX, key.gridY, key.sectionTileId, key.jobType,
-	                  key.aabbHash, key.buildingHash, g_modSetHash);
+	                  key.aabbHash, key.buildingHash, navmesh::g_navmeshCfg.g_modSetHash);
 }
 
 // Every path that loses an L2 file ends here. The first loss of the session
@@ -342,7 +342,7 @@ static void L2ScanAndEvict(long long cap)
 
 static void L2EnforceCap(size_t justWrote)
 {
-	long long cap = (long long)cfg_navmeshDiskCacheMaxMB * 1024LL * 1024LL;
+	long long cap = (long long)navmesh::g_navmeshCfg.cfg_navmeshDiskCacheMaxMB * 1024LL * 1024LL;
 	if (cap <= 0) return;
 
 	if (InterlockedCompareExchange(&g_l2SizeKnown, 0, 0) != 0)
@@ -363,7 +363,7 @@ static void L2EnforceCap(size_t justWrote)
 
 void L2StartupScan()
 {
-	long long cap = (long long)cfg_navmeshDiskCacheMaxMB * 1024LL * 1024LL;
+	long long cap = (long long)navmesh::g_navmeshCfg.cfg_navmeshDiskCacheMaxMB * 1024LL * 1024LL;
 	if (cap <= 0) return;
 	if (InterlockedCompareExchange(&g_l2EvictBusy, 1, 0) != 0) return;
 	L2ScanAndEvict(cap);

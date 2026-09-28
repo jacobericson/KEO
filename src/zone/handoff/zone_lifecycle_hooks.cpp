@@ -129,7 +129,7 @@ static void InstallZoneMapUpdateHook(int* installed)
 	                   installed, true) == NULL)
 	{
 		LogMsg(std::string("Zone lifecycle: ZoneMap::update detour installed (retention=")
-		       + (zoneRetentionEnabled ? "on)" : "off)"));
+		       + (zone::g_zoneCfg.zoneRetentionEnabled ? "on)" : "off)"));
 		return;
 	}
 	orig_zoneMapUpdate = NULL;
@@ -148,7 +148,7 @@ void InstallZoneLifecycleHooks(int* installed, int*)
 	                   installed, true) == NULL)
 	{
 		LogMsg(std::string("Zone lifecycle: activateZoneMap detour installed (townGuard=")
-		       + (townGuardEnabled ? "on)" : "off)"));
+		       + (zone::g_zoneCfg.townGuardEnabled ? "on)" : "off)"));
 	}
 	else
 	{

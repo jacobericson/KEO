@@ -105,7 +105,7 @@ bool AddWatchedCharacter(uintptr_t character, uintptr_t charMovement,
 		}
 	}
 
-	if (numWatched >= WatchedCapacity(playerCharRegistryEnabled))
+	if (numWatched >= WatchedCapacity(movement::g_movementCfg.playerCharRegistryEnabled))
 	{
 		// The oldest entry with no move order may be overwritten in place; an
 		// entry carrying one never is, so a full registry drops the add.
@@ -115,7 +115,7 @@ bool AddWatchedCharacter(uintptr_t character, uintptr_t charMovement,
 			slots[i].hasMoveOrder = watchedChars[i].hasMoveOrder;
 			slots[i].addedTime    = watchedChars[i].addedTime;
 		}
-		int evictIdx = playerCharRegistryEnabled
+		int evictIdx = movement::g_movementCfg.playerCharRegistryEnabled
 		             ? ChooseWatchedEvictSlot(slots, numWatched) : -1;
 		if (evictIdx >= 0)
 		{
@@ -267,7 +267,7 @@ void RemoveWatchedCharacter(int index)
 
 void ScanCharacterZones(void* zoneMgr)
 {
-	if (playerCharRegistryEnabled)
+	if (movement::g_movementCfg.playerCharRegistryEnabled)
 		EnsurePlayerCharsWatched();
 
 	// Per-character grid scan: one 3x3 (or 2x2, when the preload budget is
@@ -465,7 +465,7 @@ void PollActiveMovers(void* zoneMgr, double now)
 			// Arrived. With the registry on the entry is downgraded to a
 			// baseline one and the scan keeps owning its lifetime, so the
 			// zone it stands in keeps ranking; without it, it is dropped.
-			if (playerCharRegistryEnabled)
+			if (movement::g_movementCfg.playerCharRegistryEnabled)
 			{
 				if (watchedChars[i].hasMoveOrder)
 				{

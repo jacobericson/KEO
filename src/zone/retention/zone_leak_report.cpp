@@ -70,7 +70,7 @@ void ZoneLeakReport(void* zoneMgr, double now)
 	bool retainOk = ZlBuildRetention(zoneMgr);
 	// A record owns its zone only while the idle pass can unload it: with the
 	// protocol unavailable such zones are orphans again.
-	bool recordOwns = zoneLifeUnloadEnabled && !ZlUnloadUnavailable();
+	bool recordOwns = zone::g_zoneCfg.zoneLifeUnloadEnabled && !ZlUnloadUnavailable();
 
 	int nContent = 0, nSetA = 0, nSetB = 0, nTracked = 0;
 	int o176 = 0, o176reg = 0, o176proc = 0, o177 = 0, o00 = 0;

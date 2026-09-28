@@ -1,0 +1,120 @@
+// navmesh_config.cpp - defaults and INI rows for the navmesh module.
+#include "navmesh/navmesh_config.h"
+#include "base/config_rows.h"
+#include "base/ini_text.h"
+#include <cstddef>
+#include <string.h>
+
+static const ConfigChoice kWorkerChoices[] =
+{
+	{ "0", 0, "Auto" }, { "1", 1, "1" }, { "2", 2, "2" }, { "3", 3, "3" }, { "4", 4, "4" }, { "5", 5, "5" }, { "6", 6, "6" }
+};
+static_assert(sizeof(kWorkerChoices) / sizeof(kWorkerChoices[0]) == NAVMESH_WORKER_COUNT + 1,
+              "a worker choice per count up to NAVMESH_WORKER_COUNT, and Auto");
+
+namespace navmesh {
+
+const NavMeshConfig kNavMeshDefaults =
+{
+	true, // priorityBoostEnabled
+	true, // cachingEnabled
+	true, // reprioFastEnabled
+	true, // routeTierEnabled
+	true, // navmeshVanillaPruningEnabled
+	true, // navmeshNeighbourSeedsEnabled
+	true, // navmeshBuildLockNarrowEnabled
+	true, // navmeshStallThrottleEnabled
+	true, // navmeshAdjExclusionEnabled
+#ifdef ZONEOPT_DEBUG
+	true, // navmeshMissHashEnabled
+#else
+	false, // navmeshMissHashEnabled
+#endif
+	true, // navmeshMissSplitEnabled
+	true, // navmeshMissSplitBgEnabled
+	0, // cfg_navmeshWorkerCount
+	0, // cfg_navmeshGenConcurrency
+	512, // cfg_navmeshDiskCacheMaxMB
+	1.0, // cfg_reprioritizeInterval
+	0, // g_navMeshWorkerCount
+	0, // g_modSetHash
+};
+
+NavMeshConfig g_navmeshCfg = kNavMeshDefaults;
+} // namespace navmesh
+
+namespace navmesh_config_detail {
+union NavMeshConfigPodCheck { navmesh::NavMeshConfig s; };
+} // namespace navmesh_config_detail
+using namespace navmesh_config_detail;
+
+namespace navmesh {
+static_assert(__alignof(NavMeshConfig) >= 8, "NavMeshConfig must be 8-byte aligned");
+
+const ConfigKey g_navmeshConfigKeys[] =
+{
+	CFG_OBOOL("priorityBoost", NavMeshConfig, priorityBoostEnabled,         NDOC, SHOW,
+	  "Navmesh thread priority boost",
+	  "Raises the priority of the game's navmesh thread while a zone transition loads."),
+	CFG_OBOOL("caching", NavMeshConfig, cachingEnabled,               NDOC, SHOW,
+	  "Navmesh cache",
+	  "Keeps generated navmesh tiles in memory and on disk and reuses them instead of generating them"
+	  " again."),
+	CFG_OBOOL("reprioFast", NavMeshConfig, reprioFastEnabled,            DOC, SHOW,
+	  "Fast navmesh queue reordering",
+	  "Reorders the navmesh job queue on the interval below and again the moment a move order is"
+	  " issued, instead of a 3 second backstop."),
+	CFG_OBOOL("routeTier", NavMeshConfig, routeTierEnabled,             DOC, SHOW,
+	  "Move order zone first",
+	  "The zone a character with a move order stands in is generated before the zones around the"
+	  " camera."),
+	CFG_OBOOL("navmeshVanillaPruning", NavMeshConfig, navmeshVanillaPruningEnabled, NDOC, SHOW,
+	  "Game pruning on fresh navmesh buffers",
+	  "Fresh navmesh work buffers carry the game's region pruning and extra-vertex settings. Off uses"
+	  " Havok's defaults, under their own disk cache key."),
+	CFG_OBOOL("navmeshNeighbourSeeds", NavMeshConfig, navmeshNeighbourSeedsEnabled, NDOC, SHOW,
+	  "Neighbour navmesh seeds",
+	  "Records the seeds each neighbour's mesh gives, and adds stand-in seeds from a neighbour's"
+	  " shipped tile where no neighbour mesh is usable."),
+	CFG_OBOOL("navmeshBuildLockNarrow", NavMeshConfig, navmeshBuildLockNarrowEnabled, DOC, SHOW,
+	  "Narrow navmesh build lock",
+	  "The navmesh collision builders lock only the parts that race, on the game's own lock. Off locks"
+	  " each whole build on the mod's lock."),
+	CFG_OBOOL("navmeshStallThrottle", NavMeshConfig, navmeshStallThrottleEnabled,  DOC, SHOW,
+	  "Navmesh build lock stall throttle",
+	  "When the navmesh build lock has refused every attempt for five seconds, slows the engine's retry"
+	  " to a few dozen attempts a second."),
+	CFG_OBOOL("navmeshAdjExclusion", NavMeshConfig, navmeshAdjExclusionEnabled,   DOC, SHOW,
+	  "Neighbouring navmesh build exclusion",
+	  "Makes a navmesh piece wait until its neighbours are built and handed to the game, so two"
+	  " neighbours never stitch over each other. Off only counts the waits."),
+	CFG_OBOOL("navmeshMissHash", NavMeshConfig, navmeshMissHashEnabled,       DOC, DIAG,
+	  "Navmesh hash log lines",
+	  "Logs a hash of every generated navmesh."),
+	CFG_OBOOL("navmeshMissSplit", NavMeshConfig, navmeshMissSplitEnabled,      DOC, SHOW,
+	  "Parallel navmesh generation",
+	  "Navmesh generation on a worker runs outside the lock the other navmesh jobs wait on, so several"
+	  " can generate at once."),
+	CFG_OBOOL("navmeshMissSplitBg", NavMeshConfig, navmeshMissSplitBgEnabled,    DOC, SHOW,
+	  "Parallel background navmesh generation",
+	  "The same for the generation the background navmesh thread runs itself. Needs parallel navmesh"
+	  " generation."),
+	CFG_OINT_CHOICES("navmeshWorkerCount", NavMeshConfig, cfg_navmeshWorkerCount, 0.0f, (float)NAVMESH_WORKER_COUNT, INT_MIN, DOC, SHOW,
+	  "Navmesh worker threads",
+	  "Threads that generate and load navmesh tiles in the background."
+	  " Auto uses half the logical CPUs.", kWorkerChoices),
+	CFG_OINT("navmeshGenConcurrency", NavMeshConfig, cfg_navmeshGenConcurrency, 0.0f, 4.0f, INT_MIN, DOC, SHOW,
+	  "Parallel navmesh generations",
+	  "How many navmesh generations may run at once while parallel generation is on. 0 is automatic:"
+	  " two, fewer on CPUs with under five logical cores."),
+	CFG_OINT("navmeshDiskCacheMaxMB", NavMeshConfig, cfg_navmeshDiskCacheMaxMB, 32.0f, 8192.0f, INT_MIN, NDOC, SHOW,
+	  "Navmesh disk cache size in MB",
+	  "Size cap of the navmesh_cache folder; past it the oldest files are deleted down to 75% of the"
+	  " cap."),
+	CFG_ODOUBLE("reprioritizeInterval", NavMeshConfig, cfg_reprioritizeInterval, 1.0f, 30.0f, DOC, SHOW,
+	  "Navmesh queue reorder interval seconds",
+	  "Seconds between navmesh queue reorders while fast reordering is on.", 1.0f, 1),
+	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }
+};
+
+} // namespace navmesh

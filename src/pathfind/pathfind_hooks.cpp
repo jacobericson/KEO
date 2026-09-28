@@ -172,7 +172,7 @@ char hook_csCheckFaceConn(void* manager, unsigned int startFace, unsigned int de
 	// m_instances[sec]+16 and races with addInstance (observed crash at 0xDA44D5).
 	// The bypass closes that vector at the cost of letting every pair through to
 	// the A* search; clusterGraphBypass=false gives the graph its say back.
-	if (clusterGraphBypassMode == CGB_BYPASS)
+	if (pathfind::g_pathfindCfg.clusterGraphBypassMode == CGB_BYPASS)
 	{
 		RecordConnProbe(destFace, 1);
 		return 1;
@@ -181,7 +181,7 @@ char hook_csCheckFaceConn(void* manager, unsigned int startFace, unsigned int de
 	// Resolved before the original runs, so the label belongs to the request
 	// that opened this check and not to anything the call itself starts.
 	int gateOwner = WAVE_UNK;
-	if (clusterGraphBypassMode == CGB_MEASURE || clusterGraphBypassMode == CGB_PLAYER)
+	if (pathfind::g_pathfindCfg.clusterGraphBypassMode == CGB_MEASURE || pathfind::g_pathfindCfg.clusterGraphBypassMode == CGB_PLAYER)
 		gateOwner = ConnGateOwner();
 
 	char result = orig_csCheckFaceConn(manager, startFace, destFace);
@@ -209,12 +209,12 @@ char hook_csCheckFaceConn(void* manager, unsigned int startFace, unsigned int de
 	// A pair the graph accepts takes the same route in both, so only the
 	// rejection needs deciding. An unattributed rejection is obeyed: the
 	// unknown case is the one vanilla already handles.
-	if (clusterGraphBypassMode == CGB_MEASURE || clusterGraphBypassMode == CGB_PLAYER)
+	if (pathfind::g_pathfindCfg.clusterGraphBypassMode == CGB_MEASURE || pathfind::g_pathfindCfg.clusterGraphBypassMode == CGB_PLAYER)
 	{
 		if (!result)
 		{
 			InterlockedIncrement(&pathfind::g_pathDiag.diagConnRejectByGate[gateOwner]);
-			if (clusterGraphBypassMode == CGB_PLAYER && gateOwner != WAVE_PLAYER)
+			if (pathfind::g_pathfindCfg.clusterGraphBypassMode == CGB_PLAYER && gateOwner != WAVE_PLAYER)
 				return 0;
 			if (t_waveTag && t_waveConsumed)
 				InterlockedIncrement(&pathfind::g_pathDiag.diagWaveStale);
@@ -629,7 +629,7 @@ void hook_requestPath(void* havokChar, float* destination, int priority)
 	// reports what it would do. Only checked for priority < 2; the order path
 	// (priority >= 2) never needs it.
 	bool matchedPlayerSet = (priority < 2) && PlayerRepathTierIsPlayerOwned((uintptr_t)havokChar);
-	PlayerRepathTierDecision decision = PlayerRepathTierDecide(priority, matchedPlayerSet, playerRepathTierEnabled);
+	PlayerRepathTierDecision decision = PlayerRepathTierDecide(priority, matchedPlayerSet, pathfind::g_pathfindCfg.playerRepathTierEnabled);
 	squadBoostTier = decision.tier;
 	squadBoostFromRepathTier = (decision.source == PRT_SOURCE_STATE6 && decision.tier > 0);
 

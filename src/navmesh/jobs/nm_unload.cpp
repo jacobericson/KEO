@@ -100,7 +100,7 @@ static const int UNLOAD_QUEUE_WALK_CAP = 65536;
 // caching off means the hook ran anyway, and then nothing here is sound.
 const char* NavMeshZoneUnloadUnavailable()
 {
-	if (!cachingEnabled)
+	if (!navmesh::g_navmeshCfg.cachingEnabled)
 		return g_navMeshGen ? "caching off but the dispatchJob hook ran" : NULL;
 	return NULL;
 }
@@ -111,7 +111,7 @@ NavMeshUnloadBegin NavMeshBeginZoneUnload(void* zone)
 		return NM_UL_REFUSED;
 	if (NavMeshZoneUnloadUnavailable())
 		return NM_UL_UNAVAILABLE;
-	if (!cachingEnabled)
+	if (!navmesh::g_navmeshCfg.cachingEnabled)
 		return NM_UL_BEGUN;   // no mod NavMesh thread exists: nothing to keep off the zone
 	if (!InterlockedCompareExchange(&g_pjLockReady, 0, 0))
 		return NM_UL_REFUSED;

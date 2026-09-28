@@ -32,6 +32,7 @@ struct RenderConfig
 extern RenderConfig g_renderCfg;
 
 // The compiled-in values (DEV and PROD differ), before the INI.
+extern const RenderConfig kRenderDefaults;
 const RenderConfig& RenderConfigDefaults();
 
 // Startup (LoadConfig): clamps the loaded render values, one line per change,

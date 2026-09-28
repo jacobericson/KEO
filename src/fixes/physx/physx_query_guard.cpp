@@ -484,7 +484,7 @@ void PhysQueryGuardTick(double now)
 	long pure  = InterlockedCompareExchange(&s_rejPure, 0, 0);
 
 	std::ostringstream ss;
-	ss << "PhysQ: enabled=" << (physQueryGuardEnabled ? 1 : 0)
+	ss << "PhysQ: enabled=" << (fixes::g_fixesCfg.physQueryGuardEnabled ? 1 : 0)
 	   << " armed=" << (s_state == kArmed ? 1 : 0)
 	   << " entries=" << InterlockedCompareExchange(&s_entries, 0, 0)
 	   << " ok=" << InterlockedCompareExchange(&s_ok, 0, 0)

@@ -27,21 +27,19 @@ bool BenchWindowInForeground() { return false; }
 int BenchLoadedZoneCount() { return 0; }
 
 static const char* const RENDER_TITLE = "Render and particles";
-static const char* const CORE_TITLE = "Zones, navmesh and pathfinding";
+static const char* const MODULE_TITLES[] =
+{
+	"Zone loading", "Navmesh", "Pathfinding", "Movement and orders", "Crash guards and probes", "Settings panel"
+};
 
-// The table's literal counts: the PROD table lacks the two DEV-only probes,
-// both devOnly checkboxes.
 #ifdef ZONEOPT_DEBUG
 static const char* const SUITE_NAME = "settings_factory_units";
+#else
+static const char* const SUITE_NAME = "settings_factory_prod_units";
+#endif
 static const size_t CORE_ROWS_DEV = 72;
 static const int DEV_ONLY_ROWS = 17;
 static const int DEV_ONLY_CORE = 14;
-#else
-static const char* const SUITE_NAME = "settings_factory_prod_units";
-static const size_t CORE_ROWS_DEV = 70;
-static const int DEV_ONLY_ROWS = 15;
-static const int DEV_ONLY_CORE = 12;
-#endif
 
 static void CheckNamed(bool ok, const std::string& what)
 {
@@ -72,7 +70,7 @@ static bool ShouldHaveLabel(const ConfigKey& k)
 
 static bool Shown(const ConfigKey& k, bool devBuild)
 {
-	return k.label && ShouldHaveLabel(k) && (devBuild || !k.devOnly);
+	return k.label && ShouldHaveLabel(k) && (devBuild || (!k.devOnly && !k.debugOnlyReader));
 }
 
 static std::string RowLabel(const ConfigKey& k)
@@ -94,6 +92,13 @@ static int ModuleIndex(const char* name)
 			return m;
 	}
 	return -1;
+}
+
+static int ModuleFor(const char* key)
+{
+	const ConfigModule* mod = NULL;
+	FindConfigKey(key, &mod);
+	return mod ? (int)(mod - kConfigModules) : -1;
 }
 
 static int KeyIndex(const ConfigModule& m, const char* name)
@@ -123,6 +128,17 @@ static std::vector<const SettingsRow*> Section(const std::vector<SettingsRow>& r
 		++i;
 	for (++i; i < rows.size() && rows[i].kind != SR_HEADER; ++i)
 		out.push_back(&rows[i]);
+	return out;
+}
+
+static std::vector<const SettingsRow*> ModuleSections(const std::vector<SettingsRow>& rows)
+{
+	std::vector<const SettingsRow*> out;
+	for (int m = 0; m < 6; ++m)
+	{
+		std::vector<const SettingsRow*> sec = Section(rows, MODULE_TITLES[m]);
+		out.insert(out.end(), sec.begin(), sec.end());
+	}
 	return out;
 }
 
@@ -184,8 +200,9 @@ static void CheckSections()
 		if (rows[i].kind == SR_HEADER)
 			headers.push_back(rows[i].label);
 	}
-	Check(headers.size() == 3 && headers[0] == RENDER_TITLE && headers[1] == CORE_TITLE && headers[2] == "Benchmark",
-	      "Sections");
+	bool sections = headers.size() == 8 && headers[0] == RENDER_TITLE && headers[7] == "Benchmark";
+	for (int i = 0; sections && i < 6; ++i) sections = headers[i + 1] == MODULE_TITLES[i];
+	Check(sections, "Sections");
 
 	// The render section is today's, label for label and kind for kind.
 	std::vector<const SettingsRow*> render = Section(rows, RENDER_TITLE);
@@ -262,8 +279,8 @@ static void CheckRowCounts()
 	SettingsStaging st;
 	StageAll(&st);
 	std::vector<SettingsRow> dev = Rows(&st, true, NULL), prod = Rows(&st, false, NULL);
-	Check(Section(dev, CORE_TITLE).size() == CORE_ROWS_DEV, "core rows dev");
-	Check(Section(prod, CORE_TITLE).size() == 59, "core rows prod");
+	Check(ModuleSections(dev).size() == CORE_ROWS_DEV, "core rows dev");
+	Check(ModuleSections(prod).size() == 59, "core rows prod");
 	Check(Section(dev, RENDER_TITLE).size() == 21, "render rows dev");
 	Check(Section(prod, RENDER_TITLE).size() == 17, "render rows prod");
 }
@@ -275,7 +292,7 @@ static void CheckRestart()
 	SettingsStaging st;
 	StageAll(&st);
 	std::vector<SettingsRow> rows = Rows(&st, true, NULL);
-	std::vector<const SettingsRow*> core = Section(rows, CORE_TITLE);
+	std::vector<const SettingsRow*> core = ModuleSections(rows);
 	bool ok = !core.empty();
 	for (size_t i = 0; i < core.size(); ++i)
 		ok = ok && EndsWith(core[i]->label, " (restart)");
@@ -335,14 +352,15 @@ static void CheckDevOnly()
 	}
 	Check(ok && devRows == DEV_ONLY_ROWS, "devOnly");
 
-	const ConfigModule& core = kConfigModules[ModuleIndex("core")];
 	int n = 0;
-	for (int i = 0; core.keys[i].name; ++i)
+	for (int m = 1; m < 7; ++m)
 	{
-		if (core.keys[i].retired)
-			continue;
-		CheckNamed(core.keys[i].devOnly == InDevOnlySet(core.keys[i].name), std::string("devOnly set ") + core.keys[i].name);
-		n += core.keys[i].devOnly ? 1 : 0;
+		const ConfigModule& core = kConfigModules[m];
+		for (int i = 0; core.keys[i].name; ++i)
+		{
+			CheckNamed(core.keys[i].devOnly == InDevOnlySet(core.keys[i].name), std::string("devOnly set ") + core.keys[i].name);
+			n += core.keys[i].devOnly ? 1 : 0;
+		}
 	}
 	Check(n == DEV_ONLY_CORE, "devOnly set: the table's devOnly core keys");
 }
@@ -351,7 +369,7 @@ static void CheckDevOnly()
 
 static void CheckNumericRows()
 {
-	int c = ModuleIndex("core");
+	int c = ModuleFor("islandFarSpan");
 	const ConfigModule& core = kConfigModules[c];
 	SettingsStaging saved;
 	StageAll(&saved);
@@ -378,23 +396,27 @@ static void CheckNumericRows()
 		Check(n == 0 && e.empty(), "islandFarSpan: a value that rounds to the saved one writes nothing");
 	}
 
-	int ssl = KeyIndex(core, "stitchSourceLines");
+	int f = ModuleFor("stitchSourceLines");
+	const ConfigModule& fixes = kConfigModules[f];
+	int ssl = KeyIndex(fixes, "stitchSourceLines");
 	bool none = ssl >= 0;
 	for (size_t i = 0; none && i < dev.size(); ++i)
-		none = dev[i].intPtr != &st.module[c].slots[ssl].i && dev[i].floatPtr != &st.module[c].slots[ssl].f
-		    && (!core.keys[ssl].label || dev[i].label.compare(0, strlen(core.keys[ssl].label), core.keys[ssl].label) != 0);
+		none = dev[i].intPtr != &st.module[f].slots[ssl].i && dev[i].floatPtr != &st.module[f].slots[ssl].f
+		    && (!fixes.keys[ssl].label || dev[i].label.compare(0, strlen(fixes.keys[ssl].label), fixes.keys[ssl].label) != 0);
 	for (size_t i = 0; none && i < prod.size(); ++i)
-		none = !core.keys[ssl].label || prod[i].label.compare(0, strlen(core.keys[ssl].label), core.keys[ssl].label) != 0;
+		none = !fixes.keys[ssl].label || prod[i].label.compare(0, strlen(fixes.keys[ssl].label), fixes.keys[ssl].label) != 0;
 	Check(none, "stitchSourceLines has no row in either build");
 
 	// Every slider's default and maximum lie on its grid, from sliderLo.
-	for (int i = 0; core.keys[i].name; ++i)
+	for (int mm = 1; mm < 7; ++mm)
+	for (int i = 0; kConfigModules[mm].keys[i].name; ++i)
 	{
-		const ConfigKey& k = core.keys[i];
+		const ConfigModule& mod = kConfigModules[mm];
+		const ConfigKey& k = mod.keys[i];
 		bool slider = k.kind == CK_FLOAT || k.kind == CK_DOUBLE || (k.kind == CK_INT && !k.choices && k.lo <= k.hi);
 		if (k.retired || !slider)
 			continue;
-		double def = atof(k.devDefault ? k.devDefault : "nan");
+		double def = atof(ConfigFormatValue(mod, k, mod.defaults).c_str());
 		double scale = (double)(1 << k.stepExp);
 		double defSteps = (def - k.sliderLo) * scale, hiSteps = ((double)k.hi - k.sliderLo) * scale;
 		CheckNamed(k.stepExp >= 0 && k.stepExp <= 8 && (k.kind != CK_INT || k.stepExp == 0) && k.sliderLo <= def
@@ -436,7 +458,7 @@ static const ConfigKey kTestKeys[] =
 
 static void CheckStagePerModule()
 {
-	int r = ModuleIndex("render"), c = ModuleIndex("core");
+	int r = ModuleIndex("render"), c = ModuleFor("deferral");
 	Check(r >= 0 && c >= 0 && r != c, "stage per module: the render and core modules");
 	if (r < 0 || c < 0)
 		return;
@@ -507,8 +529,9 @@ static void CheckStageBounds()
 			const ConfigKey& k = mod.keys[i];
 			if (k.target || !ShouldHaveLabel(k))
 				continue;
-			bool fits = k.kind == CK_BOOL || k.kind == CK_FLOAT || (k.kind == CK_INT && k.choices);
-			CheckNamed(fits, std::string("stage bounds: offset row widget ") + k.name);
+			std::vector<SettingsRow> rows = Rows(&st, true, NULL);
+			CheckNamed(CountLabel(Section(rows, mod.title), RowLabel(k)) == 1,
+			           std::string("every labelled offset row has one widget ") + k.name);
 		}
 	}
 	Check(ok, "stage bounds");
@@ -521,7 +544,7 @@ static void CheckStageBounds()
 
 static void CheckWorkerRow()
 {
-	int c = ModuleIndex("core");
+	int c = ModuleFor("navmeshWorkerCount");
 	const ConfigModule& core = kConfigModules[c];
 	int w = KeyIndex(core, "navmeshWorkerCount");
 	SettingsStaging saved;
@@ -529,7 +552,7 @@ static void CheckWorkerRow()
 	SettingsStaging st = saved;
 	std::vector<SettingsRow> rows = Rows(&st, false, NULL);
 	const SettingsRow* r = FindLabel(rows, "Navmesh worker threads (restart)");
-	bool ok = r && w >= 0 && r->kind == SR_DROPBOX && r->intPtr == &st.module[c].slots[w].i && r->choices.size() == 7
+	bool ok = r && w >= 0 && r->kind == SR_DROPBOX && r->intPtr == &((navmesh::NavMeshConfig*)st.module[c].state)->cfg_navmeshWorkerCount && r->choices.size() == 7
 	       && r->choices[0].first == "Auto" && r->choices[0].second == 0;
 	for (int n = 1; ok && n <= 6; ++n)
 		ok = r->choices[n].second == n && r->choices[n].first == std::string(1, (char)('0' + n));
@@ -543,7 +566,7 @@ static void CheckWorkerRow()
 	int n = ModuleStageEntries(core, st.module[c], saved.module[c], &e);
 	Check(OneEntry(e, n, "navmeshWorkerCount", "3", INI_INT, true), "worker row");
 	e.clear();
-	saved.module[c].slots[w].i = 3;
+	((navmesh::NavMeshConfig*)saved.module[c].state)->cfg_navmeshWorkerCount = 3;
 	*r->intPtr = 0;
 	n = ModuleStageEntries(core, st.module[c], saved.module[c], &e);
 	Check(OneEntry(e, n, "navmeshWorkerCount", "0", INI_INT, false), "worker row");
@@ -551,7 +574,7 @@ static void CheckWorkerRow()
 
 static void CheckOneKey()
 {
-	int c = ModuleIndex("core");
+	int c = ModuleFor("deferral");
 	const ConfigModule& core = kConfigModules[c];
 	int d = KeyIndex(core, "deferral");
 	SettingsStaging saved;
@@ -580,7 +603,7 @@ static void CheckOneKey()
 
 static void CheckCustomDropBox()
 {
-	int c = ModuleIndex("core");
+	int c = ModuleFor("k7PostDeathHold");
 	const ConfigModule& core = kConfigModules[c];
 	int k7 = KeyIndex(core, "k7PostDeathHold");
 	SettingsStaging saved;
@@ -596,7 +619,7 @@ static void CheckCustomDropBox()
 	if (!ok)
 		return;
 	const char* want[3] = { "false", "observe", "true" };
-	int held = cfg_k7PostDeathHold;
+	int held = movement::g_movementCfg.cfg_k7PostDeathHold;
 	for (int i = 0; i < 3; ++i)
 	{
 		saved.module[c].slots[k7].i = -1;
@@ -605,11 +628,11 @@ static void CheckCustomDropBox()
 		int n = ModuleStageEntries(core, st.module[c], saved.module[c], &e);
 		Check(n == 1 && e.size() == 1 && e[0].key == "k7PostDeathHold" && e[0].value == want[i],
 		      "custom drop box: writes false, observe or true");
-		cfg_k7PostDeathHold = -1;
+		movement::g_movementCfg.cfg_k7PostDeathHold = -1;
 		Check(n == 1 && ConfigApplyValue(core, core.keys[k7], e[0].value, &DiscardLog)
-		      && cfg_k7PostDeathHold == r->choices[i].second, "custom drop box: the written value parses back");
+		      && movement::g_movementCfg.cfg_k7PostDeathHold == r->choices[i].second, "custom drop box: the written value parses back");
 	}
-	cfg_k7PostDeathHold = held;
+	movement::g_movementCfg.cfg_k7PostDeathHold = held;
 }
 
 // Every row the page shows saves: a change through its bound pointer gives
@@ -664,19 +687,14 @@ static void CheckEveryRowSaves()
 // The staged copy holds what the globals and the render state hold.
 static void CheckStageReads()
 {
-	int c = ModuleIndex("core");
 	SettingsStaging st;
 	StageAll(&st);
-	Check(memcmp(&StagedRender(&st), &g_renderCfg, sizeof(RenderConfig)) == 0, "StageModule copies the render state");
-	const ConfigModule& core = kConfigModules[c];
-	Check(st.module[c].slots[KeyIndex(core, "deferral")].b == deferralEnabled
-	      && st.module[c].slots[KeyIndex(core, "navmeshWorkerCount")].i == cfg_navmeshWorkerCount
-	      && st.module[c].slots[KeyIndex(core, "islandFarSpan")].f == (float)cfg_islandFarSpan
-	      && st.module[c].slots[KeyIndex(core, "camFocusHardMult")].f == cfg_camFocusHardMult
-	      && st.module[c].slots[KeyIndex(core, "reprioritizeInterval")].f == (float)cfg_reprioritizeInterval
-	      && st.module[c].slots[KeyIndex(core, "clusterGraphBypass")].i == clusterGraphBypassMode
-	      && st.module[c].slots[KeyIndex(core, "islandEdgeRing")].i == (islandEdgeRingEnabled ? 1 : 0),
-	      "StageModule reads each target row's global");
+	for (int m = 0; m < kConfigModuleCount; ++m)
+	{
+		const ConfigModule& mod = kConfigModules[m];
+		CheckNamed(!mod.state || memcmp(st.module[m].state, mod.state, mod.stateSize) == 0,
+		           std::string("StageModule copies state ") + mod.name);
+	}
 }
 
 // ---- The commit clamp and the round trip -----------------------------------
@@ -705,11 +723,13 @@ static size_t TargetWidth(const ConfigKey& k)
 // put them back.
 struct TargetSnapshot
 {
+	char state[CONFIG_STATE_MAX];
 	char bytes[CONFIG_STAGE_MAX][16];
 };
 
 static void SaveTargets(const ConfigModule& m, TargetSnapshot* s)
 {
+	if (m.state) memcpy(s->state, m.state, m.stateSize);
 	for (int i = 0; i < CONFIG_STAGE_MAX && m.keys[i].name; ++i)
 	{
 		const ConfigKey& k = m.keys[i];
@@ -721,6 +741,7 @@ static void SaveTargets(const ConfigModule& m, TargetSnapshot* s)
 
 static void RestoreTargets(const ConfigModule& m, const TargetSnapshot& s)
 {
+	if (m.state) memcpy(m.state, s.state, m.stateSize);
 	for (int i = 0; i < CONFIG_STAGE_MAX && m.keys[i].name; ++i)
 	{
 		const ConfigKey& k = m.keys[i];
@@ -824,7 +845,7 @@ static bool RoundTripValue(int m, const ConfigKey& k, double value, std::string*
 // slider.
 static std::vector<IniEntry> CommitEntries(const char* key, float value)
 {
-	int c = ModuleIndex("core");
+	int c = ModuleFor(key);
 	const ConfigModule& core = kConfigModules[c];
 	SettingsStaging saved;
 	StageAll(&saved);
@@ -875,28 +896,28 @@ static void CheckCommitClamp()
 	Check(OneValue(CommitEntries("islandFarSpan", -1e11f), "islandFarSpan", "0"),
 	      "commit clamp: islandFarSpan -1e11 writes 0");
 	{
-		int ci = ModuleIndex("core");
+		int ci = ModuleFor("navmeshDiskCacheMaxMB");
 		const ConfigModule& cm = kConfigModules[ci];
 		const ConfigKey& dk = cm.keys[KeyIndex(cm, "navmeshDiskCacheMaxMB")];
-		int held = cfg_navmeshDiskCacheMaxMB;
+		int held = navmesh::g_navmeshCfg.cfg_navmeshDiskCacheMaxMB;
 		bool applied = ConfigApplyValue(cm, dk, "100000000000", &DiscardLog);
-		ConfigClampValue(dk, &cfg_navmeshDiskCacheMaxMB, NULL);
-		bool loads = applied && cfg_navmeshDiskCacheMaxMB == 8192;
-		cfg_navmeshDiskCacheMaxMB = held;
+		ConfigClampValue(dk, &navmesh::g_navmeshCfg.cfg_navmeshDiskCacheMaxMB, NULL);
+		bool loads = applied && navmesh::g_navmeshCfg.cfg_navmeshDiskCacheMaxMB == 8192;
+		navmesh::g_navmeshCfg.cfg_navmeshDiskCacheMaxMB = held;
 		Check(loads, "commit clamp: the loader reads navmeshDiskCacheMaxMB=100000000000 as 8192");
 	}
 
 	// An integer slider's fraction does not survive the close.
-	int c = ModuleIndex("core");
+	int c = ModuleFor("islandFarSpan");
 	const ConfigModule& core = kConfigModules[c];
 	int far = KeyIndex(core, "islandFarSpan");
 	SettingsStaging saved;
 	StageAll(&saved);
 	SettingsStaging st = saved;
 	std::vector<std::string> notes;
-	st.module[c].slots[far].f = (float)cfg_islandFarSpan + 0.4f;
+	st.module[c].slots[far].f = (float)movement::g_movementCfg.cfg_islandFarSpan + 0.4f;
 	ClampSettings(&st, saved, g_renderCfg, &DiscardLog, &notes);
-	Check(st.module[c].slots[far].f == (float)cfg_islandFarSpan, "commit clamp: islandFarSpan keeps no fraction");
+	Check(st.module[c].slots[far].f == (float)movement::g_movementCfg.cfg_islandFarSpan, "commit clamp: islandFarSpan keeps no fraction");
 	st.module[c].slots[far].f = 4.6f;
 	ClampSettings(&st, saved, g_renderCfg, &DiscardLog, &notes);
 	Check(st.module[c].slots[far].f == 5.0f, "commit clamp: islandFarSpan 4.6 stays 5");
@@ -953,9 +974,8 @@ static void CheckRoundTrips()
 				}
 			}
 			CheckNamed(ok, std::string("round trip ") + k.name);
-			if (!k.target)
-				++kinds[5];
-			else if (k.kind == CK_BOOL)
+			if (!k.target) ++kinds[5];
+			if (k.kind == CK_BOOL)
 				++kinds[0];
 			else if (k.kind == CK_INT)
 				++kinds[1];
@@ -972,10 +992,10 @@ static void CheckRoundTrips()
 
 	// camFocusMaxDist: each whole value the slider reaches below the clamp is
 	// written and loaded as the clamp, and 0 stays 0.
-	int c = ModuleIndex("core");
+	int c = ModuleFor("camFocusMaxDist");
 	const ConfigModule& core = kConfigModules[c];
 	const ConfigKey& cf = core.keys[KeyIndex(core, "camFocusMaxDist")];
-	bool ok = cfg_camFocusMaxDist == 0.0f;
+	bool ok = zone::g_zoneCfg.cfg_camFocusMaxDist == 0.0f;
 	for (int v = 1; ok && v < 500; ++v)
 	{
 		std::string written;
@@ -984,12 +1004,84 @@ static void CheckRoundTrips()
 			printf("  camFocusMaxDist %d wrote '%s'\n", v, written.c_str());
 	}
 	Check(ok, "round trip camFocusMaxDist 1..499 loads as the tab shows");
-	float held = cfg_camFocusMaxDist;
-	cfg_camFocusMaxDist = 1000.0f;
+	float held = zone::g_zoneCfg.cfg_camFocusMaxDist;
+	zone::g_zoneCfg.cfg_camFocusMaxDist = 1000.0f;
 	std::string written;
 	bool zero = RoundTripValue(c, cf, 0.0, &written) && written == "0";
-	cfg_camFocusMaxDist = held;
+	zone::g_zoneCfg.cfg_camFocusMaxDist = held;
 	Check(zero, "round trip camFocusMaxDist 0 over a saved 1000 stays 0");
+}
+
+static void CheckEveryLabelledRowShows()
+{
+	for (int view = 0; view < 2; ++view)
+	{
+		SettingsStaging st;
+		StageAll(&st);
+		std::vector<SettingsRow> rows = Rows(&st, view != 0, NULL);
+		for (int m = 0; m < kConfigModuleCount; ++m)
+		for (int i = 0; kConfigModules[m].keys[i].name; ++i)
+		{
+			const ConfigKey& k = kConfigModules[m].keys[i];
+			if (!Shown(k, view != 0)) continue;
+			CheckNamed(CountLabel(Section(rows, kConfigModules[m].title), RowLabel(k)) == 1,
+			           std::string("not shown once: ") + k.name);
+		}
+	}
+}
+
+static void CheckDebugOnlyReaderHidden()
+{
+	SettingsStaging st;
+	StageAll(&st);
+	std::vector<SettingsRow> prod = Rows(&st, false, NULL), dev = Rows(&st, true, NULL);
+	for (int m = 0; m < kConfigModuleCount; ++m)
+	for (int i = 0; kConfigModules[m].keys[i].name; ++i)
+	{
+		const ConfigKey& k = kConfigModules[m].keys[i];
+		if (!k.debugOnlyReader || !k.label) continue;
+		CheckNamed(!FindLabel(prod, RowLabel(k)), std::string("debugOnlyReader row shown in PROD: ") + k.name);
+		CheckNamed(CountLabel(Section(dev, kConfigModules[m].title), RowLabel(k)) == 1,
+		           std::string("debugOnlyReader row missing in DEV: ") + k.name);
+	}
+}
+
+static void CheckIniOnlyOffsetText()
+{
+	SettingsStaging saved;
+	StageAll(&saved);
+	SettingsStaging staged = saved;
+	strcpy_s(StagedRender(&staged).particleLoopingNames, sizeof(StagedRender(&staged).particleLoopingNames),
+	         "factory_text_probe");
+	std::vector<IniEntry> entries;
+	int render = ModuleIndex("render");
+	int n = ModuleStageEntries(kConfigModules[render], staged.module[render], saved.module[render], &entries);
+	Check(OneEntry(entries, n, "particleLoopingNames", "factory_text_probe", INI_TEXT, true),
+	      "INI-only offset text saves through its state field");
+}
+
+static void CheckUnlabelledOffsetDouble()
+{
+	double state = 1.25;
+	const double defaults = 1.25;
+	const ConfigKey keys[] =
+	{
+		{ "iniOnlyDouble", CK_DOUBLE, 0, sizeof(double), 1.0f, 10.0f, false, NULL, NULL, false, 1.0f, 0,
+		  NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0, false },
+		{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0,
+		  NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0, false }
+	};
+	ConfigModule module = { "iniOnly", "INI-only", keys, &state, &defaults, sizeof(state) };
+	ConfigModuleStage saved;
+	memset(&saved, 0, sizeof(saved));
+	StageModule(module, &saved);
+	ConfigModuleStage staged = saved;
+	*(double*)staged.state = 2.75;
+	ClampModuleStage(module, &staged, saved, NULL);
+	std::vector<IniEntry> entries;
+	int n = ModuleStageEntries(module, staged, saved, &entries);
+	Check(OneEntry(entries, n, "iniOnlyDouble", "2.75", INI_FLOAT, true),
+	      "unlabelled offset double keeps and saves its state field");
 }
 
 int main()
@@ -997,6 +1089,8 @@ int main()
 	CheckSections();
 	CheckShownKeys(false);
 	CheckShownKeys(true);
+	CheckEveryLabelledRowShows();
+	CheckDebugOnlyReaderHidden();
 	CheckLabels();
 	CheckRowCounts();
 	CheckRestart();
@@ -1011,5 +1105,7 @@ int main()
 	CheckStageReads();
 	CheckCommitClamp();
 	CheckRoundTrips();
+	CheckIniOnlyOffsetText();
+	CheckUnlabelledOffsetDouble();
 	return CheckExit(SUITE_NAME);
 }

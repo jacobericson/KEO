@@ -355,7 +355,7 @@ bool ZoneHandoffTownGuardRefuses(int activationType, float deactivationTimer)
 		NoteOffMainCall();
 		return false;
 	}
-	if (!townGuardEnabled)
+	if (!zone::g_zoneCfg.townGuardEnabled)
 		return false;
 	if (!ZoneTownGuardRefuses(activationType, deactivationTimer))
 		return false;

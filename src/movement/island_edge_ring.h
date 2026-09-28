@@ -8,7 +8,7 @@
 // can only find a leg 1-2 cells long instead of one spanning the whole
 // island.
 //
-// Depends on: config_values.h (islandEdgeRingEnabled).
+// Depends on: movement_config.h (islandEdgeRingEnabled).
 //
 // Threading contract, same as the rest of island_hooks.cpp's hooks: called from
 // hook_getIsland on any thread that reaches ZoneManager::getIsland (main, AI,

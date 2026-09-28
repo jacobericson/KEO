@@ -103,7 +103,7 @@ void PrintPathQueueLine(double windowSec, const GateWindowStats& gws, LONG* serv
 	   << " term=" << termIterLimit << "/" << termOpenSetFull << "/" << termStateFull << "/" << termOther
 	   << " (iterLimit/openSetFull/stateFull/other, path-thread queue searches only)\n"
 	   << "  busy=" << busyPct << "% preamble=" << preambleMsPerSec << "ms/s gate=";
-	if (gatePassDiagEnabled)
+	if (pathfind::g_pathfindCfg.gatePassDiagEnabled)
 	{
 		double gateTotalMs = gws.totalUs / 1000.0;
 		double gateMaxMs = gws.maxUs / 1000.0;

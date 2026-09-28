@@ -381,7 +381,7 @@ static bool hook_lockZoneDiag(void* nmg, const int* zone, bool wait)
 		InterlockedIncrement(&nmBlTryN);
 		if (!r) InterlockedIncrement(&nmBlTryFail);
 
-		if (!navmeshStallThrottleEnabled)
+		if (!navmesh::g_navmeshCfg.navmeshStallThrottleEnabled)
 			return r;
 
 		BuildLockStallSite site = StallSiteForReturn(retRva);
@@ -441,7 +441,7 @@ void InstallBuildLockHooks()
 	// Both stitch hooks must exist before the builder may take the mutex: a
 	// half-installed machine could take it with nothing to release it. Set
 	// before any builder runs (no worker exists yet) and never changed.
-	if (navmeshBuildLockNarrowEnabled && bc && su && sw && fn_nmgLockZone && fn_nmgUnlockZone)
+	if (navmesh::g_navmeshCfg.navmeshBuildLockNarrowEnabled && bc && su && sw && fn_nmgLockZone && fn_nmgUnlockZone)
 		InterlockedExchange(&g_narrow, 1);
 
 	// fn_nmgLockZone keeps pointing at the entry, so the mod's own blocking
@@ -511,7 +511,7 @@ std::string BuildLockStatsSuffix()
 		// bound does not work. "off" is a third answer, not a zero.
 		// jams / waits taken / refusals past the bound that were not slowed,
 		// because the loop that asked holds a lock or is not a known one.
-		if (navmeshStallThrottleEnabled)
+		if (navmesh::g_navmeshCfg.navmeshStallThrottleEnabled)
 			ss << " blStall=" << InterlockedCompareExchange(&nmBlStallLatch, 0, 0)
 			   << "/" << InterlockedCompareExchange(&nmBlStallSleeps, 0, 0)
 			   << "/" << InterlockedCompareExchange(&nmBlStallSkips, 0, 0);

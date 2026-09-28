@@ -508,7 +508,7 @@ inline bool L2Bypassed() { return InterlockedCompareExchange(&navmesh::g_nmCache
 // getSeedPointsFromAdjacentZone hook is wanted: not turned off in the INI. Read-only after LoadConfig, any thread.
 inline bool NmNbrSeedHookWanted()
 {
-	return navmeshNeighbourSeedsEnabled;
+	return navmesh::g_navmeshCfg.navmeshNeighbourSeedsEnabled;
 }
 
 // True when the stand-in seeds are wanted in the INI, and neither the hook nor a callee check refused them. Decides the
@@ -518,7 +518,7 @@ inline bool NmNbrSeedHookWanted()
 // thread after InstallNavMeshLazyHooks). Any thread.
 inline bool NmNbrSeedStandInActive()
 {
-	return navmeshNeighbourSeedsEnabled
+	return navmesh::g_navmeshCfg.navmeshNeighbourSeedsEnabled
 	    && InterlockedCompareExchange(&navmesh::g_nmCache.g_nbrSeedHookState, 0, 0) != 2
 	    && InterlockedCompareExchange(&navmesh::g_nmCache.g_nbrSeedStandInRefused, 0, 0) == 0;
 }

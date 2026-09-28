@@ -487,7 +487,7 @@ void CreateNavMeshWorkers()
 
 	// The live count, not the capacity: NAVMESH_WORKER_COUNT only sizes the
 	// arrays and bounds the INI value.
-	int want = g_navMeshWorkerCount;
+	int want = navmesh::g_navmeshCfg.g_navMeshWorkerCount;
 	if (want < 1) want = 1;
 	if (want > NAVMESH_WORKER_COUNT) want = NAVMESH_WORKER_COUNT;
 

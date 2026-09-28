@@ -73,7 +73,7 @@ static void CallOriginalTracked(void* sectionEntry)
 
 static void hook_finalizeZoneResources(void* sectionEntry)
 {
-	if (!nestValidationGuardEnabled || !sectionEntry)
+	if (!fixes::g_fixesCfg.nestValidationGuardEnabled || !sectionEntry)
 	{
 		CallOriginalTracked(sectionEntry);
 		return;

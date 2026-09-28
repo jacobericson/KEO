@@ -93,29 +93,29 @@ struct InputField
 
 static const InputField kFields[] =
 {
-	{ "destroyListDiag",     &HookWantInputs::destroyListDiag,     &destroyListDiagEnabled },
-	{ "destroyListDefer",    &HookWantInputs::destroyListDefer,    &destroyListDeferEnabled },
-	{ "escapePauseGuard",    &HookWantInputs::escapePauseGuard,    &escapePauseGuardEnabled },
-	{ "corpsePin",           &HookWantInputs::corpsePin,           &corpsePinEnabled },
-	{ "nestValidationGuard", &HookWantInputs::nestValidationGuard, &nestValidationGuardEnabled },
-	{ "unstitchGuard",       &HookWantInputs::unstitchGuard,       &unstitchGuardEnabled },
-	{ "graphVisitorGuard",   &HookWantInputs::graphVisitorGuard,   &graphVisitorGuardEnabled },
-	{ "graphExpandGuard",    &HookWantInputs::graphExpandGuard,    &graphExpandGuardEnabled },
-	{ "meshFaceGuard",       &HookWantInputs::meshFaceGuard,       &meshFaceGuardEnabled },
-	{ "navMeshLife",         &HookWantInputs::navMeshLife,         &navMeshLifeEnabled },
+	{ "destroyListDiag",     &HookWantInputs::destroyListDiag,     &fixes::g_fixesCfg.destroyListDiagEnabled },
+	{ "destroyListDefer",    &HookWantInputs::destroyListDefer,    &fixes::g_fixesCfg.destroyListDeferEnabled },
+	{ "escapePauseGuard",    &HookWantInputs::escapePauseGuard,    &zone::g_zoneCfg.escapePauseGuardEnabled },
+	{ "corpsePin",           &HookWantInputs::corpsePin,           &fixes::g_fixesCfg.corpsePinEnabled },
+	{ "nestValidationGuard", &HookWantInputs::nestValidationGuard, &fixes::g_fixesCfg.nestValidationGuardEnabled },
+	{ "unstitchGuard",       &HookWantInputs::unstitchGuard,       &fixes::g_fixesCfg.unstitchGuardEnabled },
+	{ "graphVisitorGuard",   &HookWantInputs::graphVisitorGuard,   &fixes::g_fixesCfg.graphVisitorGuardEnabled },
+	{ "graphExpandGuard",    &HookWantInputs::graphExpandGuard,    &fixes::g_fixesCfg.graphExpandGuardEnabled },
+	{ "meshFaceGuard",       &HookWantInputs::meshFaceGuard,       &fixes::g_fixesCfg.meshFaceGuardEnabled },
+	{ "navMeshLife",         &HookWantInputs::navMeshLife,         &fixes::g_fixesCfg.navMeshLifeEnabled },
 #ifdef ZONEOPT_DEBUG
-	{ "unstitchProbe",       &HookWantInputs::unstitchProbe,       &unstitchProbeEnabled },
-	{ "sectionKeyProbe",     &HookWantInputs::sectionKeyProbe,     &sectionKeyProbeEnabled },
+	{ "unstitchProbe",       &HookWantInputs::unstitchProbe,       &fixes::g_fixesCfg.unstitchProbeEnabled },
+	{ "sectionKeyProbe",     &HookWantInputs::sectionKeyProbe,     &fixes::g_fixesCfg.sectionKeyProbeEnabled },
 #else
 	{ "unstitchProbe",       &HookWantInputs::unstitchProbe,       NULL },
 	{ "sectionKeyProbe",     &HookWantInputs::sectionKeyProbe,     NULL },
 #endif
-	{ "movementAware",       &HookWantInputs::movementAware,       &movementAwareEnabled },
-	{ "caching",             &HookWantInputs::caching,             &cachingEnabled },
-	{ "pathfindDiag",        &HookWantInputs::pathfindDiag,        &pathfindDiagEnabled },
-	{ "pathExtractGuard",    &HookWantInputs::pathExtractGuard,    &pathExtractGuardEnabled },
-	{ "sectionStamp",        &HookWantInputs::sectionStamp,        &sectionStampEnabled },
-	{ "gatePassDiag",        &HookWantInputs::gatePassDiag,        &gatePassDiagEnabled },
+	{ "movementAware",       &HookWantInputs::movementAware,       &zone::g_zoneCfg.movementAwareEnabled },
+	{ "caching",             &HookWantInputs::caching,             &navmesh::g_navmeshCfg.cachingEnabled },
+	{ "pathfindDiag",        &HookWantInputs::pathfindDiag,        &pathfind::g_pathfindCfg.pathfindDiagEnabled },
+	{ "pathExtractGuard",    &HookWantInputs::pathExtractGuard,    &fixes::g_fixesCfg.pathExtractGuardEnabled },
+	{ "sectionStamp",        &HookWantInputs::sectionStamp,        &fixes::g_fixesCfg.sectionStampEnabled },
+	{ "gatePassDiag",        &HookWantInputs::gatePassDiag,        &pathfind::g_pathfindCfg.gatePassDiagEnabled },
 };
 static const int kFieldCount = (int)(sizeof(kFields) / sizeof(kFields[0]));
 

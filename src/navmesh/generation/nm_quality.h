@@ -182,7 +182,7 @@ const NmExtraVertexScalars NM_EXTRA_VERTEX_VANILLA = {
 // Read-only after LoadConfig, any thread.
 inline bool NmVanillaPruningActive()
 {
-	return navmeshVanillaPruningEnabled;
+	return navmesh::g_navmeshCfg.navmeshVanillaPruningEnabled;
 }
 
 // Field-by-field against the tables (padding ignored).

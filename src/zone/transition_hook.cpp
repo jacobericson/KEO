@@ -172,7 +172,7 @@ void CallPrioritizeNavMeshQueue()
 static void BoostWorkerThreads()
 {
 	// Live count, not capacity: slots above it were never created.
-	for (int i = 0; i < g_navMeshWorkerCount && i < NAVMESH_WORKER_COUNT; ++i)
+	for (int i = 0; i < navmesh::g_navmeshCfg.g_navMeshWorkerCount && i < NAVMESH_WORKER_COUNT; ++i)
 	{
 		HANDLE h = WorkerSlotHandle(i);
 		if (h)
@@ -185,7 +185,7 @@ static void BoostWorkerThreads()
 
 static void RestoreWorkerThreads()
 {
-	for (int i = 0; i < g_navMeshWorkerCount && i < NAVMESH_WORKER_COUNT; ++i)
+	for (int i = 0; i < navmesh::g_navmeshCfg.g_navMeshWorkerCount && i < NAVMESH_WORKER_COUNT; ++i)
 	{
 		HANDLE h = WorkerSlotHandle(i);
 		if (h)
@@ -347,9 +347,9 @@ void TransitionCompleteIfPending()
 	ss << std::fixed << std::setprecision(1);
 	ss << "Transition: " << totalMs << " ms, "
 	   << deferredFrameCount << " frames deferred"
-	   << (deferralEnabled ? "" : " (deferral OFF)")
-	   << (priorityBoostEnabled ? ", priority boosted" : "");
-	if (preloadEnabled)
+	   << (zone::g_zoneCfg.deferralEnabled ? "" : " (deferral OFF)")
+	   << (navmesh::g_navmeshCfg.priorityBoostEnabled ? ", priority boosted" : "");
+	if (zone::g_zoneCfg.preloadEnabled)
 	{
 		int registeredCount = 0;
 		for (int i = 0; i < numPreloaded; ++i)
@@ -362,7 +362,7 @@ void TransitionCompleteIfPending()
 		   << ", charZones=" << charZonesQueued
 		   << ", preloadSkipLoaded=" << preloadSkipLoaded
 		   << ", regSkip=" << regSkipCount;  // registry guard (zone_life.cpp), session total
-		if (movementAwareEnabled)
+		if (zone::g_zoneCfg.movementAwareEnabled)
 			ss << ", orders=" << hookOrderCount
 			   << ", watched=" << numWatched;
 		// Session-cumulative, printed whether or not any of it moved: a zero
@@ -373,7 +373,7 @@ void TransitionCompleteIfPending()
 	// destroyListOE diagnostic: dlIns=<main>/<other> from the inserter hook, and the
 	// off-main-thread call sites the first time any are recorded.
 	ss << DestroyListStatsSuffix();
-	if (gatePassDiagEnabled)
+	if (pathfind::g_pathfindCfg.gatePassDiagEnabled)
 		ss << GatePassTransitionToken(transitionEndGen, transitionEndQpc.QuadPart);
 
 	// Main-thread frames per zone-manager state for slow transitions.

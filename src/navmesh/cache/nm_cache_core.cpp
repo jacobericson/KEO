@@ -118,8 +118,8 @@ void InitNavMeshCacheCS()
 		   << " step=" << std::dec << 2
 		   << ", nbrSeed=" << (NmNbrSeedStandInActive() ? "on" : "off")
 		   << " step=" << 2 << ")" << std::hex
-		   << " modSet=" << g_modSetHash << std::dec
-		   << " capMB=" << cfg_navmeshDiskCacheMaxMB
+		   << " modSet=" << navmesh::g_navmeshCfg.g_modSetHash << std::dec
+		   << " capMB=" << navmesh::g_navmeshCfg.cfg_navmeshDiskCacheMaxMB
 		   << " crcSelfTest=" << ((L2Crc32("123456789", 9) == 0xCBF43926u) ? "ok" : "FAIL");
 		LogDebug(ss.str());
 	}

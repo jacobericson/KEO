@@ -26,7 +26,7 @@ using namespace islands_detail;
 void IslandSetHooksInstalled(bool installed)
 {
 	InterlockedExchange(&g_hooksInstalled, installed ? 1 : 0);
-	InterlockedExchange(&g_farSpanArmed, (installed && cfg_islandFarSpan > 0) ? 1 : 0);
+	InterlockedExchange(&g_farSpanArmed, (installed && movement::g_movementCfg.cfg_islandFarSpan > 0) ? 1 : 0);
 	IslandEdgeRingArm(installed);
 }
 
@@ -37,7 +37,7 @@ bool IslandFarSpanArmed()
 
 bool IslandHooksLive()
 {
-	return islandFixEnabled && InterlockedCompareExchange(&g_hooksInstalled, 0, 0) != 0;
+	return movement::g_movementCfg.islandFixEnabled && InterlockedCompareExchange(&g_hooksInstalled, 0, 0) != 0;
 }
 
 // Cell span between two zone entries of the zone array the builder last
@@ -103,7 +103,7 @@ bool hook_isInIsland(void* zoneA, void* zoneB)
 			int la0 = ZoneLabel(a);
 			if (span < 0 && la0 > 0)
 				InterlockedIncrement(&g_isInRuleUnk);
-			else if (IslandFarSpanFlips(true, la0, span, cfg_islandFarSpan))
+			else if (IslandFarSpanFlips(true, la0, span, movement::g_movementCfg.cfg_islandFarSpan))
 			{
 				InterlockedIncrement(&g_isInRuleFlip);
 				InterlockedIncrement(&g_isInFlipSpan[IslandSpanBucket(span)]);

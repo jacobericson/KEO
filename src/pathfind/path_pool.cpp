@@ -151,7 +151,7 @@ void PathPoolTickMain(double now)
 	const double windowInterval = 30.0;
 #endif
 
-	if (npcWaitDiagEnabled && (now - lastNpcWaitTime >= 1.0))
+	if (pathfind::g_pathfindCfg.npcWaitDiagEnabled && (now - lastNpcWaitTime >= 1.0))
 	{
 		lastNpcWaitTime = now;
 		RunNpcWaitDiagnostic(now);
@@ -172,12 +172,12 @@ void PathPoolTickMain(double now)
 
 	LONG servedThisWindow = 0;
 	PrintPathQueueLine(windowSec, gws, &servedThisWindow);
-	if (gatePassDiagEnabled)
+	if (pathfind::g_pathfindCfg.gatePassDiagEnabled)
 		PrintGateRateLine(gws);
 	PrintPathSlowLine(servedThisWindow);
 	PrintAstarCostLine();
 	PrintPathBusyLine(gws);
 	AstarCostTick();
-	if (npcWaitDiagEnabled)
+	if (pathfind::g_pathfindCfg.npcWaitDiagEnabled)
 		PrintNpcPathWaitLine(windowSec);
 }

@@ -409,7 +409,7 @@ static void hook_updateUT(void* physics)
 void InstallHullQueueGuard(int* installed, int*)
 {
 	// The key chooses drop or observe, never whether the site is watched.
-	s_actMode = hullDoublePushGuardEnabled;
+	s_actMode = fixes::g_fixesCfg.hullDoublePushGuardEnabled;
 	HqgInit(&s_judge, s_slots, kSlots);
 	const IMAGE_NT_HEADERS* nt = (const IMAGE_NT_HEADERS*)
 		(gameBase + ((const IMAGE_DOS_HEADER*)gameBase)->e_lfanew);

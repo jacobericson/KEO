@@ -111,7 +111,7 @@ bool K7TryDeletedReissue(IslandOrder& o, uintptr_t zm, uintptr_t cm, float posX,
 			{
 				if (o.k7DestWaitSince <= 0.0) o.k7DestWaitSince = now;
 				g_k7RefuseDestReady++;
-				if (k7DestReadyGateEnabled) return false;
+				if (movement::g_movementCfg.k7DestReadyGateEnabled) return false;
 			}
 			else
 			{
@@ -231,7 +231,7 @@ bool K7TryArrivalReissue(IslandOrder& o, uintptr_t zm, uintptr_t cm, float posX,
 	// classify here, so this never re-issues the try-shared readiness read.
 	// Still expires at the 15s cap like any other wait, so a latched observe
 	// wait that no real send ever follows is bounded and counts x.
-	if (!k7ArrivalTriggerEnabled && o.k7ArrivalWouldFireTime > 0.0)
+	if (!movement::g_movementCfg.k7ArrivalTriggerEnabled && o.k7ArrivalWouldFireTime > 0.0)
 	{
 		if (now - o.k7ArrivalWaitSince >= K7_ARRIVAL_MAX_WAIT)
 		{
@@ -305,7 +305,7 @@ bool K7TryArrivalReissue(IslandOrder& o, uintptr_t zm, uintptr_t cm, float posX,
 
 	bool cooldown = IslandRecentlyReissued(o.character, now);
 
-	K7ArrivalAction action = K7ArrivalFireGate(k7ArrivalTriggerEnabled, o.k7PostDeathHold, stillStopped,
+	K7ArrivalAction action = K7ArrivalFireGate(movement::g_movementCfg.k7ArrivalTriggerEnabled, o.k7PostDeathHold, stillStopped,
 	                                           destMatch, zonesOk, charBlocked, cooldown,
 	                                           o.reissueCount, MAX_REISSUES);
 
@@ -492,7 +492,7 @@ const char* IslandK7StuckForm(uintptr_t character)
 	// unchanged by this key. Only reported while the key can actually send:
 	// with it off, a build with the arrival mechanism reads the same as one
 	// without it.
-	if (o->k7ArrivalWaitSince > 0.0 && k7ArrivalTriggerEnabled) return "arr";
+	if (o->k7ArrivalWaitSince > 0.0 && movement::g_movementCfg.k7ArrivalTriggerEnabled) return "arr";
 	if (o->k7Preempted) return "pre";
 	return o->k7Seen29 ? "trk" : "new";
 }

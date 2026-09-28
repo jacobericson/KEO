@@ -53,6 +53,7 @@ struct ConfigKey
 	ConfigParseFn parse;              // CK_CUSTOM
 	const ConfigChoice* choices;
 	int           choiceCount;
+	bool          debugOnlyReader; // the code that reads this key is compiled only under ZONEOPT_DEBUG
 };
 
 // One table of keys and the state its offset rows live in. keys ends with a
@@ -91,6 +92,7 @@ struct ConfigLoadState
 	int                     unrecognised;   // unknown or invalid
 	int                     retired;        // retired keys reported (once each)
 	std::vector<IniDupSeen> dupSeen;        // keys applied so far, for the duplicate report
+	std::vector<std::string> debugIgnored; // DEV-only readers ignored in PROD, once per key
 	std::vector<std::string> retiredSeen;   // retired keys already reported
 
 	ConfigLoadState() : overrides(0), unrecognised(0), retired(0) {}
@@ -99,6 +101,9 @@ struct ConfigLoadState
 // One key=value line: a table row (either module), then a bench slot key,
 // then a retired row, then unknown; lineNo feeds the duplicate report.
 void ConfigApplyLine(const std::string& key, const std::string& val, int lineNo, ConfigLoadState* st, ConfigLogFn log);
+
+// The loader summary, empty when there is nothing to report.
+std::string ConfigSummaryLine(const ConfigLoadState& st, int dupCount);
 
 // The value rule for one CK_INT, CK_FLOAT or CK_DOUBLE row, which the loader
 // and the settings commit both apply; p holds a value of the row's own type.

@@ -92,11 +92,11 @@ static unsigned int ComputeModSetHash(std::string& usedPath)
 void LoadConfig(const std::string& dllDir)
 {
 	std::string modsCfgPath;
-	g_modSetHash = ComputeModSetHash(modsCfgPath);
+	navmesh::g_navmeshCfg.g_modSetHash = ComputeModSetHash(modsCfgPath);
 	{
 		std::ostringstream ss;
-		ss << "Active mod set hash: " << std::hex << g_modSetHash << std::dec;
-		if (g_modSetHash == 0)
+		ss << "Active mod set hash: " << std::hex << navmesh::g_navmeshCfg.g_modSetHash << std::dec;
+		if (navmesh::g_navmeshCfg.g_modSetHash == 0)
 			ss << " (mods.cfg not found — L2 cache keyed without it)";
 		else
 			ss << " (from " << modsCfgPath << ")";
@@ -157,8 +157,8 @@ void LoadConfig(const std::string& dllDir)
 	// zones the mod preloads, so any log read against a crash needs to state it.
 	{
 		std::ostringstream ss;
-		ss << "Config: preloadKeepAliveSeconds=" << cfg_preloadKeepAliveSeconds
-		   << (cfg_preloadKeepAliveSeconds > 0.0f
+		ss << "Config: preloadKeepAliveSeconds=" << zone::g_zoneCfg.cfg_preloadKeepAliveSeconds
+		   << (zone::g_zoneCfg.cfg_preloadKeepAliveSeconds > 0.0f
 		       ? " (overrides the game's per-timer default)"
 		       : " (the game's per-timer default)");
 #if ZONEHAND_STEP >= 2
@@ -174,9 +174,9 @@ void LoadConfig(const std::string& dllDir)
 	// pruned, and which L2 settings hash the cache uses.
 	{
 		std::ostringstream ss;
-		ss << "Config: navmeshVanillaPruning=" << (navmeshVanillaPruningEnabled ? "true" : "false")
+		ss << "Config: navmeshVanillaPruning=" << (navmesh::g_navmeshCfg.navmeshVanillaPruningEnabled ? "true" : "false")
 		   << " (NMPRUNE_STEP " << 2;
-		if (!navmeshVanillaPruningEnabled)
+		if (!navmesh::g_navmeshCfg.navmeshVanillaPruningEnabled)
 			ss << ": off, fresh work buffers keep Havok's pruning defaults)";
 		else
 			ss << ": fresh work buffers carry the game's region pruning and extra-vertex settings)";
@@ -187,9 +187,9 @@ void LoadConfig(const std::string& dllDir)
 	// the mod generates, and which L2 settings hash the cache uses.
 	{
 		std::ostringstream ss;
-		ss << "Config: navmeshNeighbourSeeds=" << (navmeshNeighbourSeedsEnabled ? "true" : "false")
+		ss << "Config: navmeshNeighbourSeeds=" << (navmesh::g_navmeshCfg.navmeshNeighbourSeedsEnabled ? "true" : "false")
 		   << " (NMNBRSEED_STEP " << 2;
-		if (!navmeshNeighbourSeedsEnabled)
+		if (!navmesh::g_navmeshCfg.navmeshNeighbourSeedsEnabled)
 			ss << ": off, no neighbour-seed hook, no stand-in seeds)";
 		else
 			ss << ": a missing or temp neighbour contributes its shipped tile's border seeds)";
@@ -200,16 +200,8 @@ void LoadConfig(const std::string& dllDir)
 	// loader rejected leaves the setting at its default while the INI reads as
 	// though it took. The count travels with the summary so the two are read
 	// together.
-	if (st.overrides > 0 || st.unrecognised > 0 || st.retired > 0 || dupCount > 0)
-	{
-		std::ostringstream ss;
-		ss << "Config: " << st.overrides << " setting(s) loaded from INI, "
-		   << st.unrecognised << " unrecognised, " << st.retired << " retired, "
-		   << "dup=" << dupCount;
-		if (st.unrecognised > 0)
-			ss << " (unrecognised listed above, left at their defaults)";
-		LogMsg(ss.str());
-	}
+	std::string summary = ConfigSummaryLine(st, dupCount);
+	if (!summary.empty()) LogMsg(summary);
 
 	FinalizeConfig();
 }
@@ -225,11 +217,11 @@ void FinalizeConfig()
 	SYSTEM_INFO si;
 	GetSystemInfo(&si);
 	int cpus = (int)si.dwNumberOfProcessors;
-	g_navMeshWorkerCount = cfg_navmeshWorkerCount ? cfg_navmeshWorkerCount
+	navmesh::g_navmeshCfg.g_navMeshWorkerCount = navmesh::g_navmeshCfg.cfg_navmeshWorkerCount ? navmesh::g_navmeshCfg.cfg_navmeshWorkerCount
 	                                              : AutoNavMeshWorkerCount(cpus, NAVMESH_WORKER_COUNT);
 	std::ostringstream ss;
-	ss << "Config: navmeshWorkerCount=" << (cfg_navmeshWorkerCount ? "" : "auto ")
-	   << g_navMeshWorkerCount << " (cpus=" << cpus << ", capacity " << NAVMESH_WORKER_COUNT << ")";
+	ss << "Config: navmeshWorkerCount=" << (navmesh::g_navmeshCfg.cfg_navmeshWorkerCount ? "" : "auto ")
+	   << navmesh::g_navmeshCfg.g_navMeshWorkerCount << " (cpus=" << cpus << ", capacity " << NAVMESH_WORKER_COUNT << ")";
 	LogMsg(ss.str());
 
 	ClampRenderConfig();

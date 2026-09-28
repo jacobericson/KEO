@@ -529,7 +529,7 @@ void __fastcall hook_resetUnloadZones(void* zoneMgr)
 		&NavMeshLowerResetGateLocked);
 	DWORD tid     = GetCurrentThreadId();
 	bool  onMain  = IsMainThread();
-	bool  keyOn   = saveLoadUnloadEnabled;
+	bool  keyOn   = zone::g_zoneCfg.saveLoadUnloadEnabled;
 	bool  fnBound = (fn_unloadZoneFromReset != NULL);
 	bool  unload  = keyOn && fnBound;
 

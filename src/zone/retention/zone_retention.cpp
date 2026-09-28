@@ -198,7 +198,7 @@ static int HeldCount(double now)
 
 bool ZoneRetentionWantsRelease(void* zoneEntry)
 {
-	if (!zoneRetentionEnabled || !zoneEntry || !g_zoneMgr)
+	if (!zone::g_zoneCfg.zoneRetentionEnabled || !zoneEntry || !g_zoneMgr)
 		return false;
 
 	// Past phase 1 the original keeps every cell without touching a

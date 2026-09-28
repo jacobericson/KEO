@@ -177,7 +177,6 @@ src\base\log_bounded.cpp
 src\plugin\crash_record.cpp
 src\base\config_table.cpp
 src\base\config_keys.cpp
-src\base\config_values.cpp
 src\plugin\hook_manifest.cpp
 src\plugin\hook_manifest_policy.cpp
 src\gui\settings_factory.cpp
@@ -232,3 +231,9 @@ src\navmesh\jobs\nm_job_pipeline.cpp
 src\navmesh\jobs\nm_unload.cpp
 src\navmesh\jobs\nm_claimed_job_policy.cpp
 src\navmesh\jobs\nm_claimed_job.cpp
+src\zone\zone_config.cpp
+src\navmesh\navmesh_config.cpp
+src\pathfind\pathfind_config.cpp
+src\movement\movement_config.cpp
+src\fixes\fixes_config.cpp
+src\gui\gui_config.cpp
