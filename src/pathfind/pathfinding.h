@@ -34,9 +34,6 @@ char hook_csFindPathFallback(void* manager, unsigned int startFaceKey, void* sta
 // The fallback hook running at all.
 extern volatile long fallbackInvocations;
 
-// Watched-registry evictions (tracking.cpp increments it).
-extern volatile long watchedEvictions;
-
 // Path-result extraction guard + streaming-collection timestamp
 void hook_addInstance(void* collection, __int64 sectionData,
                       __int64 param3, __int64 param4, int param5);
@@ -44,9 +41,6 @@ unsigned __int64 hook_contentStreamCallee0x8869(void* manager,
                                                  unsigned int faceKey,
                                                  void* searchOutput,
                                                  unsigned int* resultBuf);
-
-extern volatile long extractionCrashRescue;
-extern volatile long addInstanceHookCalls;
 
 // "PathGuard:" counter line, main thread, rate-limited.
 void LogPathGuardStats(double now);

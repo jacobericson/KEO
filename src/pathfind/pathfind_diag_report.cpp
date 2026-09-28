@@ -2,10 +2,30 @@
 // Main thread. Snapshots are non-destructive; logging takes logCS inside LogMsg.
 
 #include "pathfind/pathfind_diag.h"
-#include "pathfind/pathfind_diag_internal.h"
 
 namespace pathfind_diag_detail
 {
+
+// =========================================================================
+// Reporter timing + per-window snapshots (main thread only)
+// =========================================================================
+
+static double lastPathDiagLogTime = 0.0;
+
+static long prevPrimaryAttempts = 0;
+static long prevPrimarySuccess  = 0;
+static long prevPrimaryFail     = 0;
+static long prevAstarAttempts   = 0;
+static long prevAstarSuccess    = 0;
+static long prevAstarUnreach    = 0;
+static long prevAstarTerminated = 0;
+static long prevAstarInvalid    = 0;
+static long prevConnAttempts    = 0;
+static long prevConnFail        = 0;
+static long prevPlayerRequests  = 0;
+static long prevNPCRequests     = 0;
+static long prevPlayerCap       = 0;
+static long prevFailSequence    = 0;
 
 struct PathfindDiagReportCtx
 {
@@ -53,54 +73,54 @@ struct PathfindDiagReportCtx
 void ReadPathfindDiagCounters(PathfindDiagReportCtx& c)
 {
 	// Snapshot all counters (non-destructive read)
-	c.pAttempts = InterlockedCompareExchange(&diagPrimaryAttempts, 0, 0);
-	c.pSuccess  = InterlockedCompareExchange(&diagPrimarySuccess, 0, 0);
-	c.pFail     = InterlockedCompareExchange(&diagPrimaryFail, 0, 0);
+	c.pAttempts = InterlockedCompareExchange(&pathfind::g_pathDiag.diagPrimaryAttempts, 0, 0);
+	c.pSuccess  = InterlockedCompareExchange(&pathfind::g_pathDiag.diagPrimarySuccess, 0, 0);
+	c.pFail     = InterlockedCompareExchange(&pathfind::g_pathDiag.diagPrimaryFail, 0, 0);
 
-	c.cAttempts = InterlockedCompareExchange(&diagConnAttempts, 0, 0);
-	c.cFail     = InterlockedCompareExchange(&diagConnFail, 0, 0);
+	c.cAttempts = InterlockedCompareExchange(&pathfind::g_pathDiag.diagConnAttempts, 0, 0);
+	c.cFail     = InterlockedCompareExchange(&pathfind::g_pathDiag.diagConnFail, 0, 0);
 
-	c.aAttempts  = InterlockedCompareExchange(&diagAstarAttempts, 0, 0);
-	c.aSuccess   = InterlockedCompareExchange(&diagAstarSuccess, 0, 0);
-	c.aUnreach   = InterlockedCompareExchange(&diagAstarUnreachable, 0, 0);
-	c.aTermed    = InterlockedCompareExchange(&diagAstarTerminated, 0, 0);
-	c.aTruncated = InterlockedCompareExchange(&diagAstarTruncated, 0, 0);
-	c.aInvalid   = InterlockedCompareExchange(&diagAstarInvalid, 0, 0);
-	c.aOther     = InterlockedCompareExchange(&diagAstarOther, 0, 0);
+	c.aAttempts  = InterlockedCompareExchange(&pathfind::g_pathDiag.diagAstarAttempts, 0, 0);
+	c.aSuccess   = InterlockedCompareExchange(&pathfind::g_pathDiag.diagAstarSuccess, 0, 0);
+	c.aUnreach   = InterlockedCompareExchange(&pathfind::g_pathDiag.diagAstarUnreachable, 0, 0);
+	c.aTermed    = InterlockedCompareExchange(&pathfind::g_pathDiag.diagAstarTerminated, 0, 0);
+	c.aTruncated = InterlockedCompareExchange(&pathfind::g_pathDiag.diagAstarTruncated, 0, 0);
+	c.aInvalid   = InterlockedCompareExchange(&pathfind::g_pathDiag.diagAstarInvalid, 0, 0);
+	c.aOther     = InterlockedCompareExchange(&pathfind::g_pathDiag.diagAstarOther, 0, 0);
 
-	c.tIter     = InterlockedCompareExchange(&diagTermIterLimit, 0, 0);
-	c.tOpen     = InterlockedCompareExchange(&diagTermOpenSetFull, 0, 0);
-	c.tState    = InterlockedCompareExchange(&diagTermStatesFull, 0, 0);
-	c.tOther    = InterlockedCompareExchange(&diagTermOtherCause, 0, 0);
+	c.tIter     = InterlockedCompareExchange(&pathfind::g_pathDiag.diagTermIterLimit, 0, 0);
+	c.tOpen     = InterlockedCompareExchange(&pathfind::g_pathDiag.diagTermOpenSetFull, 0, 0);
+	c.tState    = InterlockedCompareExchange(&pathfind::g_pathDiag.diagTermStatesFull, 0, 0);
+	c.tOther    = InterlockedCompareExchange(&pathfind::g_pathDiag.diagTermOtherCause, 0, 0);
 
 	c.wStarted = 0, c.wSuccess = 0, c.wUnreach = 0, c.wTerm = 0, c.wInvalid = 0, c.wOther = 0;
 	for (int arm = 0; arm < 3; ++arm)
 	{
-		c.wStartedArm[arm] = InterlockedCompareExchange(&diagWaveStarted[arm], 0, 0);
-		c.wSuccessArm[arm] = InterlockedCompareExchange(&diagWaveSuccess[arm], 0, 0);
-		c.wUnreachArm[arm] = InterlockedCompareExchange(&diagWaveUnreach[arm], 0, 0);
-		c.wTermArm[arm]    = InterlockedCompareExchange(&diagWaveTerm[arm], 0, 0);
-		c.wInvalidArm[arm] = InterlockedCompareExchange(&diagWaveInvalid[arm], 0, 0);
-		c.wOtherArm[arm]   = InterlockedCompareExchange(&diagWaveOther[arm], 0, 0);
+		c.wStartedArm[arm] = InterlockedCompareExchange(&pathfind::g_pathDiag.diagWaveStarted[arm], 0, 0);
+		c.wSuccessArm[arm] = InterlockedCompareExchange(&pathfind::g_pathDiag.diagWaveSuccess[arm], 0, 0);
+		c.wUnreachArm[arm] = InterlockedCompareExchange(&pathfind::g_pathDiag.diagWaveUnreach[arm], 0, 0);
+		c.wTermArm[arm]    = InterlockedCompareExchange(&pathfind::g_pathDiag.diagWaveTerm[arm], 0, 0);
+		c.wInvalidArm[arm] = InterlockedCompareExchange(&pathfind::g_pathDiag.diagWaveInvalid[arm], 0, 0);
+		c.wOtherArm[arm]   = InterlockedCompareExchange(&pathfind::g_pathDiag.diagWaveOther[arm], 0, 0);
 		c.wStarted += c.wStartedArm[arm]; c.wSuccess += c.wSuccessArm[arm];
 		c.wUnreach += c.wUnreachArm[arm]; c.wTerm    += c.wTermArm[arm];
 		c.wInvalid += c.wInvalidArm[arm]; c.wOther   += c.wOtherArm[arm];
 	}
 	for (int garm = 0; garm < 3; ++garm)
 	{
-		c.wGateArm[garm]   = InterlockedCompareExchange(&diagWaveStartedByGate[garm], 0, 0);
-		c.wGateOkArm[garm] = InterlockedCompareExchange(&diagWaveSuccessByGate[garm], 0, 0);
-		c.cRejArm[garm]    = InterlockedCompareExchange(&diagConnRejectByGate[garm], 0, 0);
+		c.wGateArm[garm]   = InterlockedCompareExchange(&pathfind::g_pathDiag.diagWaveStartedByGate[garm], 0, 0);
+		c.wGateOkArm[garm] = InterlockedCompareExchange(&pathfind::g_pathDiag.diagWaveSuccessByGate[garm], 0, 0);
+		c.cRejArm[garm]    = InterlockedCompareExchange(&pathfind::g_pathDiag.diagConnRejectByGate[garm], 0, 0);
 	}
-	c.wStale     = InterlockedCompareExchange(&diagWaveStale, 0, 0);
-	c.wTagNpc    = InterlockedCompareExchange(&diagWaveStartedByTag[0], 0, 0);
-	c.wTagPlayer = InterlockedCompareExchange(&diagWaveStartedByTag[1], 0, 0);
-	c.wTagNpcOk  = InterlockedCompareExchange(&diagWaveSuccessByTag[0], 0, 0);
-	c.wTagPlrOk  = InterlockedCompareExchange(&diagWaveSuccessByTag[1], 0, 0);
-	c.wDisagree  = InterlockedCompareExchange(&diagWaveLabelDisagree, 0, 0);
+	c.wStale     = InterlockedCompareExchange(&pathfind::g_pathDiag.diagWaveStale, 0, 0);
+	c.wTagNpc    = InterlockedCompareExchange(&pathfind::g_pathDiag.diagWaveStartedByTag[0], 0, 0);
+	c.wTagPlayer = InterlockedCompareExchange(&pathfind::g_pathDiag.diagWaveStartedByTag[1], 0, 0);
+	c.wTagNpcOk  = InterlockedCompareExchange(&pathfind::g_pathDiag.diagWaveSuccessByTag[0], 0, 0);
+	c.wTagPlrOk  = InterlockedCompareExchange(&pathfind::g_pathDiag.diagWaveSuccessByTag[1], 0, 0);
+	c.wDisagree  = InterlockedCompareExchange(&pathfind::g_pathDiag.diagWaveLabelDisagree, 0, 0);
 
-	c.maxIter   = InterlockedCompareExchange(&diagMaxIterUsed, 0, 0);
-	c.lastTIter = InterlockedCompareExchange(&diagLastTermIter, 0, 0);
+	c.maxIter   = InterlockedCompareExchange(&pathfind::g_pathDiag.diagMaxIterUsed, 0, 0);
+	c.lastTIter = InterlockedCompareExchange(&pathfind::g_pathDiag.diagLastTermIter, 0, 0);
 }
 
 void AppendPathfindDiagBase(std::ostringstream& ss, const PathfindDiagReportCtx& c)
@@ -214,12 +234,12 @@ void ReportPathfindWindow(const PathfindDiagReportCtx& c)
 		long dConn     = c.cAttempts - prevConnAttempts;
 		long dConnFail = c.cFail     - prevConnFail;
 
-		long playerReqs = InterlockedCompareExchange(&diagPlayerRequests, 0, 0);
-		long npcReqs    = InterlockedCompareExchange(&diagNPCRequests, 0, 0);
+		long playerReqs = InterlockedCompareExchange(&pathfind::g_pathDiag.diagPlayerRequests, 0, 0);
+		long npcReqs    = InterlockedCompareExchange(&pathfind::g_pathDiag.diagNPCRequests, 0, 0);
 		long dPlayer = playerReqs - prevPlayerRequests;
 		long dNPC    = npcReqs    - prevNPCRequests;
 
-		long playerCap  = InterlockedCompareExchange(&diagPlayerCap, 0, 0);
+		long playerCap  = InterlockedCompareExchange(&pathfind::g_pathDiag.diagPlayerCap, 0, 0);
 		long dPlayerCap = playerCap - prevPlayerCap;
 
 		prevPrimaryAttempts = c.pAttempts;
@@ -292,14 +312,14 @@ void ReportPathfindWindow(const PathfindDiagReportCtx& c)
 		}
 
 		// Last failure detail (when new failures since last report)
-		long failSeq = InterlockedCompareExchange(&lastAstarFail.sequence, 0, 0);
+		long failSeq = InterlockedCompareExchange(&pathfind::g_pathDiag.lastAstarFail.sequence, 0, 0);
 		if (failSeq > prevFailSequence)
 		{
-			float gx = lastAstarFail.goalX * 10.0f;
-			float gz = lastAstarFail.goalZ * 10.0f;
-			long st = InterlockedCompareExchange(&lastAstarFail.status, 0, 0);
-			long ca = InterlockedCompareExchange(&lastAstarFail.cause, 0, 0);
-			long it = InterlockedCompareExchange(&lastAstarFail.iterCount, 0, 0);
+			float gx = pathfind::g_pathDiag.lastAstarFail.goalX * 10.0f;
+			float gz = pathfind::g_pathDiag.lastAstarFail.goalZ * 10.0f;
+			long st = InterlockedCompareExchange(&pathfind::g_pathDiag.lastAstarFail.status, 0, 0);
+			long ca = InterlockedCompareExchange(&pathfind::g_pathDiag.lastAstarFail.cause, 0, 0);
+			long it = InterlockedCompareExchange(&pathfind::g_pathDiag.lastAstarFail.iterCount, 0, 0);
 
 			std::ostringstream fs;
 			fs << std::fixed << std::setprecision(0);
@@ -317,13 +337,13 @@ void DrainPlayerPathFailures()
 	// Drain player failure ring buffer
 	for (int i = 0; i < PLAYER_FAIL_RING; ++i)
 	{
-		if (InterlockedCompareExchange(&playerFailRing[i].valid, 0, 1) == 1)
+		if (InterlockedCompareExchange(&pathfind::g_pathDiag.playerFailRing[i].valid, 0, 1) == 1)
 		{
-			float gx = playerFailRing[i].goalX * 10.0f;
-			float gz = playerFailRing[i].goalZ * 10.0f;
-			long st = playerFailRing[i].status;
-			long ca = playerFailRing[i].cause;
-			long it = playerFailRing[i].iterCount;
+			float gx = pathfind::g_pathDiag.playerFailRing[i].goalX * 10.0f;
+			float gz = pathfind::g_pathDiag.playerFailRing[i].goalZ * 10.0f;
+			long st = pathfind::g_pathDiag.playerFailRing[i].status;
+			long ca = pathfind::g_pathDiag.playerFailRing[i].cause;
+			long it = pathfind::g_pathDiag.playerFailRing[i].iterCount;
 
 			const char* reason = "unknown";
 			if (st == 99) reason = "CLUSTER_GRAPH_REJECTED";
@@ -348,40 +368,40 @@ void DrainPlayerPathFailures()
 void ReportFindPathInputProbe()
 {
 	// One-time FindPathInput layout probe report
-	if (InterlockedCompareExchange(&probeFPIDumped, 2, 2) == 2)
+	if (InterlockedCompareExchange(&pathfind::g_pathDiag.probeFPIDumped, 2, 2) == 2)
 	{
-		InterlockedExchange(&probeFPIDumped, 3);
+		InterlockedExchange(&pathfind::g_pathDiag.probeFPIDumped, 3);
 
 		std::ostringstream ps;
 		ps << std::fixed << std::setprecision(2);
 		ps << "FindPathInput probe:"
-		   << " startPos=(" << probeStartPos[0] << "," << probeStartPos[1]
-		   << "," << probeStartPos[2] << "," << probeStartPos[3] << ")";
+		   << " startPos=(" << pathfind::g_pathDiag.probeStartPos[0] << "," << pathfind::g_pathDiag.probeStartPos[1]
+		   << "," << pathfind::g_pathDiag.probeStartPos[2] << "," << pathfind::g_pathDiag.probeStartPos[3] << ")";
 
-		if (probeGoalPtrValid)
-			ps << " goalPos=(" << probeGoalPos[0] << "," << probeGoalPos[1]
-			   << "," << probeGoalPos[2] << "," << probeGoalPos[3] << ")";
+		if (pathfind::g_pathDiag.probeGoalPtrValid)
+			ps << " goalPos=(" << pathfind::g_pathDiag.probeGoalPos[0] << "," << pathfind::g_pathDiag.probeGoalPos[1]
+			   << "," << pathfind::g_pathDiag.probeGoalPos[2] << "," << pathfind::g_pathDiag.probeGoalPos[3] << ")";
 		else
 			ps << " goalPtr=NULL";
 
-		ps << " +40=" << probeFields[0]
-		   << " +44=" << probeFields[1]
-		   << " +48=" << probeFields[2]
-		   << " +52=" << probeFields[3];
+		ps << " +40=" << pathfind::g_pathDiag.probeFields[0]
+		   << " +44=" << pathfind::g_pathDiag.probeFields[1]
+		   << " +48=" << pathfind::g_pathDiag.probeFields[2]
+		   << " +52=" << pathfind::g_pathDiag.probeFields[3];
 
-		ps << " +64=" << probeFields[6]
-		   << " +68=" << probeFields[7]
-		   << " +72=" << probeFields[8]
-		   << " +76=" << probeFields[9];
+		ps << " +64=" << pathfind::g_pathDiag.probeFields[6]
+		   << " +68=" << pathfind::g_pathDiag.probeFields[7]
+		   << " +72=" << pathfind::g_pathDiag.probeFields[8]
+		   << " +76=" << pathfind::g_pathDiag.probeFields[9];
 
-		ps << " +128=" << probeFields[10]
-		   << " +136=" << probeFields[11];
+		ps << " +128=" << pathfind::g_pathDiag.probeFields[10]
+		   << " +136=" << pathfind::g_pathDiag.probeFields[11];
 
-		ps << " +156=" << probeFields[12]
-		   << " +160=" << probeFields[13];
+		ps << " +156=" << pathfind::g_pathDiag.probeFields[12]
+		   << " +160=" << pathfind::g_pathDiag.probeFields[13];
 
-		ps << " | +40f=" << std::setprecision(4) << *(float*)&probeFields[0]
-		   << " +76f=" << *(float*)&probeFields[9];
+		ps << " | +40f=" << std::setprecision(4) << *(float*)&pathfind::g_pathDiag.probeFields[0]
+		   << " +76f=" << *(float*)&pathfind::g_pathDiag.probeFields[9];
 
 		LogMsg(ps.str());
 	}

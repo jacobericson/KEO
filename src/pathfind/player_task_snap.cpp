@@ -308,9 +308,9 @@ void StorePlayerClickDest(uintptr_t character, const float* dest, double now)
 {
 	// Update existing entry or find empty slot
 	int emptySlot = -1;
-	for (int i = 0; i < trackedPlayerCount; ++i)
+	for (int i = 0; i < pathfind::g_pathDiag.trackedPlayerCount; ++i)
 	{
-		if (trackedPlayers[i].character == character)
+		if (pathfind::g_pathDiag.trackedPlayers[i].character == character)
 		{
 			// The match is by pointer whether the entry is active or not,
 			// and PollPlayerMovementState deactivates an entry on arrival
@@ -320,27 +320,27 @@ void StorePlayerClickDest(uintptr_t character, const float* dest, double now)
 			// the PLAYER TASK last-printed state, so it behaves like a
 			// new one.
 #ifdef ZONEOPT_DEBUG
-			if (!trackedPlayers[i].active)
+			if (!pathfind::g_pathDiag.trackedPlayers[i].active)
 				PlayerTaskForget(i);
 #endif
-			trackedPlayers[i].destX = (*(const float*)KLIB_MEMBER(5, dest, Ogre__Vector3_x, 0));
-			trackedPlayers[i].destY = (*(const float*)KLIB_MEMBER(5, dest, Ogre__Vector3_y, 4));
-			trackedPlayers[i].destZ = (*(const float*)KLIB_MEMBER(5, dest, Ogre__Vector3_z, 8));
-			trackedPlayers[i].prevPosX = 0;
-			trackedPlayers[i].prevPosZ = 0;
-			trackedPlayers[i].clickTime = now;
-			trackedPlayers[i].zeroVelocityPolls = 0;
-			trackedPlayers[i].active = true;
-			trackedPlayers[i].arrivedPrev = false;
-			trackedPlayers[i].farArrivals = 0;
-			trackedPlayers[i].farArriveMaxD = 0.0f;
-			trackedPlayers[i].arrHaveLabels = false;
-			trackedPlayers[i].orderKoLatched = false;
-			trackedPlayers[i].havePrev = false;
+			pathfind::g_pathDiag.trackedPlayers[i].destX = (*(const float*)KLIB_MEMBER(5, dest, Ogre__Vector3_x, 0));
+			pathfind::g_pathDiag.trackedPlayers[i].destY = (*(const float*)KLIB_MEMBER(5, dest, Ogre__Vector3_y, 4));
+			pathfind::g_pathDiag.trackedPlayers[i].destZ = (*(const float*)KLIB_MEMBER(5, dest, Ogre__Vector3_z, 8));
+			pathfind::g_pathDiag.trackedPlayers[i].prevPosX = 0;
+			pathfind::g_pathDiag.trackedPlayers[i].prevPosZ = 0;
+			pathfind::g_pathDiag.trackedPlayers[i].clickTime = now;
+			pathfind::g_pathDiag.trackedPlayers[i].zeroVelocityPolls = 0;
+			pathfind::g_pathDiag.trackedPlayers[i].active = true;
+			pathfind::g_pathDiag.trackedPlayers[i].arrivedPrev = false;
+			pathfind::g_pathDiag.trackedPlayers[i].farArrivals = 0;
+			pathfind::g_pathDiag.trackedPlayers[i].farArriveMaxD = 0.0f;
+			pathfind::g_pathDiag.trackedPlayers[i].arrHaveLabels = false;
+			pathfind::g_pathDiag.trackedPlayers[i].orderKoLatched = false;
+			pathfind::g_pathDiag.trackedPlayers[i].havePrev = false;
 			EdgeLegsForget(i);
 			return;
 		}
-		if (!trackedPlayers[i].active && emptySlot < 0)
+		if (!pathfind::g_pathDiag.trackedPlayers[i].active && emptySlot < 0)
 			emptySlot = i;
 	}
 
@@ -348,29 +348,29 @@ void StorePlayerClickDest(uintptr_t character, const float* dest, double now)
 	int slot = emptySlot;
 	if (slot < 0)
 	{
-		if (trackedPlayerCount >= MAX_TRACKED_PLAYERS)
+		if (pathfind::g_pathDiag.trackedPlayerCount >= MAX_TRACKED_PLAYERS)
 			return;
-		slot = trackedPlayerCount++;
+		slot = pathfind::g_pathDiag.trackedPlayerCount++;
 	}
 
 #ifdef ZONEOPT_DEBUG
 	PlayerTaskForget(slot);   // a new entry has printed nothing yet
 #endif
-	trackedPlayers[slot].character = character;
-	trackedPlayers[slot].destX = (*(const float*)KLIB_MEMBER(5, dest, Ogre__Vector3_x, 0));
-	trackedPlayers[slot].destY = (*(const float*)KLIB_MEMBER(5, dest, Ogre__Vector3_y, 4));
-	trackedPlayers[slot].destZ = (*(const float*)KLIB_MEMBER(5, dest, Ogre__Vector3_z, 8));
-	trackedPlayers[slot].prevPosX = 0;
-	trackedPlayers[slot].prevPosZ = 0;
-	trackedPlayers[slot].clickTime = now;
-	trackedPlayers[slot].zeroVelocityPolls = 0;
-	trackedPlayers[slot].active = true;
-	trackedPlayers[slot].arrivedPrev = false;
-	trackedPlayers[slot].farArrivals = 0;
-	trackedPlayers[slot].farArriveMaxD = 0.0f;
-	trackedPlayers[slot].arrHaveLabels = false;
-	trackedPlayers[slot].orderKoLatched = false;
-	trackedPlayers[slot].havePrev = false;
+	pathfind::g_pathDiag.trackedPlayers[slot].character = character;
+	pathfind::g_pathDiag.trackedPlayers[slot].destX = (*(const float*)KLIB_MEMBER(5, dest, Ogre__Vector3_x, 0));
+	pathfind::g_pathDiag.trackedPlayers[slot].destY = (*(const float*)KLIB_MEMBER(5, dest, Ogre__Vector3_y, 4));
+	pathfind::g_pathDiag.trackedPlayers[slot].destZ = (*(const float*)KLIB_MEMBER(5, dest, Ogre__Vector3_z, 8));
+	pathfind::g_pathDiag.trackedPlayers[slot].prevPosX = 0;
+	pathfind::g_pathDiag.trackedPlayers[slot].prevPosZ = 0;
+	pathfind::g_pathDiag.trackedPlayers[slot].clickTime = now;
+	pathfind::g_pathDiag.trackedPlayers[slot].zeroVelocityPolls = 0;
+	pathfind::g_pathDiag.trackedPlayers[slot].active = true;
+	pathfind::g_pathDiag.trackedPlayers[slot].arrivedPrev = false;
+	pathfind::g_pathDiag.trackedPlayers[slot].farArrivals = 0;
+	pathfind::g_pathDiag.trackedPlayers[slot].farArriveMaxD = 0.0f;
+	pathfind::g_pathDiag.trackedPlayers[slot].arrHaveLabels = false;
+	pathfind::g_pathDiag.trackedPlayers[slot].orderKoLatched = false;
+	pathfind::g_pathDiag.trackedPlayers[slot].havePrev = false;
 	EdgeLegsForget(slot);
 }
 
@@ -390,7 +390,7 @@ float PlayerFarArriveMaxDist() { return g_farArriveMaxD; }
 // null-checked; nothing here calls a game function or allocates.
 void SamplePlayerArrivals()
 {
-	if (trackedPlayerCount == 0)
+	if (pathfind::g_pathDiag.trackedPlayerCount == 0)
 		return;
 
 	// Live-list test before any dereference: a tracked entry is only cleared
@@ -405,9 +405,9 @@ void SamplePlayerArrivals()
 	if (!scStuff || scCount == 0 || scCount > 256)
 		return;
 
-	for (int i = 0; i < trackedPlayerCount; ++i)
+	for (int i = 0; i < pathfind::g_pathDiag.trackedPlayerCount; ++i)
 	{
-		TrackedPlayerDest& tp = trackedPlayers[i];
+		TrackedPlayerDest& tp = pathfind::g_pathDiag.trackedPlayers[i];
 		if (!tp.active || !tp.character)
 			continue;
 
@@ -468,7 +468,7 @@ void SamplePlayerArrivals()
 }
 
 
-namespace pathfind_diag_detail
+namespace player_task_snap_detail
 {
 
 struct PollPlayerFrameCtx
@@ -497,7 +497,7 @@ struct PollPlayerCharacterCtx
 
 bool ReadPlayerCharacter(int i, const PollPlayerFrameCtx& frame, PollPlayerCharacterCtx& c)
 {
-	TrackedPlayerDest& tp = trackedPlayers[i];
+	TrackedPlayerDest& tp = pathfind::g_pathDiag.trackedPlayers[i];
 	if (!tp.active)
 		return false;
 
@@ -568,7 +568,7 @@ bool ReadPlayerCharacter(int i, const PollPlayerFrameCtx& frame, PollPlayerChara
 
 bool UpdatePlayerMotion(int i, const PollPlayerFrameCtx& frame, PollPlayerCharacterCtx& c)
 {
-	TrackedPlayerDest& tp = trackedPlayers[i];
+	TrackedPlayerDest& tp = pathfind::g_pathDiag.trackedPlayers[i];
 	// Whether the order's own destination (tp.destX/Z, not the engine's
 	// collapsed pathDestination below) is already within 100 units --
 	// computed every poll, moving or not, so a character that passes
@@ -623,7 +623,7 @@ bool UpdatePlayerMotion(int i, const PollPlayerFrameCtx& frame, PollPlayerCharac
 
 void ClassifyPlayerStall(int i, const PollPlayerFrameCtx& frame, PollPlayerCharacterCtx& c)
 {
-	TrackedPlayerDest& tp = trackedPlayers[i];
+	TrackedPlayerDest& tp = pathfind::g_pathDiag.trackedPlayers[i];
 	// Read movement state
 	c.pathOk = KlibMovementPathOk((void*)c.charMov);
 	c.destReached = KlibMovementDestinationReached((void*)c.charMov);
@@ -667,7 +667,7 @@ void ClassifyPlayerStall(int i, const PollPlayerFrameCtx& frame, PollPlayerChara
 
 void ReportPlayerStuck(int i, const PollPlayerCharacterCtx& c)
 {
-	TrackedPlayerDest& tp = trackedPlayers[i];
+	TrackedPlayerDest& tp = pathfind::g_pathDiag.trackedPlayers[i];
 	// PLAYER STUCK diagnostic line (no recovery: the retry was deleted).
 	// UpdatePlayerMotion's paused return already keeps this whole block
 	// (and the stuck count/guess/KO note before it) from running on a
@@ -785,8 +785,8 @@ void PollPlayerCharacter(int i, const PollPlayerFrameCtx& frame)
 	ReportPlayerStuck(i, c);
 }
 
-} // namespace pathfind_diag_detail
-using namespace pathfind_diag_detail;
+} // namespace player_task_snap_detail
+using namespace player_task_snap_detail;
 
 void PollPlayerMovementState(double now)
 {
@@ -794,7 +794,7 @@ void PollPlayerMovementState(double now)
 		return;
 	lastStuckPollTime = now;
 
-	if (trackedPlayerCount == 0)
+	if (pathfind::g_pathDiag.trackedPlayerCount == 0)
 		return;
 
 	// Validate tracked characters still exist in player squad
@@ -821,6 +821,6 @@ void PollPlayerMovementState(double now)
 	frame.scStuff = scStuff;
 	frame.now = now;
 	frame.paused = paused;
-	for (int i = 0; i < trackedPlayerCount; ++i)
+	for (int i = 0; i < pathfind::g_pathDiag.trackedPlayerCount; ++i)
 		PollPlayerCharacter(i, frame);
 }

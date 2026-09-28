@@ -9,7 +9,7 @@
 
 // Registry evictions. Defined here, where they happen; the counter line that
 // prints it lives in pathfind_hooks.cpp, which not every variant compiles.
-// Declared in pathfinding.h, not included here to keep this TU free of it.
+// Declared in tracking.h, beside the registry state.
 volatile long watchedEvictions = 0;
 
 

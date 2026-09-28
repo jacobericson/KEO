@@ -41,6 +41,7 @@ extern int numWatched;
 extern double lastBaselineScan;
 extern double lastActivePoll;
 extern int hookOrderCount;
+extern volatile long watchedEvictions;
 
 
 // =========================================================================

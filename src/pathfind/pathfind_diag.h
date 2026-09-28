@@ -22,121 +22,8 @@ struct PathProbeEntry {
 };
 
 
-// =========================================================================
-// Diagnostic counters (volatile, Interlocked from bg thread)
-// =========================================================================
-
-// Hook 1: Primary path (ContentStream::findPath)
-extern volatile long diagPrimaryAttempts;
-extern volatile long diagPrimarySuccess;
-extern volatile long diagPrimaryFail;
-
-// Hook 2: Face connectivity check
-extern volatile long diagConnAttempts;
-extern volatile long diagConnFail;
-
-// Hook 3: Full A* search
-extern volatile long diagAstarAttempts;
-extern volatile long diagAstarSuccess;
-extern volatile long diagAstarUnreachable;
-extern volatile long diagAstarTerminated;
-extern volatile long diagAstarTruncated;
-extern volatile long diagAstarInvalid;
-extern volatile long diagAstarOther;
-
 // Requester arms for the waved-through buckets below.
 enum WaveOwner { WAVE_NPC = 0, WAVE_PLAYER = 1, WAVE_UNK = 2 };
-
-// Waved-through searches: pairs the cluster graph rejected under
-// clusterGraphBypass=measure, and what the search it gated returned. Started
-// is incremented before the search runs and the outcome after, so
-// started - (success + unreach + term + invalid + other) is the number of
-// waved searches that never came back. Stale counts labels a searching thread
-// dropped, which bounds how far the outcomes can be mislabelled. All six stay
-// 0 outside measure mode, where no answer is computed -- the report prints
-// "n/a" there rather than zeroes.
-//
-// Each bucket is split by who the search belongs to, indexed
-// WAVE_NPC / WAVE_PLAYER / WAVE_UNK. The label is the engine's own verdict on
-// the owning character, taken from the argument it passes to the full-path
-// call; a search that reached this point without one lands in WAVE_UNK rather
-// than being guessed into either arm, so an arm's count is only requests
-// actually attributed to it. The three arms sum to the pooled total, which is
-// what makes the rate per arm readable.
-extern volatile long diagWaveStarted[3];
-extern volatile long diagWaveSuccess[3];
-extern volatile long diagWaveUnreach[3];
-extern volatile long diagWaveTerm[3];
-extern volatile long diagWaveInvalid[3];
-extern volatile long diagWaveOther[3];
-extern volatile long diagWaveStale;
-
-// The same population labelled by the queue priority of the request being
-// served. This is the label the connectivity check itself has to use, because
-// the engine does not resolve the owning character until after the check has
-// answered, so it is what decides who gets waved through under the player-only
-// mode. Disagree counts the searches it and the authoritative label above
-// disagree about, which is that decision's miss rate; a search missing either
-// label is not counted as a disagreement.
-extern volatile long diagWaveStartedByGate[3];
-extern volatile long diagWaveSuccessByGate[3];
-extern volatile long diagWaveLabelDisagree;
-
-// And labelled by the in-flight-counter tag, a third opinion carried because
-// the counter is global and can drift independently of both labels above.
-extern volatile long diagWaveStartedByTag[2];
-extern volatile long diagWaveSuccessByTag[2];
-
-// Connectivity rejections by the label the check had at the time, counted in
-// every mode that consults the graph. Under the player-only mode the NPC and
-// unattributed arms are the rejections that were obeyed, which no wave bucket
-// can show, so this is the only place they appear.
-extern volatile long diagConnRejectByGate[3];
-
-// Termination cause breakdown (when status == 3)
-extern volatile long diagTermIterLimit;
-extern volatile long diagTermOpenSetFull;
-extern volatile long diagTermStatesFull;
-extern volatile long diagTermOtherCause;
-
-// Iteration tracking
-extern volatile long diagMaxIterUsed;
-extern volatile long diagLastTermIter;
-
-// Player vs NPC request counters (main thread, from hook_requestPath priority param)
-extern volatile long diagPlayerRequests;
-extern volatile long diagNPCRequests;
-
-// Node-cap terminations (status 3, cause 3 -- diagTermStatesFull) on a
-// request the queue already carried at player priority (req+44 >= 20,
-// hook_findPathFull's own pathPoolPlayerByReq). See playerCap= on PathRate:.
-extern volatile long diagPlayerCap;
-
-
-// =========================================================================
-// FindPathInput layout probe (one-time, bg thread writes, main thread reads)
-// =========================================================================
-
-extern volatile long  probeFPIDumped;
-extern volatile float probeStartPos[4];
-extern volatile float probeGoalPos[4];
-extern volatile long  probeGoalPtrValid;
-extern volatile long  probeFields[14];
-
-
-// =========================================================================
-// Multi-call path probe state
-// =========================================================================
-
-extern volatile long  pathProbeArmed;
-extern volatile long  pathProbeWriteIdx;
-extern PathProbeEntry pathProbeBuf[PATH_PROBE_SIZE];
-extern double         pathProbeArmTime;
-
-
-// =========================================================================
-// Player failure tracking
-// =========================================================================
 
 // Last A* failure details — any request (bg thread writes, main thread reads)
 struct AstarFailDetail {
@@ -146,8 +33,6 @@ struct AstarFailDetail {
 	volatile long  iterCount;
 	volatile long  sequence;  // monotonic for freshness
 };
-
-extern AstarFailDetail lastAstarFail;
 
 // Per-player failure ring buffer (bg thread writes, main thread drains)
 // Uses priority-based tagging: boosted player requests (pri 45) are at the
@@ -161,19 +46,6 @@ struct PlayerFailEntry {
 };
 
 const int PLAYER_FAIL_RING = 16;
-extern PlayerFailEntry playerFailRing[PLAYER_FAIL_RING];
-extern volatile long   playerFailWriteIdx;
-extern volatile long   playerRequestsInFlight;  // main increments, bg decrements
-
-
-// =========================================================================
-// Diagnostic function declarations
-// =========================================================================
-
-void LogPathfindDiagStats(double now);
-void ArmPathProbe();
-void DumpPathProbe(double now);
-
 
 // Per-character PLAYER STUCK / PLAYER TASK tracking (main thread only). A
 // diagnostic: it issues no orders (the stuckRetry recovery was deleted).
@@ -206,7 +78,7 @@ struct TrackedPlayerDest {
 	bool orderKoLatched;
 	// The start-delay exclusion (order_outcome.cpp) needs a real "is this
 	// character moving" answer on the very first poll after a click too.
-	// prevPosX/Z start at (0,0) (StorePlayerClickDest, above), so the plain
+	// prevPosX/Z start at (0,0) (StorePlayerClickDest), so the plain
 	// velocity check reads that first poll as a multi-thousand-unit jump and
 	// always "moving" -- havePrev suppresses just that one poll's motion
 	// report to order_outcome.cpp, so a queued or gathering member's real
@@ -215,8 +87,167 @@ struct TrackedPlayerDest {
 };
 
 const int MAX_TRACKED_PLAYERS = 256;
-extern TrackedPlayerDest trackedPlayers[MAX_TRACKED_PLAYERS];
-extern int trackedPlayerCount;
+
+namespace pathfind {
+
+// Path-search diagnostics and player tracking. The search counters are
+// written with Interlocked* on the contentStream bg thread (the csFindPath,
+// findPathFull and fallback hooks); the connectivity counters there and on
+// the AI back thread (csCheckFaceConn); the request counters in
+// hook_requestPath, on the main thread or the AI back thread. The main
+// thread's reporter reads them. playerRequestsInFlight is a behaviour input:
+// hook_pathReqSubmit raises it for a player's request, on the main thread or
+// the AI back thread, and hook_csFindPath lowers it when it tags that
+// request's search; nothing resets it. The FindPathInput probe and
+// lastAstarFail and player fail ring are written on the contentStream bg
+// thread; the path probe also has a csCheckFaceConn writer on the AI back
+// thread. The connectivity ring writer requires currentRequestIsPlayer,
+// a thread-local tag set by csFindPath on the contentStream bg thread.
+// The main thread reads these diagnostics, tolerating torn reads. The input
+// probe claims probeFPIDumped from 0 to 1, publishes at 2, and the reporter
+// consumes it at 3; it is not reset. The main thread clears the path probe's
+// hookType and result fields and resets pathProbeWriteIdx before arming it;
+// writers claim slots from the index while armed, and main disarms before
+// dumping. The index reserves a slot before its payload is complete.
+// lastAstarFail publishes through its sequence, which is never reset. Each
+// fail ring entry publishes through valid; main drains valid to 0, while
+// playerFailWriteIdx advances without reset. trackedPlayers and
+// trackedPlayerCount are main thread only.
+struct PathfindDiagState
+{
+	// Hook 1: Primary path (ContentStream::findPath)
+	volatile long diagPrimaryAttempts;
+	volatile long diagPrimarySuccess;
+	volatile long diagPrimaryFail;
+
+	// Hook 2: Face connectivity check
+	volatile long diagConnAttempts;
+	volatile long diagConnFail;
+
+	// Hook 3: Full A* search
+	volatile long diagAstarAttempts;
+	volatile long diagAstarSuccess;
+	volatile long diagAstarUnreachable;
+	volatile long diagAstarTerminated;
+	volatile long diagAstarTruncated;
+	volatile long diagAstarInvalid;
+	volatile long diagAstarOther;
+
+	// Waved-through searches: pairs the cluster graph rejected under
+	// clusterGraphBypass=measure, and what the search it gated returned. Started
+	// is incremented before the search runs and the outcome after, so
+	// started - (success + unreach + term + invalid + other) is the number of
+	// waved searches that never came back. Stale counts labels a searching thread
+	// dropped, which bounds how far the outcomes can be mislabelled. All six stay
+	// 0 outside measure mode, where no answer is computed -- the report prints
+	// "n/a" there rather than zeroes.
+	//
+	// Each bucket is split by who the search belongs to, indexed
+	// WAVE_NPC / WAVE_PLAYER / WAVE_UNK. The label is the engine's own verdict on
+	// the owning character, taken from the argument it passes to the full-path
+	// call; a search that reached this point without one lands in WAVE_UNK rather
+	// than being guessed into either arm, so an arm's count is only requests
+	// actually attributed to it. The three arms sum to the pooled total, which is
+	// what makes the rate per arm readable.
+	volatile long diagWaveStarted[3];
+	volatile long diagWaveSuccess[3];
+	volatile long diagWaveUnreach[3];
+	volatile long diagWaveTerm[3];
+	volatile long diagWaveInvalid[3];
+	volatile long diagWaveOther[3];
+	volatile long diagWaveStale;
+
+	// The same population labelled by the queue priority of the request being
+	// served. This is the label the connectivity check itself has to use, because
+	// the engine does not resolve the owning character until after the check has
+	// answered, so it is what decides who gets waved through under the player-only
+	// mode. Disagree counts the searches it and the authoritative label above
+	// disagree about, which is that decision's miss rate; a search missing either
+	// label is not counted as a disagreement.
+	volatile long diagWaveStartedByGate[3];
+	volatile long diagWaveSuccessByGate[3];
+	volatile long diagWaveLabelDisagree;
+
+	// And labelled by the in-flight-counter tag, a third opinion carried because
+	// the counter is global and can drift independently of both labels above.
+	volatile long diagWaveStartedByTag[2];
+	volatile long diagWaveSuccessByTag[2];
+
+	// Connectivity rejections by the label the check had at the time, counted in
+	// every mode that consults the graph. Under the player-only mode the NPC and
+	// unattributed arms are the rejections that were obeyed, which no wave bucket
+	// can show, so this is the only place they appear.
+	volatile long diagConnRejectByGate[3];
+
+	// Termination cause breakdown (when status == 3)
+	volatile long diagTermIterLimit;
+	volatile long diagTermOpenSetFull;
+	volatile long diagTermStatesFull;
+	volatile long diagTermOtherCause;
+
+	// Iteration tracking
+	volatile long diagMaxIterUsed;
+	volatile long diagLastTermIter;
+
+	// Player vs NPC request counters (from hook_requestPath priority param)
+	volatile long diagPlayerRequests;
+	volatile long diagNPCRequests;
+
+	// Node-cap terminations (status 3, cause 3 -- diagTermStatesFull) on a
+	// request the queue already carried at player priority (req+44 >= 20,
+	// hook_findPathFull's own pathPoolPlayerByReq). See playerCap= on PathRate:.
+	volatile long diagPlayerCap;
+
+
+	// =========================================================================
+	// FindPathInput layout probe (one-time, bg thread writes, main thread reads)
+	// =========================================================================
+
+	volatile long  probeFPIDumped;
+	volatile float probeStartPos[4];
+	volatile float probeGoalPos[4];
+	volatile long  probeGoalPtrValid;
+	volatile long  probeFields[14];
+
+
+	// =========================================================================
+	// Multi-call path probe state
+	// =========================================================================
+
+	volatile long  pathProbeArmed;
+	volatile long  pathProbeWriteIdx;
+	PathProbeEntry pathProbeBuf[PATH_PROBE_SIZE];
+	double         pathProbeArmTime;
+
+
+	// =========================================================================
+	// Player failure tracking
+	// =========================================================================
+
+	AstarFailDetail lastAstarFail;
+
+	PlayerFailEntry playerFailRing[PLAYER_FAIL_RING];
+	volatile long   playerFailWriteIdx;
+	volatile long   playerRequestsInFlight;
+
+	// Per-character tracking (main thread only)
+	TrackedPlayerDest trackedPlayers[MAX_TRACKED_PLAYERS];
+	int trackedPlayerCount;
+};
+
+extern PathfindDiagState g_pathDiag;
+
+} // namespace pathfind
+
+
+// =========================================================================
+// Diagnostic function declarations
+// =========================================================================
+
+void LogPathfindDiagStats(double now);
+void ArmPathProbe();
+void DumpPathProbe(double now);
+
 
 void StorePlayerClickDest(uintptr_t character, const float* dest, double now);
 void PollPlayerMovementState(double now);

@@ -8,6 +8,7 @@
 #include "pathfind/pathfind_diag.h"
 #include "pathfind/pathfind_cache.h"
 #include "movement/formation.h"
+#include "movement/tracking.h"
 #include "pathfind/path_pool.h"
 #include "pathfind/astar_cost.h"
 #include "pathfind/player_repath_tier.h"
@@ -18,12 +19,9 @@
 #pragma intrinsic(_ReturnAddress)
 
 
-// Registry evictions, defined in tracking.cpp (which every variant compiles).
-extern volatile long watchedEvictions;
-
 // Extraction guard + streaming-collection timestamp counters
-volatile long extractionCrashRescue = 0;  // faults caught inside the extraction loop
-volatile long addInstanceHookCalls  = 0;  // sanity: the addInstance hook is firing
+static volatile long extractionCrashRescue = 0;  // faults caught inside the extraction loop
+static volatile long addInstanceHookCalls  = 0;  // sanity: the addInstance hook is firing
 
 // Request pointer recovered by hook_csFindPath, for whichever request
 // hook_findPathFull runs next on this thread, so its PathSearchSample can
@@ -52,15 +50,15 @@ static __declspec(thread) bool currentRequestIsPlayer = false;
 char hook_csFindPath(void* manager, unsigned int startFaceKey, void* startPos,
                       void* destPos, float radius, char param5, void* resultBuf)
 {
-	InterlockedIncrement(&diagPrimaryAttempts);
+	InterlockedIncrement(&pathfind::g_pathDiag.diagPrimaryAttempts);
 
 	char result = orig_csFindPath(manager, startFaceKey, startPos, destPos,
 	                               radius, param5, resultBuf);
 
 	if (result)
-		InterlockedIncrement(&diagPrimarySuccess);
+		InterlockedIncrement(&pathfind::g_pathDiag.diagPrimarySuccess);
 	else
-		InterlockedIncrement(&diagPrimaryFail);
+		InterlockedIncrement(&pathfind::g_pathDiag.diagPrimaryFail);
 
 	// Tag this request for whichever hook_findPathFull call runs next on
 	// this thread (playerByReq). Set on every call, success or
@@ -74,29 +72,29 @@ char hook_csFindPath(void* manager, unsigned int startFaceKey, void* startPos,
 	// Player request tagging: boosted requests (pri 45) sort to top of queue.
 	// Decrement counter to tag sequential requests as player-owned.
 	currentRequestIsPlayer = false;
-	if (InterlockedCompareExchange(&playerRequestsInFlight, 0, 0) > 0)
+	if (InterlockedCompareExchange(&pathfind::g_pathDiag.playerRequestsInFlight, 0, 0) > 0)
 	{
-		InterlockedDecrement(&playerRequestsInFlight);
+		InterlockedDecrement(&pathfind::g_pathDiag.playerRequestsInFlight);
 		currentRequestIsPlayer = true;
 	}
 
 	// Multi-call probe: capture csFindPath positions when armed
-	if (InterlockedCompareExchange(&pathProbeArmed, 0, 0) == 1)
+	if (InterlockedCompareExchange(&pathfind::g_pathDiag.pathProbeArmed, 0, 0) == 1)
 	{
-		long idx = InterlockedIncrement(&pathProbeWriteIdx) - 1;
+		long idx = InterlockedIncrement(&pathfind::g_pathDiag.pathProbeWriteIdx) - 1;
 		if (idx < PATH_PROBE_SIZE)
 		{
 			float* sp = (float*)startPos;
 			float* dp = (float*)destPos;
-			pathProbeBuf[idx].startX = (*(const float*)KLIB_MEMBER(5, sp, hkVector4f_x, 0));
-			pathProbeBuf[idx].startY = (*(const float*)KLIB_MEMBER(5, sp, hkVector4f_y, 4));
-			pathProbeBuf[idx].startZ = (*(const float*)KLIB_MEMBER(5, sp, hkVector4f_z, 8));
-			pathProbeBuf[idx].destX  = (*(const float*)KLIB_MEMBER(5, dp, hkVector4f_x, 0));
-			pathProbeBuf[idx].destY  = (*(const float*)KLIB_MEMBER(5, dp, hkVector4f_y, 4));
-			pathProbeBuf[idx].destZ  = (*(const float*)KLIB_MEMBER(5, dp, hkVector4f_z, 8));
-			pathProbeBuf[idx].hookType = 1;
-			pathProbeBuf[idx].result   = result ? 1 : 0;
-			pathProbeBuf[idx].faceKey  = startFaceKey;
+			pathfind::g_pathDiag.pathProbeBuf[idx].startX = (*(const float*)KLIB_MEMBER(5, sp, hkVector4f_x, 0));
+			pathfind::g_pathDiag.pathProbeBuf[idx].startY = (*(const float*)KLIB_MEMBER(5, sp, hkVector4f_y, 4));
+			pathfind::g_pathDiag.pathProbeBuf[idx].startZ = (*(const float*)KLIB_MEMBER(5, sp, hkVector4f_z, 8));
+			pathfind::g_pathDiag.pathProbeBuf[idx].destX  = (*(const float*)KLIB_MEMBER(5, dp, hkVector4f_x, 0));
+			pathfind::g_pathDiag.pathProbeBuf[idx].destY  = (*(const float*)KLIB_MEMBER(5, dp, hkVector4f_y, 4));
+			pathfind::g_pathDiag.pathProbeBuf[idx].destZ  = (*(const float*)KLIB_MEMBER(5, dp, hkVector4f_z, 8));
+			pathfind::g_pathDiag.pathProbeBuf[idx].hookType = 1;
+			pathfind::g_pathDiag.pathProbeBuf[idx].result   = result ? 1 : 0;
+			pathfind::g_pathDiag.pathProbeBuf[idx].faceKey  = startFaceKey;
 		}
 	}
 
@@ -115,16 +113,16 @@ char hook_csFindPath(void* manager, unsigned int startFaceKey, void* startPos,
 // and the answer the caller receives.
 static void RecordConnProbe(unsigned int destFace, char answer)
 {
-	if (InterlockedCompareExchange(&pathProbeArmed, 0, 0) != 1)
+	if (InterlockedCompareExchange(&pathfind::g_pathDiag.pathProbeArmed, 0, 0) != 1)
 		return;
-	long idx = InterlockedIncrement(&pathProbeWriteIdx) - 1;
+	long idx = InterlockedIncrement(&pathfind::g_pathDiag.pathProbeWriteIdx) - 1;
 	if (idx >= PATH_PROBE_SIZE)
 		return;
-	pathProbeBuf[idx].startX = 0; pathProbeBuf[idx].startY = 0; pathProbeBuf[idx].startZ = 0;
-	pathProbeBuf[idx].destX  = 0; pathProbeBuf[idx].destY  = 0; pathProbeBuf[idx].destZ  = 0;
-	pathProbeBuf[idx].hookType = 3;
-	pathProbeBuf[idx].result   = answer ? 1 : 0;
-	pathProbeBuf[idx].faceKey  = destFace;
+	pathfind::g_pathDiag.pathProbeBuf[idx].startX = 0; pathfind::g_pathDiag.pathProbeBuf[idx].startY = 0; pathfind::g_pathDiag.pathProbeBuf[idx].startZ = 0;
+	pathfind::g_pathDiag.pathProbeBuf[idx].destX  = 0; pathfind::g_pathDiag.pathProbeBuf[idx].destY  = 0; pathfind::g_pathDiag.pathProbeBuf[idx].destZ  = 0;
+	pathfind::g_pathDiag.pathProbeBuf[idx].hookType = 3;
+	pathfind::g_pathDiag.pathProbeBuf[idx].result   = answer ? 1 : 0;
+	pathfind::g_pathDiag.pathProbeBuf[idx].faceKey  = destFace;
 }
 
 // A pair the cluster graph rejected and the mod waved through anyway, waiting
@@ -167,7 +165,7 @@ static int ConnGateOwner()
 
 char hook_csCheckFaceConn(void* manager, unsigned int startFace, unsigned int destFace)
 {
-	InterlockedIncrement(&diagConnAttempts);
+	InterlockedIncrement(&pathfind::g_pathDiag.diagConnAttempts);
 
 	// Bypass the cluster graph connectivity pre-check entirely.
 	// NPCs going through cluster-graph traversal hit sub_140DA4470 which derefs
@@ -189,17 +187,17 @@ char hook_csCheckFaceConn(void* manager, unsigned int startFace, unsigned int de
 	char result = orig_csCheckFaceConn(manager, startFace, destFace);
 	if (!result)
 	{
-		InterlockedIncrement(&diagConnFail);
+		InterlockedIncrement(&pathfind::g_pathDiag.diagConnFail);
 		if (currentRequestIsPlayer)
 		{
-			long idx = InterlockedIncrement(&playerFailWriteIdx) - 1;
+			long idx = InterlockedIncrement(&pathfind::g_pathDiag.playerFailWriteIdx) - 1;
 			int slot = (int)(idx % PLAYER_FAIL_RING);
-			playerFailRing[slot].goalX = 0;
-			playerFailRing[slot].goalZ = 0;
-			InterlockedExchange(&playerFailRing[slot].status, 99);  // 99 = connectivity rejection
-			InterlockedExchange(&playerFailRing[slot].cause, 0);
-			InterlockedExchange(&playerFailRing[slot].iterCount, 0);
-			InterlockedExchange(&playerFailRing[slot].valid, 1);
+			pathfind::g_pathDiag.playerFailRing[slot].goalX = 0;
+			pathfind::g_pathDiag.playerFailRing[slot].goalZ = 0;
+			InterlockedExchange(&pathfind::g_pathDiag.playerFailRing[slot].status, 99);  // 99 = connectivity rejection
+			InterlockedExchange(&pathfind::g_pathDiag.playerFailRing[slot].cause, 0);
+			InterlockedExchange(&pathfind::g_pathDiag.playerFailRing[slot].iterCount, 0);
+			InterlockedExchange(&pathfind::g_pathDiag.playerFailRing[slot].valid, 1);
 		}
 	}
 	RecordConnProbe(destFace, result);
@@ -215,11 +213,11 @@ char hook_csCheckFaceConn(void* manager, unsigned int startFace, unsigned int de
 	{
 		if (!result)
 		{
-			InterlockedIncrement(&diagConnRejectByGate[gateOwner]);
+			InterlockedIncrement(&pathfind::g_pathDiag.diagConnRejectByGate[gateOwner]);
 			if (clusterGraphBypassMode == CGB_PLAYER && gateOwner != WAVE_PLAYER)
 				return 0;
 			if (t_waveTag && t_waveConsumed)
-				InterlockedIncrement(&diagWaveStale);
+				InterlockedIncrement(&pathfind::g_pathDiag.diagWaveStale);
 			t_waveTag = 1;
 		}
 		return 1;
@@ -353,46 +351,46 @@ void CountFindPathWave(FindPathFullCtx& c)
 	c.waveTagIdx = currentRequestIsPlayer ? 1 : 0;
 	if (c.wavedThrough)
 	{
-		InterlockedIncrement(&diagWaveStarted[c.waveOwner]);
-		InterlockedIncrement(&diagWaveStartedByGate[c.waveGateIdx]);
-		InterlockedIncrement(&diagWaveStartedByTag[c.waveTagIdx]);
+		InterlockedIncrement(&pathfind::g_pathDiag.diagWaveStarted[c.waveOwner]);
+		InterlockedIncrement(&pathfind::g_pathDiag.diagWaveStartedByGate[c.waveGateIdx]);
+		InterlockedIncrement(&pathfind::g_pathDiag.diagWaveStartedByTag[c.waveTagIdx]);
 		if (c.waveOwner != WAVE_UNK && c.waveGateIdx != WAVE_UNK && c.waveOwner != c.waveGateIdx)
-			InterlockedIncrement(&diagWaveLabelDisagree);
+			InterlockedIncrement(&pathfind::g_pathDiag.diagWaveLabelDisagree);
 	}
 }
 
 void ProbeFindPathInput(void* searchState)
 {
 	// One-time FindPathInput layout probe
-	if (searchState && !InterlockedCompareExchange(&probeFPIDumped, 1, 0))
+	if (searchState && !InterlockedCompareExchange(&pathfind::g_pathDiag.probeFPIDumped, 1, 0))
 	{
 		uintptr_t ss = (uintptr_t)searchState;
 
 		float* sp = (float*)(ss + 16);
 		for (int i = 0; i < 4; ++i)
-			probeStartPos[i] = sp[i];
+			pathfind::g_pathDiag.probeStartPos[i] = sp[i];
 
 		float** goalPtrAddr = (float**)(ss + 32);
 		float* goalPtr = *goalPtrAddr;
 		if (goalPtr)
 		{
 			for (int i = 0; i < 4; ++i)
-				probeGoalPos[i] = goalPtr[i];
-			InterlockedExchange(&probeGoalPtrValid, 1);
+				pathfind::g_pathDiag.probeGoalPos[i] = goalPtr[i];
+			InterlockedExchange(&pathfind::g_pathDiag.probeGoalPtrValid, 1);
 		}
 		else
 		{
 			for (int i = 0; i < 4; ++i)
-				probeGoalPos[i] = 0.0f;
-			InterlockedExchange(&probeGoalPtrValid, 0);
+				pathfind::g_pathDiag.probeGoalPos[i] = 0.0f;
+			InterlockedExchange(&pathfind::g_pathDiag.probeGoalPtrValid, 0);
 		}
 
 		int offsets[14] = { 40, 44, 48, 52, 56, 60, 64, 68,
 		                    72, 76, 128, 136, 156, 160 };
 		for (int i = 0; i < 14; ++i)
-			probeFields[i] = *(int*)(ss + offsets[i]);
+			pathfind::g_pathDiag.probeFields[i] = *(int*)(ss + offsets[i]);
 
-		InterlockedExchange(&probeFPIDumped, 2);
+		InterlockedExchange(&pathfind::g_pathDiag.probeFPIDumped, 2);
 	}
 }
 
@@ -413,9 +411,9 @@ void CaptureFindPathProbe(void* searchState, FindPathFullCtx& c)
 {
 	// Multi-call probe: capture FindPathInput positions before calling orig
 	c.probeSlot = -1;
-	if (InterlockedCompareExchange(&pathProbeArmed, 0, 0) == 1 && searchState)
+	if (InterlockedCompareExchange(&pathfind::g_pathDiag.pathProbeArmed, 0, 0) == 1 && searchState)
 	{
-		c.probeSlot = InterlockedIncrement(&pathProbeWriteIdx) - 1;
+		c.probeSlot = InterlockedIncrement(&pathfind::g_pathDiag.pathProbeWriteIdx) - 1;
 		if (c.probeSlot < PATH_PROBE_SIZE)
 		{
 			uintptr_t ss = (uintptr_t)searchState;
@@ -423,18 +421,18 @@ void CaptureFindPathProbe(void* searchState, FindPathFullCtx& c)
 			float** gpa = (float**)(ss + 32);
 			float* gp = *gpa;
 
-			pathProbeBuf[c.probeSlot].startX = sp[0];
-			pathProbeBuf[c.probeSlot].startY = sp[1];
-			pathProbeBuf[c.probeSlot].startZ = sp[2];
+			pathfind::g_pathDiag.pathProbeBuf[c.probeSlot].startX = sp[0];
+			pathfind::g_pathDiag.pathProbeBuf[c.probeSlot].startY = sp[1];
+			pathfind::g_pathDiag.pathProbeBuf[c.probeSlot].startZ = sp[2];
 			if (gp)
 			{
-				pathProbeBuf[c.probeSlot].destX = gp[0];
-				pathProbeBuf[c.probeSlot].destY = gp[1];
-				pathProbeBuf[c.probeSlot].destZ = gp[2];
+				pathfind::g_pathDiag.pathProbeBuf[c.probeSlot].destX = gp[0];
+				pathfind::g_pathDiag.pathProbeBuf[c.probeSlot].destY = gp[1];
+				pathfind::g_pathDiag.pathProbeBuf[c.probeSlot].destZ = gp[2];
 			}
-			pathProbeBuf[c.probeSlot].hookType = 2;
-			pathProbeBuf[c.probeSlot].result   = 0;
-			pathProbeBuf[c.probeSlot].faceKey  = *(unsigned int*)(ss + 48);
+			pathfind::g_pathDiag.pathProbeBuf[c.probeSlot].hookType = 2;
+			pathfind::g_pathDiag.pathProbeBuf[c.probeSlot].result   = 0;
+			pathfind::g_pathDiag.pathProbeBuf[c.probeSlot].faceKey  = *(unsigned int*)(ss + 48);
 		}
 	}
 }
@@ -473,7 +471,7 @@ void RecordFindPathSamples(const FindPathFullCtx& c)
 void RecordFindPathOutcome(void* searchState, const FindPathFullCtx& c)
 {
 	if (c.probeSlot >= 0 && c.probeSlot < PATH_PROBE_SIZE)
-		pathProbeBuf[c.probeSlot].result = (int)c.status;
+		pathfind::g_pathDiag.pathProbeBuf[c.probeSlot].result = (int)c.status;
 
 	// The outcome of a search the cluster graph would have refused. Same
 	// two bytes the buckets below read, no extra dereference. "Other" is
@@ -481,61 +479,61 @@ void RecordFindPathOutcome(void* searchState, const FindPathFullCtx& c)
 	// included, since the full buckets below show whether any occurred.
 	if (c.wavedThrough)
 	{
-		if (c.status == 1)      InterlockedIncrement(&diagWaveSuccess[c.waveOwner]);
-		else if (c.status == 2) InterlockedIncrement(&diagWaveUnreach[c.waveOwner]);
-		else if (c.status == 3) InterlockedIncrement(&diagWaveTerm[c.waveOwner]);
-		else if (c.status == 5) InterlockedIncrement(&diagWaveInvalid[c.waveOwner]);
-		else                  InterlockedIncrement(&diagWaveOther[c.waveOwner]);
+		if (c.status == 1)      InterlockedIncrement(&pathfind::g_pathDiag.diagWaveSuccess[c.waveOwner]);
+		else if (c.status == 2) InterlockedIncrement(&pathfind::g_pathDiag.diagWaveUnreach[c.waveOwner]);
+		else if (c.status == 3) InterlockedIncrement(&pathfind::g_pathDiag.diagWaveTerm[c.waveOwner]);
+		else if (c.status == 5) InterlockedIncrement(&pathfind::g_pathDiag.diagWaveInvalid[c.waveOwner]);
+		else                  InterlockedIncrement(&pathfind::g_pathDiag.diagWaveOther[c.waveOwner]);
 
 		if (c.status == 1)
 		{
-			InterlockedIncrement(&diagWaveSuccessByGate[c.waveGateIdx]);
-			InterlockedIncrement(&diagWaveSuccessByTag[c.waveTagIdx]);
+			InterlockedIncrement(&pathfind::g_pathDiag.diagWaveSuccessByGate[c.waveGateIdx]);
+			InterlockedIncrement(&pathfind::g_pathDiag.diagWaveSuccessByTag[c.waveTagIdx]);
 		}
 	}
 
 	if (c.status == 1)
-		InterlockedIncrement(&diagAstarSuccess);
+		InterlockedIncrement(&pathfind::g_pathDiag.diagAstarSuccess);
 	else if (c.status == 2)
-		InterlockedIncrement(&diagAstarUnreachable);
+		InterlockedIncrement(&pathfind::g_pathDiag.diagAstarUnreachable);
 	else if (c.status == 3)
 	{
-		InterlockedIncrement(&diagAstarTerminated);
+		InterlockedIncrement(&pathfind::g_pathDiag.diagAstarTerminated);
 
 		if (c.cause == 1)
-			InterlockedIncrement(&diagTermIterLimit);
+			InterlockedIncrement(&pathfind::g_pathDiag.diagTermIterLimit);
 		else if (c.cause == 2)
-			InterlockedIncrement(&diagTermOpenSetFull);
+			InterlockedIncrement(&pathfind::g_pathDiag.diagTermOpenSetFull);
 		else if (c.cause == 3)
 		{
-			InterlockedIncrement(&diagTermStatesFull);
+			InterlockedIncrement(&pathfind::g_pathDiag.diagTermStatesFull);
 			// playerCap= on PathRate:: the node cap hit on a request the
 			// queue already carried at player priority.
 			// pathPoolPlayerByReq was resolved above, before
 			// orig_findPathFull, from the same req+0x2C the queue itself
 			// reads.
 			if (c.pathPoolPlayerByReq == 1)
-				InterlockedIncrement(&diagPlayerCap);
+				InterlockedIncrement(&pathfind::g_pathDiag.diagPlayerCap);
 		}
 		else
-			InterlockedIncrement(&diagTermOtherCause);
+			InterlockedIncrement(&pathfind::g_pathDiag.diagTermOtherCause);
 
-		InterlockedExchange(&diagLastTermIter, (long)c.iterCount);
+		InterlockedExchange(&pathfind::g_pathDiag.diagLastTermIter, (long)c.iterCount);
 	}
 	else if (c.status == 4)
-		InterlockedIncrement(&diagAstarTruncated);
+		InterlockedIncrement(&pathfind::g_pathDiag.diagAstarTruncated);
 	else if (c.status == 5)
-		InterlockedIncrement(&diagAstarInvalid);
+		InterlockedIncrement(&pathfind::g_pathDiag.diagAstarInvalid);
 	else
-		InterlockedIncrement(&diagAstarOther);
+		InterlockedIncrement(&pathfind::g_pathDiag.diagAstarOther);
 
 	// Update max iterations high-water mark (lock-free CAS loop)
 	long prev;
 	do {
-		prev = InterlockedCompareExchange(&diagMaxIterUsed, 0, 0);
+		prev = InterlockedCompareExchange(&pathfind::g_pathDiag.diagMaxIterUsed, 0, 0);
 		if ((long)c.iterCount <= prev)
 			break;
-	} while (InterlockedCompareExchange(&diagMaxIterUsed, (long)c.iterCount, prev) != prev);
+	} while (InterlockedCompareExchange(&pathfind::g_pathDiag.diagMaxIterUsed, (long)c.iterCount, prev) != prev);
 
 	// Record last failure detail for player exposure reporting
 	if (c.status != 1 && c.status != 2)
@@ -543,28 +541,28 @@ void RecordFindPathOutcome(void* searchState, const FindPathFullCtx& c)
 		float* goalPtr = searchState ? *(float**)((uintptr_t)searchState + 32) : NULL;
 		if (goalPtr)
 		{
-			lastAstarFail.goalX = goalPtr[0];
-			lastAstarFail.goalY = goalPtr[1];
-			lastAstarFail.goalZ = goalPtr[2];
+			pathfind::g_pathDiag.lastAstarFail.goalX = goalPtr[0];
+			pathfind::g_pathDiag.lastAstarFail.goalY = goalPtr[1];
+			pathfind::g_pathDiag.lastAstarFail.goalZ = goalPtr[2];
 		}
-		InterlockedExchange(&lastAstarFail.status, (long)c.status);
-		InterlockedExchange(&lastAstarFail.cause, (long)c.cause);
-		InterlockedExchange(&lastAstarFail.iterCount, (long)c.iterCount);
-		InterlockedIncrement(&lastAstarFail.sequence);
+		InterlockedExchange(&pathfind::g_pathDiag.lastAstarFail.status, (long)c.status);
+		InterlockedExchange(&pathfind::g_pathDiag.lastAstarFail.cause, (long)c.cause);
+		InterlockedExchange(&pathfind::g_pathDiag.lastAstarFail.iterCount, (long)c.iterCount);
+		InterlockedIncrement(&pathfind::g_pathDiag.lastAstarFail.sequence);
 	}
 
 	// Per-player failure: record to ring buffer for main-thread logging
 	if (c.status != 1 && currentRequestIsPlayer)
 	{
 		float* goalPtr = searchState ? *(float**)((uintptr_t)searchState + 32) : NULL;
-		long idx = InterlockedIncrement(&playerFailWriteIdx) - 1;
+		long idx = InterlockedIncrement(&pathfind::g_pathDiag.playerFailWriteIdx) - 1;
 		int slot = (int)(idx % PLAYER_FAIL_RING);
-		playerFailRing[slot].goalX = goalPtr ? goalPtr[0] : 0;
-		playerFailRing[slot].goalZ = goalPtr ? goalPtr[2] : 0;
-		InterlockedExchange(&playerFailRing[slot].status, (long)c.status);
-		InterlockedExchange(&playerFailRing[slot].cause, (long)c.cause);
-		InterlockedExchange(&playerFailRing[slot].iterCount, (long)c.iterCount);
-		InterlockedExchange(&playerFailRing[slot].valid, 1);
+		pathfind::g_pathDiag.playerFailRing[slot].goalX = goalPtr ? goalPtr[0] : 0;
+		pathfind::g_pathDiag.playerFailRing[slot].goalZ = goalPtr ? goalPtr[2] : 0;
+		InterlockedExchange(&pathfind::g_pathDiag.playerFailRing[slot].status, (long)c.status);
+		InterlockedExchange(&pathfind::g_pathDiag.playerFailRing[slot].cause, (long)c.cause);
+		InterlockedExchange(&pathfind::g_pathDiag.playerFailRing[slot].iterCount, (long)c.iterCount);
+		InterlockedExchange(&pathfind::g_pathDiag.playerFailRing[slot].valid, 1);
 	}
 }
 
@@ -573,7 +571,7 @@ using namespace pathfind_hooks_detail;
 
 void hook_findPathFull(void* streamingCollection, void* searchState, void* findPathOutput)
 {
-	InterlockedIncrement(&diagAstarAttempts);
+	InterlockedIncrement(&pathfind::g_pathDiag.diagAstarAttempts);
 
 	// This function's own return address is one of six known call sites
 	// (astar_cost_policy.h) -- captured once, up front, since it never
@@ -621,9 +619,9 @@ void hook_requestPath(void* havokChar, float* destination, int priority)
 {
 	// Player vs NPC tracking
 	if (priority >= 2)
-		InterlockedIncrement(&diagPlayerRequests);
+		InterlockedIncrement(&pathfind::g_pathDiag.diagPlayerRequests);
 	else
-		InterlockedIncrement(&diagNPCRequests);
+		InterlockedIncrement(&pathfind::g_pathDiag.diagNPCRequests);
 
 
 	// The match is checked -- and counted by PlayerRepathTierIsPlayerOwned --
@@ -671,7 +669,7 @@ void hook_pathReqSubmit(void* sectionMgr, void* requestObj, bool highPriority)
 			else
 			{
 				InterlockedIncrement(&p12DiagSubmitBoostsOrder);
-				InterlockedIncrement(&playerRequestsInFlight);
+				InterlockedIncrement(&pathfind::g_pathDiag.playerRequestsInFlight);
 			}
 		}
 	}
