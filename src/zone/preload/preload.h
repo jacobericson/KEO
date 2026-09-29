@@ -69,10 +69,8 @@ struct QueuedZone {
 // and reset/compact it on save load and transition completion. Two readers
 // run at bracket start in hook_showLoadingMessage (transition_hook.cpp), on
 // whichever thread opens the bracket, the main thread or the contentStream
-// thread: TargetZoneLetter clamps numPreloaded to MAX_PRELOADED and reads the
-// table without allocation or lock; the "Transition start" count walks
-// preloadedZones[0..numPreloaded) unclamped and then builds its line with
-// std::ostringstream and LogMsg, with no main-thread test.
+// thread: TargetZoneLetter and CaptureTransitionStart each clamp numPreloaded
+// to MAX_PRELOADED and read the table without allocation or lock.
 // There is no coherent publication; mixed values are tolerated diagnostics.
 // =========================================================================
 

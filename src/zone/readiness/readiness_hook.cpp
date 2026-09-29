@@ -295,8 +295,8 @@ namespace hooks_detail
 { // namespace hooks_detail
 
 // Main thread, every hook_updateCameraZone frame: the one-time config line,
-// the deferred target line, and the periodic Readiness line (10 s DEV, 30 s
-// PROD, only when a counter moved).
+// the deferred target and start lines, and the periodic Readiness line
+// (10 s DEV, 30 s PROD, only when a counter moved).
 void ReadinessReportTick(double now)
 {
 	static bool configLogged = false;
@@ -313,6 +313,7 @@ void ReadinessReportTick(double now)
 
 	if (InterlockedCompareExchange(&g_tgtLogPending, 0, 1) == 1)
 		LogTransitionTarget();
+	FlushPendingTransitionStart();
 
 #ifdef ZONEOPT_DEBUG
 	const double kReadinessLogIntervalSec = 10.0;

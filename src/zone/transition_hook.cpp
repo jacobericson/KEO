@@ -46,19 +46,24 @@ static LONG          transitionEndGen = 0;
 // Transition-bracket instrumentation
 // =========================================================================
 
-// Target 3x3 at transition start. Written by CaptureTransitionTarget on the
-// thread that opens the bracket (normally the main thread), read by
-// LogTransitionTarget on the main thread. When the start ran off the main
-// thread, g_tgtLogPending is raised after the buffer is written and the next
-// main-thread hook_updateCameraZone claims it (interlocked pair orders them).
-// The pending flag orders an off-main capture before the main reporter,
-// which consumes it before logging. The next bracket replaces the buffer;
-// there is no sequence-checked copy, so overlapping captures can mix a
-// diagnostic target. Main captures log directly and clear the pending flag.
+// Target 3x3 and preload counts at transition start. Written by
+// CaptureTransitionTarget and CaptureTransitionStart on the thread that opens
+// the bracket (normally the main thread), read by LogTransitionTarget and
+// LogTransitionStart on the main thread. When the start ran off the main
+// thread, g_tgtLogPending and g_startLogPending are raised after their values
+// are written and the next main-thread hook_updateCameraZone claims them, the
+// target first (interlocked pairs order them). Each pending flag orders an
+// off-main capture before the main reporter, which consumes it before
+// logging. The next bracket replaces the values; there is no sequence-checked
+// copy, so overlapping captures can mix a diagnostic target or count. Main
+// captures log directly and clear their pending flag.
 static char          g_tgtLetters[10];
 static int           g_tgtX          = -1;
 static int           g_tgtY          = -1;
 volatile LONG g_tgtLogPending = 0;
+static int           g_startGameOwned  = 0;
+static int           g_startPreloaded  = 0;
+static volatile LONG g_startLogPending = 0;
 
 // Main-thread hook_updateCameraZone frames per zone-manager state while a
 // bracket is open. Main thread only. g_bracketFramesGen is the transitionGen
@@ -68,6 +73,16 @@ volatile LONG g_tgtLogPending = 0;
 const int            BRACKET_STATES    = 6;       // ZoneManager states 0..5
 static int           g_bracketFrames[BRACKET_STATES];
 static LONG          g_bracketFramesGen = 0;
+
+// numPreloaded clamped to the table's capacity. A bracket start off the main
+// thread reads it while the main thread may be changing it.
+static int ClampedPreloadCount()
+{
+	int n = numPreloaded;
+	if (n > MAX_PRELOADED) n = MAX_PRELOADED;
+	if (n < 0) n = 0;
+	return n;
+}
 
 // One zone of the target 3x3. Allocation-free and lock-free: it may run on
 // whichever thread opened the bracket. Reads the preload arrays read-only
@@ -82,9 +97,7 @@ static char TargetZoneLetter(void* zm, int gx, int gy)
 	if (gx < 0 || gx > ZONE_GRID_MAX || gy < 0 || gy > ZONE_GRID_MAX)
 		return '-';
 
-	int n = numPreloaded;
-	if (n > MAX_PRELOADED) n = MAX_PRELOADED;
-	if (n < 0) n = 0;
+	int n = ClampedPreloadCount();
 	for (int i = 0; i < n; ++i)
 	{
 		if (preloadedZones[i].gridX != gx || preloadedZones[i].gridY != gy)
@@ -134,6 +147,41 @@ void LogTransitionTarget()
 	ss << "Transition target: (" << g_tgtX << "," << g_tgtY << ") 3x3="
 	   << g_tgtLetters << " focus=" << g_tgtLetters[4];
 	LogMsg(ss.str());
+}
+
+// Counts the tracked slots the game already owned when recorded. Any thread;
+// allocation-free and lock-free, reading the preload table like
+// TargetZoneLetter. Returns false when no slot is tracked.
+static bool CaptureTransitionStart()
+{
+	int n = ClampedPreloadCount();
+	if (n <= 0)
+		return false;
+	int gameOwnedCount = 0;
+	for (int i = 0; i < n; ++i)
+	{
+		if (preloadedZones[i].gameOwned)
+			gameOwnedCount++;
+	}
+	g_startGameOwned = gameOwnedCount;
+	g_startPreloaded = n;
+	return true;
+}
+
+// Main thread only (CRT string work).
+static void LogTransitionStart()
+{
+	std::ostringstream ss;
+	ss << "Transition start: " << g_startGameOwned << "/"
+	   << g_startPreloaded << " game-owned";
+	LogMsg(ss.str());
+}
+
+// Main thread, every hook_updateCameraZone frame, after the pending target line.
+void FlushPendingTransitionStart()
+{
+	if (InterlockedCompareExchange(&g_startLogPending, 0, 1) == 1)
+		LogTransitionStart();
 }
 
 } // namespace hooks_detail
@@ -249,10 +297,10 @@ void hook_showLoadingMessage(void* thisPtr, bool on)
 		BoostNavMeshThread();
 		BoostWorkerThreads();
 
-		// The target 3x3 as the bracket opens. The capture is
-		// allocation-free. The line is logged here on the main thread; off it
-		// (CRT string work is not allowed there) it waits for the next
-		// main-thread hook_updateCameraZone.
+		// The target 3x3 and the preload counts as the bracket opens. The
+		// captures are allocation-free. Their lines are logged here on the main
+		// thread; off it (CRT string work is not allowed there) they wait for
+		// the next main-thread hook_updateCameraZone.
 		if (CaptureTransitionTarget())
 		{
 			if (IsMainThread())
@@ -266,19 +314,17 @@ void hook_showLoadingMessage(void* thisPtr, bool on)
 			}
 		}
 
-		// Log how many tracked slots the game already owned when recorded
-		if (numPreloaded > 0)
+		if (CaptureTransitionStart())
 		{
-			int gameOwnedCount = 0;
-			for (int i = 0; i < numPreloaded; ++i)
+			if (IsMainThread())
 			{
-				if (preloadedZones[i].gameOwned)
-					gameOwnedCount++;
+				InterlockedExchange(&g_startLogPending, 0);
+				LogTransitionStart();
 			}
-			std::ostringstream ss;
-			ss << "Transition start: " << gameOwnedCount << "/"
-			   << numPreloaded << " game-owned";
-			LogMsg(ss.str());
+			else
+			{
+				InterlockedExchange(&g_startLogPending, 1);
+			}
 		}
 	}
 	else if (!on && isTransitionActive)
