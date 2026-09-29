@@ -152,7 +152,6 @@ static volatile LONG     g_bscOtherLogged = 0, g_swiOtherLogged = 0;
 volatile LONG g_buildLockOwnerTid   = 0;
 volatile LONG g_buildLockOwnerState = 0;   // BL_R1 or BL_TAIL
 
-
 static const int BL_ZERO_ZONE[2] = { 0, 0 };   // lockZone ignores the zone
 
 
@@ -198,6 +197,8 @@ static void BlRelease()
 	fn_nmgUnlockZone(t_blNmg, BL_ZERO_ZONE);
 }
 
+namespace nm_buildlock_detail {
+
 // Builder wall time, the same measure in both modes (the wide mode's includes
 // the buildCollisionCS wait).
 struct BuilderWallTimer
@@ -239,6 +240,9 @@ private:
 	NarrowBuilderScope(const NarrowBuilderScope&);
 	NarrowBuilderScope& operator=(const NarrowBuilderScope&);
 };
+
+} // namespace nm_buildlock_detail
+using namespace nm_buildlock_detail;
 
 bool BuildLockNarrowActive() { return InterlockedCompareExchange(&g_narrow, 0, 0) != 0; }
 

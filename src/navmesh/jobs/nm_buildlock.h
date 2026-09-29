@@ -31,5 +31,4 @@ std::string BuildLockStatsSuffix();
 extern volatile LONG g_buildLockOwnerTid;
 extern volatile LONG g_buildLockOwnerState;
 
-
 #endif

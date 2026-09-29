@@ -42,40 +42,21 @@ static bool ParseBenchSweep(const std::string& val, ConfigLogFn log)
 
 // ---- The core table ------------------------------------------------------
 //
-// Every macro sets every column: minInt's "none" is INT_MIN, not zero. A row
-// with lo > hi has no clamp. The defaults are the initialisers' values as the
-// INI writes them, DEV first.
+// Every macro sets every column but debugOnlyReader, which reads false;
+// minInt's "none" is INT_MIN, not zero. A row with lo > hi has no clamp. A
+// row's two default texts are its values as the INI writes them, DEV first.
 
 #define CFG_ROW(n, kind, size, lo, hi, tgt, minI, posOnly, doc, dev, prod, fn, label, tip, diag, sLo, sExp, ch, chN) \
 	{ n, kind, 0, size, lo, hi, false, label, tip, diag, sLo, sExp, \
 	  tgt, minI, posOnly, doc, false, dev, prod, fn, ch, chN }
-#define CFG_COUNT(a) ((int)(sizeof(a) / sizeof((a)[0])))
-#define CFG_BOOL(n, g, doc, dev, prod, diag, label, tip) \
-	CFG_ROW(n, CK_BOOL, 0, 1.0f, 0.0f, &g, INT_MIN, false, doc, dev, prod, NULL, label, tip, diag, 0.0f, 0, NULL, 0)
-// An integer row with a range drags in whole steps from its clamp minimum.
-#define CFG_INT(n, g, lo, hi, minI, doc, dev, prod, diag, label, tip) \
-	CFG_ROW(n, CK_INT, 0, lo, hi, &g, minI, false, doc, dev, prod, NULL, label, tip, diag, lo, 0, NULL, 0)
-#define CFG_INT_CHOICES(n, g, lo, hi, minI, doc, dev, prod, diag, label, tip, ch) \
-	CFG_ROW(n, CK_INT, 0, lo, hi, &g, minI, false, doc, dev, prod, NULL, label, tip, diag, lo, 0, ch, CFG_COUNT(ch))
-#define CFG_FLOAT(n, g, lo, hi, posOnly, doc, dev, prod, diag, label, tip, sLo, sExp) \
-	CFG_ROW(n, CK_FLOAT, 0, lo, hi, &g, INT_MIN, posOnly, doc, dev, prod, NULL, label, tip, diag, sLo, sExp, NULL, 0)
-#define CFG_DOUBLE(n, g, lo, hi, doc, dev, prod, diag, label, tip, sLo, sExp) \
-	CFG_ROW(n, CK_DOUBLE, 0, lo, hi, &g, INT_MIN, false, doc, dev, prod, NULL, label, tip, diag, sLo, sExp, NULL, 0)
 // A custom row without choices stays INI-only.
 #define CFG_CUSTOM(n, tgt, width, fn, doc, dev, prod) \
 	CFG_ROW(n, CK_CUSTOM, width, 1.0f, 0.0f, tgt, INT_MIN, false, doc, dev, prod, fn, NULL, NULL, false, 0.0f, 0, NULL, 0)
-#define CFG_CUSTOM_CHOICES(n, tgt, width, fn, doc, dev, prod, label, tip, ch) \
-	CFG_ROW(n, CK_CUSTOM, width, 1.0f, 0.0f, tgt, INT_MIN, false, doc, dev, prod, fn, label, tip, false, 0.0f, 0, ch, CFG_COUNT(ch))
 #define CFG_RETIRED(n) \
 	{ n, CK_CUSTOM, 0, 0, 1.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, \
 	  NULL, INT_MIN, false, false, true, NULL, NULL, NULL, NULL, 0 }
 
 #define DOC  true
-#define NDOC false
-
-// devOnly: DIAG rows only read, count, record or log, and show in DEV builds only.
-#define SHOW false
-#define DIAG true
 
 static const ConfigKey kCoreKeys[] =
 {

@@ -141,14 +141,16 @@ struct PathSearchWindow
 	volatile LONG g_gateIterLimit;
 	volatile LONG g_gateStateFull;
 	PPClassStats g_classStats[PP_CLASS_COUNT];
-	// Non-gate path outcomes; cause 1 iter limit, 2 open full, 3 state full.
+	// Non-gate path outcomes, accumulated on the path thread; they feed
+	// PathQueue's term=. Cause 1 iter limit, 2 open full, 3 state full, else other.
 	volatile LONG g_pathSearchOk;
 	volatile LONG g_pathSearchFail;
 	volatile LONG g_pathTermIterLimit;
 	volatile LONG g_pathTermOpenSetFull;
 	volatile LONG g_pathTermStateFull;
 	volatile LONG g_pathTermOther;
-	// Boost outcomes: high-iteration success, other success, failure.
+	// Boost outcomes: success above 32768 iterations, other success, failure
+	// (status != 1).
 	volatile LONG g_boostByTag[3][2];
 	volatile LONG g_boostByReq[3][3];
 	volatile LONG g_boostDisagree;

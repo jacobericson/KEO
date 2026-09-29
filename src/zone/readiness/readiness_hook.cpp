@@ -131,8 +131,6 @@ enum ReadyCaller { RC_POLL4 = 0, RC_MAIN = 1, RC_OFF = 2, RC_COUNT = 3 };
 enum ReadyClass  { RZ_NO_SECTION = 0, RZ_OUTDOOR_MISSING = 1, RZ_BUILDINGS_PENDING = 2,
                    RZ_NOT_IN_WORLD = 3, RZ_UNKNOWN = 4, RZ_COUNT = 5 };
 
-// Cumulative for the session. Incremented on any thread (Interlocked only),
-// read on the main thread by ReadinessReportTick.
 // Written on any caller thread by hook_isContentPending; scan-cost fields
 // also come from ClassifyZoneReadiness through RecordScanCost. The main
 // ReadinessReportTick reads each atomic separately. Publication is each

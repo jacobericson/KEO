@@ -9,6 +9,15 @@ namespace nm_adjacency_detail {
 const LONG      kMaxViolLines  = 8;
 
 enum { MODE_OFF = 0, MODE_ENFORCE, MODE_COUNT, MODE_COUNT_NO_OBSERVER };
+// Threads: InstallNavMeshAdjacency writes s_mode, s_observerInstalled,
+// s_observerWhy, g_adjEvent and s_qpf once at hook install on the main thread;
+// every thread only reads them after that. The stitch-source install sets
+// s_checkerPresent once. The NavMesh workers, the bg thread and the path
+// thread's drain observer change g_reg, g_regSeq and g_pubHint under the
+// generator queue lock +152, except the bg thread's own look stamps
+// (bgLastLook, bgLooked), which only it writes, unlocked; the stitch checker
+// copies g_reg without the lock, sequence-checked. t_own and t_ownTask are the claiming thread's own claim;
+// s_nextBeat is the main-thread heartbeat's.
 extern volatile LONG s_checkerPresent;
 extern int s_mode;
 extern bool s_observerInstalled;

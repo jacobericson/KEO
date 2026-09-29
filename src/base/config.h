@@ -29,7 +29,7 @@
 // cell's mesh is not in yet.
 
 
-#include "base/config_values.h"   // the INI-loaded globals
+#include "base/config_values.h"   // the modules' INI-loaded config
 
 
 // =========================================================================

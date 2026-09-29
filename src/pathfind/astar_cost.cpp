@@ -10,10 +10,8 @@
 #include "pathfind/astar_cost.h"
 #include "plugin/hook_manifest.h"
 
-
 #include "game/game.h"   // gameBase
 #include <cmath>
-
 
 bool AstarCostHookInstalled()
 {
@@ -88,8 +86,6 @@ struct AstarOutcomeHist
 	volatile LONG     latHistUs[ASTAR_HIST_BUCKETS];
 	volatile LONG     iterHist[ASTAR_HIST_BUCKETS];
 };
-} // namespace astar_cost_detail
-using namespace astar_cost_detail;
 
 // Reduced cut of "class x status": success, the two terminated/cause=3
 // (search-state-full) buckets split by whether the 4x boost wrote
@@ -97,15 +93,11 @@ using namespace astar_cost_detail;
 // unboosted open-set limit, so its cause=3 rate is not directly comparable
 // to an unboosted one), and everything else. statusCount keeps the plain
 // per-status counts a reader can total independently of this cut.
-namespace astar_cost_detail {
 enum { ASTAR_OUT_OK = 0, ASTAR_OUT_CAUSE3_UNBOOSTED = 1, ASTAR_OUT_CAUSE3_BOOSTED = 2, ASTAR_OUT_OTHER = 3, ASTAR_OUT_COUNT = 4 };
-} // namespace astar_cost_detail
-using namespace astar_cost_detail;
 
 // Any AstarCostNote caller atomically publishes outcome/status counters;
 // the main tick reads and resets each field independently per window. No
 // coherent set is copied; mixed diagnostic epochs are tolerated.
-namespace astar_cost_detail {
 struct AstarClassStats
 {
 	volatile LONG   statusCount[ASTAR_STATUS_SLOTS];

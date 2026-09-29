@@ -9,8 +9,9 @@
 
 struct SettingsRow;
 
-// One target row's staged value: b for a checkbox, i for a drop box, f for
-// a slider (an integer row's slider included).
+// One slot-bound row's staged value (a target row, or an offset row into the
+// staged module config): b for a checkbox, i for a drop box, f for a slider
+// (an integer row's slider included).
 struct ConfigStageValue
 {
 	bool  b;

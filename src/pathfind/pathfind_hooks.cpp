@@ -253,7 +253,7 @@ struct FindPathFullCtx
 	LARGE_INTEGER pathPoolQpcAfter;
 };
 
-void TakeFindPathWave(FindPathFullCtx& c)
+static void TakeFindPathWave(FindPathFullCtx& c)
 {
 	// Take the waved-through label, if this thread is carrying one, before
 	// anything below can run a nested search that would inherit it. The
@@ -269,7 +269,7 @@ void TakeFindPathWave(FindPathFullCtx& c)
 	}
 }
 
-void ResolveFindPathRequest(FindPathFullCtx& c)
+static void ResolveFindPathRequest(FindPathFullCtx& c)
 {
 	// Resolve playerByReq once from the request hook_csFindPath tagged.
 	// Clear it so an unrelated direct call reports -1. The hook separately
@@ -286,7 +286,7 @@ void ResolveFindPathRequest(FindPathFullCtx& c)
 	}
 }
 
-void ReadFindPathInput(void* searchState, FindPathFullCtx& c)
+static void ReadFindPathInput(void* searchState, FindPathFullCtx& c)
 {
 	// Classify the caller once (return address + the request-derived tag
 	// just resolved above), and read the input fields the per-search record
@@ -322,7 +322,7 @@ void ReadFindPathInput(void* searchState, FindPathFullCtx& c)
 	}
 }
 
-void CountFindPathWave(FindPathFullCtx& c)
+static void CountFindPathWave(FindPathFullCtx& c)
 {
 	// Which arm this waved search counts against. The queue priority of the
 	// request being served is the label; without one the search is counted as
@@ -359,7 +359,7 @@ void CountFindPathWave(FindPathFullCtx& c)
 	}
 }
 
-void ProbeFindPathInput(void* searchState)
+static void ProbeFindPathInput(void* searchState)
 {
 	// One-time FindPathInput layout probe
 	if (searchState && !InterlockedCompareExchange(&pathfind::g_pathDiag.probeFPIDumped, 1, 0))
@@ -394,7 +394,7 @@ void ProbeFindPathInput(void* searchState)
 	}
 }
 
-void BoostFindPathBudget(void* searchState, FindPathFullCtx& c)
+static void BoostFindPathBudget(void* searchState, FindPathFullCtx& c)
 {
 	// Boost A* budget for player characters to prevent SEARCH_STATE_FULL stalls.
 	// Player requests tagged by hook_csFindPath via playerRequestsInFlight counter.
@@ -407,7 +407,7 @@ void BoostFindPathBudget(void* searchState, FindPathFullCtx& c)
 	}
 }
 
-void CaptureFindPathProbe(void* searchState, FindPathFullCtx& c)
+static void CaptureFindPathProbe(void* searchState, FindPathFullCtx& c)
 {
 	// Multi-call probe: capture FindPathInput positions before calling orig
 	c.probeSlot = -1;
@@ -437,7 +437,7 @@ void CaptureFindPathProbe(void* searchState, FindPathFullCtx& c)
 	}
 }
 
-void RecordFindPathSamples(const FindPathFullCtx& c)
+static void RecordFindPathSamples(const FindPathFullCtx& c)
 {
 	LONGLONG astarTicks = c.pathPoolQpcAfter.QuadPart - c.pathPoolQpcBefore.QuadPart;
 	bool     astarIsCause3 = (c.status == 3 && c.cause == 3);
@@ -468,7 +468,7 @@ void RecordFindPathSamples(const FindPathFullCtx& c)
 	AstarCostNote(&astarSample, c.astarCallerClass);
 }
 
-void RecordFindPathOutcome(void* searchState, const FindPathFullCtx& c)
+static void RecordFindPathOutcome(void* searchState, const FindPathFullCtx& c)
 {
 	if (c.probeSlot >= 0 && c.probeSlot < PATH_PROBE_SIZE)
 		pathfind::g_pathDiag.pathProbeBuf[c.probeSlot].result = (int)c.status;

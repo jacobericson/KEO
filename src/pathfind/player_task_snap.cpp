@@ -61,6 +61,7 @@ static double lastStuckPollTime = 0.0;
 // POD snapshot filled by ReadPlayerTaskSnap. Integer fields use PT_NA for
 // "unreadable" (printed "-"); -1 in t / goal / permajobHead means a null link
 // (no current action, no goal, no permanent job), as the research table prints it.
+namespace player_task_snap_detail {
 struct PlayerTaskSnap
 {
 	int       fault;       // 1 = a read faulted: every other field prints "-"
@@ -89,6 +90,8 @@ struct PlayerTaskSnap
 	int       atk;         // CombatClass+0x200 (header-verified)
 	long long bbReq;       // Blackboard+0x178, -1 = unreadable
 };
+} // namespace player_task_snap_detail
+using namespace player_task_snap_detail;
 
 // The one guarded helper. Plain C: POD only, no C++ object in scope (MSVC
 // 2010 rejects __try in a function with objects needing unwinding), no game
@@ -208,11 +211,14 @@ static void ReadPlayerTaskSnap(uintptr_t character, PlayerTaskSnap* out)
 // entry whenever it drops the tracked character (not in the player squad any
 // more -- which is also what happens to every tracked character at a save
 // load -- or arrived).
+namespace player_task_snap_detail {
 struct PlayerTaskLast
 {
 	uintptr_t character;   // 0 = nothing printed for this slot
 	int       fault, t, stopped, edge, hc136;
 };
+} // namespace player_task_snap_detail
+using namespace player_task_snap_detail;
 static PlayerTaskLast g_playerTaskLast[MAX_TRACKED_PLAYERS];
 
 static void PlayerTaskForget(int slot)
@@ -495,7 +501,7 @@ struct PollPlayerCharacterCtx
 #endif
 };
 
-bool ReadPlayerCharacter(int i, const PollPlayerFrameCtx& frame, PollPlayerCharacterCtx& c)
+static bool ReadPlayerCharacter(int i, const PollPlayerFrameCtx& frame, PollPlayerCharacterCtx& c)
 {
 	TrackedPlayerDest& tp = pathfind::g_pathDiag.trackedPlayers[i];
 	if (!tp.active)
@@ -566,7 +572,7 @@ bool ReadPlayerCharacter(int i, const PollPlayerFrameCtx& frame, PollPlayerChara
 	return true;
 }
 
-bool UpdatePlayerMotion(int i, const PollPlayerFrameCtx& frame, PollPlayerCharacterCtx& c)
+static bool UpdatePlayerMotion(int i, const PollPlayerFrameCtx& frame, PollPlayerCharacterCtx& c)
 {
 	TrackedPlayerDest& tp = pathfind::g_pathDiag.trackedPlayers[i];
 	// Whether the order's own destination (tp.destX/Z, not the engine's
@@ -621,7 +627,7 @@ bool UpdatePlayerMotion(int i, const PollPlayerFrameCtx& frame, PollPlayerCharac
 	return true;
 }
 
-void ClassifyPlayerStall(int i, const PollPlayerFrameCtx& frame, PollPlayerCharacterCtx& c)
+static void ClassifyPlayerStall(int i, const PollPlayerFrameCtx& frame, PollPlayerCharacterCtx& c)
 {
 	TrackedPlayerDest& tp = pathfind::g_pathDiag.trackedPlayers[i];
 	// Read movement state
@@ -665,7 +671,7 @@ void ClassifyPlayerStall(int i, const PollPlayerFrameCtx& frame, PollPlayerChara
 	}
 }
 
-void ReportPlayerStuck(int i, const PollPlayerCharacterCtx& c)
+static void ReportPlayerStuck(int i, const PollPlayerCharacterCtx& c)
 {
 	TrackedPlayerDest& tp = pathfind::g_pathDiag.trackedPlayers[i];
 	// PLAYER STUCK diagnostic line (no recovery: the retry was deleted).
@@ -774,7 +780,7 @@ void ReportPlayerStuck(int i, const PollPlayerCharacterCtx& c)
 #endif
 }
 
-void PollPlayerCharacter(int i, const PollPlayerFrameCtx& frame)
+static void PollPlayerCharacter(int i, const PollPlayerFrameCtx& frame)
 {
 	PollPlayerCharacterCtx c;
 	if (!ReadPlayerCharacter(i, frame, c))

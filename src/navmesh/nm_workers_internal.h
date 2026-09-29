@@ -16,6 +16,17 @@
 #include "navmesh/workers/nm_retire_policy.h"
 namespace nm_workers_detail {
 enum { CLAIM_SLOT_BG = NAVMESH_WORKER_COUNT, CLAIM_SLOT_COUNT = NAVMESH_WORKER_COUNT + 1 };
+// Threads: startPlugin creates g_pjReleaseEvent and sets g_pjLockReady on the
+// main thread before any NavMesh thread exists. Every thread that takes and
+// leaves processJobCS changes g_processJobOwnerTid and its own t_pjDepth: the
+// NavMesh bg thread and the workers, and the main thread through
+// NavMeshTryLockProcessJobFor (the mod unload, the retention hook and the
+// save-load reset). g_pjPollers counts the bg thread's and the workers'
+// stop-aware waits. The bg thread and the workers count
+// g_workerCleanupInFlight, g_nmStopDropCount and each worker's own
+// g_workerPhase slot with Interlocked*; the main-thread retire sets
+// g_retireReturned and reads the others. orig_getSeedPointsAdj is written once
+// by the lazy install on the bg thread's first dispatch, before any worker exists.
 extern volatile long g_processJobOwnerTid;
 extern __declspec(thread) int t_pjDepth;
 extern HANDLE g_pjReleaseEvent;

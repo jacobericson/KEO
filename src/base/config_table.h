@@ -11,12 +11,12 @@ enum ConfigKind { CK_BOOL, CK_INT, CK_FLOAT, CK_DOUBLE, CK_TEXT, CK_CUSTOM };
 
 typedef void (*ConfigLogFn)(const std::string& line);
 
-// A custom row's parser: stores the value into its own global. True counts
-// the line as applied.
+// A custom row's parser: stores the value into its own storage, a module
+// config field or the parser's own state. True counts the line as applied.
 typedef bool (*ConfigParseFn)(const std::string& val, ConfigLogFn log);
 
 // One legal value of a CK_INT or CK_CUSTOM row: the INI text, the value the
-// global holds for it, and the settings page's name for it.
+// field holds for it, and the settings page's name for it.
 struct ConfigChoice
 {
 	const char* ini;
@@ -29,7 +29,7 @@ struct ConfigKey
 	const char*   name;
 	ConfigKind    kind;
 	size_t        offset;   // of the field in the module's state (offset rows)
-	size_t        size;     // CK_TEXT: the buffer size; CK_CUSTOM: the target's width in bytes
+	size_t        size;     // an offset row: its field's width; CK_TEXT: the buffer size; CK_CUSTOM: the target's width in bytes
 	float         lo, hi;   // the clamp range; none when lo > hi
 	bool          live;     // false: read at startup only, never applied at runtime
 	// The settings panel's row. A NULL label keeps the key INI-only.

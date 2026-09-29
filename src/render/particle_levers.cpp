@@ -13,13 +13,7 @@
 
 namespace particle_levers_detail {
 typedef const void* (*PuTemplateName_t)(void* sys);   // returns const std::string&
-} // namespace particle_levers_detail
-using namespace particle_levers_detail;
-namespace particle_levers_detail {
 typedef void (*PuSetNonVisible_t)(void* sys, float seconds);
-} // namespace particle_levers_detail
-using namespace particle_levers_detail;
-namespace particle_levers_detail {
 typedef void (*PuUpdate_t)(void* sys, float dt);
 } // namespace particle_levers_detail
 using namespace particle_levers_detail;

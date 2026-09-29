@@ -72,6 +72,4 @@ void AstarCostOnTransitionClosed();
 // Every printer here, and PathBusy: in path_pool_report.cpp, uses this answer.
 bool AstarCostHookInstalled();
 
-
-
 #endif // KENSHI_ZONE_OPT_ASTAR_COST_H

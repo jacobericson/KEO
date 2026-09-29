@@ -11,6 +11,10 @@ static const ConfigChoice kWorkerChoices[] =
 };
 static_assert(sizeof(kWorkerChoices) / sizeof(kWorkerChoices[0]) == NAVMESH_WORKER_COUNT + 1,
               "a worker choice per count up to NAVMESH_WORKER_COUNT, and Auto");
+// The worker-count row's upper bound is written as a literal: cl 16 turns an
+// explicit cast of the named constant into a run-time initializer for the
+// table and places the table in writable data.
+static_assert(NAVMESH_WORKER_COUNT == 6, "the navmeshWorkerCount row's upper bound is 6.0f");
 
 namespace navmesh {
 
@@ -99,7 +103,7 @@ const ConfigKey g_navmeshConfigKeys[] =
 	  "Parallel background navmesh generation",
 	  "The same for the generation the background navmesh thread runs itself. Needs parallel navmesh"
 	  " generation."),
-	CFG_OINT_CHOICES("navmeshWorkerCount", NavMeshConfig, cfg_navmeshWorkerCount, 0.0f, (float)NAVMESH_WORKER_COUNT, INT_MIN, DOC, SHOW,
+	CFG_OINT_CHOICES("navmeshWorkerCount", NavMeshConfig, cfg_navmeshWorkerCount, 0.0f, 6.0f, INT_MIN, DOC, SHOW,
 	  "Navmesh worker threads",
 	  "Threads that generate and load navmesh tiles in the background."
 	  " Auto uses half the logical CPUs.", kWorkerChoices),

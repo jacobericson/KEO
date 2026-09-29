@@ -13,15 +13,13 @@ namespace islands_detail {
 
 const int MAX_COMPS       = 64;               // components published per snapshot
 const int MAX_MEMBERS     = ZONE_GRID_COUNT;  // every zone at most once
-// =========================================================================
-// Published snapshot (double buffer + per-buffer seqlock)
-// =========================================================================
-
-
 
 } // namespace islands_detail
 using namespace islands_detail;
 namespace island_components_detail {
+// =========================================================================
+// Published snapshot (double buffer + per-buffer seqlock)
+// =========================================================================
 // Main-thread PublishSnapshot writes the inactive buffer, with seq odd
 // during the copy and even before exchanging the active index. Main and AI
 // hooks read through SnapReadComps or SnapCopyMembers, with two attempts.

@@ -64,7 +64,9 @@ static int RoundSlot(float f)
 	return (int)floor(f + 0.5f);
 }
 
-// A target row's global, read at its width into every field of the slot.
+// A row's storage, read at its width into every field of the slot: a target
+// row's own, or a slot-bound offset row's staged field (StageModule passes it
+// as the target).
 static ConfigStageValue ReadTarget(const ConfigKey& k)
 {
 	ConfigStageValue v;

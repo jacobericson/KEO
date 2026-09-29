@@ -70,7 +70,7 @@ struct PathfindDiagReportCtx
 	long lastTIter;
 };
 
-void ReadPathfindDiagCounters(PathfindDiagReportCtx& c)
+static void ReadPathfindDiagCounters(PathfindDiagReportCtx& c)
 {
 	// Snapshot all counters (non-destructive read)
 	c.pAttempts = InterlockedCompareExchange(&pathfind::g_pathDiag.diagPrimaryAttempts, 0, 0);
@@ -123,7 +123,7 @@ void ReadPathfindDiagCounters(PathfindDiagReportCtx& c)
 	c.lastTIter = InterlockedCompareExchange(&pathfind::g_pathDiag.diagLastTermIter, 0, 0);
 }
 
-void AppendPathfindDiagBase(std::ostringstream& ss, const PathfindDiagReportCtx& c)
+static void AppendPathfindDiagBase(std::ostringstream& ss, const PathfindDiagReportCtx& c)
 {
 	// conn= carries the mode the answers were given under and the rejection
 	// count in every mode, so an absent count means no session rather than no
@@ -153,7 +153,7 @@ void AppendPathfindDiagBase(std::ostringstream& ss, const PathfindDiagReportCtx&
 		ss << "/" << c.tOther << "oth";
 }
 
-void AppendPathfindDiagWave(std::ostringstream& ss, const PathfindDiagReportCtx& c)
+static void AppendPathfindDiagWave(std::ostringstream& ss, const PathfindDiagReportCtx& c)
 {
 	// What the bypass waves through, and how those searches end. Printed in
 	// every mode so the token is never missing; outside measure mode no answer
@@ -212,14 +212,14 @@ void AppendPathfindDiagWave(std::ostringstream& ss, const PathfindDiagReportCtx&
 		ss << "n/a";
 }
 
-void AppendPathfindDiagIterations(std::ostringstream& ss, const PathfindDiagReportCtx& c)
+static void AppendPathfindDiagIterations(std::ostringstream& ss, const PathfindDiagReportCtx& c)
 {
 	ss << " maxIter=" << c.maxIter;
 	if (c.lastTIter > 0)
 		ss << " lastTermIter=" << c.lastTIter;
 }
 
-void ReportPathfindWindow(const PathfindDiagReportCtx& c)
+static void ReportPathfindWindow(const PathfindDiagReportCtx& c)
 {
 	// Per-window throughput (delta since last report)
 	{
@@ -332,7 +332,7 @@ void ReportPathfindWindow(const PathfindDiagReportCtx& c)
 	}
 }
 
-void DrainPlayerPathFailures()
+static void DrainPlayerPathFailures()
 {
 	// Drain player failure ring buffer
 	for (int i = 0; i < PLAYER_FAIL_RING; ++i)
@@ -365,7 +365,7 @@ void DrainPlayerPathFailures()
 	}
 }
 
-void ReportFindPathInputProbe()
+static void ReportFindPathInputProbe()
 {
 	// One-time FindPathInput layout probe report
 	if (InterlockedCompareExchange(&pathfind::g_pathDiag.probeFPIDumped, 2, 2) == 2)

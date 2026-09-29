@@ -53,33 +53,33 @@ struct PathfindConfig
 {
 	bool pathfindDiagEnabled;
 
-// npcWaitDiag: NPC path-wait diagnostic. DEV default on, PROD default off;
-// read by path_pool.cpp.
+	// npcWaitDiag: NPC path-wait diagnostic. DEV default on, PROD default off;
+	// read by path_pool.cpp.
 	bool npcWaitDiagEnabled;
 
-// gatePassDiag: per-pass gate-code timing diagnostic. DEV default on, PROD
-// default off; decides the Gates__updateCodes install (hook_manifest.cpp) and the
-// GateRate: line (path_pool_report.cpp).
+	// gatePassDiag: per-pass gate-code timing diagnostic. DEV default on, PROD
+	// default off; decides the Gates__updateCodes install (hook_manifest.cpp) and the
+	// GateRate: line (path_pool_report.cpp).
 	bool gatePassDiagEnabled;
 
-// pathCostLines: the hook_findPathFull record and its histograms/cap
-// counters accumulate whenever findPathFull is hooked
-// (pathfindDiagEnabled); this key controls only how much of that gets
-// printed on the heartbeat -- the compact AstarCap:/PathBusy: lines always
-// print, this key adds the per-class AstarClass: detail lines. On by
-// default (astar_cost.cpp).
+	// pathCostLines: the hook_findPathFull record and its histograms/cap
+	// counters accumulate whenever findPathFull is hooked
+	// (pathfindDiagEnabled); this key controls only how much of that gets
+	// printed on the heartbeat -- the compact AstarCap:/PathBusy: lines always
+	// print, this key adds the per-class AstarClass: detail lines. On by
+	// default (astar_cost.cpp).
 	bool pathCostLinesEnabled;
 
 	int clusterGraphBypassMode;
 
-// playerRepathTier: the game's own mid-walk re-request for a player character
-// calls requestPath at priority 0, the same as an NPC's, so it queues at the
-// NPC tier (10) instead of the mod's player tier (45) that its original order
-// got. The publish-and-match in player_repath_tier.h runs and counts either
-// way; this key chooses only whether a match's tier is actually written
-// (true, the default) or just counted (false, observe; playerRepath= in the
-// Phase12 heartbeat carries seen/would/tiered/set every time). Read on every
-// match.
+	// playerRepathTier: the game's own mid-walk re-request for a player character
+	// calls requestPath at priority 0, the same as an NPC's, so it queues at the
+	// NPC tier (10) instead of the mod's player tier (45) that its original order
+	// got. The publish-and-match in player_repath_tier.h runs and counts either
+	// way; this key chooses only whether a match's tier is actually written
+	// (true, the default) or just counted (false, observe; playerRepath= in the
+	// Phase12 heartbeat carries seen/would/tiered/set every time). Read on every
+	// match.
 	bool playerRepathTierEnabled;
 };
 

@@ -45,13 +45,13 @@ namespace nm_workers_detail {
 // Finish clears its slot; a late clear conservatively delays the unload.
 static void* volatile g_claimZone[CLAIM_SLOT_COUNT] = {};
 
-// ClaimZoneSet runs under the caller-held generator queue lock +152, before
-// unlink ownership is exposed by releasing it. ClaimZoneClear is called
-// when the claimed job finishes; an invalid slot, including -1, is a no-op.
 uintptr_t UnloadingZone()
 {
 	return (uintptr_t)InterlockedCompareExchangePointer(&g_unloadingZone, NULL, NULL);
 }
+// ClaimZoneSet runs under the caller-held generator queue lock +152, before
+// unlink ownership is exposed by releasing it. ClaimZoneClear is called
+// when the claimed job finishes; an invalid slot, including -1, is a no-op.
 void ClaimZoneSet(int slot, uintptr_t zone)
 {
 	if (slot >= 0 && slot < CLAIM_SLOT_COUNT)

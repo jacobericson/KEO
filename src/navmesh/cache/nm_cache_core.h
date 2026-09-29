@@ -72,7 +72,8 @@ namespace navmesh {
 // written with Interlocked* (no allocation, no logging) on the NavMesh bg
 // thread and the workers, by the collision builders, the work-buffer probe
 // and the L2 reader and writer; on the main thread by the cache's init and
-// clear, the zone unloader and the save-load reset. Three groups take plain
+// clear, the zone unloader, the save-load reset and the stats reporter, which
+// advances its own l2MissLogReported cursor. Three groups take plain
 // stores into storage their writer claimed first: the settings and
 // work-buffer probe buffers (probeEMP, probeGen, probeMisc, verifyEMP,
 // wbArrayProbes, wbArrayOffsets, wbWritableOffsets), filled once behind an
@@ -81,10 +82,11 @@ namespace navmesh {
 // (strcpy_s) and nmDiskCacheDirChecked, on the main thread in
 // InitNavMeshCacheCS. The main thread's stats reporter
 // reads the counters through InterlockedCompareExchange(&x, 0, 0). Read off
-// the main thread as behaviour inputs: nmCacheDisabled, nmDiagStage (fixed
-// after start-up), workerBusyCount (also by the crash recorder),
-// lazyHooksInstalled, g_l2Bypass, g_nbrSeedHookState, g_nbrSeedStandInRefused
-// and g_navMeshWorkersLive. g_navMeshPoolRefusal is a main-thread diagnostic
+// the main thread as behaviour inputs: nmDiskCacheDirBuf, written once before
+// any hook installs, from which the L2 reader and writer build every path;
+// nmCacheDisabled, nmDiagStage (fixed after start-up), workerBusyCount (also
+// by the crash recorder), lazyHooksInstalled, g_l2Bypass, g_nbrSeedHookState,
+// g_nbrSeedStandInRefused and g_navMeshWorkersLive. g_navMeshPoolRefusal is a main-thread diagnostic
 // read; g_workBufAllocSize is a probe result with no reader. The
 // "last" records (nmDiagLast*, nmStaleLast*, nmZeroFaceLast*) are separate
 // stores that a racing reader can see torn; each reports only the most

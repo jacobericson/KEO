@@ -1,5 +1,5 @@
 // hook_manifest_policy.cpp — the want predicate and its inputs. Host-safe: the
-// config globals come from config_values.h, which carries no game header.
+// module config comes from config_values.h, which carries no game header.
 
 #include "plugin/hook_manifest_policy.h"
 #include "base/config_values.h"

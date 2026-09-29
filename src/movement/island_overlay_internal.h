@@ -5,6 +5,11 @@
 
 namespace islands_detail {
 
+// The hook census: the isInIsland and getIsland hooks write it on any thread,
+// Interlocked* only, and the main-thread Islands: and IslandSpan: reporters
+// read it. Cumulative and never reset; each counter is read on its own, so
+// mixed values across counters are a tolerated diagnostic. g_hooksInstalled
+// is set once by the hook install on the main thread and read on any thread.
 extern volatile long g_isInCalls;
 extern volatile long g_isInFlips;
 extern volatile long g_isInSeqFail;

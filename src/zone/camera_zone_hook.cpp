@@ -190,7 +190,7 @@ namespace hooks_detail
 {
 
 // Main thread: probe and pending completion precede the original; no lock spans phases.
-void CameraZoneFramePreamble(void* zoneMgr, void* cameraPos)
+static void CameraZoneFramePreamble(void* zoneMgr, void* cameraPos)
 {
 	// destroyListOE diagnostic (destroy_list_defer.h). The game calls the destroy-list drain earlier
 	// in this same frame (GameWorld__mainLoop_GPUSensitiveStuff calls it at
@@ -213,7 +213,7 @@ void CameraZoneFramePreamble(void* zoneMgr, void* cameraPos)
 }
 
 // Main thread: check the save-load edge, then replay; deferCS is released before original inserts.
-bool CameraZoneSaveLoad(void* zoneMgr)
+static bool CameraZoneSaveLoad(void* zoneMgr)
 {
 	// Drop all mod state across a save load, and do no preload work while
 	// the game is loading one (every pointer we would cache is about to die).
@@ -233,7 +233,7 @@ bool CameraZoneSaveLoad(void* zoneMgr)
 }
 
 // Main thread: all periodic ticks precede the save-loading return; callees keep their own locks.
-bool CameraZoneTicks(void* zoneMgr, bool saveLoading)
+static bool CameraZoneTicks(void* zoneMgr, bool saveLoading)
 {
 	// Lines the NavMesh bg thread queued (lazy hook install results, the bg
 	// TID, worker creation: core.h, LogMsgDeferrable). Every frame, ahead of
@@ -302,7 +302,7 @@ bool CameraZoneTicks(void* zoneMgr, bool saveLoading)
 }
 
 // Main thread: sample reporting time after save-load refusal, before preload gates.
-double CameraZoneReports(void* zoneMgr)
+static double CameraZoneReports(void* zoneMgr)
 {
 	double now = ElapsedSec();
 
@@ -347,7 +347,7 @@ double CameraZoneReports(void* zoneMgr)
 }
 
 // Main thread: preload and camera-pointer gates run after all reports.
-bool CameraZonePreloadGates(void* cameraPos)
+static bool CameraZonePreloadGates(void* cameraPos)
 {
 	if (!zone::g_zoneCfg.preloadEnabled)
 		return false;
@@ -358,7 +358,7 @@ bool CameraZonePreloadGates(void* cameraPos)
 }
 
 // Main thread: focus, adoption, eviction and queue priority precede the idle-only preload work.
-bool CameraZoneFocusAndPreload(void* zoneMgr, void* cameraPos, double now)
+static bool CameraZoneFocusAndPreload(void* zoneMgr, void* cameraPos, double now)
 {
 	// The raw eye position (today's behaviour, and the always-safe fallback).
 	float eyeX = (*(const float*)KLIB_MEMBER(5, cameraPos, Ogre__Vector3_x, 0));

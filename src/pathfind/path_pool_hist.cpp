@@ -82,7 +82,8 @@ namespace path_pool_hist_detail {
 // odd while copying, even when published. Main PPSlowSnapshot accepts only
 // an unchanged even sequence, with four attempts; failure is an empty
 // diagnostic window. Main PPSlowRequestReset raises g_slowResetRequested;
-// the path writer clears its private work at its next insert, then publishes.
+// the path writer clears its private work at its next insert (no cross-thread
+// array write), then publishes.
 struct PathSlowPublished
 {
 	volatile LONG g_slowSeq;
@@ -96,8 +97,6 @@ static_assert(__alignof(PathSlowPublished) >= 8, "PathSlowPublished must be 8-by
 using namespace path_pool_hist_detail;
 namespace path_pool_detail {
 
-// Main thread requests a reset; the path thread clears its working copy the
-// next time it has something to insert (no cross-thread array write).
 static volatile LONG g_slowResetRequested = 0;
 
 void PPSlowRequestReset()
@@ -166,17 +165,6 @@ int PPSlowSnapshot(PPSlowEntry* out)
 	}
 	return 0;
 }
-
-
-
-
-// Path-thread, non-gate A* outcome/termination accumulation. Feeds
-// PathQueue's term= field. cause: 1 = iteration limit, 2 = open set full,
-// 3 = search state full; 0/other = "other".
-
-// Boost counters. Outcome index: 0 = success, iterations > 32768;
-// 1 = success, iterations <= 32768; 2 = failure (status != 1).
-
 
 } // namespace path_pool_detail
 

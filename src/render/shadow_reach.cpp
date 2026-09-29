@@ -57,60 +57,24 @@ struct OgreFastArray
 	size_t size;
 	size_t capacity;
 };
-} // namespace shadow_reach_detail
-using namespace shadow_reach_detail;
 
 // ObjectData is passed by value, which the x64 ABI passes as a pointer to the
 // caller's copy; the original advances that copy's pointers.
-namespace shadow_reach_detail {
 typedef void (*CullFrustum_t)(size_t numNodes, void* objData, const void* frustum,
                               unsigned visMask, OgreFastArray* out, const void* lodCamera);
-} // namespace shadow_reach_detail
-using namespace shadow_reach_detail;
-namespace shadow_reach_detail {
 typedef void (*SetupCascade_t)(void* csm, void* light, void* viewport, void* csmCamera,
                                void* mainCamera, int cascade);
-} // namespace shadow_reach_detail
-using namespace shadow_reach_detail;
-namespace shadow_reach_detail {
 typedef void (*RenderPhase_t)(void* target, void* viewport, void* camera, const void* lodCamera,
                               unsigned char firstRq, unsigned char lastRq, bool includeOverlays);
 // Struct returns go through a hidden pointer in rdx (this in rcx).
-} // namespace shadow_reach_detail
-using namespace shadow_reach_detail;
-namespace shadow_reach_detail {
 typedef void* (*GetWorldAabb_t)(const void* obj, float* centerHalf6);
-} // namespace shadow_reach_detail
-using namespace shadow_reach_detail;
-namespace shadow_reach_detail {
 typedef float* (*CamVector_t)(const void* cam, float* out3);
-} // namespace shadow_reach_detail
-using namespace shadow_reach_detail;
-namespace shadow_reach_detail {
 typedef const float* (*CamVectorRef_t)(const void* cam);
-} // namespace shadow_reach_detail
-using namespace shadow_reach_detail;
-namespace shadow_reach_detail {
 typedef const float* (*FrustumFovY_t)(const void* frustum);   // Radian&
-} // namespace shadow_reach_detail
-using namespace shadow_reach_detail;
-namespace shadow_reach_detail {
 typedef float (*FrustumAspect_t)(const void* frustum);
-} // namespace shadow_reach_detail
-using namespace shadow_reach_detail;
-namespace shadow_reach_detail {
 typedef int (*ViewportWidth_t)(const void* viewport);
-} // namespace shadow_reach_detail
-using namespace shadow_reach_detail;
-namespace shadow_reach_detail {
 typedef void* (*ParentNode_t)(const void* movable);
-} // namespace shadow_reach_detail
-using namespace shadow_reach_detail;
-namespace shadow_reach_detail {
 typedef bool (*FrustumFlag_t)(const void* frustum);
-} // namespace shadow_reach_detail
-using namespace shadow_reach_detail;
-namespace shadow_reach_detail {
 typedef const float* (*FrustumOffset_t)(const void* frustum);   // Vector2&
 } // namespace shadow_reach_detail
 using namespace shadow_reach_detail;
