@@ -10,9 +10,7 @@ namespace hooks_detail
 { // namespace hooks_detail
 
 extern bool prioritizedThisTransition;
-extern volatile LONG g_tgtLogPending;
-void LogTransitionTarget();
-void FlushPendingTransitionStart();
+void FlushPendingTransitionLines();
 void CountBracketFrame(void* zm);
 void ReadinessReportTick(double now);
 

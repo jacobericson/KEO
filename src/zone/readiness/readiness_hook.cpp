@@ -311,9 +311,7 @@ void ReadinessReportTick(double now)
 		LogMsg(cs.str());
 	}
 
-	if (InterlockedCompareExchange(&g_tgtLogPending, 0, 1) == 1)
-		LogTransitionTarget();
-	FlushPendingTransitionStart();
+	FlushPendingTransitionLines();
 
 #ifdef ZONEOPT_DEBUG
 	const double kReadinessLogIntervalSec = 10.0;

@@ -50,9 +50,9 @@ static LONG          transitionEndGen = 0;
 // CaptureTransitionTarget and CaptureTransitionStart on the thread that opens
 // the bracket (normally the main thread), read by LogTransitionTarget and
 // LogTransitionStart on the main thread. When the start ran off the main
-// thread, g_tgtLogPending and g_startLogPending are raised after their values
-// are written and the next main-thread hook_updateCameraZone claims them, the
-// target first (interlocked pairs order them). Each pending flag orders an
+// thread, g_tgtLogPending and then g_startLogPending are raised after their
+// values are written, and FlushPendingTransitionLines claims them on the
+// next main-thread hook_updateCameraZone. Each pending flag orders an
 // off-main capture before the main reporter, which consumes it before
 // logging. The next bracket replaces the values; there is no sequence-checked
 // copy, so overlapping captures can mix a diagnostic target or count. Main
@@ -60,7 +60,7 @@ static LONG          transitionEndGen = 0;
 static char          g_tgtLetters[10];
 static int           g_tgtX          = -1;
 static int           g_tgtY          = -1;
-volatile LONG g_tgtLogPending = 0;
+static volatile LONG g_tgtLogPending = 0;
 static int           g_startGameOwned  = 0;
 static int           g_startPreloaded  = 0;
 static volatile LONG g_startLogPending = 0;
@@ -141,7 +141,7 @@ static bool CaptureTransitionTarget()
 }
 
 // Main thread only (CRT string work).
-void LogTransitionTarget()
+static void LogTransitionTarget()
 {
 	std::ostringstream ss;
 	ss << "Transition target: (" << g_tgtX << "," << g_tgtY << ") 3x3="
@@ -177,10 +177,17 @@ static void LogTransitionStart()
 	LogMsg(ss.str());
 }
 
-// Main thread, every hook_updateCameraZone frame, after the pending target line.
-void FlushPendingTransitionStart()
+// Main thread, every hook_updateCameraZone frame. The bracket start raises
+// the target flag before the start flag, so the flags are claimed in the
+// reverse order: a claimed start flag means its target flag is already
+// visible, and the target line never prints after its own start line.
+void FlushPendingTransitionLines()
 {
-	if (InterlockedCompareExchange(&g_startLogPending, 0, 1) == 1)
+	bool start  = InterlockedCompareExchange(&g_startLogPending, 0, 1) == 1;
+	bool target = InterlockedCompareExchange(&g_tgtLogPending, 0, 1) == 1;
+	if (target)
+		LogTransitionTarget();
+	if (start)
 		LogTransitionStart();
 }
 
@@ -300,7 +307,8 @@ void hook_showLoadingMessage(void* thisPtr, bool on)
 		// The target 3x3 and the preload counts as the bracket opens. The
 		// captures are allocation-free. Their lines are logged here on the main
 		// thread; off it (CRT string work is not allowed there) they wait for
-		// the next main-thread hook_updateCameraZone.
+		// the next main-thread hook_updateCameraZone. The target flag must be
+		// raised before the start flag: FlushPendingTransitionLines relies on it.
 		if (CaptureTransitionTarget())
 		{
 			if (IsMainThread())
