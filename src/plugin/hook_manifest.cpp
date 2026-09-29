@@ -73,12 +73,17 @@ static const HookWant s_wants[] =
 static_assert(sizeof(s_wants) / sizeof(s_wants[0]) == HOOK_ROW_COUNT, "one want per manifest row");
 
 static volatile LONG s_installed[HOOK_ROW_COUNT] = { 0 };
+// Written once per row by the startup gate on the main thread before any
+// install; read by HookInstallRow on any thread.
+static volatile LONG s_gatePassed[HOOK_ROW_COUNT] = { 0 };
 
 const char* HookInstallRow(HookRowId id, void* detour, void** orig, int* installed,
                            bool reverify)
 {
 	uintptr_t rva = g_hookPrologues[id].rva;
-	if (reverify && !VerifyPrologueByRva(rva))
+	bool reverifyOk = reverify && VerifyPrologueByRva(rva);
+	if (HookInstallAdmit(reverify, reverifyOk,
+	                     InterlockedCompareExchange(&s_gatePassed[id], 0, 0) != 0) != HOOK_ADMIT)
 	{
 		*orig = NULL;
 		return "prologue";
@@ -97,6 +102,11 @@ const char* HookInstallRow(HookRowId id, void* detour, void** orig, int* install
 bool HookRowInstalled(HookRowId id)
 {
 	return InterlockedCompareExchange(&s_installed[id], 0, 0) != 0;
+}
+
+void HookRowNoteGateVerdict(HookRowId id, bool passed)
+{
+	InterlockedExchange(&s_gatePassed[id], passed ? 1 : 0);
 }
 
 HookWantInputs HookWantInputsNow()
@@ -122,20 +132,20 @@ bool HookRowWanted(HookRowId id)
 static void InstallLoadingHooks(int* installed, int*)
 {
 	// Loading-message and readiness-bypass hooks
-	if (HookInstallRow(HOOK_SHOW_LOADING_MESSAGE, hook_showLoadingMessage,
-			(void**)&game::g_hookOrig.orig_showLoadingMessage, installed, false) != NULL)
+	if (HookInstall(HOOK_SHOW_LOADING_MESSAGE, hook_showLoadingMessage,
+			&game::g_hookOrig.orig_showLoadingMessage, installed, false) != NULL)
 		ErrorLog("FAILED to hook showLoadingMessage");
 
-	if (HookInstallRow(HOOK_IS_CONTENT_PENDING, hook_isContentPending,
-			(void**)&game::g_hookOrig.orig_isContentPending, installed, false) != NULL)
+	if (HookInstall(HOOK_IS_CONTENT_PENDING, hook_isContentPending,
+			&game::g_hookOrig.orig_isContentPending, installed, false) != NULL)
 	{
 		ErrorLog("FAILED to hook isContentPending");
 		zone::g_zoneCfg.preloadEnabled = false;  // registration readiness requires isContentPending
 	}
 
 	// Camera-zone orchestrator hook
-	if (HookInstallRow(HOOK_UPDATE_CAMERA_ZONE, hook_updateCameraZone,
-			(void**)&game::g_hookOrig.orig_updateCameraZone, installed, false) != NULL)
+	if (HookInstall(HOOK_UPDATE_CAMERA_ZONE, hook_updateCameraZone,
+			&game::g_hookOrig.orig_updateCameraZone, installed, false) != NULL)
 		ErrorLog("FAILED to hook updateCameraZone");
 }
 
@@ -149,8 +159,8 @@ static void InstallDestroyListHook(int* installed, int*)
 	SetDestroyListDefer(fixes::g_fixesCfg.destroyListDeferEnabled);
 	if (HookRowWanted(HOOK_DESTROYLIST_INSERT))
 	{
-		if (HookInstallRow(HOOK_DESTROYLIST_INSERT, hook_destroyListInsert,
-				(void**)&orig_destroyListInsert, installed, true) == NULL)
+		if (HookInstall(HOOK_DESTROYLIST_INSERT, hook_destroyListInsert,
+				&orig_destroyListInsert, installed, true) == NULL)
 		{
 			std::ostringstream dls;
 			dls << "destroyListOE inserter hook installed: defer="
@@ -176,8 +186,8 @@ static void InstallDestroyListHook(int* installed, int*)
 // VerifyPrologue before the patch, and the table row is fatal.
 static void InstallResetUnloadHook(int* installed, int*)
 {
-	if (HookInstallRow(HOOK_RESET_UNLOAD_ZONES, hook_resetUnloadZones,
-			(void**)&orig_resetUnloadZones, installed, true) == NULL)
+	if (HookInstall(HOOK_RESET_UNLOAD_ZONES, hook_resetUnloadZones,
+			&orig_resetUnloadZones, installed, true) == NULL)
 	{
 		LogMsg(std::string("Save-load reset hook installed: saveLoadUnload=")
 		       + (zone::g_zoneCfg.saveLoadUnloadEnabled ? "on" : "off"));
@@ -196,8 +206,8 @@ static void InstallOrderHook(int* installed, int*)
 {
 	if (HookRowWanted(HOOK_ADD_ORDER_SELECTED))
 	{
-		if (HookInstallRow(HOOK_ADD_ORDER_SELECTED, hook_addOrderSelected,
-				(void**)&game::g_hookOrig.orig_addOrderSelected, installed, false) != NULL)
+		if (HookInstall(HOOK_ADD_ORDER_SELECTED, hook_addOrderSelected,
+				&game::g_hookOrig.orig_addOrderSelected, installed, false) != NULL)
 			ErrorLog("FAILED to hook addOrderSelectedCharacters");
 	}
 }
@@ -219,14 +229,14 @@ static void InstallIslandHooks(int* installed, int*)
 {
 	int islandInstalled = 0;
 
-	if (HookInstallRow(HOOK_ISINISLAND_IMPL, hook_isInIsland,
-			(void**)&game::g_hookOrig.orig_isInIsland, installed, false) == NULL)
+	if (HookInstall(HOOK_ISINISLAND_IMPL, hook_isInIsland,
+			&game::g_hookOrig.orig_isInIsland, installed, false) == NULL)
 		islandInstalled++;
 	else
 		ErrorLog("FAILED to hook ZoneMap::isInIsland");
 
-	if (HookInstallRow(HOOK_GETISLAND_IMPL, hook_getIsland,
-			(void**)&game::g_hookOrig.orig_getIsland, installed, false) == NULL)
+	if (HookInstall(HOOK_GETISLAND_IMPL, hook_getIsland,
+			&game::g_hookOrig.orig_getIsland, installed, false) == NULL)
 		islandInstalled++;
 	else
 		ErrorLog("FAILED to hook ZoneManager::getIsland");
@@ -253,8 +263,8 @@ static void InstallCancelHooks(int* installed, int*)
 	bool jobOk = false;
 	bool taskOk = false;
 
-	if (HookInstallRow(HOOK_STOP_CHARACTERS_MOVEMENT, hook_stopCharactersMovement,
-			(void**)&game::g_hookOrig.orig_stopCharactersMovement, installed, true) == NULL)
+	if (HookInstall(HOOK_STOP_CHARACTERS_MOVEMENT, hook_stopCharactersMovement,
+			&game::g_hookOrig.orig_stopCharactersMovement, installed, true) == NULL)
 		stopOk = true;
 	else
 	{
@@ -262,8 +272,8 @@ static void InstallCancelHooks(int* installed, int*)
 		ErrorLog("FAILED to hook PlayerInterface::stopCharactersMovement (island cancel)");
 	}
 
-	if (HookInstallRow(HOOK_ADD_JOB_SELECTED, hook_addJobSelected,
-			(void**)&game::g_hookOrig.orig_addJobSelected, installed, true) == NULL)
+	if (HookInstall(HOOK_ADD_JOB_SELECTED, hook_addJobSelected,
+			&game::g_hookOrig.orig_addJobSelected, installed, true) == NULL)
 		jobOk = true;
 	else
 	{
@@ -271,8 +281,8 @@ static void InstallCancelHooks(int* installed, int*)
 		ErrorLog("FAILED to hook PlayerInterface::addJobSelectedCharacters (island cancel)");
 	}
 
-	if (HookInstallRow(HOOK_ADD_TASK_NEAREST, hook_addTaskNearest,
-			(void**)&game::g_hookOrig.orig_addTaskNearest, installed, true) == NULL)
+	if (HookInstall(HOOK_ADD_TASK_NEAREST, hook_addTaskNearest,
+			&game::g_hookOrig.orig_addTaskNearest, installed, true) == NULL)
 		taskOk = true;
 	else
 	{
@@ -292,8 +302,8 @@ static void InstallCacheHook(int* installed, int*)
 {
 	if (HookRowWanted(HOOK_DISPATCH_JOB))
 	{
-		const char* cacheHookResult = HookInstallRow(HOOK_DISPATCH_JOB, hook_dispatchJob,
-				(void**)&game::g_hookOrig.orig_dispatchJob, installed, false);
+		const char* cacheHookResult = HookInstall(HOOK_DISPATCH_JOB, hook_dispatchJob,
+				&game::g_hookOrig.orig_dispatchJob, installed, false);
 		if (cacheHookResult == NULL)
 		{
 			std::ostringstream ds;
@@ -345,26 +355,26 @@ static void InstallPathfindHooks(int* installed, int*)
 	{
 		int diagInstalled = 0;
 
-		if (HookInstallRow(HOOK_CS_FIND_PATH, hook_csFindPath,
-				(void**)&game::g_hookOrig.orig_csFindPath, installed, false) == NULL)
+		if (HookInstall(HOOK_CS_FIND_PATH, hook_csFindPath,
+				&game::g_hookOrig.orig_csFindPath, installed, false) == NULL)
 			diagInstalled++;
 		else
 			ErrorLog("FAILED to hook ContentStream::findPath");
 
-		if (HookInstallRow(HOOK_CS_CHECK_FACE_CONN, hook_csCheckFaceConn,
-				(void**)&game::g_hookOrig.orig_csCheckFaceConn, installed, false) == NULL)
+		if (HookInstall(HOOK_CS_CHECK_FACE_CONN, hook_csCheckFaceConn,
+				&game::g_hookOrig.orig_csCheckFaceConn, installed, false) == NULL)
 			diagInstalled++;
 		else
 			ErrorLog("FAILED to hook checkFaceConnectivity");
 
-		if (HookInstallRow(HOOK_FIND_PATH_FULL, hook_findPathFull,
-				(void**)&game::g_hookOrig.orig_findPathFull, installed, false) == NULL)
+		if (HookInstall(HOOK_FIND_PATH_FULL, hook_findPathFull,
+				&game::g_hookOrig.orig_findPathFull, installed, false) == NULL)
 			{ diagInstalled++; }
 		else
 			ErrorLog("FAILED to hook findPathFull");
 
-		if (HookInstallRow(HOOK_REQUEST_PATH, hook_requestPath,
-				(void**)&game::g_hookOrig.orig_requestPath, installed, false) == NULL)
+		if (HookInstall(HOOK_REQUEST_PATH, hook_requestPath,
+				&game::g_hookOrig.orig_requestPath, installed, false) == NULL)
 			diagInstalled++;
 		else
 			ErrorLog("FAILED to hook requestPath");
@@ -382,8 +392,8 @@ static void InstallSubmitHook(int* installed, int*)
 {
 	if (HookRowWanted(HOOK_PATH_REQ_SUBMIT))
 	{
-		if (HookInstallRow(HOOK_PATH_REQ_SUBMIT, hook_pathReqSubmit,
-				(void**)&game::g_hookOrig.orig_pathReqSubmit, installed, false) == NULL)
+		if (HookInstall(HOOK_PATH_REQ_SUBMIT, hook_pathReqSubmit,
+				&game::g_hookOrig.orig_pathReqSubmit, installed, false) == NULL)
 		{
 			LogMsg("Pathfinding step 2: submit hook installed");
 		}
@@ -399,8 +409,8 @@ static void InstallFallbackHook(int* installed, int*)
 {
 	if (HookRowWanted(HOOK_CS_FIND_PATH_FALLBACK))
 	{
-		if (HookInstallRow(HOOK_CS_FIND_PATH_FALLBACK, hook_csFindPathFallback,
-				(void**)&game::g_hookOrig.orig_csFindPathFallback, installed, false) == NULL)
+		if (HookInstall(HOOK_CS_FIND_PATH_FALLBACK, hook_csFindPathFallback,
+				&game::g_hookOrig.orig_csFindPathFallback, installed, false) == NULL)
 		{
 			LogMsg("Pathfinding step 4: fallback hook installed");
 		}
@@ -420,8 +430,8 @@ static void InstallPathExtractHooks(int* installed, int*)
 {
 	if (HookRowWanted(HOOK_CONTENT_STREAM_CALLEE_0X8869))
 	{
-		if (HookInstallRow(HOOK_CONTENT_STREAM_CALLEE_0X8869, hook_contentStreamCallee0x8869,
-				(void**)&game::g_hookOrig.orig_contentStreamCallee0x8869, installed, false) == NULL)
+		if (HookInstall(HOOK_CONTENT_STREAM_CALLEE_0X8869, hook_contentStreamCallee0x8869,
+				&game::g_hookOrig.orig_contentStreamCallee0x8869, installed, false) == NULL)
 		{
 			LogMsg("pathExtractGuard: extraction hook installed");
 		}
@@ -431,8 +441,8 @@ static void InstallPathExtractHooks(int* installed, int*)
 
 	if (HookRowWanted(HOOK_ADD_INSTANCE))
 	{
-		if (HookInstallRow(HOOK_ADD_INSTANCE, hook_addInstance,
-				(void**)&game::g_hookOrig.orig_addInstance, installed, false) == NULL)
+		if (HookInstall(HOOK_ADD_INSTANCE, hook_addInstance,
+				&game::g_hookOrig.orig_addInstance, installed, false) == NULL)
 		{
 			StitchSourceNoteAddObserver();
 			LogMsg("sectionStamp: addInstance count hook installed");
@@ -458,28 +468,28 @@ static void InstallPathPoolHooks(int* installed, int*)
 	int poolInstalled = 0;
 	int poolTotal = 3 + (gateHookWanted ? 2 : 0);   // + updateCodes and findPath
 
-	if (HookInstallRow(HOOK_CONTENT_STREAM, hook_contentStream,
-			(void**)&orig_contentStream, installed, true) == NULL)
+	if (HookInstall(HOOK_CONTENT_STREAM, hook_contentStream,
+			&orig_contentStream, installed, true) == NULL)
 		poolInstalled++;
 	else
 		ErrorLog("FAILED to hook SectionManager::contentStream (PathPool)");
 
-	if (HookInstallRow(HOOK_DEQUEUE_WORK, hook_dequeueWork,
-			(void**)&orig_dequeueWork, installed, true) == NULL)
+	if (HookInstall(HOOK_DEQUEUE_WORK, hook_dequeueWork,
+			&orig_dequeueWork, installed, true) == NULL)
 		poolInstalled++;
 	else
 		ErrorLog("FAILED to hook SectionManager::dequeueWork_threadSafe (PathPool)");
 
-	if (HookInstallRow(HOOK_ENQUEUE_THREAD_SAFE, hook_enqueueThreadSafe,
-			(void**)&orig_enqueueThreadSafe, installed, true) == NULL)
+	if (HookInstall(HOOK_ENQUEUE_THREAD_SAFE, hook_enqueueThreadSafe,
+			&orig_enqueueThreadSafe, installed, true) == NULL)
 		poolInstalled++;
 	else
 		ErrorLog("FAILED to hook PathRequestQueue::enqueue_threadSafe (PathPool)");
 
 	if (gateHookWanted)
 	{
-		if (HookInstallRow(HOOK_GATES_UPDATE_CODES, hook_gatesUpdateCodes,
-				(void**)&orig_gatesUpdateCodes, installed, true) == NULL)
+		if (HookInstall(HOOK_GATES_UPDATE_CODES, hook_gatesUpdateCodes,
+				&orig_gatesUpdateCodes, installed, true) == NULL)
 			poolInstalled++;
 		else
 		{
@@ -487,8 +497,8 @@ static void InstallPathPoolHooks(int* installed, int*)
 			pathfind::g_pathfindCfg.gatePassDiagEnabled = false;
 		}
 		if (orig_gatesUpdateCodes
-		    && HookInstallRow(HOOK_GATES_FIND_PATH, hook_gatesFindPath,
-				(void**)&orig_gatesFindPath, installed, true) == NULL)
+		    && HookInstall(HOOK_GATES_FIND_PATH, hook_gatesFindPath,
+				&orig_gatesFindPath, installed, true) == NULL)
 			poolInstalled++;
 		else
 			ErrorLog("FAILED to hook Gates__findPath (GatePass)");

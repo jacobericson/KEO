@@ -510,8 +510,8 @@ void InstallUnstitchProbe(int* installed, int*)
 	s_qpf = f.QuadPart;
 	s_nextBeat = 0;
 
-	const char* why = HookInstallRow(HOOK_NAVMESH_DELETE_INSTANCE, hook_deleteInstance_probe,
-			(void**)&orig_deleteInstance_probe, installed, true);
+	const char* why = HookInstall(HOOK_NAVMESH_DELETE_INSTANCE, hook_deleteInstance_probe,
+			&orig_deleteInstance_probe, installed, true);
 
 	if (!why)
 	{

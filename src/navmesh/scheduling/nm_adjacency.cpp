@@ -210,8 +210,8 @@ void InstallNavMeshAdjacency(int* installed, int*)
 		ErrorLog("NavMesh adjacency: the sub-map cell size is unreadable; a type-4 interior's box is not widened");
 	}
 
-	s_observerWhy = HookInstallRow(HOOK_NMG_UPDATE, hook_nmgUpdate, (void**)&orig_nmgUpdate,
-	                               installed, true);
+	s_observerWhy = HookInstall(HOOK_NMG_UPDATE, hook_nmgUpdate, &orig_nmgUpdate,
+	                            installed, true);
 	s_observerInstalled = (s_observerWhy == NULL);
 	if (!s_observerInstalled)
 		orig_nmgUpdate = NULL;

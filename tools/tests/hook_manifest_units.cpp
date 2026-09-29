@@ -371,8 +371,19 @@ static bool PoolRowsExact(const TestRow* rows, int n)
 	return count == 2 && stop && build;
 }
 
+static void CheckInstallAdmit()
+{
+	Check(HookInstallAdmit(true, true, true) == HOOK_ADMIT, "a re-verified row that matches is admitted");
+	Check(HookInstallAdmit(true, true, false) == HOOK_ADMIT, "a re-verify decides a re-verified row whatever the gate said");
+	Check(HookInstallAdmit(true, false, true) == HOOK_REFUSE_PROLOGUE, "a re-verified row that no longer matches is refused");
+	Check(HookInstallAdmit(true, false, false) == HOOK_REFUSE_PROLOGUE, "a re-verified row that never matched is refused");
+	Check(HookInstallAdmit(false, false, true) == HOOK_ADMIT, "a row the gate passed is admitted without a re-verify");
+	Check(HookInstallAdmit(false, false, false) == HOOK_REFUSE_PROLOGUE, "a row the gate refused is never patched without a re-verify");
+}
+
 int main()
 {
+	CheckInstallAdmit();
 #if ZONEHAND_STEP >= 3
 	CheckVariant(kDevRows, kDevCount, "dev", 65, 50, 49, 25, 25, DevDefaults());
 	CheckVariant(kProdRows, kProdCount, "prod", 61, 46, 44, 25, 21, ProdDefaults());

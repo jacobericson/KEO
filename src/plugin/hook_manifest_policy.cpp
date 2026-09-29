@@ -59,3 +59,10 @@ HookWantInputs HookWantInputsFromConfig()
 	in.gatePassDiag        = pathfind::g_pathfindCfg.gatePassDiagEnabled;
 	return in;
 }
+
+HookAdmit HookInstallAdmit(bool reverify, bool reverifyOk, bool gatePassed)
+{
+	if (reverify)
+		return reverifyOk ? HOOK_ADMIT : HOOK_REFUSE_PROLOGUE;
+	return gatePassed ? HOOK_ADMIT : HOOK_REFUSE_PROLOGUE;
+}

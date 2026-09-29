@@ -251,8 +251,8 @@ void InstallGraphPositionGuard(int* installed, int*)
 	s_qpf = f.QuadPart;
 	s_nextBeat = 0;
 
-	const char* why = HookInstallRow(HOOK_GRAPH_POSITION_LOOKUP, hook_graphPositionLookup,
-			(void**)&orig_graphPositionLookup, installed, true);
+	const char* why = HookInstall(HOOK_GRAPH_POSITION_LOOKUP, hook_graphPositionLookup,
+			&orig_graphPositionLookup, installed, true);
 
 	if (!why)
 	{

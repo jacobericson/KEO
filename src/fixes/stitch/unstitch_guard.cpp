@@ -560,8 +560,8 @@ void InstallUnstitchGuard(int* installed, int*)
 	fn_releaseFreeBlocks   = (releaseFreeBlocks_t)GameAddr(RVA_GRAPHINST_RELEASE_FREE_BLOCKS);
 	fn_removeInstancedEdge = (removeInstancedEdge_t)GameAddr(RVA_GRAPHINST_REMOVE_INSTANCED_EDGE);
 
-	const char* why = HookInstallRow(HOOK_UNSTITCH_CROSS_SECTION, hook_unstitchCrossSection,
-			(void**)&orig_unstitchCrossSection, installed, true);
+	const char* why = HookInstall(HOOK_UNSTITCH_CROSS_SECTION, hook_unstitchCrossSection,
+			&orig_unstitchCrossSection, installed, true);
 
 	if (!why)
 	{

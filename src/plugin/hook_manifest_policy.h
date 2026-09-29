@@ -70,4 +70,10 @@ bool HookWantEval(HookWant want, const HookWantInputs& in);
 // PROD build, which carries neither the key nor the site.
 HookWantInputs HookWantInputsFromConfig();
 
+// Whether an install may patch its row. A row the caller re-verifies is
+// admitted exactly when that check passes, whatever the gate said; any other
+// row only when the startup gate passed it.
+enum HookAdmit { HOOK_ADMIT = 0, HOOK_REFUSE_PROLOGUE };
+HookAdmit HookInstallAdmit(bool reverify, bool reverifyOk, bool gatePassed);
+
 #endif

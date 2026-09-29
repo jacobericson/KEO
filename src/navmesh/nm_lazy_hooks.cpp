@@ -126,8 +126,8 @@ void InstallNavMeshLazyHooks()
 	if (InterlockedCompareExchange(&navmesh::g_nmCache.lazyHooksInstalled, NM_LAZY_RUNNING, NM_LAZY_NOT_STARTED) != NM_LAZY_NOT_STARTED)
 		return;
 
-	if (HookInstallRow(HOOK_EDGE_PROCESS, (void*)hook_edgeProcess, (void**)&orig_edgeProcess,
-	                   NULL, true) == NULL)
+	if (HookInstall(HOOK_EDGE_PROCESS, hook_edgeProcess, &orig_edgeProcess,
+	                NULL, true) == NULL)
 		LogMsgDeferrable("edgeProcess clone-guard: installed");
 	else
 		LogMsgDeferrable("edgeProcess clone-guard: install FAILED");
@@ -135,8 +135,8 @@ void InstallNavMeshLazyHooks()
 	// Pass-through on NavMeshResult__populate, purely to read each generation's
 	// input triangle count for the zero-face rule. Installed here rather than in
 	// startPlugin so it shares the first-dispatch timing of the guard above.
-	if (HookInstallRow(HOOK_NM_RESULT_POPULATE, (void*)hook_nmResultPopulate_diag,
-	                   (void**)&game::g_hookOrig.orig_nmResultPopulate, NULL, true) == NULL)
+	if (HookInstall(HOOK_NM_RESULT_POPULATE, hook_nmResultPopulate_diag,
+	                &game::g_hookOrig.orig_nmResultPopulate, NULL, true) == NULL)
 		LogMsgDeferrable("populate hook: installed (input triangle counts)");
 	else
 		LogMsgDeferrable("populate hook: install FAILED (tri counts unavailable)");
@@ -144,8 +144,8 @@ void InstallNavMeshLazyHooks()
 	// Ownership tripwire on processJobAlt. Its prologue is
 	// `mov rax, rsp` / `push rbp` / `push rsi` = exactly 5 relocatable bytes at
 	// instruction boundaries, with no RIP-relative operand, so it is hookable.
-	if (HookInstallRow(HOOK_PROCESS_JOB_ALT, (void*)hook_processJobAltTrip,
-	                   (void**)&orig_processJobAltTrip, NULL, true) == NULL)
+	if (HookInstall(HOOK_PROCESS_JOB_ALT, hook_processJobAltTrip,
+	                &orig_processJobAltTrip, NULL, true) == NULL)
 	{
 		LogMsgDeferrable("processJobAlt tripwire: installed");
 	}
@@ -160,8 +160,8 @@ void InstallNavMeshLazyHooks()
 	// the one hook in this file where that is true, and the reason the marker
 	// below matters more here than elsewhere. A failed install logs once, and
 	// the worker pool is then refused for the session.
-	if (HookInstallRow(HOOK_NAVMESH_STOP, (void*)hook_navMeshStop, (void**)&orig_navMeshStop,
-	                   NULL, true) == NULL)
+	if (HookInstall(HOOK_NAVMESH_STOP, hook_navMeshStop, &orig_navMeshStop,
+	                NULL, true) == NULL)
 	{
 		LogMsgDeferrable("NavMesh::stop hook: installed (worker retirement)");
 		ExitCaptureNoteStopHookOutcome(true);
@@ -183,8 +183,8 @@ void InstallNavMeshLazyHooks()
 	if (NmNbrSeedHookWanted())
 	{
 		if (fn_navMeshGetSector
-		    && HookInstallRow(HOOK_NMG_GET_SEED_POINTS_ADJ, (void*)hook_getSeedPointsAdj,
-		                      (void**)&orig_getSeedPointsAdj, NULL, true) == NULL)
+		    && HookInstall(HOOK_NMG_GET_SEED_POINTS_ADJ, hook_getSeedPointsAdj,
+		                   &orig_getSeedPointsAdj, NULL, true) == NULL)
 		{
 			InterlockedExchange(&navmesh::g_nmCache.g_nbrSeedHookState, NBRSEED_HOOK_OK);
 			char line[128];

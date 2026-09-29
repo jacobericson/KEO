@@ -424,11 +424,11 @@ static bool hook_lockZoneDiag(void* nmg, const int* zone, bool wait)
 
 void InstallBuildLockHooks()
 {
-	bool bc = HookInstallRow(HOOK_BUILD_COLLISION_IMPL, (void*)hook_buildCollision,
-	                         (void**)&orig_buildCollisionHook, NULL, true) == NULL;
+	bool bc = HookInstall(HOOK_BUILD_COLLISION_IMPL, hook_buildCollision,
+	                      &orig_buildCollisionHook, NULL, true) == NULL;
 	LogMsgDeferrable(bc ? "buildCollision hook: installed" : "buildCollision hook: install FAILED");
-	bool bi = HookInstallRow(HOOK_BUILD_COLLISION_INTERIOR_IMPL, (void*)hook_buildCollisionInterior,
-	                         (void**)&orig_buildInteriorHook, NULL, true) == NULL;
+	bool bi = HookInstall(HOOK_BUILD_COLLISION_INTERIOR_IMPL, hook_buildCollisionInterior,
+	                      &orig_buildInteriorHook, NULL, true) == NULL;
 	LogMsgDeferrable(bi ? "buildCollisionInterior hook: installed" : "buildCollisionInterior hook: install FAILED");
 
 	// The stitch hooks install in both modes, so bsc= and stitch= compare
@@ -436,10 +436,10 @@ void InstallBuildLockHooks()
 	bool su = false, sw = false;
 	if (bc)
 	{
-		su = HookInstallRow(HOOK_NMG_STITCH_UNLOADED_ZONE, (void*)hook_stitchUnloadedZone,
-		                    (void**)&orig_stitchUnloadedZone, NULL, true) == NULL;
-		sw = HookInstallRow(HOOK_NMG_STITCH_WITH_INTERIORS, (void*)hook_stitchWithInteriors,
-		                    (void**)&orig_stitchWithInteriors, NULL, true) == NULL;
+		su = HookInstall(HOOK_NMG_STITCH_UNLOADED_ZONE, hook_stitchUnloadedZone,
+		                 &orig_stitchUnloadedZone, NULL, true) == NULL;
+		sw = HookInstall(HOOK_NMG_STITCH_WITH_INTERIORS, hook_stitchWithInteriors,
+		                 &orig_stitchWithInteriors, NULL, true) == NULL;
 	}
 	// Both stitch hooks must exist before the builder may take the mutex: a
 	// half-installed machine could take it with nothing to release it. Set
@@ -449,8 +449,8 @@ void InstallBuildLockHooks()
 
 	// fn_nmgLockZone keeps pointing at the entry, so the mod's own blocking
 	// calls pass through this counter, which counts only wait == false.
-	if (HookInstallRow(HOOK_NMG_LOCK_ZONE, (void*)hook_lockZoneDiag, (void**)&orig_lockZoneDiag,
-	                   NULL, true) == NULL)
+	if (HookInstall(HOOK_NMG_LOCK_ZONE, hook_lockZoneDiag, &orig_lockZoneDiag,
+	                NULL, true) == NULL)
 	{
 		LogMsgDeferrable("lockZone counter: installed");
 	}

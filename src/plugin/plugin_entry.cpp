@@ -279,10 +279,12 @@ bool CheckBuildGate(EntryCtx& ctx)
 		for (int i = 0; i < g_hookPrologueCount; ++i)
 		{
 			bool shared = false;
-			if (!VerifyPrologue(g_hookPrologues[i].rva,
-			                    g_hookPrologues[i].bytes,
-			                    g_hookPrologues[i].name,
-			                    &shared))
+			bool passed = VerifyPrologue(g_hookPrologues[i].rva,
+			                             g_hookPrologues[i].bytes,
+			                             g_hookPrologues[i].name,
+			                             &shared);
+			HookRowNoteGateVerdict((HookRowId)i, passed);
+			if (!passed)
 			{
 				// A diagnostic site is not worth refusing to install over: turn that
 				// one diagnostic off and carry on. Everything else is fatal.
@@ -303,15 +305,7 @@ bool CheckBuildGate(EntryCtx& ctx)
 			ctx.gateOk = false;
 		if (gateDiagBad > 0)
 		{
-			// Named, not blamed on a specific flag: today's only diagnostic
-			// rows are the path-pool pass-through hooks, the three player
-			// cancel hooks (stop key, job order, nearest-selected), the
-			// neighbour-seed hook, and in every build the render-lever
-			// sites and the two settings-panel sites (game.cpp), not destroyListDiag --
-			// destroyListInsert is fatal, not diagnostic, since its deferral
-			// mitigation shipped. Each affected hook refuses its
-			// own install at its call site below (VerifyPrologueByRva is
-			// checked again there); nothing here needs to flip a flag.
+			// A row installed without a re-verify is patched only if the gate passed it: HookInstallRow reads this verdict.
 			std::ostringstream ds;
 			ds << "Build gate: " << gateDiagBad
 			   << " diagnostic site(s) mismatched (" << gateDiagNames.str()

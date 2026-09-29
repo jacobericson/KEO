@@ -707,7 +707,7 @@ void InstallStitchSource(int* installed, int*)
 	LfInit(&s_add,   s_addStore,   kUidSlots,   kProbe);
 	LfInit(&s_gen,   s_genStore,   kUidSlots,   kProbe);
 
-	const char* why = HookInstallRow(HOOK_NMG_STITCH, hook_nmgStitch, (void**)&orig_nmgStitch,
+	const char* why = HookInstall(HOOK_NMG_STITCH, hook_nmgStitch, &orig_nmgStitch,
 			installed, true);
 
 	if (!why)

@@ -324,8 +324,8 @@ void InstallCreateInstanceGuard(int* installed, int*)
 	// The key chooses skip or observe, never whether the site is watched.
 	s_actMode = fixes::g_fixesCfg.createInstanceGuardEnabled;
 
-	const char* why = HookInstallRow(HOOK_NAVMESH_CREATE_INSTANCE, hook_createInstance,
-			(void**)&orig_createInstance, installed, true);
+	const char* why = HookInstall(HOOK_NAVMESH_CREATE_INSTANCE, hook_createInstance,
+			&orig_createInstance, installed, true);
 
 	if (!why)
 	{

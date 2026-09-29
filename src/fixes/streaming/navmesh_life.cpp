@@ -263,8 +263,8 @@ void InstallNavMeshLife(int* installed, int*)
 	s_instVtbl = GameAddr(RVA_HKAI_NAVMESH_INSTANCE_VFTABLE);
 	s_meshVtbl = GameAddr(RVA_HKAI_NAVMESH_VFTABLE);
 
-	const char* why = HookInstallRow(HOOK_REMOVE_INSTANCE, hook_removeInstance,
-			(void**)&orig_removeInstance, installed, true);
+	const char* why = HookInstall(HOOK_REMOVE_INSTANCE, hook_removeInstance,
+			&orig_removeInstance, installed, true);
 
 	if (!why)
 	{

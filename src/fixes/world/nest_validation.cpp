@@ -120,8 +120,8 @@ void InstallNestValidationGuard(int* installed, int*)
 	if (!HookRowWanted(HOOK_FINALIZE_ZONE_RES_ENTRY))
 		return;
 
-	const char* why = HookInstallRow(HOOK_FINALIZE_ZONE_RES_ENTRY, hook_finalizeZoneResources,
-			(void**)&orig_finalizeZoneResources_guard, installed, true);
+	const char* why = HookInstall(HOOK_FINALIZE_ZONE_RES_ENTRY, hook_finalizeZoneResources,
+			&orig_finalizeZoneResources_guard, installed, true);
 
 	if (!why)
 	{
@@ -136,8 +136,8 @@ void InstallNestValidationGuard(int* installed, int*)
 	// The destroyed counter is independent of the guard above: it installs
 	// even if the guard failed to (it would then just never see the flag
 	// set, and count nothing -- correct, since nothing here is attributable).
-	const char* destroyWhy = HookInstallRow(HOOK_TOWNLIST_DESTROY, hook_townListDestroy,
-			(void**)&orig_townListDestroy, installed, true);
+	const char* destroyWhy = HookInstall(HOOK_TOWNLIST_DESTROY, hook_townListDestroy,
+			&orig_townListDestroy, installed, true);
 
 	if (!destroyWhy)
 	{

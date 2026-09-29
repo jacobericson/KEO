@@ -113,8 +113,8 @@ void InstallZonePauseGuard(int* installed, int*)
 			why = "isPaused operands";
 	}
 
-	if (!why && HookInstallRow(HOOK_PROCESS_LOADING, hook_processLoading,
-			(void**)&orig_processLoading, installed, true) == NULL)
+	if (!why && HookInstall(HOOK_PROCESS_LOADING, hook_processLoading,
+			&orig_processLoading, installed, true) == NULL)
 	{
 		LogMsg("Escape menu pause guard: installed");
 		return;

@@ -125,8 +125,8 @@ static bool __fastcall hook_zoneMapUpdate(void* zoneEntry)
 
 static void InstallZoneMapUpdateHook(int* installed)
 {
-	if (HookInstallRow(HOOK_ZONEMAP_UPDATE, hook_zoneMapUpdate, (void**)&orig_zoneMapUpdate,
-	                   installed, true) == NULL)
+	if (HookInstall(HOOK_ZONEMAP_UPDATE, hook_zoneMapUpdate, &orig_zoneMapUpdate,
+	                installed, true) == NULL)
 	{
 		LogMsg(std::string("Zone lifecycle: ZoneMap::update detour installed (retention=")
 		       + (zone::g_zoneCfg.zoneRetentionEnabled ? "on)" : "off)"));
@@ -144,8 +144,8 @@ void InstallZoneLifecycleHooks(int* installed, int*)
 {
 	ZoneHandoffInit();
 
-	if (HookInstallRow(HOOK_ACTIVATE_ZONEMAP, hook_activateZoneMap, (void**)&orig_activateZoneMap,
-	                   installed, true) == NULL)
+	if (HookInstall(HOOK_ACTIVATE_ZONEMAP, hook_activateZoneMap, &orig_activateZoneMap,
+	                installed, true) == NULL)
 	{
 		LogMsg(std::string("Zone lifecycle: activateZoneMap detour installed (townGuard=")
 		       + (zone::g_zoneCfg.townGuardEnabled ? "on)" : "off)"));

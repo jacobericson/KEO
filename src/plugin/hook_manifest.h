@@ -23,7 +23,20 @@ enum HookRowId
 const char* HookInstallRow(HookRowId id, void* detour, void** orig, int* installed,
                            bool reverify);
 
+// The install every caller uses: the detour and the slot its original is
+// written to must have one function type, so a slot of another function type
+// is a compile error rather than a cast.
+template <typename Fn>
+inline const char* HookInstall(HookRowId id, Fn detour, Fn* orig, int* installed, bool reverify)
+{
+	return HookInstallRow(id, (void*)detour, (void**)orig, installed, reverify);
+}
+
 bool HookRowInstalled(HookRowId id);
+
+// The startup gate's verdict for one row: its prologue matched, or the row is
+// shared with another plugin's detour. Main thread, before any install.
+void HookRowNoteGateVerdict(HookRowId id, bool passed);
 
 // The row's want over the config globals as they stand at the call.
 bool HookRowWanted(HookRowId id);

@@ -84,8 +84,8 @@ void InstallSectionKeyProbe(int* installed, int*)
 
 	bool clearanceOk = false, cutOk = false;
 
-	const char* why = HookInstallRow(HOOK_CLEARANCE_RESET_KEYS, hook_clearanceResetKeys,
-			(void**)&orig_clearanceResetKeys, installed, true);
+	const char* why = HookInstall(HOOK_CLEARANCE_RESET_KEYS, hook_clearanceResetKeys,
+			&orig_clearanceResetKeys, installed, true);
 	if (!why)
 	{
 		clearanceOk = true;
@@ -97,8 +97,8 @@ void InstallSectionKeyProbe(int* installed, int*)
 		         + why + "); its key set is not recorded");
 	}
 
-	why = HookInstallRow(HOOK_SECTION_CUT_LOOKUP, hook_sectionCutLookup,
-			(void**)&orig_sectionCutLookup, installed, true);
+	why = HookInstall(HOOK_SECTION_CUT_LOOKUP, hook_sectionCutLookup,
+			&orig_sectionCutLookup, installed, true);
 	if (!why)
 	{
 		cutOk = true;

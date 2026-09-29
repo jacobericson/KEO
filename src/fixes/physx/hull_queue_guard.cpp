@@ -433,16 +433,16 @@ void InstallHullQueueGuard(int* installed, int*)
 		(gameBase + ((const IMAGE_DOS_HEADER*)gameBase)->e_lfanew);
 	s_gameEnd = gameBase + nt->OptionalHeader.SizeOfImage;
 
-	const char* why = HookInstallRow(HOOK_PHYSICS_UPDATE_UT, hook_updateUT,
-			(void**)&orig_updateUT, installed, true);
+	const char* why = HookInstall(HOOK_PHYSICS_UPDATE_UT, hook_updateUT,
+			&orig_updateUT, installed, true);
 
 	if (!why)
 	{
 		s_state = 1;
 		for (int k = 0; k < kPushers; ++k)
 		{
-			if (HookInstallRow(kPushRows[k], kPushDetours[k], (void**)&s_origPush[k],
-			                   installed, true) == NULL)
+			if (HookInstall(kPushRows[k], kPushDetours[k], &s_origPush[k],
+			                installed, true) == NULL)
 				++s_pushersInstalled;
 		}
 		LogMsg(std::string("Hull queue guard: installed, mode=")

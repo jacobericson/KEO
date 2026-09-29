@@ -180,8 +180,8 @@ void InstallGraphVisitorGuard(int* installed, int*)
 	s_qpf = f.QuadPart;
 	s_nextBeat = 0;
 
-	const char* why = HookInstallRow(HOOK_SEARCH_SET_NODE_COST, hook_searchSetNodeCost,
-			(void**)&orig_searchSetNodeCost, installed, true);
+	const char* why = HookInstall(HOOK_SEARCH_SET_NODE_COST, hook_searchSetNodeCost,
+			&orig_searchSetNodeCost, installed, true);
 
 	if (!why)
 	{

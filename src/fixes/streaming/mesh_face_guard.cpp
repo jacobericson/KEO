@@ -272,8 +272,8 @@ void InstallMeshFaceGuard(int* installed, int*)
 	fn_faceFromIndex = (faceFromIndex_t)GameAddr(RVA_NAVMESH_FACE_FROM_INDEX);
 	fn_edgeFromIndex = (edgeFromIndex_t)GameAddr(RVA_NAVMESH_EDGE_FROM_INDEX);
 
-	const char* why = HookInstallRow(HOOK_NAVMESH_FACE_AABB, hook_faceAabb,
-			(void**)&orig_faceAabb, installed, true);
+	const char* why = HookInstall(HOOK_NAVMESH_FACE_AABB, hook_faceAabb,
+			&orig_faceAabb, installed, true);
 
 	if (!why)
 	{

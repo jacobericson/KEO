@@ -1,12 +1,12 @@
 """Structural test of the hook install sites (unittest, standard library only).
 
 Every manifest row that startPlugin, a module installer or the first navmesh
-dispatch installs must be named by exactly one HookInstallRow( call under src/
-(or by one entry of one array ending `Rows` that is passed to such a call); no
-call may name an id the manifest lacks, or a render or gui row, which install
-outside the manifest. InstallHooks' step list must name each step once. The one
-NmPoolDecide( call must read, through HookRowInstalled(, exactly the rows whose
-caps carry HOOK_CAP_WORKER_POOL.
+dispatch installs must be named by exactly one HookInstall( or HookInstallRow(
+call under src/ (or by one entry of one array ending `Rows` that is passed to
+such a call); no call may name an id the manifest lacks, or a render or gui
+row, which install outside the manifest. InstallHooks' step list must name
+each step once. The one NmPoolDecide( call must read, through
+HookRowInstalled(, exactly the rows whose caps carry HOOK_CAP_WORKER_POOL.
 
 Every row use, and every entry of a passed `Rows` array, must sit under
 conditions that imply its row's `#if`/`#ifdef` block; the one `NmPoolDecide(`
@@ -82,15 +82,15 @@ def parse_rows(text):
 
 
 def find_calls(files):
-    """(id, path) for the first argument of every HookInstallRow( call, and for
-    every HOOK_ id in the initialiser of an array ending `Rows` that a call is
-    passed. files maps a path to its text."""
+    """(id, path) for the first argument of every HookInstall(/HookInstallRow(
+    call, and for every HOOK_ id in the initialiser of an array ending `Rows`
+    that a call is passed. files maps a path to its text."""
     calls = []
     for path in sorted(files):
         text = strip_comments(files[path], blank_literals=True)
-        for m in re.finditer(r'\bHookInstallRow\s*\(\s*(HOOK_\w+)', text):
+        for m in re.finditer(r'\bHookInstall(?:Row)?\s*\(\s*(HOOK_\w+)', text):
             calls.append((m.group(1), path))
-        passed = set(re.findall(r'\bHookInstallRow\s*\(\s*(\w+Rows)\s*\[', text))
+        passed = set(re.findall(r'\bHookInstall(?:Row)?\s*\(\s*(\w+Rows)\s*\[', text))
         for m in re.finditer(r'\b(\w+Rows)\s*\[[^\]]*\]\s*=\s*\{([^}]*)\}', text):
             if m.group(1) in passed:
                 for rid in re.findall(r'\bHOOK_\w+', m.group(2)):
@@ -276,19 +276,19 @@ def row_conditions(text):
 
 
 def find_uses(files):
-    """(id, path, line, conditions) for every HookInstallRow(/HookRowWanted(/
-    HookRowInstalled( call naming a HOOK_ id, and for every HOOK_ id in the
-    initialiser of an array ending `Rows` that a call is passed (the same rule
-    find_calls uses), taken at that id's own line."""
+    """(id, path, line, conditions) for every HookInstall(/HookInstallRow(/
+    HookRowWanted(/HookRowInstalled( call naming a HOOK_ id, and for every
+    HOOK_ id in the initialiser of an array ending `Rows` that a call is passed
+    (the same rule find_calls uses), taken at that id's own line."""
     uses = []
     for path in sorted(files):
         raw = files[path]
         text = strip_comments(raw, blank_literals=True)
         conds = directive_conditions(raw)
-        for m in re.finditer(r'\b(?:HookInstallRow|HookRowWanted|HookRowInstalled)\s*\(\s*(HOOK_\w+)', text):
+        for m in re.finditer(r'\b(?:HookInstall|HookInstallRow|HookRowWanted|HookRowInstalled)\s*\(\s*(HOOK_\w+)', text):
             line = text.count('\n', 0, m.start()) + 1
             uses.append((m.group(1), path, line, conds[line - 1]))
-        passed = set(re.findall(r'\bHookInstallRow\s*\(\s*(\w+Rows)\s*\[', text))
+        passed = set(re.findall(r'\bHookInstall(?:Row)?\s*\(\s*(\w+Rows)\s*\[', text))
         for m in re.finditer(r'\b(\w+Rows)\s*\[[^\]]*\]\s*=\s*\{([^}]*)\}', text):
             if m.group(1) not in passed:
                 continue
@@ -313,7 +313,7 @@ def _cond_implies(use_cond, row_cond):
 def check_conditions(row_conds, uses):
     """The problem lines for a use whose site does not sit under every one of
     its row's #if/#ifdef conditions. An id with no manifest row is skipped:
-    check() already reports it for HookInstallRow(."""
+    check() already reports it for an install call."""
     problems = []
     for rid, path, line, use_conds in uses:
         conds = row_conds.get(rid)
@@ -421,6 +421,27 @@ static void (*const kInstallSteps[])(int*, int*) =
 '''
 
 
+TYPED = '''
+static const HookRowId kRows[2] = { HOOK_P1, HOOK_P2 };
+void InstallTyped(int* i)
+{
+	HookInstall(HOOK_A, h, &o, i, true);
+	for (int k = 0; k < 2; ++k)
+		HookInstall(kRows[k], kDetours[k], &s_orig[k], i, true);
+	/* a comment: HookInstall(HOOK_B, h, &o, i, true) */
+	LogMsg("HookInstall(HOOK_B) in a string is not a call");
+}
+'''
+
+FORWARDER = '''
+template <typename Fn>
+inline const char* HookInstall(HookRowId id, Fn detour, Fn* orig, int* installed, bool reverify)
+{
+	return HookInstallRow(id, (void*)detour, (void**)orig, installed, reverify);
+}
+'''
+
+
 def clean_files():
     return {'helper.cpp': HELPER, 'startup.cpp': STARTUP, 'module.cpp': MODULE, 'lazy.cpp': LAZY}
 
@@ -446,6 +467,15 @@ class ParseTests(unittest.TestCase):
 
     def test_steps_skip_preprocessor_and_comments(self):
         self.assertEqual(find_steps(STEPS), ['InstallA', 'InstallB', 'StepC'])
+
+    def test_typed_install_calls_counted(self):
+        self.assertEqual(sorted(rid for rid, _ in find_calls({'typed.cpp': TYPED})),
+                         ['HOOK_A', 'HOOK_P1', 'HOOK_P2'])
+
+    def test_forwarder_names_no_row(self):
+        files = {'hook_manifest.h': FORWARDER}
+        self.assertEqual(find_calls(files), [])
+        self.assertEqual(find_uses(files), [])
 
 
 class CheckTests(unittest.TestCase):
@@ -486,6 +516,17 @@ class CheckTests(unittest.TestCase):
         files['gui.cpp'] = 'void X(int* i) { HookInstallRow(HOOK_G, h, (void**)&o, i, true); }\n'
         self.assertEqual(self.problems(files),
                          ['test_hook_sites: HOOK_G is a render or gui row, installed outside the manifest'])
+
+    def test_typed_spelling_passes(self):
+        files = clean_files()
+        files['startup.cpp'] = STARTUP.replace('HookInstallRow(HOOK_A, hook_a, (void**)&orig_a',
+                                               'HookInstall(HOOK_A, hook_a, &orig_a')
+        self.assertEqual(self.problems(files), [])
+
+    def test_call_doubled_across_spellings_fails(self):
+        files = clean_files()
+        files['typed.cpp'] = 'void X(int* i) { HookInstall(HOOK_A, h, &o, i, true); }\n'
+        self.assertEqual(self.problems(files), ['test_hook_sites: HOOK_A installed by 2 calls'])
 
     def test_step_listed_twice_fails(self):
         steps = STEPS.replace('\tStepC,', '\tStepC,\n\tInstallA,')
@@ -600,6 +641,15 @@ HookRowWanted(HOOK_A);
         site = '''#if ZONEHAND_STEP >= 2
 #else
 HookInstallRow(HOOK_S2, hook_s2, (void**)&orig_s2, installed, true);
+#endif
+'''
+        self.assertEqual(self.check_site(site),
+                         ["test_hook_sites: HOOK_S2 used at site.cpp:3 outside its row's #if block"])
+
+    def test_typed_use_in_else_arm_fails(self):
+        site = '''#if ZONEHAND_STEP >= 2
+#else
+HookInstall(HOOK_S2, hook_s2, &orig_s2, installed, true);
 #endif
 '''
         self.assertEqual(self.check_site(site),

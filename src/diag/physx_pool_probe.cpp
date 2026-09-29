@@ -254,8 +254,8 @@ void InstallPhysXPoolProbe(int* installed, int*)
 	if (!ResolveExeExtent())
 		why = "image extent";
 	else
-		why = HookInstallRow(HOOK_LOAD_PHYSX_RESOURCE, hook_loadPhysXResource,
-				(void**)&orig_loadPhysXResource, installed, true);
+		why = HookInstall(HOOK_LOAD_PHYSX_RESOURCE, hook_loadPhysXResource,
+				&orig_loadPhysXResource, installed, true);
 
 	if (!why)
 	{

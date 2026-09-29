@@ -103,8 +103,8 @@ void InstallCorpsePin(int* installed, int*)
 	 || (const void*)KlibRealAddress(&Character::isDead)  != GameAddr(RVA_CHARACTER_IS_DEAD))
 		why = "addresses";
 	else
-		why = HookInstallRow(HOOK_ACTIVEPLATOON_CALC_POS, hook_calculateCurrentPos,
-				(void**)&orig_calculateCurrentPos, installed, true);
+		why = HookInstall(HOOK_ACTIVEPLATOON_CALC_POS, hook_calculateCurrentPos,
+				&orig_calculateCurrentPos, installed, true);
 
 	if (!why)
 	{

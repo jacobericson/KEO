@@ -270,8 +270,8 @@ void InstallGraphExpandGuard(int* installed, int*)
 		// Before the install: the detour calls it as soon as it is in.
 		fn_openSetPopNext = (openSetPopNext_t)GameAddr(RVA_OPENSET_POP_NEXT);
 		// The prologue was verified above; the row is not verified twice.
-		why = HookInstallRow(HOOK_GRAPH_EXPAND_NODE, hook_graphExpandNode,
-				(void**)&orig_graphExpandNode, installed, false);
+		why = HookInstall(HOOK_GRAPH_EXPAND_NODE, hook_graphExpandNode,
+				&orig_graphExpandNode, installed, false);
 	}
 
 	if (!why)
