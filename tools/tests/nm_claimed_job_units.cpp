@@ -108,8 +108,41 @@ static void CheckRoute(const char* label, const CjReleasePoint* points, int coun
 	Check(std::strcmp(r.trace, expected) == 0, label);
 }
 
+// A claimed job finished twice through CjFinishRun releases once: its trace is
+// the one-finish route's, with one S and one L where the route has them.
+static void CheckFinishTwice(const char* label, CjReleasePoint point, CjReleaseFacts facts, const char* once)
+{
+	Recorder r = { "", { true, true }, 0 };
+	int stage = CJ_STAGE_CLAIMED;
+	CjFinishRun(&stage, CjReleasePlanFor(point, facts), Ops(&r));
+	CjFinishRun(&stage, CjReleasePlanFor(point, facts), Ops(&r));
+	if (std::strcmp(r.trace, once) != 0)
+		std::printf("trace %s: got [%s], expected [%s]\n", label, r.trace, once);
+	Check(std::strcmp(r.trace, once) == 0, label);
+}
+
+static void CheckFinishOnce()
+{
+	int stage = CJ_STAGE_CLAIMED;
+	Check(CjFinishAdmit(&stage) && stage == CJ_STAGE_FINISHED, "the first finish of a claimed job runs");
+	Check(!CjFinishAdmit(&stage) && stage == CJ_STAGE_FINISHED, "a second finish releases nothing");
+	stage = CJ_STAGE_EMPTY;
+	Check(!CjFinishAdmit(&stage) && stage == CJ_STAGE_EMPTY, "a finish of a job never claimed releases nothing");
+
+	const CjReleaseFacts none = { false, false, false };
+	CheckFinishTwice("a worker claim finished twice releases once: S,B+,A,L,E,I", CJ_FINISH_WORKER, none, "S,B+,A,L,E,I");
+	CheckFinishTwice("a bg content-lost claim finished twice releases once: S,L", CJ_FINISH_BG_CONTENT_LOST, none, "S,L");
+	CheckFinishTwice("a bg pipeline-return claim finished twice releases once: S,L", CJ_FINISH_BG_PIPELINE_RETURN, none, "S,L");
+
+	Recorder r = { "", { true, true }, 0 };
+	stage = CJ_STAGE_EMPTY;
+	CjFinishRun(&stage, CjReleasePlanFor(CJ_FINISH_WORKER, none), Ops(&r));
+	Check(r.trace[0] == 0, "a finish of a job never claimed runs no release");
+}
+
 int main()
 {
+	CheckFinishOnce();
 	CheckPolicyMatrix();
 	const CjReleaseFacts none = { false, false, false };
 	const CjReleaseFacts data = { true, false, false };

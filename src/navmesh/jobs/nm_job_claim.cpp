@@ -343,12 +343,10 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 	// processing starts: between those two points the job is in neither +136
 	// nor +232 and isBusy would report idle. Released once, at the end of the
 	// worker loop body, on every exit path.
-	WorkerBusyEnter(nmg);
 	// The claim marker for the mod-unload protocol, also before the unlock:
 	// from here until the worker loop clears it, NavMeshUnloadFence::TryBegin refuses
 	// this zone (the building hash below reads its content with no lock).
-	ClaimZoneSet(claimSlot, jobZone);
-	claimedOut->resetRaises = ZoneResetGateRaises(&g_zoneResetGate);
+	ClaimedJobBeginLocked(claimedOut, nmg, job, jobType, jobZone, claimSlot);
 
 	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
 	if (adj)
@@ -433,8 +431,6 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 	*hitIdxOut = hitIdx;
 	*isMissOut = (hitIdx < 0);
 	*keyOut = key;
-	claimedOut->job = job;
-	claimedOut->claimSlot = claimSlot;
 	return job;
 }
 

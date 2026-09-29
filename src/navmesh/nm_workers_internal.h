@@ -59,7 +59,7 @@ void ClearBusyBridgeIfIdle(uintptr_t nmg, bool lockHeld);
 int L2InFlightAcquire(const NmCacheLock& held, const NavMeshCacheKey& key);
 void L2InFlightRelease(const NmCacheLock& held, int slot);
 uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut, NavMeshCacheKey* keyOut, ClaimedJob* claimedOut);
-bool WorkerProcessHit(void* nmg, uintptr_t job, int jobType, int hitIdx, const NavMeshCacheKey& key, LONGLONG claimQpc, LONG resetRaises);
+bool WorkerProcessHit(void* nmg, const ClaimedJob* claimed, int hitIdx, const NavMeshCacheKey& key);
 void BridgeLockQueue(void* nmg);
 void BridgeUnlockQueue(void* nmg);
 BusyBridgeOps GameBusyBridgeOps(uintptr_t nmg);

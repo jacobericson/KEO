@@ -357,7 +357,6 @@ static bool WorkerRunClaimedJob(int workerId)
 	if (!job) return true;
 
 	int jobType = *(int*)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_flags, 88)) & 7;
-	claimed.jobType = jobType;
 
 	// Re-check 1 of 3: after the claim. It covers the window
 	// between the check above and the claim, and HITs as well: a quit
@@ -374,7 +373,7 @@ static bool WorkerRunClaimedJob(int workerId)
 	// path and regenerates, rather than deleting the job. A HIT whose zone
 	// was unloaded returns true (dropped) and does not.
 	if (!stopDropped && !isMiss
-	    && !WorkerProcessHit((void*)g_navMeshGen, job, jobType, hitIdx, key, claimed.claimQpc, claimed.resetRaises))
+	    && !WorkerProcessHit((void*)g_navMeshGen, &claimed, hitIdx, key))
 		isMiss = true;
 
 	if (!stopDropped && isMiss)

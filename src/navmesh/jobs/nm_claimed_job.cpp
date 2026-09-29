@@ -2,7 +2,7 @@
 #include "navmesh/jobs/nm_claimed_job.h"
 #include "navmesh/nm_workers_internal.h"
 
-ClaimedJob::ClaimedJob() : job(0), jobType(0), claimQpc(0), resetRaises(0), claimSlot(-1), clone(NULL)
+ClaimedJob::ClaimedJob() : job(0), jobType(0), claimQpc(0), resetRaises(0), claimSlot(-1), clone(NULL), stage(CJ_STAGE_EMPTY)
 {
 	memset(&pendingWrite, 0, sizeof(pendingWrite));
 }
@@ -51,6 +51,18 @@ static CjReleaseOps CjGameOps(CjGameContext* context)
 
 using namespace nm_claimed_job_detail;
 
+void ClaimedJobBeginLocked(ClaimedJob* claimed, uintptr_t nmg, uintptr_t job, int jobType,
+                           uintptr_t zone, int claimSlot)
+{
+	WorkerBusyEnter(nmg);
+	ClaimZoneSet(claimSlot, zone);
+	claimed->resetRaises = ZoneResetGateRaises(&g_zoneResetGate);
+	claimed->job = job;
+	claimed->jobType = jobType;
+	claimed->claimSlot = claimSlot;
+	claimed->stage = CJ_STAGE_CLAIMED;
+}
+
 void ClaimedJobWritePending(ClaimedJob* claimed)
 {
 	CjReleaseFacts facts = { claimed->pendingWrite.data != NULL, false, false };
@@ -69,5 +81,5 @@ void ClaimedJobFinish(ClaimedJob* claimed, CjReleasePoint point, bool bgAdj)
 {
 	CjReleaseFacts facts = { false, false, bgAdj };
 	nm_claimed_job_detail::CjGameContext context = { claimed };
-	CjRunReleases(CjReleasePlanFor(point, facts), nm_claimed_job_detail::CjGameOps(&context));
+	CjFinishRun(&claimed->stage, CjReleasePlanFor(point, facts), nm_claimed_job_detail::CjGameOps(&context));
 }

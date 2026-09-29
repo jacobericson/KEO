@@ -208,6 +208,7 @@ struct BgDispatchCtx
 	uintptr_t peekZone;
 	uintptr_t adjPrev;
 	int jobType;
+	ClaimedJob* claimed;
 	char initBuf[16];
 
 	bool Pick(char* result);
@@ -438,28 +439,20 @@ char BgDispatchCtx::ProcessPicked()
 	// flight), so the job is never invisible to either check. Released once, after
 	// ProcessNavMeshJob returns (its L2 write included, as for a worker), or on
 	// the vanilla content-check return below.
-	WorkerBusyEnter(nmg);
-	ClaimZoneSet(CLAIM_SLOT_BG, peekZone);
-	LONG resetRaises = ZoneResetGateRaises(&g_zoneResetGate);
+	ClaimedJobBeginLocked(claimed, nmg, job, jobType, peekZone, CLAIM_SLOT_BG);
 
 	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
 
 	// Claim time: the bg thread took ownership of `job` in the unlink just
 	// above (either arm). Stored in ClaimedJob for ProcessNavMeshJob.
-	LONGLONG claimQpc = QpcNow();
-	ClaimedJob claimed;
-	claimed.job = job;
-	claimed.jobType = jobType;
-	claimed.claimQpc = claimQpc;
-	claimed.resetRaises = resetRaises;
-	claimed.claimSlot = CLAIM_SLOT_BG;
+	claimed->claimQpc = QpcNow();
 
 	// Vanilla's own claim-time check (dispatchJob_orig 0x3CE030:
 	// `if (!**job) return 1;`), unchanged. ProcessNavMeshJob re-checks after
 	// its processJobCS wait.
 	if (!*(uintptr_t*)KLIB_MEMBER(4, *(uintptr_t*)KLIB_MEMBER(4, job, NavMeshGenerator__Task_zone, 0), ZoneMap_mapContent, 0))
 	{
-		ClaimedJobFinish(&claimed, CJ_FINISH_BG_CONTENT_LOST, adj);
+		ClaimedJobFinish(claimed, CJ_FINISH_BG_CONTENT_LOST, adj);
 		return 1;
 	}
 
@@ -475,8 +468,8 @@ char BgDispatchCtx::ProcessPicked()
 	// lock, so the bg thread starts no new MISS of the mod's own during the
 	// worker retire. HITs and the type 2/3/4 / bad-zone forwards are unchanged.
 	// The bridge was raised at the unlink above; ClaimedJobFinish below releases it.
-	ProcessNavMeshJob(thisNMG, thisNMG, &claimed);
-	ClaimedJobFinish(&claimed, CJ_FINISH_BG_PIPELINE_RETURN, adj);
+	ProcessNavMeshJob(thisNMG, thisNMG, claimed);
+	ClaimedJobFinish(claimed, CJ_FINISH_BG_PIPELINE_RETURN, adj);
 	return 1;
 }
 
@@ -491,9 +484,11 @@ using namespace nm_dispatch_detail;
 char hook_dispatchJob(void* thisNMG)
 {
 	uintptr_t nmg = BgFirstDispatchPhase(thisNMG);
+	ClaimedJob claimed;
 	BgDispatchCtx context;
 	context.thisNMG = thisNMG;
 	context.nmg = nmg;
+	context.claimed = &claimed;
 	char result = 0;
 	if (!context.Pick(&result)) return result;
 	return context.ProcessPicked();

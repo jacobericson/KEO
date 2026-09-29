@@ -72,3 +72,19 @@ void CjRunReleases(const CjReleasePlan& plan, const CjReleaseOps& ops)
 		ops.leaveBusy(ops.ctx);
 	}
 }
+
+bool CjFinishAdmit(int* stage)
+{
+	if (*stage != CJ_STAGE_CLAIMED)
+		return false;
+	*stage = CJ_STAGE_FINISHED;
+	return true;
+}
+
+bool CjFinishRun(int* stage, const CjReleasePlan& plan, const CjReleaseOps& ops)
+{
+	if (!CjFinishAdmit(stage))
+		return false;
+	CjRunReleases(plan, ops);
+	return true;
+}

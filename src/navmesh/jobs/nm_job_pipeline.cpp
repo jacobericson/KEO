@@ -90,25 +90,24 @@ static bool ResetWaitAt(ZoneResetSite site, uintptr_t job, LONG raisesAtClaim, i
 		== ZONE_RESET_WAIT_WAITED && !ResetWaitRevalidate(job, contentBefore, reasonOut);
 }
 
-bool WorkerProcessHit(void* nmg, uintptr_t job, int jobType, int hitIdx,
-	                             const NavMeshCacheKey& key, LONGLONG claimQpc, LONG resetRaises)
+bool WorkerProcessHit(void* nmg, const ClaimedJob* claimed, int hitIdx, const NavMeshCacheKey& key)
 {
 	{
 		int resetReason = STALE_REASON_NONE;
-		if (ResetWaitAt(ZONE_RESET_SITE_HIT, job, resetRaises, &resetReason))
+		if (ResetWaitAt(ZONE_RESET_SITE_HIT, claimed->job, claimed->resetRaises, &resetReason))
 		{
-			NoteStaleDrop(STALE_SITE_HIT, job, jobType, resetReason, claimQpc);
+			NoteStaleDrop(STALE_SITE_HIT, claimed->job, claimed->jobType, resetReason, claimed->claimQpc);
 			return true;
 		}
 	}
 
 	// Before the busy raise below, so the drop has nothing to release.
 	{
-		NoteClaimAge(false, claimQpc, QpcNow());
+		NoteClaimAge(false, claimed->claimQpc, QpcNow());
 		int staleReason = STALE_REASON_NONE;
-		if (!JobZoneStillLoaded(job, &staleReason))
+		if (!JobZoneStillLoaded(claimed->job, &staleReason))
 		{
-			NoteStaleDrop(STALE_SITE_HIT, job, jobType, staleReason, claimQpc);
+			NoteStaleDrop(STALE_SITE_HIT, claimed->job, claimed->jobType, staleReason, claimed->claimQpc);
 			return true;
 		}
 	}
@@ -141,40 +140,40 @@ bool WorkerProcessHit(void* nmg, uintptr_t job, int jobType, int hitIdx,
 	bool resetDrop = false;
 	if (freshNavMesh)
 	{
-		*(void**)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_mesh, 72)) = freshNavMesh;
-		*(void**)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_output, 80)) = NULL;
+		*(void**)(KLIB_MEMBER(4, claimed->job, NavMeshGenerator__Task_mesh, 72)) = freshNavMesh;
+		*(void**)(KLIB_MEMBER(4, claimed->job, NavMeshGenerator__Task_output, 80)) = NULL;
 		InterlockedIncrement(&navmesh::g_nmCache.nmCacheHitCount);
 		int resetReason = STALE_REASON_NONE;
-		if (ResetWaitAt(ZONE_RESET_SITE_BUILD, job, resetRaises, &resetReason))
+		if (ResetWaitAt(ZONE_RESET_SITE_BUILD, claimed->job, claimed->resetRaises, &resetReason))
 		{
-			NoteStaleDrop(STALE_SITE_HIT, job, jobType, resetReason, claimQpc);
+			NoteStaleDrop(STALE_SITE_HIT, claimed->job, claimed->jobType, resetReason, claimed->claimQpc);
 			resetDrop = true;
 		}
 		else
 		{
 			NoteWorkerPhase(WPHASE_BUILDING);
-			game::g_gameFn.fn_buildCollision(nmg, (void*)job, 0, 0.0);
+			game::g_gameFn.fn_buildCollision(nmg, (void*)claimed->job, 0, 0.0);
 			NoteWorkerPhase(WPHASE_STORING);
 		}
 	}
 
-	void* label29NavInst = *(void**)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_output, 80));
+	void* label29NavInst = *(void**)(KLIB_MEMBER(4, claimed->job, NavMeshGenerator__Task_output, 80));
 	if (label29NavInst)
-		*(int*)(KLIB_MEMBER(4, (uintptr_t)label29NavInst, NavInstance_hash, 64)) = *(int*)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_hash, 32));
+		*(int*)(KLIB_MEMBER(4, (uintptr_t)label29NavInst, NavInstance_hash, 64)) = *(int*)(KLIB_MEMBER(4, claimed->job, NavMeshGenerator__Task_hash, 32));
 
-	uintptr_t navMeshResult = *(uintptr_t*)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_mesh, 72));
+	uintptr_t navMeshResult = *(uintptr_t*)(KLIB_MEMBER(4, claimed->job, NavMeshGenerator__Task_mesh, 72));
 	int faceCount = navMeshResult ? *(int*)(KLIB_MEMBER(4, navMeshResult + NMOFF_FACES, ByteArray_m_size, 8)) : 0;
 	if (!resetDrop && navMeshResult && faceCount > 0)
 	{
-		game::g_gameFn.fn_enqueueToProcQueue((void*)(KLIB_MEMBER(4, (uintptr_t)nmg, NavMeshGenerator_done, 184)), (void*)job);
+		game::g_gameFn.fn_enqueueToProcQueue((void*)(KLIB_MEMBER(4, (uintptr_t)nmg, NavMeshGenerator_done, 184)), (void*)claimed->job);
 	}
 	else
 	{
-		void* delNavInst = *(void**)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_output, 80));
+		void* delNavInst = *(void**)(KLIB_MEMBER(4, claimed->job, NavMeshGenerator__Task_output, 80));
 		if (delNavInst) game::g_gameFn.fn_gameDelete(delNavInst);
-		void* buildingRef = *(void**)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_buildings_stuff, 24));
+		void* buildingRef = *(void**)(KLIB_MEMBER(4, claimed->job, NavMeshGenerator__Task_buildings_stuff, 24));
 		if (buildingRef) game::g_gameFn.fn_gameDelArr(buildingRef);
-		game::g_gameFn.fn_gameDelete((void*)job);
+		game::g_gameFn.fn_gameDelete((void*)claimed->job);
 	}
 
 

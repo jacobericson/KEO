@@ -53,4 +53,14 @@ struct CjReleaseOps
 
 void CjRunReleases(const CjReleasePlan& plan, const CjReleaseOps& ops);
 
+// A claimed job's progress. A finish runs its release tail only from
+// CJ_STAGE_CLAIMED and moves the stage to CJ_STAGE_FINISHED.
+enum CjStage { CJ_STAGE_EMPTY = 0, CJ_STAGE_CLAIMED, CJ_STAGE_FINISHED };
+// True, with the stage moved to finished, for the first finish of a claimed
+// job; false, nothing changed, for a job never claimed or already finished.
+bool CjFinishAdmit(int* stage);
+// A claimed job's finish: runs the plan's releases only when CjFinishAdmit
+// admits the stage, so the release tail runs at most once. True when it ran.
+bool CjFinishRun(int* stage, const CjReleasePlan& plan, const CjReleaseOps& ops);
+
 #endif
