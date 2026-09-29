@@ -259,6 +259,11 @@ const size_t RVA_GRAPH_HEURISTIC_CLUSTER_CENTRE = 0xDA6690;
 // Hooked by src/fixes/search/graph_heuristic_guard.cpp while the guard is wanted.
 const size_t RVA_GRAPH_HEURISTIC_COARSE_SEED = 0xDA5FE0;
 
+// The collection's graph-instance connect, called by addInstance for every registered graph:
+// it copies each cross-tile link's stored cost into both instances' owned edges.
+// Hooked by src/fixes/search/cluster_cross_cost.cpp while clusterCrossCost is on.
+const size_t RVA_GRAPH_INSTANCE_CONNECT = 0xD9AD30;
+
 // The per-face AABB step a navmesh instance's clearance reset runs: it fetches
 // one face record and walks the consecutive edges the record names, bounding
 // neither the face index nor either end of the edge run. Prologue is a single

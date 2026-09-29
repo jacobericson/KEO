@@ -9,6 +9,7 @@
 #include "gui/settings_panel.h"
 #include "bench/bench_runner.h"
 #include "fixes/search/graph_heuristic_guard.h"
+#include "fixes/search/cluster_cross_cost.h"
 #include "pathfind/astar_hier_policy.h"
 
 namespace plugin_entry_detail
@@ -51,6 +52,7 @@ void LogInitBanner(int installed, int totalHooks, const std::string& gateTok,
 	    << ", graphExpandGuard=" << (fixes::g_fixesCfg.graphExpandGuardEnabled ? "ON" : "OFF")
 	    << ", graphPositionGuard=" << (fixes::g_fixesCfg.graphPositionGuardEnabled ? "ON" : "OFF")
 	    << ", graphHeuristicGuard=" << GraphHeuristicGuardToken()
+	    << ", clusterCrossCost=" << ClusterCrossCostToken()
 	    << ", createInstanceGuard=" << (fixes::g_fixesCfg.createInstanceGuardEnabled ? "ON" : "OFF")
 	    << ", hullDoublePushGuard=" << (fixes::g_fixesCfg.hullDoublePushGuardEnabled ? "ON" : "OFF")
 	    << ", stitchByteGuard=" << (fixes::g_fixesCfg.stitchByteGuardEnabled ? "ON" : "OFF")

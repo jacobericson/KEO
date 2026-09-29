@@ -82,7 +82,7 @@ static bool HasName(const TestRow* rows, int n, const char* name)
 	return false;
 }
 
-// The 20 inputs, each with its field and the config global it is read from; a
+// The 21 inputs, each with its field and the config global it is read from; a
 // NULL global is a key a PROD build does not carry, or an int key
 // CheckInputMapping flips on its own.
 struct InputField
@@ -119,6 +119,7 @@ static const InputField kFields[] =
 	{ "gatePassDiag",        &HookWantInputs::gatePassDiag,        &pathfind::g_pathfindCfg.gatePassDiagEnabled },
 	{ "graphHeuristicGuard", &HookWantInputs::graphHeuristicGuard, NULL },
 	{ "playerHierarchical",  &HookWantInputs::playerHierarchical,  NULL },
+	{ "clusterCrossCost",    &HookWantInputs::clusterCrossCost,    NULL },
 };
 static const int kFieldCount = (int)(sizeof(kFields) / sizeof(kFields[0]));
 
@@ -130,7 +131,8 @@ static int FieldIndex(const char* name)
 	return -1;
 }
 
-// The DEV defaults: every key true but unstitchProbe, graphHeuristicGuard and playerHierarchical.
+// The DEV defaults: every key true but unstitchProbe, graphHeuristicGuard, playerHierarchical
+// and clusterCrossCost.
 static HookWantInputs DevDefaults()
 {
 	HookWantInputs in;
@@ -139,6 +141,7 @@ static HookWantInputs DevDefaults()
 	in.unstitchProbe = false;
 	in.graphHeuristicGuard = false;
 	in.playerHierarchical = false;
+	in.clusterCrossCost = false;
 	return in;
 }
 
@@ -293,6 +296,7 @@ static const Flip kFlips[] =
 	  { "csFindPath", "csCheckFaceConn", "requestPath", "pathReqSubmit", "csFindPathFallback",
 	    "contentStreamCallee_0x8869", "graphHeuristicGoalAdjacent", "graphHeuristicClusterCentre",
 	    "graphHeuristicCoarseSeed" } },
+	{ "clusterCrossCost", { "clusterCrossCost" }, { "graphInstanceConnect" } },
 };
 
 static void CheckWantTruthTable()
@@ -378,6 +382,13 @@ static void CheckInputMapping()
 	pathfind::g_pathfindCfg.playerHierarchicalMode = savedHier;
 	Check(SameInputs(observe, base, FieldIndex("playerHierarchical")), "inputs playerHierarchical observe");
 	Check(SameInputs(on, base, FieldIndex("playerHierarchical")), "inputs playerHierarchical on");
+
+	// clusterCrossCost is an int key as well.
+	const int savedCross = fixes::g_fixesCfg.clusterCrossCostOn;
+	fixes::g_fixesCfg.clusterCrossCostOn = 1;
+	HookWantInputs cross = HookWantInputsFromConfig();
+	fixes::g_fixesCfg.clusterCrossCostOn = savedCross;
+	Check(SameInputs(cross, base, FieldIndex("clusterCrossCost")), "inputs clusterCrossCost");
 }
 
 // The rows carrying HOOK_CAP_WORKER_POOL are exactly navMeshStop and
@@ -413,14 +424,14 @@ int main()
 {
 	CheckInstallAdmit();
 #if ZONEHAND_STEP >= 3
-	CheckVariant(kDevRows, kDevCount, "dev", 68, 53, 49, 25, 28, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 64, 49, 44, 25, 24, ProdDefaults());
+	CheckVariant(kDevRows, kDevCount, "dev", 69, 54, 49, 25, 29, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 65, 50, 44, 25, 25, ProdDefaults());
 #elif ZONEHAND_STEP == 2
-	CheckVariant(kDevRows, kDevCount, "dev", 67, 52, 48, 25, 27, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 63, 48, 43, 25, 23, ProdDefaults());
+	CheckVariant(kDevRows, kDevCount, "dev", 68, 53, 48, 25, 28, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 64, 49, 43, 25, 24, ProdDefaults());
 #else
-	CheckVariant(kDevRows, kDevCount, "dev", 64, 49, 45, 25, 24, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 60, 45, 40, 25, 20, ProdDefaults());
+	CheckVariant(kDevRows, kDevCount, "dev", 65, 50, 45, 25, 25, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 61, 46, 40, 25, 21, ProdDefaults());
 #endif
 	CheckDevMinusProd();
 	CheckWantTruthTable();

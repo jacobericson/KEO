@@ -6,6 +6,7 @@ camFocusHardMult=2.5
 camFocusHysteresis=250
 camFocusMaxDist=0
 camLogInterval=20
+clusterCrossCost=0
 clusterGraphBypass=2
 corpsePin=true
 createInstanceGuard=true

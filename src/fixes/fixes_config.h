@@ -182,6 +182,11 @@ struct FixesConfig
 	// heuristic (graph_heuristic_guard.cpp); 0 by default. playerHierarchical other than off
 	// installs them too. Read at startup only.
 	int graphHeuristicGuardOn;
+
+	// clusterCrossCost: rewrites each cross-tile cluster-graph link's cost to its world-frame
+	// distance as an instance registers (cluster_cross_cost.cpp); 0 by default. Changes NPC
+	// routing as well as the hierarchical player search. Read at startup only.
+	int clusterCrossCostOn;
 };
 
 extern FixesConfig g_fixesCfg;

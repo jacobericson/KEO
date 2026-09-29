@@ -228,7 +228,8 @@ std::vector<KeyValue> TemplateKeys(const std::string& text)
 
 const char* const kUndocumented[] =
 {
-	"caching", "camLogInterval", "deferral", "destroyListDefer", "destroyListDiag", "gatePassDiag",
+	"caching", "camLogInterval", "clusterCrossCost", "deferral", "destroyListDefer", "destroyListDiag",
+	"gatePassDiag",
 	"graphHeuristicGuard", "graphPositionGuard", "groupCohesion", "islandDeletedReissue", "islandFix",
 	"islandReadinessRule", "movementAware", "navmeshDiskCacheMaxMB", "navmeshNeighbourSeeds",
 	"navmeshVanillaPruning", "npcWaitDiag", "pathfindDiag", "playerHierOnCap", "playerHierarchical",
@@ -294,7 +295,7 @@ void CheckTemplateAndDefaults(const ConfigModule& core, const ConfigModule& rend
 		}
 	}
 
-	// 2. The undocumented rows are exactly the known 28.
+	// 2. The undocumented rows are exactly the known 29.
 	{
 		std::vector<std::string> undoc, want;
 		for (int m = 0; m < kConfigModuleCount; ++m)
@@ -304,7 +305,7 @@ void CheckTemplateAndDefaults(const ConfigModule& core, const ConfigModule& rend
 		for (int i = 0; kUndocumented[i]; ++i)
 			want.push_back(kUndocumented[i]);
 		std::sort(undoc.begin(), undoc.end());
-		Check(undoc.size() == 28, "undocumented rows: 28");
+		Check(undoc.size() == 29, "undocumented rows: 29");
 		for (size_t i = 0; i < undoc.size(); ++i)
 			CheckNamed(std::binary_search(want.begin(), want.end(), undoc[i]), "undocumented " + undoc[i]);
 		for (size_t i = 0; i < want.size(); ++i)
@@ -622,7 +623,7 @@ void CheckGoldenRecord(const ConfigModule& core)
 		if (!fl[i].empty() && eq != std::string::npos)
 			want.push_back(KeyValue(fl[i].substr(0, eq), fl[i].substr(eq + 1)));
 	}
-	Check(want.size() == 99u, "golden record key count");
+	Check(want.size() == 100u, "golden record key count");
 	CheckNamed(got.size() == want.size(), "golden count");
 	for (size_t i = 0; i < got.size(); ++i)
 	{
@@ -669,7 +670,7 @@ void CheckTables()
 		Check(mod.keys[i].name == NULL, "tables end");
 	}
 	Check(kConfigModuleCount == 8, "tables end: eight modules");
-	Check(active == 101 && retired == 22, "tables end: active and retired rows");
+	Check(active == 102 && retired == 22, "tables end: active and retired rows");
 	Check(coreActive == 2 && renderActive == 22, "tables end: rows per module");
 	std::printf("  tables: %d module(s), %d active row(s) (core %d, render %d), %d retired\n",
 	            kConfigModuleCount, active, coreActive, renderActive, retired);

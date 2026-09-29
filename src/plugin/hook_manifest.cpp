@@ -45,6 +45,7 @@
 #include "fixes/search/graph_expand_guard.h"
 #include "fixes/search/graph_position_guard.h"
 #include "fixes/search/graph_heuristic_guard.h"
+#include "fixes/search/cluster_cross_cost.h"
 #include "fixes/streaming/create_instance_guard.h"
 #include "fixes/physx/hull_queue_guard.h"
 #include "fixes/streaming/mesh_face_guard.h"
@@ -572,6 +573,9 @@ static void (*const kInstallSteps[])(int*, int*) =
 
 	// The hierarchical heuristic's three unchecked instance reads, only while wanted.
 	InstallGraphHeuristicGuard,
+
+	// The cross-tile cluster link cost, rewritten as each graph instance registers, only while wanted.
+	InstallClusterCrossCost,
 
 	// And again: three records at one instruction, each with a valid key and a
 	// valid slot, faulting one dereference below them.

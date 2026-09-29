@@ -177,6 +177,14 @@
 	HOOK_ROW(HOOK_GRAPH_HEURISTIC_COARSE_SEED, "graphHeuristicCoarseSeed", RVA_GRAPH_HEURISTIC_COARSE_SEED, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_GRAPH_HEURISTIC, HOOK_CAP_NONE,
 	         0x48,0x89,0x5C,0x24,0x08,0x48,0x89,0x74,0x24,0x10,0x57,0x48,0x83,0xEC,0x20,0x8B)
 
+	// The collection's graph-instance connect (src/fixes/search/cluster_cross_cost.cpp): the
+	// prologue opens with `mov r11,rsp` and `mov [r11+10h],rdx`, so the bytes a detour takes
+	// are two whole register-relative instructions with no branch. Wanted only while
+	// clusterCrossCost is set. diagnostic = true: a mismatch refuses the cost fix alone, and
+	// without it the connect behaves exactly as vanilla does.
+	HOOK_ROW(HOOK_GRAPH_INSTANCE_CONNECT, "graphInstanceConnect", RVA_GRAPH_INSTANCE_CONNECT, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_CLUSTER_CROSS_COST, HOOK_CAP_NONE,
+	         0x4C,0x8B,0xDC,0x49,0x89,0x53,0x10,0x49,0x89,0x4B,0x08,0x53,0x55,0x48,0x81,0xEC)
+
 	// The per-face AABB step (src/fixes/streaming/mesh_face_guard.cpp): the five bytes a
 	// detour takes are one whole `mov [rsp+18h],r8`. Present in every build,
 	// because the fault it guards is a measured crash rather than a

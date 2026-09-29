@@ -16,6 +16,17 @@ static bool ParseGraphHeuristicGuard(const std::string& val, ConfigLogFn log)
 	return true;
 }
 
+// clusterCrossCost: a boolean stored as 1 or 0; anything else is refused.
+static bool ParseClusterCrossCost(const std::string& val, ConfigLogFn log)
+{
+	(void)log;
+	bool b;
+	if (!ParseBool(val, &b))
+		return false;
+	fixes::g_fixesCfg.clusterCrossCostOn = b ? 1 : 0;
+	return true;
+}
+
 namespace fixes {
 
 const FixesConfig kFixesDefaults =
@@ -46,6 +57,7 @@ const FixesConfig kFixesDefaults =
 	true, // corpsePinEnabled
 	true, // nestValidationGuardEnabled
 	0, // graphHeuristicGuardOn
+	0, // clusterCrossCostOn
 };
 
 FixesConfig g_fixesCfg = kFixesDefaults;
@@ -142,6 +154,7 @@ const ConfigKey g_fixesConfigKeys[] =
 	  "Skips the game's nest validation for a cell whose navmesh is not in yet, so no nest is destroyed"
 	  " against a missing mesh; the cell is checked again next loading cycle."),
 	CFG_OCUSTOM("graphHeuristicGuard", FixesConfig, graphHeuristicGuardOn, ParseGraphHeuristicGuard, NDOC),
+	CFG_OCUSTOM("clusterCrossCost", FixesConfig, clusterCrossCostOn, ParseClusterCrossCost, NDOC),
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }
 };
 
