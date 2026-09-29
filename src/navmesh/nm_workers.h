@@ -190,10 +190,10 @@ const char* NavMeshZoneUnloadUnavailable();
 // lock (+152), as NavMeshUnloadFence::TryBegin publishes its zone; directly when no
 // dispatch has run yet. Main thread, no mod lock held.
 struct ZoneResetGate;
-void NavMeshRaiseResetGateLocked(ZoneResetGate* g);
+void NavMeshRaiseResetGateUnderQueueLock(ZoneResetGate* g);
 // Lowers the gate under the same queue lock (+152), directly when no
 // generator exists. Main thread, no mod lock held.
-void NavMeshLowerResetGateLocked(ZoneResetGate* g);
+void NavMeshLowerResetGateUnderQueueLock(ZoneResetGate* g);
 bool NavMeshRequestPjPriority();
 bool NavMeshPjPriorityActive();
 bool NavMeshWorkersIdle();

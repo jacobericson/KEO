@@ -10,14 +10,15 @@
 // later one, and waits (no lock held) only when nothing in the queue can run. navmeshAdjExclusion=false keeps the registry, the detour and the
 // checker and only counts (adjWould=) what enforcement would defer.
 //
-// Every "Locked" call needs the generator's queue lock (+152) held by the
-// caller; nothing here allocates or logs under it.
+// Every "Locked" call takes the caller's NmQueueLock: +152 is held for it,
+// and nothing here allocates or logs under it.
 
 #include "base/config.h"
 #include "navmesh/scheduling/nm_adjacency_policy.h"
 #include <windows.h>
 #include <stdint.h>
 
+class NmQueueLock;
 
 bool NmAdjActive();
 bool NmAdjEnforcing();
@@ -28,16 +29,16 @@ void NmAdjDescribeTask(uintptr_t task, NmJobDesc* out);
 
 // The head the bg thread keeps in place; workers never take it and the
 // prioritizer never moves it.
-uintptr_t NmAdjPinnedLocked();
+uintptr_t NmAdjPinnedLocked(const NmQueueLock& held);
 
 // Worker scan (WorkerTryDequeueAny).
-void       NmAdjWorkerScanBeginLocked(NmAdjScan* s);
-NmAdjOffer NmAdjWorkerOfferLocked(NmAdjScan* s, uintptr_t task, bool eligible, NmJobDesc* descOut);
+void       NmAdjWorkerScanBeginLocked(const NmQueueLock& held, NmAdjScan* s);
+NmAdjOffer NmAdjWorkerOfferLocked(const NmQueueLock& held, NmAdjScan* s, uintptr_t task, bool eligible, NmJobDesc* descOut);
 // A node that is not a candidate, or any node after the take.
-void       NmAdjWorkerObserveLocked(NmAdjScan* s, uintptr_t task, bool eligible);
+void       NmAdjWorkerObserveLocked(const NmQueueLock& held, NmAdjScan* s, uintptr_t task, bool eligible);
 // Returns false when the take was refused (no free entry, enforcing); the
 // caller then leaves the job queued. Sets this thread's own job on a claim.
-bool       NmAdjWorkerScanEndLocked(NmAdjScan* s, int workerId, const NmJobDesc* takenDesc, bool canReserve);
+bool       NmAdjWorkerScanEndLocked(const NmQueueLock& held, NmAdjScan* s, int workerId, const NmJobDesc* takenDesc, bool canReserve);
 // After the unlock: wakes waiters if the scan changed the registry.
 void       NmAdjAfterScan(const NmAdjScan* s);
 
@@ -45,16 +46,16 @@ void       NmAdjAfterScan(const NmAdjScan* s);
 // order). Offer every node in queue order until the offer returns true.
 // eligible: zone and content set, and not a type 0/1 job of the zone being
 // unloaded. bgOnly: types 2/3/4 (a skip is always one).
-void            NmAdjBgScanBeginLocked(NmAdjBgScan* s);
-bool            NmAdjBgOfferLocked(NmAdjBgScan* s, uintptr_t task, bool eligible, bool bgOnly);
+void            NmAdjBgScanBeginLocked(const NmQueueLock& held, NmAdjBgScan* s);
+bool            NmAdjBgOfferLocked(const NmQueueLock& held, NmAdjBgScan* s, uintptr_t task, bool eligible, bool bgOnly);
 // CLAIM: *pick is registered and this thread owns it. A bg-only pick is pinned,
 // and the caller moves it to the front for the original. WAIT: nothing runnable,
 // something blocked. NONE: nothing eligible.
 // episodeStart: the first scan of this dispatch's wait episode (counters).
-NmAdjBgDecision NmAdjBgScanEndLocked(NmAdjBgScan* s, uintptr_t* pick, bool episodeStart);
+NmAdjBgDecision NmAdjBgScanEndLocked(const NmQueueLock& held, NmAdjBgScan* s, uintptr_t* pick, bool episodeStart);
 // The head goes to the original with no stitch (no content): pinned.
-void            NmAdjBgForwardLocked(uintptr_t head);
-void            NmAdjBgReleaseLocked();
+void            NmAdjBgForwardLocked(const NmQueueLock& held, uintptr_t head);
+void            NmAdjBgReleaseLocked(const NmQueueLock& held);
 void            NmAdjBgUnpin();           // takes +152
 // The bg thread found the queue empty without taking +152.
 void            NmAdjBgLookedUnlocked();

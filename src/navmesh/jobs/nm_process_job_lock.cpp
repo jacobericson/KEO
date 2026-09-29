@@ -35,7 +35,7 @@ __declspec(thread) int t_pjDepth = 0;
 
 // Wakes a stop-aware waiter the moment processJobCS is released, so a poller
 // takes the next release as promptly as a parked EnterCriticalSection waiter
-// (CallOrigDispatchLocked, the first-dispatch latch) does. With a plain sleep a
+// (CallOrigDispatchUnderPj, the first-dispatch latch) does. With a plain sleep a
 // release would sit for the rest of the poller's sleep, a whole 15.6 ms tick at
 // the default timer resolution, and the parked waiters would win nearly every
 // release: the MISS threads would lose their turns to type 2/3/4 dispatches and
@@ -184,7 +184,7 @@ static inline bool PjPrioActiveAt(LONGLONG now)
 //
 // It only holds back threads that arrive while the request stands. Threads
 // already waiting (missLock and CloneNMG waiters, which poll in
-// EnterProcessJobCSStopAware rather than park, and CallOrigDispatchLocked and
+// EnterProcessJobCSStopAware rather than park, and CallOrigDispatchUnderPj and
 // the first-dispatch latch, which park and never back off) still compete for
 // the next release, so the poller is not guaranteed that release: it wins the
 // first one no other waiter takes. Bounded either way.

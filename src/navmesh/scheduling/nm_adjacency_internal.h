@@ -37,8 +37,6 @@ LONG64 Read64(volatile LONG64* p);
 void NoteMax64(volatile LONG64* slot, LONG64 v);
 void NoteMax(volatile LONG* slot, LONG v);
 void Wake();
-void LockQueue(uintptr_t nmg);
-void UnlockQueue(uintptr_t nmg);
 bool ReadU32Guarded(const void* at, unsigned int* out);
 // Entry writers hold +152, so there is one at a time; the sequence lets the
 // diagnostic checker copy e/high without it. Bg-only time fields have their

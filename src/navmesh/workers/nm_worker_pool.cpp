@@ -14,6 +14,7 @@
 #include "navmesh/workers/nm_retire_policy.h"
 
 #include "navmesh/nm_workers_internal.h"
+#include "navmesh/jobs/nm_queue_lock.h"
 using namespace nm_workers_detail;
 // --------------------------------------------------------------------
 // Worker pool state
@@ -137,11 +138,11 @@ void NavMeshWakeWorkersIfQueued()
 namespace nm_workers_detail {
 static __declspec(thread) uintptr_t t_busyNmg = 0;
 
-// Caller holds the generator queue lock +152 and releases it after publishing the claim.
-void WorkerBusyEnter(uintptr_t nmg)
+// Caller holds the generator queue lock +152 as q and releases it after publishing the claim.
+void WorkerBusyEnter(const NmQueueLock& q)
 {
-	t_busyNmg = nmg;
-	NoteBusyBridge(BusyBridge(GameBusyBridgeOps(nmg), BUSY_BRIDGE_ENTER, true));
+	t_busyNmg = q.Nmg();
+	NoteBusyBridge(BusyBridge(GameBusyBridgeOps(q.Nmg()), BUSY_BRIDGE_ENTER, true));
 }
 
 // Called with no lock held; BusyBridgeLeave takes the generator queue lock +152 itself.
@@ -161,14 +162,12 @@ void WorkerBusyLeave()
 // +152 site takes it, and the two words.
 void BridgeLockQueue(void* nmg)
 {
-	char initBuf[16];
-	void* initResult = game::g_gameFn.fn_pathBuilderInit(initBuf);
-	game::g_gameFn.fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, (uintptr_t)nmg, NavMeshGenerator_queue_mutex, 152)), initResult);
+	NmQueueMutexLock((uintptr_t)nmg);
 }
 
 void BridgeUnlockQueue(void* nmg)
 {
-	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, (uintptr_t)nmg, NavMeshGenerator_queue_mutex, 152)));
+	NmQueueMutexUnlock((uintptr_t)nmg);
 }
 
 static long BridgeIncrement(void*) { return InterlockedIncrement(&navmesh::g_nmCache.workerBusyCount); }
@@ -212,10 +211,10 @@ namespace nm_workers_detail {
 // The bg thread's backstop for a byte the original left at 1 with nothing
 // claimed: it clears the byte when the count reads 0. It takes the generator's
 // queue lock (+152) only when the byte reads 1, so an idle poll costs no lock,
-// and takes nothing under it. lockHeld: the caller already holds +152.
-void ClearBusyBridgeIfIdle(uintptr_t nmg, bool lockHeld)
+// and takes nothing under it. held: the caller's own hold of +152, or NULL.
+void ClearBusyBridgeIfIdle(uintptr_t nmg, const NmQueueLock* held)
 {
-	NoteBusyBridge(BusyBridge(GameBusyBridgeOps(nmg), BUSY_BRIDGE_CLEAR_IF_IDLE, lockHeld));
+	NoteBusyBridge(BusyBridge(GameBusyBridgeOps(nmg), BUSY_BRIDGE_CLEAR_IF_IDLE, held != NULL));
 }
 } // namespace nm_workers_detail
 

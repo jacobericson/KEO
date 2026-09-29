@@ -12,6 +12,7 @@
 #include "navmesh/workers/nm_worker_gate_policy.h"
 #include "navmesh/workers/nm_retire_policy.h"
 #include "navmesh/nm_workers_internal.h"
+#include "navmesh/jobs/nm_queue_lock.h"
 using namespace nm_workers_detail;
 // --------------------------------------------------------------------
 // orig_dispatchJob under processJobCS
@@ -25,7 +26,7 @@ using namespace nm_workers_detail;
 // measure=true records the hold for the type 2/3/4 path, the one this wrap
 // exists for; the bad-zone and bypass forwards are wrapped for correctness but
 // are not part of that measurement.
-static char CallOrigDispatchLocked(void* thisNMG, bool measure)
+static char CallOrigDispatchUnderPj(void* thisNMG, bool measure)
 {
 	ProcessJobLock lock;   // held for the whole function, released on return
 	if (measure) MissParHolderSet(MP_HOLD_T234);
@@ -68,11 +69,9 @@ static char NmAdjBgLeave(uintptr_t nmg, NmAdjWaitResult w, LONGLONG* adjSlice)
 	NmAdjBgWaitDone(adjSlice, w == NMADJ_WAIT_SLICE);
 	if (w != NMADJ_WAIT_STOP)
 		return 0;
-	char initBuf[16];
-	void* initResult = game::g_gameFn.fn_pathBuilderInit(initBuf);
-	game::g_gameFn.fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)), initResult);
-	NmAdjBgReleaseLocked();
-	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+	NmQueueLock queue(nmg);
+	NmAdjBgReleaseLocked(queue);
+	queue.Release();
 	return 0;
 }
 
@@ -209,20 +208,20 @@ struct BgDispatchCtx
 	uintptr_t adjPrev;
 	int jobType;
 	ClaimedJob* claimed;
-	char initBuf[16];
+	NmQueueLock* queue;
 
 	bool Pick(char* result);
 	char ProcessPicked();
 };
 
-// Returns true holding the queue lock +152; ProcessPicked releases it on every path.
+// Returns true with *queue held (+152); ProcessPicked releases it on every path.
 bool BgDispatchCtx::Pick(char* result)
 {
 	// Multi-consumer dequeue: workers may free jobs concurrently, so peek
 	// under the queue lock.
 	if (!*(uintptr_t*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_front, 136)))
 	{
-		ClearBusyBridgeIfIdle(nmg, false);
+		ClearBusyBridgeIfIdle(nmg, NULL);
 		// The bg-only age's clock: an idle bg thread has looked, and seen nothing.
 		NmAdjBgLookedUnlocked();
 		*result = 0;
@@ -235,21 +234,20 @@ bool BgDispatchCtx::Pick(char* result)
 	const bool adj = NmAdjActive();
 	LONGLONG adjSlice = 0;
 	adjRetry:
-	void* initResult = game::g_gameFn.fn_pathBuilderInit(initBuf);
-	game::g_gameFn.fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)), initResult);
+	queue->Acquire(nmg);
 
 	job = *(uintptr_t*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_front, 136));
 	if (!job)
 	{
 		if (adj)
 		{
-			NmAdjBgReleaseLocked();
+			NmAdjBgReleaseLocked(*queue);
 			NmAdjBgWaitDone(&adjSlice, false);
 		}
 		// Still under +152 here, so the read-and-clear is atomic against a
 		// worker's WorkerBusyEnter without taking the lock a second time.
-		ClearBusyBridgeIfIdle(nmg, true);
-		game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+		ClearBusyBridgeIfIdle(nmg, queue);
+		queue->Release();
 		*result = 0;
 		return false;
 	}
@@ -260,7 +258,7 @@ bool BgDispatchCtx::Pick(char* result)
 	{
 		if (adj)
 			NmAdjBgWaitDone(&adjSlice, false);
-		game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+		queue->Release();
 		ZoneResetGateNoteDeferred(&g_zoneResetGate, ZONE_RESET_SITE_CLAIM);
 		*result = 0;
 		return false;
@@ -274,16 +272,16 @@ bool BgDispatchCtx::Pick(char* result)
 		// held by another task stays.
 		if (adj)
 		{
-			NmAdjBgForwardLocked(job);
+			NmAdjBgForwardLocked(*queue, job);
 			NmAdjBgWaitDone(&adjSlice, false);
 		}
-		game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+		queue->Release();
 		// Wake the workers once this forward has consumed the head. A worker
 		// that found the queue all-ineligible cleared the event, and nothing
 		// else re-sets it on this path, so eligible jobs queued behind the head
 		// would sit until the 500 ms backstop expired.
 		{
-			char r = CallOrigDispatchLocked(thisNMG, false);
+			char r = CallOrigDispatchUnderPj(thisNMG, false);
 			if (adj)
 				NmAdjBgUnpin();
 			if (*(uintptr_t*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_front, 136)))
@@ -298,7 +296,7 @@ bool BgDispatchCtx::Pick(char* result)
 	if (adj)
 	{
 		NmAdjBgScan scan;
-		NmAdjBgScanBeginLocked(&scan);
+		NmAdjBgScanBeginLocked(*queue, &scan);
 		const uintptr_t unloading = UnloadingZone();
 		bool headHeld = false;
 		for (uintptr_t node = job; node; node = *(uintptr_t*)(KLIB_MEMBER(4, node, NavMeshGenerator__Task_next, 96)))
@@ -311,16 +309,16 @@ bool BgDispatchCtx::Pick(char* result)
 			if (held && node == job)
 				headHeld = true;
 			bool eligible = zone && *(uintptr_t*)KLIB_MEMBER(4, zone, ZoneMap_mapContent, 0) && !held;
-			if (NmAdjBgOfferLocked(&scan, node, eligible, t != 0 && t != 1))
+			if (NmAdjBgOfferLocked(*queue, &scan, node, eligible, t != 0 && t != 1))
 				break;
 		}
 		if (headHeld)
 			InterlockedIncrement(&navmesh::g_nmCache.nmUlHeld);
 		uintptr_t pick = 0;
-		NmAdjBgDecision decision = NmAdjBgScanEndLocked(&scan, &pick, adjSlice == 0);
+		NmAdjBgDecision decision = NmAdjBgScanEndLocked(*queue, &scan, &pick, adjSlice == 0);
 		if (decision != NMADJ_BG_CLAIM)
 		{
-			game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+			queue->Release();
 			// Workers may take what the bg thread cannot. Once per episode:
 			// every release wakes them again (Wake in nm_adjacency.cpp).
 			if (!adjSlice)
@@ -364,7 +362,7 @@ bool BgDispatchCtx::Pick(char* result)
 	return true;
 }
 
-// Entered holding the queue lock +152.
+// Entered with *queue held (+152); every path releases it before anything that takes processJobCS.
 char BgDispatchCtx::ProcessPicked()
 {
 	if (jobType != 0 && jobType != 1)
@@ -376,14 +374,14 @@ char BgDispatchCtx::ProcessPicked()
 		// and the original would re-pop that one; with it the head is pinned
 		// (the prioritizer leaves a pinned head in place), because the job
 		// registered by the scan above must be the job the original processes.
-		game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+		queue->Release();
 		InterlockedIncrement(&navmesh::g_nmCache.nmJobCount);
 		InterlockedIncrement(&navmesh::g_nmCache.nmCacheSkipCount);
 		// Same wake as the bad-zone forward: a stitching job at the head is
 		// exactly the case that made workers clear the event and sleep on a
 		// queue that still held type 0/1 work behind it.
 		{
-			char r = CallOrigDispatchLocked(thisNMG, true);
+			char r = CallOrigDispatchUnderPj(thisNMG, true);
 			// The original pushed the task (or deleted it) before returning.
 			if (adj)
 			{
@@ -408,7 +406,7 @@ char BgDispatchCtx::ProcessPicked()
 	// this head, so wake them if anything is behind it.
 	if (peekZone == UnloadingZone())
 	{
-		game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+		queue->Release();
 		InterlockedIncrement(&navmesh::g_nmCache.nmUlHeld);
 		if (nextJob)
 			SignalJobAvailable();
@@ -439,9 +437,9 @@ char BgDispatchCtx::ProcessPicked()
 	// flight), so the job is never invisible to either check. Released once, after
 	// ProcessNavMeshJob returns (its L2 write included, as for a worker), or on
 	// the vanilla content-check return below.
-	ClaimedJobBeginLocked(claimed, nmg, job, jobType, peekZone, CLAIM_SLOT_BG);
+	ClaimedJobBeginLocked(*queue, claimed, job, jobType, peekZone, CLAIM_SLOT_BG);
 
-	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+	queue->Release();
 
 	// Claim time: the bg thread took ownership of `job` in the unlink just
 	// above (either arm). Stored in ClaimedJob for ProcessNavMeshJob.
@@ -489,6 +487,8 @@ char hook_dispatchJob(void* thisNMG)
 	context.thisNMG = thisNMG;
 	context.nmg = nmg;
 	context.claimed = &claimed;
+	NmQueueLock queueLock;
+	context.queue = &queueLock;
 	char result = 0;
 	if (!context.Pick(&result)) return result;
 	return context.ProcessPicked();

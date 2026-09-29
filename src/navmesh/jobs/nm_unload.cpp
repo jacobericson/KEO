@@ -12,6 +12,7 @@
 #include "navmesh/workers/nm_worker_gate_policy.h"
 #include "navmesh/workers/nm_retire_policy.h"
 #include "navmesh/nm_workers_internal.h"
+#include "navmesh/jobs/nm_queue_lock.h"
 using namespace nm_workers_detail;
 namespace nm_workers_detail {
 // The zone the main thread is unloading under the mod-unload protocol
@@ -80,7 +81,7 @@ void ClaimZoneClear(int slot)
 //    skip past them; without the scan the bg thread returns 0 on such a head;
 //    ulHeld=). Types 2/3/4 and the bad-zone forward
 //    need no skip: they reach the original only through
-//    CallOrigDispatchLocked, under processJobCS, which the caller holds across
+//    CallOrigDispatchUnderPj, under processJobCS, which the caller holds across
 //    the unload; afterwards the original finds the content NULL and drops the
 //    job (0x3CE0A7), as vanilla does for its own unloads.
 // 3. Claims already made. Every claim writes its zone into its thread's slot
@@ -98,7 +99,7 @@ void ClaimZoneClear(int slot)
 //    late-HIT path. None of them reads zone content, and each belongs to a
 //    claimed job, whose zone point 3 refuses.
 // 5. The save-load reset's admission gate is published under +152 the same
-//    way (NavMeshRaiseResetGateLocked): a claim loop that takes +152 after
+//    way (NavMeshRaiseResetGateUnderQueueLock): a claim loop that takes +152 after
 //    the raise is ordered after it, and every claim made before it is
 //    already in its slot and in workerBusyCount. While the gate is up and no
 //    stop is seen, both claim loops take nothing and release +152 at once. A
@@ -157,9 +158,7 @@ static NavMeshUnloadBegin NavMeshBeginZoneUnload(void* zone)
 	if (UnloadingZone())
 		return NM_UL_REFUSED;
 
-	char initBuf[16];
-	void* initResult = game::g_gameFn.fn_pathBuilderInit(initBuf);
-	game::g_gameFn.fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)), initResult);
+	NmQueueLock queue(nmg);
 
 	bool queued = false;
 	int walked = 0;
@@ -176,14 +175,14 @@ static NavMeshUnloadBegin NavMeshBeginZoneUnload(void* zone)
 
 	if (queued)
 	{
-		game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+		queue.Release();
 		InterlockedIncrement(&navmesh::g_nmCache.nmUlSkipJob);
 		return NM_UL_REFUSED;
 	}
 
 	// Published under +152: see point 2 above.
 	InterlockedExchangePointer(&g_unloadingZone, zone);
-	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+	queue.Release();
 
 	for (int i = 0; i < CLAIM_SLOT_COUNT; ++i)
 	{
@@ -241,7 +240,7 @@ void NavMeshUnloadFence::Release()
 // it: the raise is interlocked writes and a ResetEvent. Called on the main
 // thread with no mod lock held. Without a generator no claim loop has run, so
 // there is nothing to order against and the gate is raised directly.
-void NavMeshRaiseResetGateLocked(ZoneResetGate* g)
+void NavMeshRaiseResetGateUnderQueueLock(ZoneResetGate* g)
 {
 	uintptr_t nmg = g_navMeshGen;
 	if (!nmg || !game::g_gameFn.fn_pathBuilderInit || !game::g_gameFn.fn_pathBuilderFinalize || !game::g_gameFn.fn_readerUnlock)
@@ -249,18 +248,16 @@ void NavMeshRaiseResetGateLocked(ZoneResetGate* g)
 		ZoneResetGateRaise(g);
 		return;
 	}
-	char initBuf[16];
-	void* initResult = game::g_gameFn.fn_pathBuilderInit(initBuf);
-	game::g_gameFn.fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)), initResult);
+	NmQueueLock queue(nmg);
 	// Published under +152: see point 5 above.
 	ZoneResetGateRaise(g);
-	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+	queue.Release();
 }
 
 // Main thread, no mod lock held. Takes the generator queue lock (+152) around
 // the lower and nothing under it, matching the raise above. Without a
 // generator there is no claim loop to order against, so lower directly.
-void NavMeshLowerResetGateLocked(ZoneResetGate* g)
+void NavMeshLowerResetGateUnderQueueLock(ZoneResetGate* g)
 {
 	uintptr_t nmg = g_navMeshGen;
 	if (!nmg || !game::g_gameFn.fn_pathBuilderInit || !game::g_gameFn.fn_pathBuilderFinalize || !game::g_gameFn.fn_readerUnlock)
@@ -268,11 +265,9 @@ void NavMeshLowerResetGateLocked(ZoneResetGate* g)
 		ZoneResetGateLower(g);
 		return;
 	}
-	char initBuf[16];
-	void* initResult = game::g_gameFn.fn_pathBuilderInit(initBuf);
-	game::g_gameFn.fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)), initResult);
+	NmQueueLock queue(nmg);
 	ZoneResetGateLower(g);
-	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+	queue.Release();
 }
 
 bool NavMeshWorkersIdle()

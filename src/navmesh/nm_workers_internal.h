@@ -14,6 +14,7 @@
 #include "navmesh/jobs/nm_busy_bridge_policy.h"
 #include "navmesh/workers/nm_worker_gate_policy.h"
 #include "navmesh/workers/nm_retire_policy.h"
+class NmQueueLock;
 namespace nm_workers_detail {
 enum { CLAIM_SLOT_BG = NAVMESH_WORKER_COUNT, CLAIM_SLOT_COUNT = NAVMESH_WORKER_COUNT + 1 };
 // Threads: startPlugin creates g_pjReleaseEvent and sets g_pjLockReady on the
@@ -55,7 +56,7 @@ void* ConstructFreshSettings(uintptr_t origWB);
 void* CloneNMG(void* realNMG, bool* stoppedOut);
 void FreeClonedNMG(void* clone);
 bool ResetWaitRevalidate(uintptr_t job, uintptr_t contentBefore, int* reasonOut);
-void ClearBusyBridgeIfIdle(uintptr_t nmg, bool lockHeld);
+void ClearBusyBridgeIfIdle(uintptr_t nmg, const NmQueueLock* held);
 int L2InFlightAcquire(const NmCacheLock& held, const NavMeshCacheKey& key);
 void L2InFlightRelease(const NmCacheLock& held, int slot);
 uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut, NavMeshCacheKey* keyOut, ClaimedJob* claimedOut);
@@ -243,7 +244,7 @@ static inline uintptr_t JobZoneContent(uintptr_t job)
 	uintptr_t zone = *(uintptr_t*)KLIB_MEMBER(4, job, NavMeshGenerator__Task_zone, 0);
 	return zone ? *(volatile uintptr_t*)KLIB_MEMBER(4, zone, ZoneMap_mapContent, OFF_ZONE_CONTENT) : 0;
 }
-void WorkerBusyEnter(uintptr_t nmg);
+void WorkerBusyEnter(const NmQueueLock& q);
 
 void WorkerBusyLeave();
 void ClaimZoneSet(int slot, uintptr_t zone);

@@ -51,10 +51,10 @@ static CjReleaseOps CjGameOps(CjGameContext* context)
 
 using namespace nm_claimed_job_detail;
 
-void ClaimedJobBeginLocked(ClaimedJob* claimed, uintptr_t nmg, uintptr_t job, int jobType,
+void ClaimedJobBeginLocked(const NmQueueLock& q, ClaimedJob* claimed, uintptr_t job, int jobType,
                            uintptr_t zone, int claimSlot)
 {
-	WorkerBusyEnter(nmg);
+	WorkerBusyEnter(q);
 	ClaimZoneSet(claimSlot, zone);
 	claimed->resetRaises = ZoneResetGateRaises(&g_zoneResetGate);
 	claimed->job = job;

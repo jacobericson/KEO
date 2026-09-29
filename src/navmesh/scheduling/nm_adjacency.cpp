@@ -131,18 +131,6 @@ void Wake()
 	NavMeshWakeWorkersIfQueued();
 }
 
-void LockQueue(uintptr_t nmg)
-{
-	char initBuf[16];
-	void* t = game::g_gameFn.fn_pathBuilderInit(initBuf);
-	game::g_gameFn.fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)), t);
-}
-
-void UnlockQueue(uintptr_t nmg)
-{
-	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
-}
-
 } // namespace nm_adjacency_detail
 using namespace nm_adjacency_detail;
 bool NmAdjActive()    { return s_mode != MODE_OFF; }
@@ -179,7 +167,7 @@ void NmAdjDescribeTask(uintptr_t task, NmJobDesc* out)
 	NmAdjDescribe(x, y, type, haveUid, uid, box, s_cellX, s_cellZ, out);
 }
 
-uintptr_t NmAdjPinnedLocked()
+uintptr_t NmAdjPinnedLocked(const NmQueueLock&)
 {
 	return (uintptr_t)g_reg.pin;
 }

@@ -526,8 +526,8 @@ using namespace preload_saveload_detail;
 void __fastcall hook_resetUnloadZones(void* zoneMgr)
 {
 	// The admission gate is up from here to the hook's exit, an unwind included.
-	ZoneResetGateScope admission(&g_zoneResetGate, &NavMeshRaiseResetGateLocked, &NavMeshWakeWorkersIfQueued,
-		&NavMeshLowerResetGateLocked);
+	ZoneResetGateScope admission(&g_zoneResetGate, &NavMeshRaiseResetGateUnderQueueLock, &NavMeshWakeWorkersIfQueued,
+		&NavMeshLowerResetGateUnderQueueLock);
 	DWORD tid     = GetCurrentThreadId();
 	bool  onMain  = IsMainThread();
 	bool  keyOn   = zone::g_zoneCfg.saveLoadUnloadEnabled;

@@ -30,7 +30,7 @@ static LONG          s_genRead    = 0;   // main thread only
 void MissParRecordJob(const MissParJob& j)
 {
 	// t_genStart/t_genEnd are stamped by the populate hook on this same
-	// thread, but a bg-thread T234 dispatch (CallOrigDispatchLocked) also
+	// thread, but a bg-thread T234 dispatch (CallOrigDispatchUnderPj) also
 	// runs processJobAlt and can populate without ever reaching this
 	// function. Only trust the stamps when they fall inside this job's own
 	// fn_processJobAlt window; otherwise this job's generate never reached

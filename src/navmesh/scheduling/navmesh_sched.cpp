@@ -6,6 +6,7 @@
 #include "movement/mover_policy.h"
 #include "zone/preload/coverage_stats.h"
 #include "navmesh/scheduling/nm_adjacency.h"
+#include "navmesh/jobs/nm_queue_lock.h"
 #include <new>
 
 
@@ -260,23 +261,21 @@ void PrioritizeNavMeshQueue(int camGridX, int camGridY,
 		return;
 
 	// Acquire input queue lock at navMeshGen+152
-	char initBuf[16];
-	void* initResult = game::g_gameFn.fn_pathBuilderInit(initBuf);
-	game::g_gameFn.fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, navMeshGen, NavMeshGenerator_queue_mutex, 152)), initResult);
+	NmQueueLock queue(navMeshGen);
 
 	head = *(uintptr_t*)(KLIB_MEMBER(4, navMeshGen, NavMeshGenerator_queue_front, 136));
 	// The list is rebuilt behind `anchor`: the queue's front, or the next
 	// pointer of a head the bg thread has pinned (nm_adjacency.h), which stays
 	// first because the job it registered must be the one it processes.
 	uintptr_t* anchor = (uintptr_t*)(KLIB_MEMBER(4, navMeshGen, NavMeshGenerator_queue_front, 136));
-	if (head && head == NmAdjPinnedLocked())
+	if (head && head == NmAdjPinnedLocked(queue))
 	{
 		anchor = (uintptr_t*)(KLIB_MEMBER(4, head, NavMeshGenerator__Task_next, 96));
 		head = *anchor;
 	}
 	if (!head)
 	{
-		game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, navMeshGen, NavMeshGenerator_queue_mutex, 152)));
+		queue.Release();
 		return;
 	}
 
@@ -427,7 +426,7 @@ void PrioritizeNavMeshQueue(int camGridX, int camGridY,
 	}
 
 	// Release lock
-	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, navMeshGen, NavMeshGenerator_queue_mutex, 152)));
+	queue.Release();
 
 	// Grow the spill buffer OUTSIDE the lock if this pass needed more than
 	// it had. Nothrow + NULL-checked: a failed grow just means the next

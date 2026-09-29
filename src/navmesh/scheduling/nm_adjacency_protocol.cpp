@@ -2,6 +2,7 @@
 // Locked scan paths use caller-held generator queue +152 and take no lock beneath it;
 // the bg wait takes no lock and checks stop, while unpin takes +152 itself.
 #include "navmesh/scheduling/nm_adjacency_internal.h"
+#include "navmesh/jobs/nm_queue_lock.h"
 #include <string.h>
 namespace nm_adjacency_detail {
 static const size_t OFF_NMG_THREAD_RUNNING = 0x108;
@@ -15,12 +16,12 @@ static void NoteDeferral(LONGLONG waited);
 // Workers
 // ---------------------------------------------------------------------------
 
-void NmAdjWorkerScanBeginLocked(NmAdjScan* s)
+void NmAdjWorkerScanBeginLocked(const NmQueueLock&, NmAdjScan* s)
 {
 	NmAdjScanBegin(s, &g_reg, s_mode == MODE_ENFORCE, QpcNow());
 }
 
-NmAdjOffer NmAdjWorkerOfferLocked(NmAdjScan* s, uintptr_t task, bool eligible, NmJobDesc* descOut)
+NmAdjOffer NmAdjWorkerOfferLocked(const NmQueueLock&, NmAdjScan* s, uintptr_t task, bool eligible, NmJobDesc* descOut)
 {
 	if (task == (uintptr_t)g_reg.pin)
 		eligible = false;
@@ -33,12 +34,12 @@ NmAdjOffer NmAdjWorkerOfferLocked(NmAdjScan* s, uintptr_t task, bool eligible, N
 	return NmAdjScanOffer(s, &g_reg, task, descOut, true);
 }
 
-void NmAdjWorkerObserveLocked(NmAdjScan* s, uintptr_t task, bool eligible)
+void NmAdjWorkerObserveLocked(const NmQueueLock&, NmAdjScan* s, uintptr_t task, bool eligible)
 {
 	NmAdjScanObserve(s, task, eligible && task != (uintptr_t)g_reg.pin);
 }
 
-bool NmAdjWorkerScanEndLocked(NmAdjScan* s, int workerId, const NmJobDesc* takenDesc, bool canReserve)
+bool NmAdjWorkerScanEndLocked(const NmQueueLock&, NmAdjScan* s, int workerId, const NmJobDesc* takenDesc, bool canReserve)
 {
 	const bool took = s->took;
 	const bool conflicting = s->tookConflicting;
@@ -83,12 +84,12 @@ static void NoteDeferral(LONGLONG waited)
 	NoteMax64(&s_deferMaxUs, QpcToUs(waited));
 }
 
-void NmAdjBgScanBeginLocked(NmAdjBgScan* s)
+void NmAdjBgScanBeginLocked(const NmQueueLock&, NmAdjBgScan* s)
 {
 	NmAdjBgScanBegin(s, &g_reg, s_mode == MODE_ENFORCE, QpcNow());
 }
 
-bool NmAdjBgOfferLocked(NmAdjBgScan* s, uintptr_t task, bool eligible, bool bgOnly)
+bool NmAdjBgOfferLocked(const NmQueueLock&, NmAdjBgScan* s, uintptr_t task, bool eligible, bool bgOnly)
 {
 	NmJobDesc d;
 	if (!NmAdjBgScanWants(s, bgOnly))
@@ -100,7 +101,7 @@ bool NmAdjBgOfferLocked(NmAdjBgScan* s, uintptr_t task, bool eligible, bool bgOn
 	return NmAdjBgScanOffer(s, &g_reg, task, &d, eligible, bgOnly);
 }
 
-NmAdjBgDecision NmAdjBgScanEndLocked(NmAdjBgScan* s, uintptr_t* pick, bool episodeStart)
+NmAdjBgDecision NmAdjBgScanEndLocked(const NmQueueLock&, NmAdjBgScan* s, uintptr_t* pick, bool episodeStart)
 {
 	NmAdjBgResult r;
 	WBegin();
@@ -134,7 +135,7 @@ NmAdjBgDecision NmAdjBgScanEndLocked(NmAdjBgScan* s, uintptr_t* pick, bool episo
 	return NMADJ_BG_CLAIM;
 }
 
-void NmAdjBgForwardLocked(uintptr_t head)
+void NmAdjBgForwardLocked(const NmQueueLock&, uintptr_t head)
 {
 	WBegin();
 	NmAdjBgForward(&g_reg, head);
@@ -142,7 +143,7 @@ void NmAdjBgForwardLocked(uintptr_t head)
 	WEnd();
 }
 
-void NmAdjBgReleaseLocked()
+void NmAdjBgReleaseLocked(const NmQueueLock&)
 {
 	WBegin();
 	NmAdjBgRelease(&g_reg);
@@ -164,11 +165,11 @@ void NmAdjBgUnpin()
 	uintptr_t nmg = g_navMeshGen;
 	if (!nmg || !g_reg.pin)
 		return;
-	LockQueue(nmg);
+	NmQueueLock queue(nmg);
 	WBegin();
 	g_reg.pin = 0;
 	WEnd();
-	UnlockQueue(nmg);
+	queue.Release();
 }
 
 // NavMesh::stop seen, or the workers told to shut down.

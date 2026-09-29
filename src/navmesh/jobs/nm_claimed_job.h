@@ -7,6 +7,8 @@
 #include "navmesh/nm_workers.h"
 #include "navmesh/jobs/nm_claimed_job_policy.h"
 
+class NmQueueLock;
+
 struct ClaimedJob
 {
 	uintptr_t job;
@@ -26,11 +28,11 @@ private:
 };
 
 // The one raise of a claim, called holding the generator's queue lock (+152)
-// right after the job's unlink and before the unlock: the busy bridge, this
-// thread's claim slot and the reset gate's raise count, in that order, then
-// the job's own fields. claimQpc is taken after the unlock; clone and
-// pendingWrite are the pipeline's.
-void ClaimedJobBeginLocked(ClaimedJob* claimed, uintptr_t nmg, uintptr_t job, int jobType,
+// as q right after the job's unlink and before the unlock: the busy bridge
+// (on q's generator), this thread's claim slot and the reset gate's raise
+// count, in that order, then the job's own fields. claimQpc is taken after
+// the unlock; clone and pendingWrite are the pipeline's.
+void ClaimedJobBeginLocked(const NmQueueLock& q, ClaimedJob* claimed, uintptr_t job, int jobType,
                            uintptr_t zone, int claimSlot);
 // Called last in PjCtx::Handoff, after the job is handed to the game or deleted.
 // No mod cache or process lock is held; the policy's data-only guard keeps the timed writer.

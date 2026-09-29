@@ -3,6 +3,7 @@
 // thread drain (contentStream through NavMesh::update) calls the original
 // first, then takes +152 before done.mutex.
 #include "navmesh/scheduling/nm_adjacency_internal.h"
+#include "navmesh/jobs/nm_queue_lock.h"
 using namespace nm_adjacency_detail;
 namespace nm_adjacency_detail {
 static const int      kDoneCap    = 512;
@@ -19,7 +20,7 @@ static void OwnEnd(bool publish)
 	uintptr_t nmg = g_navMeshGen;
 	if (idx < 0 || !nmg)
 		return;
-	LockQueue(nmg);
+	NmQueueLock queue(nmg);
 	WBegin();
 	// A registry reset could have reused the slot; act only on our own entry.
 	if (g_reg.e[idx].state == NMADJ_CLAIMED && g_reg.e[idx].task == task)
@@ -30,7 +31,7 @@ static void OwnEnd(bool publish)
 			NmAdjFree(&g_reg, idx);
 	}
 	WEnd();
-	UnlockQueue(nmg);
+	queue.Release();
 	Wake();
 }
 
@@ -59,7 +60,7 @@ static void ObserveDrain(uintptr_t nmg)
 	int n = 0;
 	bool overflow = false;
 
-	LockQueue(nmg);
+	NmQueueLock queue(nmg);
 	// Every publish happened under this lock, after its push to done had
 	// returned; a task absent from done now has been popped by the drain.
 	const long seq = g_reg.pubSeq;
@@ -82,7 +83,7 @@ static void ObserveDrain(uintptr_t nmg)
 		freed = NmAdjReleaseDrained(&g_reg, seq, done, n);
 		WEnd();
 	}
-	UnlockQueue(nmg);
+	queue.Release();
 
 	if (overflow)
 		InterlockedIncrement(&s_obsOverflow);

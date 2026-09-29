@@ -12,6 +12,7 @@
 #include "navmesh/workers/nm_worker_gate_policy.h"
 #include "navmesh/workers/nm_retire_policy.h"
 #include "navmesh/nm_workers_internal.h"
+#include "navmesh/jobs/nm_queue_lock.h"
 using namespace nm_workers_detail;
 namespace nm_workers_detail {
 // --------------------------------------------------------------------
@@ -207,9 +208,7 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 	if (!nmg) return 0;
 
 	// Phase 1: claim a job under the queue lock.
-	char initBuf[16];
-	void* initResult = game::g_gameFn.fn_pathBuilderInit(initBuf);
-	game::g_gameFn.fn_pathBuilderFinalize((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)), initResult);
+	NmQueueLock queue(nmg);
 
 	uintptr_t head = *(uintptr_t*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_front, 136));
 	if (!head)
@@ -217,7 +216,7 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 		// Empty under the lock: the event is only ever cleared while holding
 		// this lock, so a worker cannot miss a job queued after the check.
 		ClearJobAvailable();
-		game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+		queue.Release();
 		return 0;
 	}
 
@@ -227,7 +226,7 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 	if (ZoneResetGateUp(&g_zoneResetGate) && ZoneResetAdmit(true, NavMeshStopRequested(), ZONE_RESET_SITE_CLAIM) == ZONE_RESET_DEFER_RESET)
 	{
 		ClearJobAvailable();
-		game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+		queue.Release();
 		ZoneResetGateNoteDeferred(&g_zoneResetGate, ZONE_RESET_SITE_CLAIM);
 		return 0;
 	}
@@ -249,7 +248,7 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 	NmAdjScan adjScan;
 	NmJobDesc adjDesc, adjTakenDesc;
 	if (adj)
-		NmAdjWorkerScanBeginLocked(&adjScan);
+		NmAdjWorkerScanBeginLocked(queue, &adjScan);
 
 	for (uintptr_t node = head; node; node = *(uintptr_t*)(KLIB_MEMBER(4, node, NavMeshGenerator__Task_next, 96)))
 	{
@@ -269,15 +268,15 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 		{
 			if (job)
 			{
-				NmAdjWorkerObserveLocked(&adjScan, node, candidate);
+				NmAdjWorkerObserveLocked(queue, &adjScan, node, candidate);
 				if (!NmAdjScanWantsRest(&adjScan))
 					break;
 				continue;
 			}
-			if (!candidate || NmAdjWorkerOfferLocked(&adjScan, node, true, &adjDesc) != NMADJ_OFFER_TAKE)
+			if (!candidate || NmAdjWorkerOfferLocked(queue, &adjScan, node, true, &adjDesc) != NMADJ_OFFER_TAKE)
 			{
 				if (!candidate)
-					NmAdjWorkerObserveLocked(&adjScan, node, false);
+					NmAdjWorkerObserveLocked(queue, &adjScan, node, false);
 				prev = node;
 				continue;
 			}
@@ -304,7 +303,7 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 
 	// Registers the claim; enforcing, a claim with no free entry is refused
 	// and the job stays queued.
-	if (adj && !NmAdjWorkerScanEndLocked(&adjScan, claimSlot, job ? &adjTakenDesc : NULL,
+	if (adj && !NmAdjWorkerScanEndLocked(queue, &adjScan, claimSlot, job ? &adjTakenDesc : NULL,
 	                                    InterlockedCompareExchange(&navmesh::g_nmCache.g_navMeshWorkersLive, 0, 0) > 0))
 		job = 0;
 
@@ -319,7 +318,7 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 		// the first eligible job wakes everyone; the 500 ms wait is the
 		// backstop. The list is not touched.
 		ClearJobAvailable();
-		game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+		queue.Release();
 		if (adj)
 			NmAdjAfterScan(&adjScan);
 		return 0;
@@ -346,9 +345,9 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 	// The claim marker for the mod-unload protocol, also before the unlock:
 	// from here until the worker loop clears it, NavMeshUnloadFence::TryBegin refuses
 	// this zone (the building hash below reads its content with no lock).
-	ClaimedJobBeginLocked(claimedOut, nmg, job, jobType, jobZone, claimSlot);
+	ClaimedJobBeginLocked(queue, claimedOut, job, jobType, jobZone, claimSlot);
 
-	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
+	queue.Release();
 	if (adj)
 		NmAdjAfterScan(&adjScan);
 
