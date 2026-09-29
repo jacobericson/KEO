@@ -123,7 +123,7 @@ static void hook_navMeshStop(void* navMesh)
 namespace nm_workers_detail {
 void InstallNavMeshLazyHooks()
 {
-	if (InterlockedCompareExchange(&navmesh::g_nmCache.lazyHooksInstalled, 1, 0) != 0)
+	if (InterlockedCompareExchange(&navmesh::g_nmCache.lazyHooksInstalled, NM_LAZY_RUNNING, NM_LAZY_NOT_STARTED) != NM_LAZY_NOT_STARTED)
 		return;
 
 	if (HookInstallRow(HOOK_EDGE_PROCESS, (void*)hook_edgeProcess, (void**)&orig_edgeProcess,
@@ -188,7 +188,7 @@ void InstallNavMeshLazyHooks()
 		    && HookInstallRow(HOOK_NMG_GET_SEED_POINTS_ADJ, (void*)hook_getSeedPointsAdj,
 		                      (void**)&orig_getSeedPointsAdj, NULL, true) == NULL)
 		{
-			InterlockedExchange(&navmesh::g_nmCache.g_nbrSeedHookState, 1);
+			InterlockedExchange(&navmesh::g_nmCache.g_nbrSeedHookState, NBRSEED_HOOK_OK);
 			char line[128];
 			_snprintf_s(line, sizeof(line), _TRUNCATE,
 				"neighbour-seed hook: installed (NMNBRSEED_STEP %d)", (int)2);
@@ -204,7 +204,7 @@ void InstallNavMeshLazyHooks()
 		}
 		else
 		{
-			InterlockedExchange(&navmesh::g_nmCache.g_nbrSeedHookState, 2);
+			InterlockedExchange(&navmesh::g_nmCache.g_nbrSeedHookState, NBRSEED_HOOK_FAILED);
 			LogMsgDeferrable("neighbour-seed hook: install FAILED (neighbour seeds off for the session"
 			                 "; L2 settings hash without nbrseed1"
 			                 ")");
@@ -221,6 +221,6 @@ void InstallNavMeshLazyHooks()
 		}
 	}
 
-	InterlockedExchange(&navmesh::g_nmCache.lazyHooksInstalled, 2);
+	InterlockedExchange(&navmesh::g_nmCache.lazyHooksInstalled, NM_LAZY_DONE);
 }
 } // namespace nm_workers_detail

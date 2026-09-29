@@ -115,12 +115,9 @@ static bool ResolveImageSize(unsigned __int64 base, unsigned __int64* outSize)
 
 namespace navmesh_update_guard_detail {
 typedef FixedLogBufN<1024> GBuf;
-} // namespace navmesh_update_guard_detail
-using namespace navmesh_update_guard_detail;
 
 
 // What the frame walk established about the faulting thread.
-namespace navmesh_update_guard_detail {
 struct UnwindFacts
 {
 	bool ok;          // the walk ran to completion without faulting

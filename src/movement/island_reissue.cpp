@@ -304,9 +304,6 @@ bool ReissueOrder(IslandOrder& o, double now, const char* why, bool haveCross, f
 	return true;
 }
 
-} // namespace order_tracker_detail
-using namespace order_tracker_detail;
-
 // =========================================================================
 // (a) Discriminator trace: shared by ReissueCharacter (this file) and
 // FormationReissueTravel (formation_query.cpp). Main thread only.
@@ -315,7 +312,6 @@ using namespace order_tracker_detail;
 // Current order type from Character::playerMoveOrderDefault's (0x5D1820)
 // cached-order chain (game.h). Every link is null-checked; -1 = no cached
 // order (or any link is null), meaning the fresh-AddOrder path always runs.
-namespace order_tracker_detail {
 int ReadCharOrderType(uintptr_t character)
 {
 	if (!character) return -1;

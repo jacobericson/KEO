@@ -29,7 +29,9 @@ struct ConfigKey
 	const char*   name;
 	ConfigKind    kind;
 	size_t        offset;   // of the field in the module's state (offset rows)
-	size_t        size;     // an offset row: its field's width; CK_TEXT: the buffer size; CK_CUSTOM: the target's width in bytes
+	// An offset row: its field's width; CK_TEXT: the buffer size; CK_CUSTOM:
+	// the target's width in bytes.
+	size_t        size;
 	float         lo, hi;   // the clamp range; none when lo > hi
 	bool          live;     // false: read at startup only, never applied at runtime
 	// The settings panel's row. A NULL label keeps the key INI-only.

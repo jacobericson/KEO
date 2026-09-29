@@ -66,30 +66,34 @@ enum StaleReason
 	STALE_REASON_NO_TERRAIN = 3,   // ZoneMap+0xB8 (terrainCollision) is NULL
 	STALE_REASON_SHUTDOWN   = 4    // NavMesh::stop seen (also stopDrop=)
 };
+// lazyHooksInstalled: the lazy install's progress. The NavMesh bg thread moves
+// it from not started to running with a compare-exchange, and to done last.
+enum NmLazyInstallState { NM_LAZY_NOT_STARTED = 0, NM_LAZY_RUNNING = 1, NM_LAZY_DONE = 2 };
+// g_nbrSeedHookState: the neighbour-seed hook's install outcome.
+enum NmNbrSeedHookState { NBRSEED_HOOK_UNTRIED = 0, NBRSEED_HOOK_OK = 1, NBRSEED_HOOK_FAILED = 2 };
 namespace navmesh {
 
 // The navmesh cache's counters, probes and flags. The counters and flags are
 // written with Interlocked* (no allocation, no logging) on the NavMesh bg
-// thread and the workers, by the collision builders, the work-buffer probe
-// and the L2 reader and writer; on the main thread by the cache's init and
-// clear, the zone unloader, the save-load reset and the stats reporter, which
-// advances its own l2MissLogReported cursor. Three groups take plain
-// stores into storage their writer claimed first: the settings and
-// work-buffer probe buffers (probeEMP, probeGen, probeMisc, verifyEMP,
-// wbArrayProbes, wbArrayOffsets, wbWritableOffsets), filled once behind an
-// Interlocked latch; each L2 miss log record, in the slot its
-// InterlockedIncrement of l2MissLogCount claimed; and nmDiskCacheDirBuf
-// (strcpy_s) and nmDiskCacheDirChecked, on the main thread in
-// InitNavMeshCacheCS. The main thread's stats reporter
-// reads the counters through InterlockedCompareExchange(&x, 0, 0). Read off
-// the main thread as behaviour inputs: nmDiskCacheDirBuf, written once before
-// any hook installs, from which the L2 reader and writer build every path;
-// nmCacheDisabled, nmDiagStage (fixed after start-up), workerBusyCount (also
-// by the crash recorder), lazyHooksInstalled, g_l2Bypass, g_nbrSeedHookState,
-// g_nbrSeedStandInRefused and g_navMeshWorkersLive. g_navMeshPoolRefusal is a main-thread diagnostic
-// read; g_workBufAllocSize is a probe result with no reader. The
-// "last" records (nmDiagLast*, nmStaleLast*, nmZeroFaceLast*) are separate
-// stores that a racing reader can see torn; each reports only the most
+// thread and the workers, by the collision builders, the work-buffer probe and
+// the L2 reader and writer; on the main thread by the cache's init and clear,
+// the zone unloader, the save-load reset and the stats reporter, which advances
+// its own l2MissLogReported cursor. Three groups take plain stores into storage
+// their writer claimed first: the settings and work-buffer probe buffers
+// (probeEMP, probeGen, probeMisc, verifyEMP, wbArrayProbes, wbArrayOffsets,
+// wbWritableOffsets), filled once behind an Interlocked latch; each L2 miss log
+// record, in the slot its InterlockedIncrement of l2MissLogCount claimed; and
+// nmDiskCacheDirBuf (strcpy_s) and nmDiskCacheDirChecked, on the main thread in
+// InitNavMeshCacheCS. The main thread's stats reporter reads the counters
+// through InterlockedCompareExchange(&x, 0, 0). Read off the main thread as
+// behaviour inputs: nmDiskCacheDirBuf, written once before any hook installs,
+// from which the L2 reader and writer build every path; nmCacheDisabled,
+// nmDiagStage (fixed after start-up), workerBusyCount (also by the crash
+// recorder), lazyHooksInstalled, g_l2Bypass, g_nbrSeedHookState,
+// g_nbrSeedStandInRefused and g_navMeshWorkersLive. g_navMeshPoolRefusal is a
+// main-thread diagnostic read; g_workBufAllocSize is a probe result with no
+// reader. The "last" records (nmDiagLast*, nmStaleLast*, nmZeroFaceLast*) are
+// separate stores that a racing reader can see torn; each reports only the most
 // recent event, so that is tolerated.
 struct NavMeshCacheState
 {
@@ -521,7 +525,7 @@ inline bool NmNbrSeedHookWanted()
 inline bool NmNbrSeedStandInActive()
 {
 	return navmesh::g_navmeshCfg.navmeshNeighbourSeedsEnabled
-	    && InterlockedCompareExchange(&navmesh::g_nmCache.g_nbrSeedHookState, 0, 0) != 2
+	    && InterlockedCompareExchange(&navmesh::g_nmCache.g_nbrSeedHookState, 0, 0) != NBRSEED_HOOK_FAILED
 	    && InterlockedCompareExchange(&navmesh::g_nmCache.g_nbrSeedStandInRefused, 0, 0) == 0;
 }
 // Records one zero-face mesh. inputTri is the generation's input triangle

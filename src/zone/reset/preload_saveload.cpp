@@ -268,13 +268,14 @@ bool PreloadCheckSaveLoad(void* zoneMgr)
 // the survivor pass uses. The fence is taken at every reset, whatever the
 // survivor-unload key says, because the game's own unloads happen either way.
 //
-// Deadlock: the only acquisitions of processJobCS are the NavMesh background
-// thread's and the workers' (through nm_workers_internal.h helpers). Each takes
-// it holding no other lock — so nothing waits for processJobCS while holding a lock the
-// unloads need, and the order here (processJobCS, then whatever the native
-// unload takes) is the order those threads use too. Nothing on the
-// content-stream thread takes it, so the NavMesh change region the unloads
-// enter cannot close a cycle through it.
+// Deadlock: processJobCS is taken by the NavMesh background thread and the
+// workers (through nm_workers_internal.h helpers) and, on the main thread, by
+// NavMeshTryLockProcessJobFor here, in the unload and in the retention hold.
+// Each takes it holding no other lock — so nothing waits for processJobCS
+// while holding a lock the unloads need, and the order here (processJobCS,
+// then whatever the native unload takes) is the order those threads use too.
+// Nothing on the content-stream thread takes it, so the NavMesh change region
+// the unloads enter cannot close a cycle through it.
 static const DWORD RESET_PJ_LOCK_TIMEOUT_MS = 10000;
 
 // Furthest lifecycle stage the mod's tracking records for a zone, in the same

@@ -91,9 +91,7 @@ bool NbrSeedJobTakeLate()
 	t_nbrJob.late = 0;
 	return late;
 }
-} // namespace nm_workers_detail
 
-namespace nm_workers_detail {
 nmgGetSeedPointsAdj_t orig_getSeedPointsAdj = NULL;
 } // namespace nm_workers_detail
 
@@ -120,9 +118,6 @@ nmgGetSeedPointsAdj_t orig_getSeedPointsAdj = NULL;
 
 namespace nm_nbr_seeds_detail {
 enum { NBR_SI_NONE = 0, NBR_SI_SHIP, NBR_SI_PLACE, NBR_SI_NOFILE, NBR_SI_LATE, NBR_SI_HBAD };
-} // namespace nm_nbr_seeds_detail
-using namespace nm_nbr_seeds_detail;
-namespace nm_nbr_seeds_detail {
 enum { NBR_REC_SHIP = 1, NBR_REC_PLACE, NBR_REC_NOFILE };
 } // namespace nm_nbr_seeds_detail
 using namespace nm_nbr_seeds_detail;
@@ -479,7 +474,7 @@ namespace nm_workers_detail {
 // refused after the worker retire has returned (NbrBuildCell).
 void NbrSeedPrefetch(uintptr_t realNMG, uintptr_t jobZone)
 {
-	if (!NmNbrSeedStandInActive() || InterlockedCompareExchange(&navmesh::g_nmCache.g_nbrSeedHookState, 0, 0) != 1)
+	if (!NmNbrSeedStandInActive() || InterlockedCompareExchange(&navmesh::g_nmCache.g_nbrSeedHookState, 0, 0) != NBRSEED_HOOK_OK)
 		return;
 	if (NbrStopSeen() || !realNMG || !jobZone)
 		return;
@@ -732,7 +727,7 @@ void NbrSeedJobBegin(int jobType, int gridX, int gridY)
 {
 	memset(&t_nbrJob, 0, sizeof(t_nbrJob));
 	if (jobType != 0 || !NmNbrSeedHookWanted()
-	    || InterlockedCompareExchange(&navmesh::g_nmCache.g_nbrSeedHookState, 0, 0) != 1)
+	    || InterlockedCompareExchange(&navmesh::g_nmCache.g_nbrSeedHookState, 0, 0) != NBRSEED_HOOK_OK)
 		return;
 	t_nbrJob.gridX = gridX;
 	t_nbrJob.gridY = gridY;

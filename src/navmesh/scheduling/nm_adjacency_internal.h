@@ -16,8 +16,10 @@ enum { MODE_OFF = 0, MODE_ENFORCE, MODE_COUNT, MODE_COUNT_NO_OBSERVER };
 // thread's drain observer change g_reg, g_regSeq and g_pubHint under the
 // generator queue lock +152, except the bg thread's own look stamps
 // (bgLastLook, bgLooked), which only it writes, unlocked; the stitch checker
-// copies g_reg without the lock, sequence-checked. t_own and t_ownTask are the claiming thread's own claim;
-// s_nextBeat is the main-thread heartbeat's.
+// copies g_reg without the lock, sequence-checked. InstallNavMeshAdjacency
+// also initialises g_reg and sets s_nextBeat to 0 at the same install. t_own
+// and t_ownTask are the claiming thread's own claim; s_nextBeat is the
+// main-thread heartbeat's.
 extern volatile LONG s_checkerPresent;
 extern int s_mode;
 extern bool s_observerInstalled;

@@ -68,9 +68,6 @@ namespace nm_workers_detail {
 volatile long g_retireReturned        = 0;
 volatile long g_workerCleanupInFlight = 0;
 
-} // namespace nm_workers_detail
-
-namespace nm_workers_detail {
 // A worker (or the bg thread's neighbour-seed load), before touching Havok
 // memory or the generator after the stop may have been seen. True: go ahead,
 // then call WorkerCleanupEnd. False: the retire has returned, so skip it; a
@@ -159,10 +156,6 @@ void WorkerBusyLeave()
 	}
 	NoteBusyBridge(BusyBridgeLeave(GameBusyBridgeOps(nmg)));
 }
-} // namespace nm_workers_detail
-
-namespace nm_workers_detail
-{
 
 // The bridge on the real generator: its queue lock, taken the way every other
 // +152 site takes it, and the two words.
@@ -211,9 +204,6 @@ void NoteBusyBridge(bool held)
 	if (!held)
 		InterlockedIncrement(&navmesh::g_nmCache.nmBusyBridgeViolCount);
 }
-
-
-
 } // namespace nm_workers_detail
 using namespace nm_workers_detail;
 

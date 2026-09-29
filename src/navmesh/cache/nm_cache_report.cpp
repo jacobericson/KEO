@@ -263,7 +263,7 @@ static void AppendNeighbourSeed(std::ostringstream& ss)
 	// false, off(hook) when the hook was refused (nothing counted then).
 	if (!NmNbrSeedHookWanted())
 		ss << " nbrSeed=off(ini)";
-	else if (InterlockedCompareExchange(&navmesh::g_nmCache.g_nbrSeedHookState, 0, 0) == 2)
+	else if (InterlockedCompareExchange(&navmesh::g_nmCache.g_nbrSeedHookState, 0, 0) == NBRSEED_HOOK_FAILED)
 		ss << " nbrSeed=off(hook)";
 	else
 		ss << " nbrSeed=live" << InterlockedCompareExchange(&navmesh::g_nmCache.nmNbrSeedLive, 0, 0)
@@ -278,7 +278,7 @@ static void AppendStandIn(std::ostringstream& ss)
 {
 	// The stand-in inject (nm_cache_core.h): what the stand-in did where the
 	// game added nothing. Printed while the feature is on; off(...) says why not.
-	if (NmNbrSeedHookWanted() && InterlockedCompareExchange(&navmesh::g_nmCache.g_nbrSeedHookState, 0, 0) != 2)
+	if (NmNbrSeedHookWanted() && InterlockedCompareExchange(&navmesh::g_nmCache.g_nbrSeedHookState, 0, 0) != NBRSEED_HOOK_FAILED)
 	{
 		if (InterlockedCompareExchange(&navmesh::g_nmCache.g_nbrSeedStandInRefused, 0, 0))
 		{

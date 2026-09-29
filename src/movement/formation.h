@@ -72,8 +72,9 @@ int       FormationSlotForCharacter(uintptr_t character);
 uintptr_t FormationFirstAliveMember(int slot);
 // Re-dispatch the travel order (grp.dest) to every alive member, once per
 // boundary move: returns false while the per-group cooldown is active.
-// Members whose last requested destination already equals grp.dest get a
-// 3-unit offset so CharMovement::setDestination does not drop the order.
+// A member whose last requested destination is within 8 units of grp.dest is
+// sent a point moved 8 units away, so CharMovement::setDestination does not
+// drop the order.
 bool      FormationReissueTravel(int slot, const char* why, double now);
 // True if (x,z) is within sqrt(maxDistSq) of the active group's destination.
 bool      FormationGroupDestNear(int slot, float x, float z, float maxDistSq);

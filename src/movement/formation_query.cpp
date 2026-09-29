@@ -38,6 +38,12 @@ bool FormationGroupDestNear(int slot, float x, float z, float maxDistSq)
 	return dx * dx + dz * dz <= maxDistSq;
 }
 
+// FormationRebaseReissueClocks shifts the group's reissue clock after a pause.
+// A field that changes FormationGroup's size (so does
+// MAX_FORMATION_MEMBERS_LIMIT) stops the build here: decide whether it is a
+// clock the rebase must shift, then update the size. A field that fits in
+// existing padding, or a same-size change, leaves the size as it was.
+static_assert(sizeof(FormationGroup) == 2112, "FormationGroup changed: FormationRebaseReissueClocks must shift every clock field");
 void FormationRebaseReissueClocks(double pausedSeconds)
 {
 	if (pausedSeconds <= 0.0) return;

@@ -154,7 +154,6 @@ volatile LONG g_buildLockOwnerState = 0;   // BL_R1 or BL_TAIL
 
 static const int BL_ZERO_ZONE[2] = { 0, 0 };   // lockZone ignores the zone
 
-
 static uintptr_t ReturnRva(void* ra) { return (uintptr_t)ra - gameBase; }
 
 // First call from an unrecognised site, logged once per hook. A caller outside

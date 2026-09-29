@@ -184,7 +184,7 @@ static uintptr_t BgFirstDispatchPhase(void* thisNMG)
 		if (!InterlockedCompareExchange(&poolDecided, 0, 0))
 		{
 			NmPoolDecision d = NmPoolDecide(
-				InterlockedCompareExchange(&navmesh::g_nmCache.lazyHooksInstalled, 0, 0) == 2,
+				InterlockedCompareExchange(&navmesh::g_nmCache.lazyHooksInstalled, 0, 0) == NM_LAZY_DONE,
 				HookRowInstalled(HOOK_NAVMESH_STOP),
 				HookRowInstalled(HOOK_BUILD_COLLISION_IMPL));
 			if (d != NMPOOL_WAIT && !InterlockedCompareExchange(&poolDecided, 1, 0))

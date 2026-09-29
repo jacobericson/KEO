@@ -12,8 +12,8 @@ static const ConfigChoice kWorkerChoices[] =
 static_assert(sizeof(kWorkerChoices) / sizeof(kWorkerChoices[0]) == NAVMESH_WORKER_COUNT + 1,
               "a worker choice per count up to NAVMESH_WORKER_COUNT, and Auto");
 // The worker-count row's upper bound is written as a literal: cl 16 turns an
-// explicit cast of the named constant into a run-time initializer for the
-// table and places the table in writable data.
+// explicit cast of the named constant into a run-time initializer for this
+// table and places it in writable data.
 static_assert(NAVMESH_WORKER_COUNT == 6, "the navmeshWorkerCount row's upper bound is 6.0f");
 
 namespace navmesh {
