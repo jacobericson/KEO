@@ -236,3 +236,4 @@ src\pathfind\pathfind_config.cpp
 src\movement\movement_config.cpp
 src\fixes\fixes_config.cpp
 src\gui\gui_config.cpp
+src\navmesh\jobs\nm_unload_fence_policy.cpp

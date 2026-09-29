@@ -6,6 +6,7 @@
 #include "navmesh/cache/nm_cache_core.h"
 #include "navmesh/cache/nm_disk_cache.h"
 #include "navmesh/generation/nm_quality.h"
+#include "navmesh/jobs/nm_unload_fence_policy.h"
 
 
 // Worker pool state
@@ -87,63 +88,62 @@ enum NavMeshPjLockResult
 };
 
 // --------------------------------------------------------------------
-// Mod-unload protocol. Frozen API: other code is written against it.
+// Mod-unload protocol: the fence below is the API; its order is nm_unload_fence_policy.h's.
 // --------------------------------------------------------------------
 //
 // The mod unloading one of its own zones during play (ZoneManager::
 // deactivateZoneMap) frees the zone's content and terrain collision while the
 // NavMesh bg thread and the workers may be reading them: the claim-time
 // building hash reads the content with no lock, and processJobAlt reads the
-// terrain under processJobCS. The protocol keeps every mod NavMesh thread off
+// terrain under processJobCS. The fence keeps every mod NavMesh thread off
 // the zone for the duration. Main thread only, holding no mod lock, in this
 // order:
 //
-//   if (NavMeshBeginZoneUnload(zone) == NM_UL_BEGUN)
+//   NavMeshUnloadFence fence;
+//   NmFenceResult r = fence.TryBegin(zone);
+//   if (NmFenceProceeds(r))
 //   {
-//       NavMeshPjLockResult pj = NavMeshTryLockProcessJobFor(0, NULL);
-//       if (pj == NM_PJLOCK_HELD || pj == NM_PJLOCK_NONE)
-//       {
-//           ... ZoneManager::deactivateZoneMap(zm, zone, save) ...
-//           if (pj == NM_PJLOCK_HELD)
-//               NavMeshUnlockProcessJob();
-//       }
-//       NavMeshEndZoneUnload();   // always, whatever pj was
+//       ... ZoneManager::deactivateZoneMap(zm, zone, save) ...
+//       fence.Release();
 //   }
-//   // NM_UL_REFUSED / TIMEOUT: nothing unloaded; retry the zone on a later
-//   // frame (after a TIMEOUT, NavMeshRequestPjPriority). NM_UL_UNAVAILABLE:
-//   // never retry; this build or session has no sound protocol
-//   // (NavMeshZoneUnloadUnavailable says why).
+//   // REFUSED_*, DEFER_PJ: nothing unloaded; retry the zone on a later
+//   // frame (after DEFER_PJ the priority is already asked). UNAVAILABLE:
+//   // never retry (NavMeshZoneUnloadUnavailable says why).
 //
-// Begin refuses until processJobCS exists, so NM_PJLOCK_NONE never follows a
-// true Begin.
+// With caching on, TryBegin refuses until processJobCS exists, so
+// NM_FENCE_NO_LOCK follows only the caching-off begin, which publishes nothing.
 //
 // const char* NavMeshZoneUnloadUnavailable()
-//   NULL when Begin can succeed in this build and session (now or later);
+//   NULL when TryBegin can succeed in this build and session (now or later);
 //   otherwise a static reason: "caching off but the dispatchJob hook ran". With caching off (the INI key, or the dispatchJob
 //   hook failed to install) and the hook never run, no mod code runs on a
-//   NavMesh thread at all, so it answers NULL and Begin returns NM_UL_BEGUN
-//   at once without publishing anything (vanilla's own exposure only). Main
+//   NavMesh thread at all, so it answers NULL and TryBegin begins at once
+//   without publishing anything (vanilla's own exposure only). Main
 //   thread.
 //
-// NavMeshUnloadBegin NavMeshBeginZoneUnload(void* zone)
-//   NM_UL_UNAVAILABLE whenever NavMeshZoneUnloadUnavailable is non-NULL.
+// NmFenceResult NavMeshUnloadFence::TryBegin(void* zone)
+//   NM_FENCE_UNAVAILABLE whenever NavMeshZoneUnloadUnavailable is non-NULL.
 //   Otherwise takes the generator's queue lock (NMG+152, the primitives
 //   PrioritizeNavMeshQueue uses), walks the job queue (NMG+136 via Task::next)
 //   and refuses, releasing the lock, if any job of any type names `zone`
-//   (counted ulSkipJob=). Otherwise publishes the zone as "being unloaded"
-//   before releasing the lock: from then on no worker and no bg claim takes a
-//   job for it (they stay queued; ulHeld= counts claim attempts that left one).
-//   Then refuses if any worker or the bg thread still has a job for the zone
-//   in flight (its claimed-zone slot, written under the same lock at claim and
-//   cleared when the job is completely done), clearing the publication first
-//   (ulSkipClaim=). NM_UL_BEGUN when the zone is free of mod NavMesh work;
-//   it stays so until NavMeshEndZoneUnload. NM_UL_REFUSED (transient) also
-//   when: zone is NULL, processJobCS is not initialised, no dispatch has run
-//   yet (no generator known), or an earlier Begin has not been ended. Never
-//   holds the queue lock on
-//   return, and never reads NMG+232 or calls NavMeshGenerator::hasJob (both
-//   unlocked). The +152 lock is a blocking timed_lock, held only for queue
-//   operations (the same as PrioritizeNavMeshQueue).
+//   (NM_FENCE_REFUSED_JOB, counted ulSkipJob=). Otherwise publishes the zone
+//   as "being unloaded" before releasing the lock: from then on no worker and
+//   no bg claim takes a job for it (they stay queued; ulHeld= counts claim
+//   attempts that left one). Then refuses if any worker or the bg thread
+//   still has a job for the zone in flight (its claimed-zone slot, written
+//   under the same lock at claim and cleared when the job is completely
+//   done), clearing the publication first (NM_FENCE_REFUSED_CLAIM,
+//   ulSkipClaim=). NM_FENCE_REFUSED (transient) when: zone is NULL,
+//   processJobCS is not initialised, no dispatch has run yet (no generator
+//   known), or an earlier publication has not been ended. Once begun, the
+//   zone stays free of mod NavMesh work until Release, and TryBegin makes one
+//   NavMeshTryLockProcessJobFor(0, ...): NM_FENCE_HELD when it takes
+//   processJobCS; when it fails, TryBegin ends the publication and calls
+//   NavMeshRequestPjPriority before returning NM_FENCE_DEFER_PJ. Never
+//   holds the queue lock on return, and never reads NMG+232 or calls
+//   NavMeshGenerator::hasJob (both unlocked). The +152 lock is a blocking
+//   timed_lock, held only for queue operations (the same as
+//   PrioritizeNavMeshQueue).
 //
 // NavMeshTryLockProcessJobFor(0, ...)
 //   Exactly one TryEnterCriticalSection. Fails while any MISS, clone
@@ -165,9 +165,10 @@ enum NavMeshPjLockResult
 // bool NavMeshPjPriorityActive()
 //   The request is up now (raised and not expired). Main thread.
 //
-// void NavMeshEndZoneUnload()
-//   Clears the publication. Call it after every true Begin, after releasing
-//   processJobCS (or after a failed try). Idempotent.
+// void NavMeshUnloadFence::Release()
+//   After NM_FENCE_HELD or NM_FENCE_NO_LOCK: releases processJobCS when
+//   held, then clears the publication. After any other result, or a second
+//   time, it releases nothing.
 //
 // bool NavMeshWorkersIdle()
 //   Interlocked read of workerBusyCount == 0, safe from the main thread.
@@ -178,13 +179,6 @@ enum NavMeshPjLockResult
 //   publication above for anything stronger). It is not needed by the protocol above,
 //   whose per-zone test is exact.
 
-enum NavMeshUnloadBegin
-{
-	NM_UL_REFUSED = 0,   // transient: retry the zone on a later frame
-	NM_UL_BEGUN,         // free of mod NavMesh work; NavMeshEndZoneUnload must follow
-	NM_UL_UNAVAILABLE    // can never pass in this build or session
-};
-
 NavMeshPjLockResult NavMeshTryLockProcessJobFor(DWORD timeoutMs, DWORD* waitedMs);
 // Only after NM_PJLOCK_HELD.
 void NavMeshUnlockProcessJob();
@@ -192,10 +186,8 @@ void NavMeshUnlockProcessJob();
 // from here on. Before it, NavMeshTryLockProcessJobFor answers NM_PJLOCK_NONE.
 void NavMeshMarkProcessJobLockReady();
 const char* NavMeshZoneUnloadUnavailable();
-NavMeshUnloadBegin NavMeshBeginZoneUnload(void* zone);
-void NavMeshEndZoneUnload();
 // Raises the save-load reset's admission gate inside one hold of the queue
-// lock (+152), as NavMeshBeginZoneUnload publishes its zone; directly when no
+// lock (+152), as NavMeshUnloadFence::TryBegin publishes its zone; directly when no
 // dispatch has run yet. Main thread, no mod lock held.
 struct ZoneResetGate;
 void NavMeshRaiseResetGateLocked(ZoneResetGate* g);
@@ -228,24 +220,26 @@ bool NavMeshStopSeen();
 // claim covers the whole job, generation included).
 bool NavMeshZoneClaimed(void* zone);
 
-// Releases the pair, in the one order that is safe, on every exit including
-// an unwind: processJobCS first and only when this caller took it, then the
-// unload publication. A processJobCS left held parks every generation for
-// the rest of the session, and an un-ended publication refuses every later
-// unload.
-struct NavMeshUnloadFenceScope
+// The mod-unload fence. Main thread only, holding no mod lock. TryBegin
+// publishes the zone under the queue lock (+152), refusing it while a job for
+// it is queued or claimed, then tries processJobCS once with no wait; when it
+// is busy, it ends the publication and asks the MISS entry points to stand
+// aside before returning NM_FENCE_DEFER_PJ. After NM_FENCE_HELD or
+// NM_FENCE_NO_LOCK the caller unloads, then calls Release, which unlocks
+// processJobCS when held and then ends the publication. The destructor
+// releases only what the caller did not, on a C++ unwind.
+struct NavMeshUnloadFence
 {
-	bool pjHeld;
-	explicit NavMeshUnloadFenceScope(bool held) : pjHeld(held) {}
-	~NavMeshUnloadFenceScope()
-	{
-		if (pjHeld)
-			NavMeshUnlockProcessJob();
-		NavMeshEndZoneUnload();
-	}
+	NmFenceResult result;
+
+	NavMeshUnloadFence() : result(NM_FENCE_RELEASED) {}
+	~NavMeshUnloadFence() { Release(); }
+	NmFenceResult TryBegin(void* zone);
+	void Release();
+
 private:
-	NavMeshUnloadFenceScope(const NavMeshUnloadFenceScope&);
-	NavMeshUnloadFenceScope& operator=(const NavMeshUnloadFenceScope&);
+	NavMeshUnloadFence(const NavMeshUnloadFence&);
+	NavMeshUnloadFence& operator=(const NavMeshUnloadFence&);
 };
 
 

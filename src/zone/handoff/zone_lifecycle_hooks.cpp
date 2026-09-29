@@ -83,10 +83,11 @@ static bool __fastcall hook_zoneMapUpdate(void* zoneEntry)
 
 	// The zone's navmesh goes with it, so no mod navmesh thread may be
 	// working on the cell and none may start while the teardown runs. This
-	// call blocks briefly on the generator's queue mutex, which is why the
-	// decision above lets at most one cell per frame reach it.
-	NavMeshUnloadBegin ub = NavMeshBeginZoneUnload(zoneEntry);
-	if (ub == NM_UL_UNAVAILABLE)
+	// blocks briefly on the generator's queue mutex, which is why the decision
+	// above lets at most one cell per frame reach it.
+	NavMeshUnloadFence fence;
+	NmFenceResult fr = fence.TryBegin(zoneEntry);
+	if (fr == NM_FENCE_UNAVAILABLE)
 	{
 		// No such fence exists in this build or this session, and none ever
 		// will. Holding on that would hold every cell forever, so the cell
@@ -95,30 +96,21 @@ static bool __fastcall hook_zoneMapUpdate(void* zoneEntry)
 		ZoneRetentionNoteReleased(zoneEntry, !kept, false);
 		return kept;
 	}
-	if (ub != NM_UL_BEGUN)
+	if (fr == NM_FENCE_DEFER_PJ)
+	{
+		// A zero-wait try lost to a generation; the fence asked the entry
+		// points to stand aside, so one of the next frames wins the lock.
+		ZoneRetentionHoldInstead(zoneEntry, ZONE_RETENTION_DEFER_PJ);
+		return orig_zoneMapUpdate(zoneEntry);
+	}
+	if (!NmFenceProceeds(fr))
 	{
 		ZoneRetentionHoldInstead(zoneEntry, ZONE_RETENTION_DEFER_NAV);
 		return orig_zoneMapUpdate(zoneEntry);
 	}
 
-	// Zero wait: a blocking acquisition here would stall the frame for as
-	// long as a generation holds the lock, once per cell.
-	NavMeshPjLockResult pj = NavMeshTryLockProcessJobFor(0, NULL);
-	if (pj == NM_PJLOCK_TIMEOUT)
-	{
-		NavMeshEndZoneUnload();
-		// The generation entry points stand aside for a couple of seconds, so
-		// one of the next frames wins the lock.
-		NavMeshRequestPjPriority();
-		ZoneRetentionHoldInstead(zoneEntry, ZONE_RETENTION_DEFER_PJ);
-		return orig_zoneMapUpdate(zoneEntry);
-	}
-
-	bool kept;
-	{
-		NavMeshUnloadFenceScope scope(pj == NM_PJLOCK_HELD);
-		kept = orig_zoneMapUpdate(zoneEntry);
-	}
+	bool kept = orig_zoneMapUpdate(zoneEntry);
+	fence.Release();
 	ZoneRetentionNoteReleased(zoneEntry, !kept, true);
 	return kept;
 }

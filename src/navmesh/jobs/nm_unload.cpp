@@ -89,7 +89,7 @@ void ClaimZoneClear(int slot)
 //    +152 orders those writes before the slot reads below, so a claim made
 //    before the walk is always visible; one made after cannot be for this
 //    zone (point 2). A zone with a claim in flight is refused (ulSkipClaim=).
-// 4. The rest runs under processJobCS (the caller's NavMeshTryLockProcessJobFor
+// 4. The rest runs under processJobCS (the fence's NavMeshTryLockProcessJobFor
 //    with a timeout of 0): no processJobAlt, no type 2/3/4 dispatch and no
 //    clone snapshot can run during the unload. Three kinds of work run with
 //    processJobCS released: a worker clone's realGenerate, which reads only
@@ -129,7 +129,17 @@ const char* NavMeshZoneUnloadUnavailable()
 	return NULL;
 }
 
-NavMeshUnloadBegin NavMeshBeginZoneUnload(void* zone)
+namespace nm_unload_detail {
+enum NavMeshUnloadBegin
+{
+	NM_UL_REFUSED = 0,   // transient: retry the zone on a later frame
+	NM_UL_BEGUN,         // free of mod NavMesh work; NavMeshEndZoneUnload must follow
+	NM_UL_UNAVAILABLE    // can never pass in this build or session
+};
+} // namespace nm_unload_detail
+using namespace nm_unload_detail;
+
+static NavMeshUnloadBegin NavMeshBeginZoneUnload(void* zone)
 {
 	if (!zone)
 		return NM_UL_REFUSED;
@@ -187,9 +197,44 @@ NavMeshUnloadBegin NavMeshBeginZoneUnload(void* zone)
 	return NM_UL_BEGUN;
 }
 
-void NavMeshEndZoneUnload()
+static void NavMeshEndZoneUnload()
 {
 	InterlockedExchangePointer(&g_unloadingZone, NULL);
+}
+
+// The fence's operations, bound to this protocol. Main thread.
+static int  FenceBegin(void* zone)
+{
+	NavMeshUnloadBegin b = NavMeshBeginZoneUnload(zone);
+	return b == NM_UL_BEGUN ? NM_FENCE_BEGIN_OK : b == NM_UL_UNAVAILABLE ? NM_FENCE_BEGIN_UNAVAILABLE : NM_FENCE_BEGIN_REFUSED;
+}
+static long FenceSkipJob(void*)   { return InterlockedCompareExchange(&navmesh::g_nmCache.nmUlSkipJob, 0, 0); }
+static long FenceSkipClaim(void*) { return InterlockedCompareExchange(&navmesh::g_nmCache.nmUlSkipClaim, 0, 0); }
+static int  FenceTryPj(void*)
+{
+	NavMeshPjLockResult pj = NavMeshTryLockProcessJobFor(0, NULL);
+	return pj == NM_PJLOCK_HELD ? NM_FENCE_PJ_HELD : pj == NM_PJLOCK_TIMEOUT ? NM_FENCE_PJ_TIMEOUT : NM_FENCE_PJ_NONE;
+}
+static void FenceUnlockPj(void*)  { NavMeshUnlockProcessJob(); }
+static void FenceEnd(void*)       { NavMeshEndZoneUnload(); }
+static void FencePriority(void*)  { NavMeshRequestPjPriority(); }
+
+static NmFenceOps FenceOps(void* zone)
+{
+	NmFenceOps ops = { zone, &FenceBegin, &FenceSkipJob, &FenceSkipClaim, &FenceTryPj,
+	                   &FenceUnlockPj, &FenceEnd, &FencePriority };
+	return ops;
+}
+
+NmFenceResult NavMeshUnloadFence::TryBegin(void* zone)
+{
+	result = NmFenceTryBegin(FenceOps(zone));
+	return result;
+}
+
+void NavMeshUnloadFence::Release()
+{
+	NmFenceRelease(&result, FenceOps(NULL));
 }
 
 // Takes the generator's queue lock (+152) around the raise and nothing under

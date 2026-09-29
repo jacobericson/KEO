@@ -434,7 +434,7 @@ char BgDispatchCtx::ProcessPicked()
 	// The bg thread's claim markers, raised BEFORE the unlock exactly as a
 	// worker's are (WorkerTryDequeueAny): the busy bridge (so workerBusyCount
 	// covers this job from the unlink, which is what NavMeshWorkersIdle reads)
-	// and the claimed-zone slot (so NavMeshBeginZoneUnload sees this zone as in
+	// and the claimed-zone slot (so NavMeshUnloadFence::TryBegin sees this zone as in
 	// flight), so the job is never invisible to either check. Released once, after
 	// ProcessNavMeshJob returns (its L2 write included, as for a worker), or on
 	// the vanilla content-check return below.

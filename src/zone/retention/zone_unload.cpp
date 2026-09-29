@@ -44,21 +44,22 @@ using namespace zone_life_detail;
 //      applies                                                          -> state
 //   5b. a +176 zone: terrain collision loaded, or its record at least
 //      60 s old (the optional soft precondition)                        -> state
-//   6. NavMeshBeginZoneUnload(zone): refused for a queued job -> job, a
+//   6. NavMeshUnloadFence::TryBegin(zone): refused for a queued job -> job, a
 //      claim in flight -> claim, anything else (no dispatch yet, an
-//      un-Ended Begin) -> state; NM_UL_UNAVAILABLE -> as 1
-//   7. NavMeshTryLockProcessJobFor(0): one TryEnterCriticalSection;
-//      TIMEOUT while any MISS holds processJobCS                         -> pj
-//      (and NavMeshRequestPjPriority: the MISS entry points stand aside
-//      for up to 2 s, so a retry on the next frames can win)
-// then deactivateZoneMap(zm, zone, save), NavMeshUnlockProcessJob (only after
-// NM_PJLOCK_HELD) and NavMeshEndZoneUnload (after every true Begin), both
-// also on unwind. No mod lock is held on entry, NMG+152 is never held across
-// the unload (Begin releases it before returning), and neither
-// NavMeshGenerator::hasJob nor NMG+232 is read. After the unload: the record
-// is released, any working-table entry dropped, the island overlay rebuilt,
-// and the unload timed (zlMs=). Deferrals are expected: a zero-timeout try
-// fails for the whole of any navmesh MISS (2-10 s on a cold cache).
+//      un-ended publication) -> state; NM_FENCE_UNAVAILABLE -> as 1
+//   7. then, inside TryBegin, one zero-wait TryEnterCriticalSection;
+//      NM_FENCE_DEFER_PJ while any MISS holds processJobCS              -> pj
+//      (TryBegin has asked NavMeshRequestPjPriority: the MISS entry points
+//      stand aside for up to 2 s, so a retry on the next frames can win)
+// then deactivateZoneMap(zm, zone, save) and NavMeshUnloadFence::Release,
+// which unlocks processJobCS (only after NM_FENCE_HELD) and then ends the
+// publication; its destructor does both on an unwind. No mod lock is held on
+// entry, NMG+152 is never held across the unload (TryBegin releases it before
+// returning), and neither NavMeshGenerator::hasJob nor NMG+232 is read.
+// After the unload: the record is released, any working-table entry dropped,
+// the island overlay rebuilt, and the unload timed (zlMs=). Deferrals are
+// expected: a zero-timeout try fails for the whole of any navmesh MISS (2-10 s
+// on a cold cache).
 
 
 static const double ZL_DRAIN_WAIT_CAP_SEC = 30.0;   // precondition 5's bound
@@ -260,39 +261,27 @@ bool UnloadModZone(void* zm, void* zone, bool save, const char* why)
 		}
 	}
 
-	// 6. Keep every mod NavMesh thread off the zone.
-	long skipJob0   = InterlockedCompareExchange(&navmesh::g_nmCache.nmUlSkipJob, 0, 0);
-	long skipClaim0 = InterlockedCompareExchange(&navmesh::g_nmCache.nmUlSkipClaim, 0, 0);
-	NavMeshUnloadBegin ub = NavMeshBeginZoneUnload(zone);
-	if (ub == NM_UL_UNAVAILABLE)
+	// 6-7. Keep every mod NavMesh thread off the zone, then processJobCS with
+	// no wait: every MISS in flight has finished.
+	NavMeshUnloadFence fence;
+	NmFenceResult fr = fence.TryBegin(zone);
+	if (fr == NM_FENCE_UNAVAILABLE)
 	{
 		ZlUnloadUnavailable();   // logs the reason once
 		g_zlLastOutcome = ZLO_UNAVAILABLE;
 		return false;
 	}
-	if (ub != NM_UL_BEGUN)
+	if (fr == NM_FENCE_DEFER_PJ)
 	{
-		int kind = ZLD_STATE;
-		// Begin runs on the main thread only, so a change in either counter
-		// across the call is this call's refusal.
-		if (InterlockedCompareExchange(&navmesh::g_nmCache.nmUlSkipJob, 0, 0) != skipJob0)
-			kind = ZLD_JOB;
-		else if (InterlockedCompareExchange(&navmesh::g_nmCache.nmUlSkipClaim, 0, 0) != skipClaim0)
-			kind = ZLD_CLAIM;
-		ZlDefer(kind);
+		// The fence ended the publication and asked the MISS threads to
+		// stand aside (2 s, never extended; ulPrio= counts the raises). The
+		// caller retries on the next frames while it stands.
+		ZlDefer(ZLD_PJ);
 		return false;
 	}
-
-	// 7. processJobCS, zero wait: every MISS in flight has finished.
-	NavMeshPjLockResult pj = NavMeshTryLockProcessJobFor(0, NULL);
-	if (pj == NM_PJLOCK_TIMEOUT)
+	if (!NmFenceProceeds(fr))
 	{
-		NavMeshEndZoneUnload();
-		ZlDefer(ZLD_PJ);
-		// Ask the MISS threads to stand aside (non-blocking, 2 s,
-		// never extended; ulPrio= counts the raises). The caller retries on
-		// the next frames while it stands (NavMeshPjPriorityActive).
-		NavMeshRequestPjPriority();
+		ZlDefer(fr == NM_FENCE_REFUSED_JOB ? ZLD_JOB : fr == NM_FENCE_REFUSED_CLAIM ? ZLD_CLAIM : ZLD_STATE);
 		return false;
 	}
 
@@ -302,13 +291,13 @@ bool UnloadModZone(void* zm, void* zone, bool save, const char* why)
 	LARGE_INTEGER q0, q1;
 	QueryPerformanceCounter(&q0);
 	{
-		NavMeshUnloadFenceScope scope(pj == NM_PJLOCK_HELD);
 		// The removal half of the same boundary the finalize opens: this
 		// takes the cell's objects, and their collision, back out of the
 		// world.
 		ZoneGeometryMutationScope geomScope;
 		fn_unloadZoneFromReset(zm, zone, save ? 1 : 0);
 	}
+	fence.Release();
 	QueryPerformanceCounter(&q1);
 	double ms = QPCToMs(q0, q1);
 
@@ -351,7 +340,7 @@ bool UnloadModZone(void* zm, void* zone, bool save, const char* why)
 		   << " save=" << (save ? 1 : 0)
 		   << " was=" << (loading ? 1 : 0) << "/" << (access ? 1 : 0)
 		   << " flags=0x" << std::hex << (int)flagsBefore << std::dec
-		   << " pj=" << ((pj == NM_PJLOCK_HELD) ? "held" : "none")
+		   << " pj=" << ((fr == NM_FENCE_HELD) ? "held" : "none")
 		   << std::fixed << std::setprecision(1)
 		   << " ms=" << ms
 		   << " age=";

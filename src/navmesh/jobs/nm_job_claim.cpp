@@ -238,7 +238,7 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 	int jobType = -1;
 
 	// The zone the main thread is unloading, read once under the lock
-	// NavMeshBeginZoneUnload publishes it under. Its jobs stay queued.
+	// NavMeshUnloadFence::TryBegin publishes it under. Its jobs stay queued.
 	uintptr_t unloading = UnloadingZone();
 	bool heldForUnload = false;
 
@@ -345,7 +345,7 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 	// worker loop body, on every exit path.
 	WorkerBusyEnter(nmg);
 	// The claim marker for the mod-unload protocol, also before the unlock:
-	// from here until the worker loop clears it, NavMeshBeginZoneUnload refuses
+	// from here until the worker loop clears it, NavMeshUnloadFence::TryBegin refuses
 	// this zone (the building hash below reads its content with no lock).
 	ClaimZoneSet(claimSlot, jobZone);
 	claimedOut->resetRaises = ZoneResetGateRaises(&g_zoneResetGate);

@@ -384,8 +384,8 @@ struct NavMeshCacheState
 
 	// Mod-unload protocol (nm_workers.h). Cumulative, printed on the stats
 	// line (DEV and PROD) so a session can see unloads being deferred:
-	//   ulSkipJob=   NavMeshBeginZoneUnload refused: a job for the zone was queued
-	//   ulSkipClaim= NavMeshBeginZoneUnload refused: a claim for the zone in flight
+	//   ulSkipJob=   NavMeshUnloadFence::TryBegin refused: a job for the zone was queued
+	//   ulSkipClaim= NavMeshUnloadFence::TryBegin refused: a claim for the zone in flight
 	//   ulSkipPj=    processJobCS try failed while an unload was published
 	//   ulHeld=      claim attempts that left the unloading zone's job queued
 	//                (printed only when non-zero)
