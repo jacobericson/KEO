@@ -94,9 +94,7 @@ void ZonePrepLedgerObserveCell(ZonePrepLedger* l, int cellX, int cellY, bool f17
 // incarnation.
 bool ZonePrepLedgerRelease(ZonePrepLedger* l, int cellX, int cellY);
 
-// Publishes/reads the lock-free per-cell classification. Publish is main-
-// thread only; read is safe from any thread.
-void ZonePrepLedgerPublishClass(ZonePrepLedger* l, int cellX, int cellY, int cls);
+// Reads the lock-free per-cell classification, from any thread.
 int  ZonePrepLedgerReadClass(const ZonePrepLedger* l, int cellX, int cellY);
 
 void ZonePrepLedgerSetGameOwnedBypass(ZonePrepLedger* l, bool on);

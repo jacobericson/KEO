@@ -1,5 +1,6 @@
 #include <cstdio>
 #include "zone/zone_ledger.h"
+#include "zone_prep_ledger_test_writer.h"
 
 #include "check.h"
 static bool Near(double a, double b) { double d = a - b; return d < 0.001 && d > -0.001; }
@@ -430,6 +431,56 @@ static void TestAdoptionLatency()
 	Check(Near(b.readyToActive.max, 9999.0), "max still reflects a dropped sample");
 }
 
+// The class word follows the state: each legal edge publishes its state's
+// class, a refused edge publishes nothing, Retiring keeps the class it had,
+// and a release writes None. Where the class before an edge already equals
+// the one it publishes, it is first cleared to None, so every row's own
+// store is observed.
+static void TestClassFollowsState()
+{
+	ZonePrepLedger l;
+	ZonePrepLedgerInit(&l);
+
+	Check(ZonePrepLedgerBegin(&l, 5, 6, 1, 0.0), "class: begin");
+	Check(ZonePrepLedgerReadClass(&l, 5, 6) == ZONE_CLASS_PRIVATE, "class: a shell cell reads private");
+	ZonePrepLedgerPublishClass(&l, 5, 6, ZONE_CLASS_NONE);
+	Check(ZonePrepLedgerSetState(&l, 5, 6, ZONE_STATE_PRIVATE_CONTENT, 1.0), "class: content");
+	Check(ZonePrepLedgerReadClass(&l, 5, 6) == ZONE_CLASS_PRIVATE, "class: a content cell reads private");
+	ZonePrepLedgerPublishClass(&l, 5, 6, ZONE_CLASS_NONE);
+	Check(ZonePrepLedgerSetState(&l, 5, 6, ZONE_STATE_PRIVATE_NAV, 2.0), "class: nav");
+	Check(ZonePrepLedgerReadClass(&l, 5, 6) == ZONE_CLASS_PRIVATE, "class: a nav cell reads private");
+	Check(!ZonePrepLedgerSetState(&l, 5, 6, ZONE_STATE_NATIVE_ACTIVE, 3.0), "class: nav to native active is refused");
+	Check(ZonePrepLedgerReadClass(&l, 5, 6) == ZONE_CLASS_PRIVATE, "class: a refused edge leaves the class");
+	ZonePrepLedgerPublishClass(&l, 5, 6, ZONE_CLASS_NONE);
+	Check(ZonePrepLedgerSetState(&l, 5, 6, ZONE_STATE_READY_FOR_ADOPTION, 3.5), "class: ready for adoption");
+	Check(ZonePrepLedgerReadClass(&l, 5, 6) == ZONE_CLASS_PRIVATE, "class: a ready cell reads private");
+	Check(ZonePrepLedgerSetState(&l, 5, 6, ZONE_STATE_NATIVE_A, 4.0), "class: adopt");
+	Check(ZonePrepLedgerReadClass(&l, 5, 6) == ZONE_CLASS_ADOPTED, "class: an adopted cell reads adopted");
+	ZonePrepLedgerPublishClass(&l, 5, 6, ZONE_CLASS_NONE);
+	ZonePrepLedgerObserveCell(&l, 5, 6, false, false, true, 5.0);
+	Check(ZonePrepLedgerGetConst(&l, 5, 6)->state == ZONE_STATE_NATIVE_B_LOADING, "class: observed to native B loading");
+	Check(ZonePrepLedgerReadClass(&l, 5, 6) == ZONE_CLASS_ADOPTED, "class: a native B loading cell reads adopted");
+	ZonePrepLedgerPublishClass(&l, 5, 6, ZONE_CLASS_NONE);
+	ZonePrepLedgerObserveCell(&l, 5, 6, false, true, true, 6.0);
+	Check(ZonePrepLedgerGetConst(&l, 5, 6)->state == ZONE_STATE_NATIVE_ACTIVE, "class: observed to native active");
+	Check(ZonePrepLedgerReadClass(&l, 5, 6) == ZONE_CLASS_ADOPTED, "class: a native active cell reads adopted");
+	Check(ZonePrepLedgerSetState(&l, 5, 6, ZONE_STATE_RETIRING, 7.0), "class: retire a native cell");
+	Check(ZonePrepLedgerReadClass(&l, 5, 6) == ZONE_CLASS_ADOPTED, "class: a retiring native cell keeps adopted");
+	Check(ZonePrepLedgerRelease(&l, 5, 6), "class: release");
+	Check(ZonePrepLedgerReadClass(&l, 5, 6) == ZONE_CLASS_NONE, "class: a released cell reads none");
+
+	Check(ZonePrepLedgerBegin(&l, 7, 8, 1, 8.0), "class: begin a second cell");
+	Check(ZonePrepLedgerSetState(&l, 7, 8, ZONE_STATE_RETIRING, 9.0), "class: retire from the shell");
+	Check(ZonePrepLedgerReadClass(&l, 7, 8) == ZONE_CLASS_PRIVATE, "class: a retiring private cell keeps private");
+
+	Check(ZonePrepLedgerBegin(&l, 9, 10, 1, 10.0), "class: begin a third cell");
+	Check(ZonePrepLedgerSetState(&l, 9, 10, ZONE_STATE_PRIVATE_CONTENT, 11.0), "class: third content");
+	Check(ZonePrepLedgerSetState(&l, 9, 10, ZONE_STATE_PRIVATE_NAV, 12.0), "class: third nav");
+	ZonePrepLedgerPublishClass(&l, 9, 10, ZONE_CLASS_NONE);
+	Check(ZonePrepLedgerSetState(&l, 9, 10, ZONE_STATE_GEOMETRY_INVALIDATED, 13.0), "class: invalidate");
+	Check(ZonePrepLedgerReadClass(&l, 9, 10) == ZONE_CLASS_PRIVATE, "class: an invalidated cell reads private");
+}
+
 int main()
 {
 	TestIdentity();
@@ -437,6 +488,7 @@ int main()
 	TestPrepLedger();
 	TestPrivateTeardownReusesTheSlot();
 	TestSharedPrepLedgerInstance();
+	TestClassFollowsState();
 	TestRegistrationFromEitherStage();
 	TestNavLedger();
 	TestRetentionLedger();

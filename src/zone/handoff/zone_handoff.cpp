@@ -225,7 +225,6 @@ static bool RetireAndRelease(int gx, int gy, double now)
 		g_ledgerRefused++;
 		return false;
 	}
-	ZonePrepLedgerPublishClass(&g_zonePrepLedger, gx, gy, ZONE_CLASS_NONE);
 	g_retired++;
 	return true;
 }
@@ -261,7 +260,6 @@ void ZoneHandoffNoteLoaded(void* zoneEntry, int gx, int gy)
 	int cell = ZoneCell(gx, gy);
 	g_cells[cell].readyAt    = 0.0;
 	g_cells[cell].admittedAt = 0.0;
-	ZonePrepLedgerPublishClass(&g_zonePrepLedger, gx, gy, ZONE_CLASS_PRIVATE);
 }
 
 void ZoneHandoffNoteDropped(int gx, int gy)
@@ -320,7 +318,6 @@ static void MarkAdopted(int gx, int gy, double now)
 	int cell = ZoneCell(gx, gy);
 	if (!ZonePrepLedgerSetState(&g_zonePrepLedger, gx, gy, ZONE_STATE_NATIVE_A, now))
 		g_ledgerRefused++;
-	ZonePrepLedgerPublishClass(&g_zonePrepLedger, gx, gy, ZONE_CLASS_ADOPTED);
 	if (cell >= 0)
 	{
 		g_cells[cell].admittedAt     = now;

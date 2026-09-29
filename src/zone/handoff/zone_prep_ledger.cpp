@@ -28,6 +28,36 @@ static void ReleaseEntry(ZonePrepEntry* e)
 	e->everUsed = keepEverUsed;
 }
 
+// The readiness class each state publishes. Retiring keeps the class the cell
+// had: the release that follows it in the same main-thread call writes None.
+static const unsigned char ZONE_CLASS_KEEP = 0xFF;
+static const unsigned char kClassOfState[] =
+{
+	ZONE_CLASS_NONE,      // Unloaded
+	ZONE_CLASS_PRIVATE,   // PrivateShell
+	ZONE_CLASS_PRIVATE,   // PrivateContent
+	ZONE_CLASS_PRIVATE,   // PrivateNav
+	ZONE_CLASS_PRIVATE,   // ReadyForAdoption
+	ZONE_CLASS_ADOPTED,   // NativeA
+	ZONE_CLASS_ADOPTED,   // NativeBLoading
+	ZONE_CLASS_ADOPTED,   // NativeActive
+	ZONE_CLASS_KEEP,      // Retiring
+	ZONE_CLASS_PRIVATE    // GeometryInvalidated
+};
+// One row per state, in the enum's order; a state added without its row stops the build.
+static_assert(sizeof(kClassOfState) / sizeof(kClassOfState[0]) == ZONE_STATE_COUNT, "a class per state");
+
+// Production's one per-cell writer of a cell's class; ZonePrepLedgerInit (and
+// the world reset through it) stores None into every cell. One aligned byte
+// store after the state it follows, so a reader on another thread sees this
+// state's class or the one before it.
+static void PublishStateClass(ZonePrepLedger* l, int idx, int state)
+{
+	unsigned char cls = kClassOfState[state];
+	if (cls != ZONE_CLASS_KEEP)
+		l->classWord[idx] = cls;
+}
+
 void ZonePrepLedgerInit(ZonePrepLedger* l)
 {
 	for (int i = 0; i < ZONE_GRID_CELLS; ++i)
@@ -76,6 +106,7 @@ bool ZonePrepLedgerBegin(ZonePrepLedger* l, int cellX, int cellY, unsigned world
 	e->illegalAttempts = 0;
 
 	l->countByState[ZONE_STATE_PRIVATE_SHELL]++;
+	PublishStateClass(l, ZoneCellIndex(cellX, cellY), ZONE_STATE_PRIVATE_SHELL);
 	return true;
 }
 
@@ -92,6 +123,7 @@ bool ZonePrepLedgerSetState(ZonePrepLedger* l, int cellX, int cellY, int toState
 	e->state = toState;
 	e->enteredStateAt = now;
 	l->countByState[toState]++;
+	PublishStateClass(l, ZoneCellIndex(cellX, cellY), toState);
 
 	if (toState == ZONE_STATE_NATIVE_A)
 		e->pendingAdoption = false;   // takeover/admission is exactly the request this flag records
@@ -143,7 +175,7 @@ bool ZonePrepLedgerRelease(ZonePrepLedger* l, int cellX, int cellY)
 	l->countByState[e->state]--;
 	ReleaseEntry(e);
 	l->countByState[ZONE_STATE_UNLOADED]++;
-	l->classWord[idx] = ZONE_CLASS_NONE;
+	PublishStateClass(l, idx, ZONE_STATE_UNLOADED);
 	return true;
 }
 
@@ -152,6 +184,7 @@ void ZonePrepLedgerClearAll(ZonePrepLedger* l)
 	ZonePrepLedgerInit(l);
 }
 
+// The host suites' direct writer of a cell's class.
 void ZonePrepLedgerPublishClass(ZonePrepLedger* l, int cellX, int cellY, int cls)
 {
 	l->classWord[ZoneCellIndex(cellX, cellY)] = (unsigned char)cls;
