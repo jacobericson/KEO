@@ -11,6 +11,7 @@
 #include "movement/tracking.h"
 #include "movement/islands.h"
 #include "zone/geometry/zone_geometry_epoch.h"
+#include "zone/retention/zone_save_rule.h"
 
 using namespace zone_life_detail;
 
@@ -75,8 +76,6 @@ static bool   g_zlUnavailLogged     = false;
 
 
 namespace zone_life_detail {
-int    g_zlLastDefer         = ZLD_STATE;
-int    g_zlLastOutcome       = ZLO_DEFERRED;
 double g_zlLastUnloadSec     = -1.0e9;
 static unsigned char g_zlRetain[ZONE_GRID_COUNT];
 
@@ -164,22 +163,27 @@ static bool ZlSectionsDrained(void* zone)
 	return false;
 }
 
-static void ZlDefer(int kind)
+static ZlUnloadResult ZlDefer(int kind)
 {
-	g_zlLastOutcome = ZLO_DEFERRED;
-	g_zlLastDefer   = kind;
 	g_zlDefer[kind]++;
+	ZlUnloadResult r = { ZLO_DEFERRED, kind };
+	return r;
+}
+
+static ZlUnloadResult ZlResult(int outcome)
+{
+	ZlUnloadResult r = { outcome, -1 };
+	return r;
 }
 
 
 namespace zone_life_detail {
 
-bool UnloadModZone(void* zm, void* zone, bool save, const char* why)
+ZlUnloadResult UnloadModZone(void* zm, void* zone, bool save, const char* why)
 {
 	if (!zm || !zone || !fn_unloadZoneFromReset || !IsMainThread())
 	{
-		ZlDefer(ZLD_STATE);
-		return false;
+		return ZlDefer(ZLD_STATE);
 	}
 
 	// 1. The protocol can pass at all here. When it never can, the
@@ -187,8 +191,7 @@ bool UnloadModZone(void* zm, void* zone, bool save, const char* why)
 	// forever.
 	if (ZlUnloadUnavailable())
 	{
-		g_zlLastOutcome = ZLO_UNAVAILABLE;
-		return false;
+		return ZlResult(ZLO_UNAVAILABLE);
 	}
 
 	int gx = GetZoneGridX(zone);
@@ -205,14 +208,13 @@ bool UnloadModZone(void* zm, void* zone, bool save, const char* why)
 		{
 			ZlRelease(cell);
 			g_zlRelGone++;
-			g_zlLastOutcome = ZLO_RELEASED;
+			return ZlResult(ZLO_RELEASED);
 		}
 		else
 		{
 			g_zlAnomaly++;
-			g_zlLastOutcome = ZLO_ANOMALY;
+			return ZlResult(ZLO_ANOMALY);
 		}
-		return false;
 	}
 
 	// 3. The game's zone now.
@@ -220,8 +222,7 @@ bool UnloadModZone(void* zm, void* zone, bool save, const char* why)
 	{
 		ZlRelease(cell);
 		g_zlRelSetAB++;
-		g_zlLastOutcome = ZLO_RELEASED;
-		return false;
+		return ZlResult(ZLO_RELEASED);
 	}
 
 	// 4. The zone manager at rest.
@@ -229,8 +230,7 @@ bool UnloadModZone(void* zm, void* zone, bool save, const char* why)
 	    || InterlockedCompareExchange(&transitionEndPending, 0, 0) != 0
 	    || *(unsigned char*)(KLIB_MEMBER(2, (uintptr_t)zm, ZoneManager_justLoadedAGame, OFF_ZM_LOADING)) != 0)
 	{
-		ZlDefer(ZLD_STATE);
-		return false;
+		return ZlDefer(ZLD_STATE);
 	}
 
 	double now = ElapsedSec();
@@ -242,8 +242,7 @@ bool UnloadModZone(void* zm, void* zone, bool save, const char* why)
 			g_zl[cell].drainWaitSince = now;
 		if (now - g_zl[cell].drainWaitSince < ZL_DRAIN_WAIT_CAP_SEC)
 		{
-			ZlDefer(ZLD_STATE);
-			return false;
+			return ZlDefer(ZLD_STATE);
 		}
 	}
 
@@ -256,9 +255,16 @@ bool UnloadModZone(void* zm, void* zone, bool save, const char* why)
 		double recAge = (cell >= 0 && g_zl[cell].flags) ? now - g_zl[cell].firstSeen : 0.0;
 		if (recAge < ZL_TERRAIN_WAIT_SEC)
 		{
-			ZlDefer(ZLD_STATE);
-			return false;
+			return ZlDefer(ZLD_STATE);
 		}
+	}
+
+	// The save rule's floor: a zone the player could have changed is never
+	// discarded, whatever the caller passed.
+	if (!save && access)
+	{
+		g_zlAnomaly++;
+		return ZlResult(ZLO_ANOMALY);
 	}
 
 	// 6-7. Keep every mod NavMesh thread off the zone, then processJobCS with
@@ -268,21 +274,18 @@ bool UnloadModZone(void* zm, void* zone, bool save, const char* why)
 	if (fr == NM_FENCE_UNAVAILABLE)
 	{
 		ZlUnloadUnavailable();   // logs the reason once
-		g_zlLastOutcome = ZLO_UNAVAILABLE;
-		return false;
+		return ZlResult(ZLO_UNAVAILABLE);
 	}
 	if (fr == NM_FENCE_DEFER_PJ)
 	{
 		// The fence ended the publication and asked the MISS threads to
 		// stand aside (2 s, never extended; ulPrio= counts the raises). The
 		// caller retries on the next frames while it stands.
-		ZlDefer(ZLD_PJ);
-		return false;
+		return ZlDefer(ZLD_PJ);
 	}
 	if (!NmFenceProceeds(fr))
 	{
-		ZlDefer(fr == NM_FENCE_REFUSED_JOB ? ZLD_JOB : fr == NM_FENCE_REFUSED_CLAIM ? ZLD_CLAIM : ZLD_STATE);
-		return false;
+		return ZlDefer(fr == NM_FENCE_REFUSED_JOB ? ZLD_JOB : fr == NM_FENCE_REFUSED_CLAIM ? ZLD_CLAIM : ZLD_STATE);
 	}
 
 	unsigned char flagsBefore = (cell >= 0) ? g_zl[cell].flags : 0;
@@ -306,12 +309,11 @@ bool UnloadModZone(void* zm, void* zone, bool save, const char* why)
 	if (*(void**)(KLIB_MEMBER(2, (uintptr_t)zone, ZoneMap_mapContent, OFF_ZONE_CONTENT)) != NULL)
 	{
 		g_zlAnomaly++;
-		g_zlLastOutcome = ZLO_ANOMALY;
 		std::ostringstream ss;
 		ss << "ZoneLife unload: zone (" << gx << "," << gy << ") why=" << why
 		   << " -- content still present after deactivateZoneMap; record kept";
 		LogMsg(ss.str());
-		return false;
+		return ZlResult(ZLO_ANOMALY);
 	}
 
 	g_zlUnloads++;
@@ -321,7 +323,6 @@ bool UnloadModZone(void* zm, void* zone, bool save, const char* why)
 	if (ms > g_zlMsMax)
 		g_zlMsMax = ms;
 	g_zlLastUnloadSec = now;
-	g_zlLastOutcome   = ZLO_UNLOADED;
 
 	ZlRelease(cell);
 	for (int j = 0; j < numPreloaded; ++j)
@@ -348,7 +349,7 @@ bool UnloadModZone(void* zm, void* zone, bool save, const char* why)
 		else                  ss << "-";
 		LogMsg(ss.str());
 	}
-	return true;
+	return ZlResult(ZLO_UNLOADED);
 }
 
 } // namespace
@@ -527,16 +528,12 @@ static long   g_zlKeep          = 0;       // zlKeep=: accessible zones the pass
 // Returns false for "keep".
 static bool ZlUnloadVerdict(void* zone, void* content, unsigned char flags, bool* save)
 {
-	*save = false;
-	if (!IsZoneAccessible(zone))
-		return true;
+	bool accessible = IsZoneAccessible(zone);
 	int firstTime = 0, loaded = 0, activation = 0;
-	if (!ReadContentLifeFlags(content, &firstTime, &loaded, &activation))
-		return false;
-	if (firstTime != 0 || loaded == 0 || (flags & ZL_DOUBLE))
-		return false;
-	*save = true;
-	return true;
+	bool flagsRead = accessible && ReadContentLifeFlags(content, &firstTime, &loaded, &activation);
+	ZlSaveVerdict v = ZlSaveRuleDecide(accessible, flagsRead, firstTime, loaded, (flags & ZL_DOUBLE) != 0);
+	*save = (v == ZL_SAVE_SAVE);
+	return v != ZL_SAVE_KEEP;
 }
 
 // The candidate's cell is queued, or in the working
@@ -663,13 +660,14 @@ void ZoneLifeUnloadPass(void* zoneMgr, double now)
 		return;
 	}
 
-	if (UnloadModZone(zoneMgr, ze, save, "idle"))
+	ZlUnloadResult ul = UnloadModZone(zoneMgr, ze, save, "idle");
+	if (ul.outcome == ZLO_UNLOADED)
 	{
 		g_zlNextAttempt = now + ZL_SPACING_SEC;
 		return;
 	}
 
-	switch (g_zlLastOutcome)
+	switch (ul.outcome)
 	{
 	case ZLO_RELEASED:
 		g_zlNextAttempt = now;                      // next candidate next frame
@@ -682,13 +680,13 @@ void ZoneLifeUnloadPass(void* zoneMgr, double now)
 	case ZLO_UNAVAILABLE:
 		break;                                      // the pass returns at its top from now on
 	default:   // ZLO_DEFERRED
-		if (g_zlLastDefer == ZLD_PJ)
+		if (ul.defer == ZLD_PJ)
 		{
 			// Every frame while the priority request stands (the
 			// MISS entry points are backing off), else the old 0.1 s.
 			g_zlNextAttempt = NavMeshPjPriorityActive() ? now : now + 0.1;
 		}
-		else if (g_zlLastDefer == ZLD_JOB || g_zlLastDefer == ZLD_CLAIM)
+		else if (ul.defer == ZLD_JOB || ul.defer == ZLD_CLAIM)
 		{
 			g_zl[best].nextTry = now + 1.0;
 			g_zlNextAttempt = now;

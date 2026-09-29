@@ -199,10 +199,11 @@ void EvictStaleZones(void* zoneMgr, double now)
 					    || (zcell >= 0 && g_zl[zcell].nextTry > now))
 						continue;
 					zombieTried = true;
-					bool gone = UnloadModZone(zoneMgr, ze, false, "zombie");
+					ZlUnloadResult ul = UnloadModZone(zoneMgr, ze, false, "zombie");
+					bool gone = (ul.outcome == ZLO_UNLOADED);
 					if (gone)
 						g_zlZombieUnloads++;
-					if (gone || g_zlLastOutcome == ZLO_RELEASED)
+					if (gone || ul.outcome == ZLO_RELEASED)
 					{
 						std::ostringstream ss;
 						ss << "Zombie eviction: zone (" << zgx << "," << zgy << ") age="
@@ -222,11 +223,11 @@ void EvictStaleZones(void* zoneMgr, double now)
 						}
 						continue;
 					}
-					if (g_zlLastOutcome == ZLO_UNAVAILABLE)
+					if (ul.outcome == ZLO_UNAVAILABLE)
 						clearFallback = true;   // became unavailable at Begin
 					else
 					{
-						if (g_zlLastOutcome == ZLO_DEFERRED && g_zlLastDefer == ZLD_PJ)
+						if (ul.outcome == ZLO_DEFERRED && ul.defer == ZLD_PJ)
 							g_zlZombieRetryCell = zcell;
 						else if (zcell >= 0 && g_zl[zcell].flags)
 							g_zl[zcell].nextTry = now + 4.0;   // two passes: the others get a turn
@@ -239,7 +240,7 @@ void EvictStaleZones(void* zoneMgr, double now)
 							std::ostringstream ss;
 							ss << "Zombie unload deferred: zone (" << zgx << "," << zgy << ") age="
 							   << std::fixed << std::setprecision(1) << age << "s why="
-							   << ((g_zlLastOutcome == ZLO_DEFERRED) ? kDeferName[g_zlLastDefer] : "anomaly");
+							   << ((ul.outcome == ZLO_DEFERRED) ? kDeferName[ul.defer] : "anomaly");
 							LogDebug(ss.str());
 						}
 #endif
@@ -388,10 +389,11 @@ void ZlZombieFastRetry(void* zoneMgr, double now)
 	}
 	bool reg = preloadedZones[i].registered;
 	double age = now - preloadedZones[i].loadTimeSec;
-	bool gone = UnloadModZone(zoneMgr, ze, false, "zombie");
+	ZlUnloadResult ul = UnloadModZone(zoneMgr, ze, false, "zombie");
+	bool gone = (ul.outcome == ZLO_UNLOADED);
 	if (gone)
 		g_zlZombieUnloads++;
-	if (gone || g_zlLastOutcome == ZLO_RELEASED)
+	if (gone || ul.outcome == ZLO_RELEASED)
 	{
 		// UnloadModZone NULLed the slot on success; EvictStaleZones compacts it.
 		if (!gone)
@@ -406,7 +408,7 @@ void ZlZombieFastRetry(void* zoneMgr, double now)
 		g_zlZombieRetryCell = -1;
 		return;
 	}
-	if (!(g_zlLastOutcome == ZLO_DEFERRED && g_zlLastDefer == ZLD_PJ))
+	if (!(ul.outcome == ZLO_DEFERRED && ul.defer == ZLD_PJ))
 		g_zlZombieRetryCell = -1;   // any other outcome: back to the 2 s pass
 }
 

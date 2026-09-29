@@ -28,10 +28,18 @@ enum ZlDeferKind
 enum ZlOutcome
 {
 	ZLO_UNLOADED = 0,
-	ZLO_DEFERRED,       // g_zlLastDefer says why
+	ZLO_DEFERRED,       // ZlUnloadResult::defer says why
 	ZLO_RELEASED,       // no longer the mod's to unload (gone, or in Set A/B)
 	ZLO_ANOMALY,        // flags without a content, or a content the call left in place
 	ZLO_UNAVAILABLE     // the unload protocol can never pass here
+};
+
+// One unload attempt's outcome, returned by value; defer names the kind when
+// outcome is ZLO_DEFERRED and is -1 otherwise.
+struct ZlUnloadResult
+{
+	int outcome;
+	int defer;
 };
 
 const unsigned int ZL_PLAYER_CAP = 1024;
@@ -53,16 +61,14 @@ extern long   g_ftCleared;
 extern long   g_ftLate;
 extern long   g_ftKeptLate;
 
-// Unload out-channel, defined in zone_unload.cpp; written only by UnloadModZone.
-extern int    g_zlLastDefer;
-extern int    g_zlLastOutcome;
+// The last mod unload's time, defined in zone_unload.cpp; written only by UnloadModZone.
 extern double g_zlLastUnloadSec;
 
 void ZlNotePlayerCap(unsigned int count);
 void ZlRelease(int cell);
 const char* ZlUnloadUnavailable();
 void ZlNoteUnloaded(int cell, double now);
-bool UnloadModZone(void* zm, void* zone, bool save, const char* why);
+ZlUnloadResult UnloadModZone(void* zm, void* zone, bool save, const char* why);
 void ZlAppendStep2Tokens(std::ostringstream& ss);
 bool ZlBuildRetention(void* zoneMgr);
 void ZlAppendStep3Tokens(std::ostringstream& ss);
