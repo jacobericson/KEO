@@ -26,7 +26,8 @@ bool HookWantEval(HookWant want, const HookWantInputs& in)
 	case HOOK_WANT_NAVMESH_LIFE:      return in.navMeshLife;
 	case HOOK_WANT_UNSTITCH_PROBE:    return in.unstitchProbe;
 	case HOOK_WANT_SECTION_KEY_PROBE: return in.sectionKeyProbe;
-	case HOOK_WANT_GRAPH_HEURISTIC: return in.graphHeuristicGuard;
+	case HOOK_WANT_GRAPH_HEURISTIC:   return in.graphHeuristicGuard || in.playerHierarchical;
+	case HOOK_WANT_FIND_PATH_FULL:    return in.pathfindDiag || in.playerHierarchical;
 	case HOOK_WANT_UNCOUNTED:         return false;
 	}
 	return false;
@@ -59,6 +60,7 @@ HookWantInputs HookWantInputsFromConfig()
 	in.sectionStamp        = fixes::g_fixesCfg.sectionStampEnabled;
 	in.gatePassDiag        = pathfind::g_pathfindCfg.gatePassDiagEnabled;
 	in.graphHeuristicGuard = fixes::g_fixesCfg.graphHeuristicGuardOn != 0;
+	in.playerHierarchical  = pathfind::g_pathfindCfg.playerHierarchicalMode != AHIER_OFF;
 	return in;
 }
 

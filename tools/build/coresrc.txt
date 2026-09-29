@@ -240,3 +240,5 @@ src\navmesh\jobs\nm_unload_fence_policy.cpp
 src\zone\retention\zone_save_rule.cpp
 src\fixes\search\graph_heuristic_guard_policy.cpp
 src\fixes\search\graph_heuristic_guard.cpp
+src\pathfind\astar_hier_policy.cpp
+src\pathfind\astar_hier.cpp

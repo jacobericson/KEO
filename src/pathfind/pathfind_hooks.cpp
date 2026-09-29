@@ -1,7 +1,7 @@
 // pathfind_hooks.cpp -- the pathfinding hooks
 //
 // csFindPath (count, probe), csCheckFaceConn (count, bypass: return 1, probe),
-// findPathFull (count, status, probe), requestPath (player/NPC count, formation
+// findPathFull (count, status, probe, hierarchical arm), requestPath (player/NPC count, formation
 // match, tier), pathReqSubmit (priority override), csFindPathFallback
 // (reachability count).
 
@@ -11,6 +11,7 @@
 #include "movement/tracking.h"
 #include "pathfind/path_pool.h"
 #include "pathfind/astar_cost.h"
+#include "pathfind/astar_hier.h"
 #include "pathfind/player_repath_tier.h"
 #include "pathfind/player_repath_tier_policy.h"
 #include "fixes/streaming/navmesh_life.h"
@@ -591,9 +592,9 @@ void hook_findPathFull(void* streamingCollection, void* searchState, void* findP
 	BoostFindPathBudget(searchState, c);
 	CaptureFindPathProbe(searchState, c);
 
-	// Default path: call original A*
+	// The original A*, once, or with its hierarchical arm (astar_hier.h)
 	QueryPerformanceCounter(&c.pathPoolQpcBefore);
-	game::g_hookOrig.orig_findPathFull(streamingCollection, searchState, findPathOutput);
+	AstarHierSearch(streamingCollection, searchState, findPathOutput, astarReturnAddr, c.pathPoolPlayerByReq);
 
 	c.status = *(unsigned char*)((uintptr_t)findPathOutput + 60);
 	c.cause  = *(unsigned char*)((uintptr_t)findPathOutput + 61);

@@ -9,6 +9,7 @@
 #include "gui/settings_panel.h"
 #include "bench/bench_runner.h"
 #include "fixes/search/graph_heuristic_guard.h"
+#include "pathfind/astar_hier_policy.h"
 
 namespace plugin_entry_detail
 {
@@ -42,6 +43,8 @@ void LogInitBanner(int installed, int totalHooks, const std::string& gateTok,
 	    << ", clusterGraphBypass=" << (pathfind::g_pathfindCfg.clusterGraphBypassMode == CGB_BYPASS ? "ON"
 	        : (pathfind::g_pathfindCfg.clusterGraphBypassMode == CGB_MEASURE ? "MEASURE"
 	        : (pathfind::g_pathfindCfg.clusterGraphBypassMode == CGB_PLAYER ? "PLAYER" : "OFF")))
+	    << ", playerHier=" << AstarHierModeName(pathfind::g_pathfindCfg.playerHierarchicalMode)
+	    << "/" << AstarHierOnCapName(pathfind::g_pathfindCfg.playerHierOnCapMode)
 	    << ", unstitchGuard=" << (fixes::g_fixesCfg.unstitchGuardEnabled ? "ON" : "OFF")
 	    << ", stitchSourceLines=" << fixes::g_fixesCfg.cfg_stitchSourceLines
 	    << ", graphVisitorGuard=" << (fixes::g_fixesCfg.graphVisitorGuardEnabled ? "ON" : "OFF")

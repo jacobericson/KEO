@@ -1,6 +1,7 @@
 // pathfind_config.h - the pathfind module's INI storage, defaults and table.
 #pragma once
 #include "base/config_table.h"
+#include "pathfind/astar_hier_policy.h"
 
 // clusterGraphBypass: what checkFaceConnectivity
 // answers. Four positions, mutually exclusive, so there is no combination to
@@ -81,6 +82,12 @@ struct PathfindConfig
 	// Phase12 heartbeat carries seen/would/tiered/set every time). Read on every
 	// match.
 	bool playerRepathTierEnabled;
+
+	// playerHierarchical: the player search's hierarchical arm (astar_hier_policy.h's
+	// AstarHierMode); off by default. playerHierOnCap: what on does with a hierarchical
+	// status 3 (AstarHierOnCap). Both read at startup and by AstarHierSearch on the search threads.
+	int playerHierarchicalMode;
+	int playerHierOnCapMode;
 };
 
 extern PathfindConfig g_pathfindCfg;

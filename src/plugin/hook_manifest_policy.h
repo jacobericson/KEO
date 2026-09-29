@@ -36,6 +36,7 @@ enum HookWant
 	HOOK_WANT_UNSTITCH_PROBE,     // unstitchProbe
 	HOOK_WANT_SECTION_KEY_PROBE,  // sectionKeyProbe
 	HOOK_WANT_GRAPH_HEURISTIC,    // graphHeuristicGuard
+	HOOK_WANT_FIND_PATH_FULL,     // pathfindDiag or playerHierarchical != off
 	HOOK_WANT_UNCOUNTED
 };
 
@@ -64,6 +65,7 @@ struct HookWantInputs
 	bool sectionStamp;
 	bool gatePassDiag;
 	bool graphHeuristicGuard;
+	bool playerHierarchical;  // playerHierarchical != off
 };
 
 bool HookWantEval(HookWant want, const HookWantInputs& in);

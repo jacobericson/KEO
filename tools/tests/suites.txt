@@ -74,3 +74,4 @@ config_modules_units | tools\tests\config_modules_units.cpp | src\base\config_ta
 nm_unload_fence_units | tools\tests\nm_unload_fence_units.cpp | src\navmesh\jobs\nm_unload_fence_policy.cpp |
 zone_save_rule_units | tools\tests\zone_save_rule_units.cpp | src\zone\retention\zone_save_rule.cpp |
 graph_heuristic_guard_units | tools\tests\graph_heuristic_guard_units.cpp | src\fixes\search\graph_heuristic_guard_policy.cpp src\fixes\search\graph_position_guard_policy.cpp |
+astar_hier_policy_units | tools\tests\astar_hier_policy_units.cpp | src\pathfind\astar_hier_policy.cpp src\pathfind\astar_cost_policy.cpp |

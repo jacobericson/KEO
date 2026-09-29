@@ -32,6 +32,7 @@
 #include "pathfind/pathfinding.h"
 #include "pathfind/path_pool.h"
 #include "pathfind/astar_cost.h"
+#include "pathfind/astar_hier_policy.h"
 #include "pathfind/gate_pass.h"
 #include "bench/bench_runner.h"
 #include "fixes/world/corpse_pin.h"
@@ -349,13 +350,17 @@ static void ClearFormationStep(int*, int*)
 	ClearFormationGroups();
 }
 
-// Pathfinding diagnostics (4 hooks: 3 bg thread + requestPath)
+// Pathfinding diagnostics (4 hooks: 3 bg thread + requestPath). findPathFull also installs on
+// its own when only the hierarchical arm wants it: then csFindPath is not hooked, so the
+// search's queue label reads -1 and the player budget boost never arms.
 static void InstallPathfindHooks(int* installed, int*)
 {
-	if (HookRowWanted(HOOK_CS_FIND_PATH))
-	{
-		int diagInstalled = 0;
+	const bool diag = HookRowWanted(HOOK_CS_FIND_PATH);
+	const bool full = HookRowWanted(HOOK_FIND_PATH_FULL);
+	int diagInstalled = 0;
 
+	if (diag)
+	{
 		if (HookInstall(HOOK_CS_FIND_PATH, hook_csFindPath,
 				&game::g_hookOrig.orig_csFindPath, installed, false) == NULL)
 			diagInstalled++;
@@ -367,13 +372,26 @@ static void InstallPathfindHooks(int* installed, int*)
 			diagInstalled++;
 		else
 			ErrorLog("FAILED to hook checkFaceConnectivity");
+	}
 
+	if (full)
+	{
 		if (HookInstall(HOOK_FIND_PATH_FULL, hook_findPathFull,
 				&game::g_hookOrig.orig_findPathFull, installed, false) == NULL)
-			{ diagInstalled++; }
+			{ if (diag) diagInstalled++; }
 		else
+		{
 			ErrorLog("FAILED to hook findPathFull");
+			if (pathfind::g_pathfindCfg.playerHierarchicalMode != AHIER_OFF)
+			{
+				pathfind::g_pathfindCfg.playerHierarchicalMode = AHIER_OFF;
+				ErrorLog("FAILED to hook findPathFull; playerHierarchical is off for this session");
+			}
+		}
+	}
 
+	if (diag)
+	{
 		if (HookInstall(HOOK_REQUEST_PATH, hook_requestPath,
 				&game::g_hookOrig.orig_requestPath, installed, false) == NULL)
 			diagInstalled++;
@@ -385,6 +403,11 @@ static void InstallPathfindHooks(int* installed, int*)
 
 		LogMsg("Pathfinding step 1: " +
 		       std::string(diagInstalled == 4 ? "all 4 hooks installed" : "PARTIAL install"));
+	}
+	else if (full)
+	{
+		LogMsg(std::string("Pathfinding step 1: findPathFull alone for playerHierarchical=")
+		       + AstarHierModeName(pathfind::g_pathfindCfg.playerHierarchicalMode));
 	}
 }
 

@@ -15,6 +15,7 @@
 #include "fixes/streaming/navmesh_update_guard.h"
 #include "pathfind/astar_cost_policy.h"  // AstarCallerClass constants for the PathBusy split
 #include "pathfind/astar_cost.h"         // AstarCostTick, printed on the same window cadence
+#include "pathfind/astar_hier.h"
 #include <intrin.h>        // _ReadWriteBarrier
 #include <cmath>
 
@@ -107,6 +108,7 @@ void PathPoolTickMain(double now)
 	PrintAstarCostLine();
 	PrintPathBusyLine(gws);
 	AstarCostTick();
+	AstarHierTick();
 	if (pathfind::g_pathfindCfg.npcWaitDiagEnabled)
 		PrintNpcPathWaitLine(windowSec);
 }

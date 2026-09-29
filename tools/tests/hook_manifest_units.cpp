@@ -82,8 +82,8 @@ static bool HasName(const TestRow* rows, int n, const char* name)
 	return false;
 }
 
-// The 19 inputs, each with its field and the config global it is read from; a
-// NULL global is a key a PROD build does not carry, or the int key
+// The 20 inputs, each with its field and the config global it is read from; a
+// NULL global is a key a PROD build does not carry, or an int key
 // CheckInputMapping flips on its own.
 struct InputField
 {
@@ -118,6 +118,7 @@ static const InputField kFields[] =
 	{ "sectionStamp",        &HookWantInputs::sectionStamp,        &fixes::g_fixesCfg.sectionStampEnabled },
 	{ "gatePassDiag",        &HookWantInputs::gatePassDiag,        &pathfind::g_pathfindCfg.gatePassDiagEnabled },
 	{ "graphHeuristicGuard", &HookWantInputs::graphHeuristicGuard, NULL },
+	{ "playerHierarchical",  &HookWantInputs::playerHierarchical,  NULL },
 };
 static const int kFieldCount = (int)(sizeof(kFields) / sizeof(kFields[0]));
 
@@ -129,7 +130,7 @@ static int FieldIndex(const char* name)
 	return -1;
 }
 
-// The DEV defaults: every key true but unstitchProbe and graphHeuristicGuard.
+// The DEV defaults: every key true but unstitchProbe, graphHeuristicGuard and playerHierarchical.
 static HookWantInputs DevDefaults()
 {
 	HookWantInputs in;
@@ -137,6 +138,7 @@ static HookWantInputs DevDefaults()
 		in.*kFields[i].field = true;
 	in.unstitchProbe = false;
 	in.graphHeuristicGuard = false;
+	in.playerHierarchical = false;
 	return in;
 }
 
@@ -251,7 +253,7 @@ struct Flip
 {
 	const char* label;
 	const char* fields[2];
-	const char* rows[8];
+	const char* rows[12];
 };
 
 static const Flip kFlips[] =
@@ -286,6 +288,11 @@ static const Flip kFlips[] =
 	{ "unstitchProbe", { "unstitchProbe" }, { "deleteInstance" } },
 	{ "sectionKeyProbe", { "sectionKeyProbe" }, { "clearanceResetKeys", "sectionCutLookup" } },
 	{ "graphHeuristicGuard", { "graphHeuristicGuard" }, { "graphHeuristicGoalAdjacent", "graphHeuristicClusterCentre", "graphHeuristicCoarseSeed" } },
+	{ "playerHierarchical", { "playerHierarchical" }, { "graphHeuristicGoalAdjacent", "graphHeuristicClusterCentre", "graphHeuristicCoarseSeed" } },
+	{ "pathfindDiag and playerHierarchical", { "pathfindDiag", "playerHierarchical" },
+	  { "csFindPath", "csCheckFaceConn", "requestPath", "pathReqSubmit", "csFindPathFallback",
+	    "contentStreamCallee_0x8869", "graphHeuristicGoalAdjacent", "graphHeuristicClusterCentre",
+	    "graphHeuristicCoarseSeed" } },
 };
 
 static void CheckWantTruthTable()
@@ -305,7 +312,7 @@ static void CheckWantTruthTable()
 		}
 
 		int expected = 0;
-		while (expected < 8 && flip.rows[expected])
+		while (expected < 12 && flip.rows[expected])
 			++expected;
 		int changed = 0;
 		for (int i = 0; i < kDevCount; ++i)
@@ -361,6 +368,16 @@ static void CheckInputMapping()
 	HookWantInputs heuristic = HookWantInputsFromConfig();
 	fixes::g_fixesCfg.graphHeuristicGuardOn = savedHeuristic;
 	Check(SameInputs(heuristic, base, FieldIndex("graphHeuristicGuard")), "inputs graphHeuristicGuard");
+
+	// playerHierarchical is an int key too: observe and on each flip exactly its input.
+	const int savedHier = pathfind::g_pathfindCfg.playerHierarchicalMode;
+	pathfind::g_pathfindCfg.playerHierarchicalMode = AHIER_OBSERVE;
+	HookWantInputs observe = HookWantInputsFromConfig();
+	pathfind::g_pathfindCfg.playerHierarchicalMode = AHIER_ON;
+	HookWantInputs on = HookWantInputsFromConfig();
+	pathfind::g_pathfindCfg.playerHierarchicalMode = savedHier;
+	Check(SameInputs(observe, base, FieldIndex("playerHierarchical")), "inputs playerHierarchical observe");
+	Check(SameInputs(on, base, FieldIndex("playerHierarchical")), "inputs playerHierarchical on");
 }
 
 // The rows carrying HOOK_CAP_WORKER_POOL are exactly navMeshStop and

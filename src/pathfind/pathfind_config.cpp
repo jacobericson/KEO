@@ -20,6 +20,38 @@ static bool ParseClusterGraphBypass(const std::string& val, ConfigLogFn log)
 	return false;
 }
 
+// playerHierarchical: off, observe or on; anything else is refused.
+static bool ParsePlayerHierarchical(const std::string& val, ConfigLogFn log)
+{
+	(void)log;
+	int mode;
+	if (_stricmp(val.c_str(), "off") == 0)
+		mode = AHIER_OFF;
+	else if (_stricmp(val.c_str(), "observe") == 0)
+		mode = AHIER_OBSERVE;
+	else if (_stricmp(val.c_str(), "on") == 0)
+		mode = AHIER_ON;
+	else
+		return false;
+	pathfind::g_pathfindCfg.playerHierarchicalMode = mode;
+	return true;
+}
+
+// playerHierOnCap: rerun or keep; anything else is refused.
+static bool ParsePlayerHierOnCap(const std::string& val, ConfigLogFn log)
+{
+	(void)log;
+	int onCap;
+	if (_stricmp(val.c_str(), "rerun") == 0)
+		onCap = AHIER_CAP_RERUN;
+	else if (_stricmp(val.c_str(), "keep") == 0)
+		onCap = AHIER_CAP_KEEP;
+	else
+		return false;
+	pathfind::g_pathfindCfg.playerHierOnCapMode = onCap;
+	return true;
+}
+
 static const ConfigChoice kClusterGraphChoices[] =
 {
 	{ "false", CGB_ORIGINAL, "false" }, { "true", CGB_BYPASS, "true" }, { "player", CGB_PLAYER, "player" },
@@ -44,6 +76,8 @@ const PathfindConfig kPathfindDefaults =
 	true, // pathCostLinesEnabled
 	CGB_BYPASS, // clusterGraphBypassMode
 	true, // playerRepathTierEnabled
+	AHIER_OFF, // playerHierarchicalMode
+	AHIER_CAP_RERUN, // playerHierOnCapMode
 };
 
 PathfindConfig g_pathfindCfg = kPathfindDefaults;
@@ -82,6 +116,8 @@ const ConfigKey g_pathfindConfigKeys[] =
 	  "Player path re-request priority",
 	  "A player character's mid-walk path re-request keeps the priority its move order got instead of"
 	  " queueing behind every NPC. Off only counts."),
+	CFG_OCUSTOM("playerHierarchical", PathfindConfig, playerHierarchicalMode, ParsePlayerHierarchical, NDOC),
+	CFG_OCUSTOM("playerHierOnCap", PathfindConfig, playerHierOnCapMode, ParsePlayerHierOnCap, NDOC),
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }
 };
 
