@@ -10,6 +10,7 @@
                        // function itself is resolved dynamically below, so this
                        // does not require linking dbghelp.lib.
 #include <cstdio>
+#include "plugin/hook_manifest.h"
 
 // Implemented in plugin/crash_record.cpp, next to crash_dump.txt's own record counter.
 bool ExitCaptureAnyCrashRecorded();
@@ -85,7 +86,7 @@ bool IsCurrentProcess(HANDLE h)
 bool ShouldArm()
 {
 	return ExitCaptureShouldArm(
-		InterlockedCompareExchange(&g_navMeshStopHookInstalled, 0, 0) != 0,
+		HookRowInstalled(HOOK_NAVMESH_STOP),
 		InterlockedCompareExchange(&g_navMeshStopSeen, 0, 0) != 0,
 		ExitCaptureAnyCrashRecorded());
 }

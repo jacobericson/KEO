@@ -32,14 +32,6 @@ extern volatile DWORD g_navMeshBgThreadId;
 // not suppressed, since a real mod crash can still happen there.
 extern volatile LONG g_navMeshStopSeen;
 
-// Set to 1 once the NavMesh::stop hook itself installs (nm_lazy_hooks.cpp, lazy
-// on the first hook_dispatchJob). A session that quits from the main menu
-// without ever loading a zone never reaches that install, so g_navMeshStopSeen
-// stays 0 for the whole process; the DEV exit-capture instrument requires
-// this flag too, so a clean menu-only quit is never mistaken for the silent
-// death it exists to catch.
-extern volatile LONG g_navMeshStopHookInstalled;
-
 // The navmesh worker's phase, for the crash record. Each worker
 // points t_navMeshWorkerPhase at its own phase word (nm_worker_pool.cpp, which
 // writes it through InterlockedExchange as the job moves on) and sets

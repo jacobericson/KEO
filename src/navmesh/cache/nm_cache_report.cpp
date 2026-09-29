@@ -11,6 +11,7 @@
 #include "navmesh/cache/nm_l2_writer.h"    // l2WrFail= token, the not-banking test
 #include "navmesh/workers/nm_worker_gate_policy.h"
 #include "navmesh/cache/nm_key_hash.h"
+#include "plugin/hook_manifest.h"
 
 namespace nm_cache_core_detail {
 static double lastNMLogTime = 0.0;
@@ -317,7 +318,7 @@ static void AppendBuildAndTrip(std::ostringstream& ss)
 
 	ss << BuildLockStatsSuffix();
 
-	if (InterlockedCompareExchange(&navmesh::g_nmCache.nmTripInstalled, 0, 0))
+	if (HookRowInstalled(HOOK_PROCESS_JOB_ALT))
 		ss << " trip=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmTripCount, 0, 0);
 	else
 		ss << " trip=off";

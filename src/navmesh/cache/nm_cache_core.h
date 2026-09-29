@@ -312,9 +312,6 @@ struct NavMeshCacheState
 	// processJobAlt called by a thread that did not own processJobCS. Reported as
 	// trip=; expected 0 over a whole session.
 	volatile long nmTripCount;
-	// 0 until the tripwire hook is installed. trip= prints "off" while it is 0,
-	// because no violations counted is not the same as none possible.
-	volatile long nmTripInstalled;
 
 	// Time spent inside orig_dispatchJob under processJobCS for type 2/3/4 jobs,
 	// in tenths of a millisecond. Reported as t234=<avg>/<max>ms.

@@ -21,9 +21,6 @@ volatile DWORD g_navMeshBgThreadId = 0;
 // not suppressed, since a real mod crash can still happen there.
 volatile LONG g_navMeshStopSeen = 0;
 
-// See core.h -- set once by the NavMesh::stop hook's own install (nm_lazy_hooks.cpp).
-volatile LONG g_navMeshStopHookInstalled = 0;
-
 // The worker phase for the crash record (core.h).
 __declspec(thread) volatile LONG* t_navMeshWorkerPhase = NULL;
 __declspec(thread) int            t_navMeshWorkerId    = -1;

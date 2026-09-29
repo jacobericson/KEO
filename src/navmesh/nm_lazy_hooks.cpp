@@ -147,7 +147,6 @@ void InstallNavMeshLazyHooks()
 	if (HookInstallRow(HOOK_PROCESS_JOB_ALT, (void*)hook_processJobAltTrip,
 	                   (void**)&orig_processJobAltTrip, NULL, true) == NULL)
 	{
-		InterlockedExchange(&navmesh::g_nmCache.nmTripInstalled, 1);
 		LogMsgDeferrable("processJobAlt tripwire: installed");
 	}
 	else
@@ -164,7 +163,6 @@ void InstallNavMeshLazyHooks()
 	if (HookInstallRow(HOOK_NAVMESH_STOP, (void*)hook_navMeshStop, (void**)&orig_navMeshStop,
 	                   NULL, true) == NULL)
 	{
-		InterlockedExchange(&g_navMeshStopHookInstalled, 1);
 		LogMsgDeferrable("NavMesh::stop hook: installed (worker retirement)");
 		ExitCaptureNoteStopHookOutcome(true);
 	}
