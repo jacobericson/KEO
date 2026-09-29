@@ -158,7 +158,7 @@ typedef void* (*getIsland_t)(void* zoneMgr, void* zone, void* lektorOut);
 // Player-cancel hooks (island_cancel_hooks.cpp detours, hook_manifest.cpp installs). The player's own ways to end a move order, so the island tracker
 // can tell a player cancel from an order the engine deleted. All three are
 // KenshiLib-covered (0.5.0 and 0.5.1 export them; klib_bindings.cpp binds
-// them); the Steam RVAs below are the brdump.py Steam column, confirmed
+// them); the Steam RVAs below match KenshiLib's Steam address table (not its GOG header comments), confirmed
 // against the binary. All run on the main thread's input/GUI
 // paths: stopCharactersMovement's only caller is GameWorld::processKeys
 // (0x7875C0, the stop key); addJobSelectedCharacters is called from
@@ -176,7 +176,7 @@ typedef void* (*getIsland_t)(void* zoneMgr, void* zone, void* lektorOut);
 //   bool shift, bool add, const Ogre::Vector3& location) (0x7F4EF0, 0x1E4
 //   bytes): rcx this, edx task, r8 subject, r9b shift, [rsp+0x28] add,
 //   [rsp+0x30] location (a pointer: the body loads it as one qword and hands it
-//   to Character::addJob 0x5C8310; the typed IDB, config 56, declares it
+//   to Character::addJob 0x5C8310; the KenshiLib-typed IDB declares it
 //   `const Ogre::Vector3*`).
 //   Calls Character::addJob(task, subject, shift, add, location) for every
 //   selected player-owned character; Character::addJob (0x5C8310) runs

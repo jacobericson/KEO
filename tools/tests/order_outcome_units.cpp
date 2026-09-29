@@ -43,7 +43,7 @@ int main()
 	Check(OrderOutcomeClassifyStop(true, false, OO_RESOLVE_MOTION, false) == OO_REC_SELF,
 	      "motion resuming with no K7 send in the window is selfRec");
 
-	// A user re-order (or a cancel) always wins over a K7 send: E2's shape
+	// A user re-order (or a cancel) always wins over a K7 send: a recorded shape
 	// (three deleted re-issues moved=0, then the user stepped in) must read
 	// userRec=1, k7rec=0, not the other way around.
 	Check(OrderOutcomeClassifyStop(true, false, OO_RESOLVE_SUPERSEDE, true) == OO_REC_USER,
@@ -58,7 +58,7 @@ int main()
 	Check(OrderOutcomeClassifyStop(true, false, OO_RESOLVE_CLOSE, true) == OO_REC_UNREC,
 	      "a K7 send with no motion before close is still unrec, not k7rec");
 
-	// N1: eviction is a bookkeeping event, never an outcome, whatever else is
+	// Eviction is a bookkeeping event, never an outcome, whatever else is
 	// true about the stall it interrupts.
 	Check(OrderOutcomeClassifyStop(true, false, OO_RESOLVE_EVICT, false) == OO_REC_NONE,
 	      "eviction is not unrec");
@@ -67,7 +67,7 @@ int main()
 	Check(OrderOutcomeClassifyStop(true, true, OO_RESOLVE_EVICT, false) == OO_REC_NONE,
 	      "eviction of an excluded stall is still not counted");
 
-	// The span-totals format (B3): orders is all orders; the rest are
+	// The span-totals format: orders is all orders; the rest are
 	// cells>=9 only.
 	Check(OrderOutcomeFormatSpanTotals(3, 1, 1, 1, 1, 0) ==
 	      " orders=3 longOrders=1 longStop=1 longFail=1 userRec=1 unrec=0",

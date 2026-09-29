@@ -50,7 +50,7 @@ static void TestCellOf()
 static void TestPredicate()
 {
 	// The census pairs.
-	Check(C(E(28, 38), E(29, 38)), "28,38 vs 29,38 (crash 1)");
+	Check(C(E(28, 38), E(29, 38)), "28,38 vs 29,38 (the recorded crash pair)");
 	Check(C(E(26, 42), E(27, 42)), "26,42 vs 27,42 (reincarnated drop)");
 	Check(C(E(24, 40), I3(24, 40)), "24,40 exterior vs the Hideout interior");
 

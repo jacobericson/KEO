@@ -48,7 +48,7 @@ int main()
 	Check(UnstitchClassifySet(9, 9, -3) == UNSTITCH_SET_SKIP_IMPLAUSIBLE,
 	      "a set naming this section with an untrustworthy length is refused, not walked");
 
-	// --- injection: the r3 record, driven through the walk ----------------
+	// --- injection: the recorded fault, driven through the walk -----------
 	// The fault read the opposite instance's node map at recorded index 58.
 	// The same walk over a synthesised set reports it when the map is shorter
 	// than 59 entries and stays silent when it is not -- which is the fork the

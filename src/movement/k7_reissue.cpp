@@ -515,7 +515,7 @@ namespace order_tracker_detail {
 // skipping its whole body while paused (in islands_reissue.cpp) stops every one of
 // these clocks from advancing during the pause itself; this corrects for a
 // clock that had already started ticking on the frame just before the pause
-// began -- on the frame the pause ends, every nonzero timestamp any K7/F1
+// began -- on the frame the pause ends, every nonzero timestamp any K7
 // comparison reads is shifted forward by the paused duration together, so a
 // later `now - <timestamp>` or `<timestamp A> - <timestamp B>` reads the same
 // as if the pause had never happened. A partial shift is worse than none: an
@@ -542,7 +542,7 @@ void K7RebasePausedClocks(bool paused, double now)
 	{
 		IslandOrder& o = g_orders[i];
 		if (!o.active) continue;
-		// Every field IslandOrder holds that any K7/F1 comparison reads
+		// Every field IslandOrder holds that any K7 comparison reads
 		// against another such field or against `now`. Not `orderTime` (never
 		// compared) and never `IslandOrder`'s (a)-discriminator fields, which
 		// have no game-time meaning. FormationGroup::createdTime is also left

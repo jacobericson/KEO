@@ -19,7 +19,7 @@ struct MeshPointerLayoutProof : Ogre::SharedPtr<Ogre::Mesh>
 };
 static_assert(sizeof(Ogre::SharedPtr<Ogre::Mesh>)==16,"mesh SharedPtr width");
 // Private offsets (mData=0, mSize=8, mCapacity=16) are verified reproducibly
-// by tools/kenshilib/test_private_layout.bat using the VS2010 compiler layout report.
+// with the VS2010 compiler's class layout report.
 static_assert(sizeof(Ogre::FastArray<Effect*>)==24,"active Effect array header width");
 static_assert(sizeof(((const Ogre::FastArray<Effect*>*)0)->size())==8,"active Effect array count width");
 struct RootLayoutProbe: Ogre::Root { static unsigned long ReadNextFrame(uintptr_t base) { return ((const RootLayoutProbe*)base)->mNextFrame; } static void Check() { static_assert(offsetof(RootLayoutProbe,mNextFrame)==KLIB_OFF_Root_nextFrame,"Ogre::Root::mNextFrame"); static_assert(sizeof(((RootLayoutProbe*)0)->mNextFrame)==4,"Ogre frame counter width"); static_assert(offsetof(RootLayoutProbe,mFrameListeners)==KLIB_OFF_Root_frameListeners,"Ogre::Root::mFrameListeners"); static_assert(offsetof(RootLayoutProbe,mRemovedFrameListeners)==KLIB_OFF_Root_removedFrameListeners,"Ogre::Root::mRemovedFrameListeners"); static_assert(sizeof(((RootLayoutProbe*)0)->mFrameListeners)==KLIB_SIZE_Root_listenerSet,"Ogre listener set width"); } };

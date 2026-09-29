@@ -4,9 +4,9 @@ REM by tools\tests\run_suites.py (compile then run, in parallel, capped at
 REM TEST_JOBS). No game or KenshiLib headers; only cl and the VS 2010 x64
 REM environment are required.
 REM
-REM check_test_guards.py is run AFTER the cd below (it used to run before it,
-REM by relative path, so it only worked when invoked from the repo root) and
-REM checks that every tools\tests\*_units.cpp is covered by suites.txt (or
+REM check_test_guards.py runs AFTER the cd below (its path is relative to
+REM the repo root, so the cd makes it work from any caller's directory) and checks
+REM that every tools\tests\*_units.cpp is covered by suites.txt (or
 REM explicitly excluded) and that run_suites.py actually fails a run when a
 REM suite fails.
 setlocal

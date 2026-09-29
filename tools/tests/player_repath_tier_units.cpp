@@ -6,7 +6,7 @@
 int main()
 {
 	// A player's own order (priority >= 2) always gets the order tier,
-	// whatever the O6 key says and whether or not it happens to also match
+	// whatever the playerRepathTier key says and whether or not it happens to also match
 	// the published set (it never would -- the order runs before the set
 	// exists for that character's own request -- but the rule must not care).
 	{
@@ -16,7 +16,7 @@ int main()
 	}
 	{
 		PlayerRepathTierDecision d = PlayerRepathTierDecide(2, false, false);
-		Check(d.tier == 45, "the order path ignores the O6 key");
+		Check(d.tier == 45, "the order path ignores the playerRepathTier key");
 		Check(d.source == PRT_SOURCE_ORDER, "still the order source with the key off");
 	}
 
@@ -28,7 +28,7 @@ int main()
 		Check(d.source == PRT_SOURCE_NONE, "no source for an NPC request");
 	}
 
-	// O6's case: a state-6 mid-walk re-request (priority 0) for a character
+	// The re-request case: a state-6 mid-walk re-request (priority 0) for a character
 	// matched against the published player set. Tiered with the key on.
 	{
 		PlayerRepathTierDecision d = PlayerRepathTierDecide(0, true, true);

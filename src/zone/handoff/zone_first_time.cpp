@@ -214,12 +214,12 @@ void ZlLogFirstTimeDiag(int i, void* content)
 // A zone that never gets a mod processContent: hand it back untouched.
 // Returns true when the table entry was dropped (the caller moves on).
 //   in Set A or B: the game is loading it or owns it: drop the entry;
-//   untouched content (activationFlag armed, loaded 0): the P3 handoff's step,
+//   untouched content (activationFlag armed, loaded 0): the pipeline handoff's step,
 //     +176 cleared; ZoneMap::_activate reuses the content when the game loads
 //     the cell (0xA0D7BF) and loadPhase2 finalizes and populates it. The
 //     record stays (ZL_HANDOFF): with zoneLifeUnload on, the idle pass unloads
 //     it (save = false, never accessible, nothing written) if the game never
-//     takes it; with it off the zone simply stays as the P3 handoff leaves one;
+//     takes it; with it off the zone simply stays as the pipeline handoff leaves one;
 //   otherwise (finalized by someone else, never ours to keep): left
 //     pending = false, so the zombie handler unloads it with save = false.
 //     Where the unload protocol can never pass, the handler's fallback

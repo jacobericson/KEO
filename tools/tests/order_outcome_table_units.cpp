@@ -11,7 +11,7 @@ static void Fresh()
 {
 	OOT_Reset(Sink); g_lines.clear();
 	OOT_Reset(Sink); g_lines.clear();
-	OOT_ResetForTest();   // R3: OOT_Reset no longer zeros the session totals itself
+	OOT_ResetForTest();   // OOT_Reset keeps the session totals; zero them here
 }
 
 int main()
@@ -29,7 +29,7 @@ int main()
 	Check(g_lines.size() == 1, "supersede prints the old record once");
 	Check(Has(g_lines[0], "userRec=1") && Has(g_lines[0], "unrec=0"), "5s stall then re-order is userRec");
 
-	// 2. Post-arrival wander is not a stop (r4b O2 3440, 741 off).
+	// 2. Post-arrival wander is not a stop.
 	Fresh();
 	OOT_Begin(&A, 1, 29, 0.0);
 	OOT_NoteMotion(A, true, false, 1.0);
@@ -55,7 +55,7 @@ int main()
 	      "KO is terminal for the member; wake-up stall not counted");
 
 	// 4. A member leaving the squad does not close the others; the leader leaving mid-route
-	//    (r1b O3: drop 322.5, arrivals 342.9) keeps the record open.
+	//    (it drops out before the others arrive) keeps the record open.
 	Fresh();
 	OOT_Begin(ab, 2, 29, 0.0);
 	OOT_NoteMotion(A, true, false, 1.0);
@@ -96,7 +96,7 @@ int main()
 
 	// 8. Table full: the (capacity+1)th concurrent order evicts without
 	// inventing unrec, and the evicted record is not counted as a long
-	// order outcome either (R2); no growth over 1000 orders.
+	// order outcome either; no growth over 1000 orders.
 	Fresh();
 	const int CAP = 64;
 	for (int i = 0; i < CAP + 1; ++i)
@@ -172,7 +172,7 @@ int main()
 	// click poll's spurious "moving" report (StorePlayerClickDest zeroes
 	// prevPos, so the very first real poll after a click always reads as a
 	// jump) is suppressed to moving=false there, so a genuine path-queue or
-	// gather wait can still open before departure is recorded (R1).
+	// gather wait can still open before departure is recorded.
 	Fresh();
 	OOT_Begin(&A, 1, 29, 0.0);
 	OOT_NoteMotion(A, false, false, 1.0);       // first poll after the click (glue passes moving=false)
@@ -184,9 +184,8 @@ int main()
 	Check(Has(g_lines[0], "selfRec=1") && Has(g_lines[0], "walked=1") && OOT_GetTotals().longStop == 1,
 	      "the path-queue wait is not counted; the later en-route stop is selfRec");
 
-	// 11b. A start delay with no later stop is never counted at all (R1's
-	// own regression case: before the fix, this path-queue wait alone would
-	// have read as a stop).
+	// 11b. A start delay with no later stop is never counted at all: this
+	// path-queue wait alone must not read as a stop.
 	Fresh();
 	OOT_Begin(&A, 1, 29, 0.0);
 	OOT_NoteMotion(A, false, false, 1.0);       // first poll after the click
@@ -196,7 +195,7 @@ int main()
 	Check(Has(g_lines[0], "selfRec=0") && OOT_GetTotals().longStop == 0, "path-queue wait alone is a start delay");
 
 	// 12. Reset flushes an open stuck order (reload to escape) and folds it
-	// into the session totals -- R3: a reload used to escape a stuck squad
+	// into the session totals -- a reload used to escape a stuck squad
 	// must reach longFail, and the totals/order sequence must survive the
 	// reset itself (they answer "since this process started", not "since
 	// the last load").
@@ -216,17 +215,17 @@ int main()
 	OOT_Begin(&B, 1, 29, 40.0);
 	Check(OOT_GetTotals().orders == 2, "totals and the order sequence survive a reset");
 
-	// 13. N-1: a K7 send that lands before F0's own poll ever opens a stall
-	// still credits the recovery -- the dominant F1 shape, where the send
-	// resolves the stop faster than F0's 1-2s-late stall-open poll can catch
+	// 13. A K7 send that lands before the table's own poll ever opens a stall
+	// still credits the recovery -- the common arrival re-issue shape, where the send
+	// resolves the stop faster than the 1-2s-late stall-open poll can catch
 	// it. The stall opens after the send but inside the 2s lookback. The
 	// guess is tagged only once PLAYER STUCK's own stop-guess call actually
-	// latches (R-1): the send's form is remembered, not printed, at open time.
+	// latches: the send's form is remembered, not printed, at open time.
 	Fresh();
 	OOT_Begin(&A, 1, 29, 0.0);
 	OOT_NoteMotion(A, true, false, 9.0);        // still moving before the real stop
-	OOT_NoteReissueSent(A, "arr", 10.3);        // F1 fires ~0.3s after the real stop
-	OOT_NoteMotion(A, false, false, 10.9);      // F0's own poll opens the stall late (0.6s after the send)
+	OOT_NoteReissueSent(A, "arr", 10.3);        // the arrival re-issue fires ~0.3s after the real stop
+	OOT_NoteMotion(A, false, false, 10.9);      // the table's own poll opens the stall late (0.6s after the send)
 	OOT_NoteStopGuess(A, "k7=trk/reached/span1", 11.9);  // PLAYER STUCK's own guess, overridden by the send's form
 	OOT_NoteMotion(A, true, false, 13.0);       // resumes after a qualifying 2.1s stall
 	OOT_NoteMotion(A, true, true, 14.0);        // arrives, closes the record
@@ -246,7 +245,7 @@ int main()
 	Check(g_lines.size() == 1 && Has(g_lines[0], "selfRec=1") && Has(g_lines[0], "k7rec=0"),
 	      "a send older than the lookback does not credit k7rec");
 
-	// 13c (R-1's own regression case): a send-credited stall that never
+	// 13c. A send-credited stall that never
 	// reaches the 2s floor must not tag stops= at all -- the credit is not
 	// yet known to be real when the stall opens, so tagging it there would
 	// print a K7 form on an order that never actually counted a stop.
@@ -290,7 +289,7 @@ int main()
 	      "a member already arrived is not double-counted, but B still is");
 
 	// -------------------------------------------------------------------
-	// 15-16. F0 pause gate (order_outcome_table.cpp's ActiveTime clock,
+	// 15-16. The pause gate (order_outcome_table.cpp's ActiveTime clock,
 	// paused=true default false so every test above is unaffected).
 	// -------------------------------------------------------------------
 

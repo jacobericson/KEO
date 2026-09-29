@@ -97,7 +97,7 @@ def check_coverage():
             print("  %s" % p)
     if ok:
         # Kept as "N suites, all guarded" (the phrase the original per-block
-        # .bat guard printed): session checklists quote this exact line.
+        # .bat guard printed): callers match this exact line.
         # "Guarded" now means covered by suites.txt (or excluded with a
         # reason) and provably fails the run on failure (checked below,
         # not by this line), rather than "has an errorlevel check" -- the
@@ -130,7 +130,7 @@ def _run_scratch_suite(name, body, extra_files=()):
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     finally:
         # run_suites.py gives each suite its own build\tests\obj\<name>\
-        # (the fix for the cross-suite object-name race); clean up both that
+        # (so suites never race on a shared object name); clean up both that
         # and the top-level .exe/.log it leaves in build\tests\.
         shutil.rmtree(os.path.join("build", "tests", "obj", name), ignore_errors=True)
         for ext in (".exe", ".log"):

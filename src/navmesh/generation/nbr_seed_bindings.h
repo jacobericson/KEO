@@ -8,8 +8,8 @@
 
 // ---- Stand-in neighbour seeds (nm_nbr_seeds.cpp) ----
 // Verified in the Steam 1.0.65 IDB; every KenshiLib-covered
-// address below equals the Steam column of tools/kenshilib/brdump.py over the
-// 0.5.1 tables and is bound in klib_bindings.cpp (all are 0.5.0 exports too).
+// address below equals its entry in KenshiLib's 0.5.1 Steam address table
+// (not its GOG header comments) and is bound in klib_bindings.cpp (all are 0.5.0 exports too).
 //
 // Hooked (installed with the lazy NavMesh hooks):
 //   NavMeshGenerator::getSeedPointsFromAdjacentZone(const ZoneMap*, const iVector2&)

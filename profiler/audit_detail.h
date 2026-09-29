@@ -285,7 +285,7 @@ const unsigned VIS_ATTACHMENTS = 0x1004;
 const size_t RVA_EFFECTS_MGR = 0x2127190;  // EffectsManager* (lazy singleton, 296 bytes)
 const size_t EM_ACTIVE_DATA  = 200;        // Ogre::FastArray<Effect*> of active effects: data
 const size_t EM_ACTIVE_SIZE  = 208;        //   element count
-// Private mSize offset is compiler-verified by test_private_layout.bat.
+// Private mSize offset is verified with the VS2010 compiler's class layout report.
 static_assert(EM_ACTIVE_SIZE == EM_ACTIVE_DATA + 8, "active FastArray count composed legacy parity");
 const size_t FX_HANDLER      = 24;         // Effect: ParticleSystemHandler* (NULL: no particles)
 const size_t FX_AGE          = 48;         // Effect: float, += scaled dt each update (0xF9570)

@@ -123,7 +123,7 @@ static void TestPrepLedger()
 	Check(n == 0, "nothing left ready after admission");
 
 	// Independence: a ledger-1 transition never touches ledger 2 or 3 (they
-	// are separate arrays); the design forbids Set-A entry from erasing
+	// are separate arrays); Set-A entry must never erase
 	// outstanding nav/retention work.
 	ZoneNavLedger nav;
 	ZoneNavLedgerInit(&nav, 1);
@@ -256,7 +256,7 @@ static void TestNavLedger()
 	ZoneNavLedgerRequestRemoval(&l, 2, 3);
 	Check(!ZoneNavLedgerRemovalAcknowledged(&l, 2, 3), "removal pending is not yet acknowledged");
 
-	// Section 5 step 3's hazard: a re-claim must not be allowed to land while
+	// The recovery's removal hazard: a re-claim must not be allowed to land while
 	// the removal is still unacknowledged. That refusal is counted too.
 	refusedBefore = ZoneNavLedgerRefusedAttempts(&l, 2, 3);
 	Check(!ZoneNavLedgerClaim(&l, id, 2, 3), "a re-claim is refused while removal is pending");

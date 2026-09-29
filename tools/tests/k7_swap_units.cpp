@@ -17,7 +17,7 @@ int main()
 		Check(onset == 0.0, "onset stays 0 with no signature");
 		onset = K7SigOnsetStep(onset, true, false, 111.8);
 		Check(onset == 111.8, "onset arms on the first signature frame");
-		// The design's must-HOLD case: the signature holds every frame from
+		// The must-HOLD case: the signature holds every frame from
 		// 111.8 to 115.0 (a stopped character keeps hc136==1 or ps==3 every
 		// frame), so the "last frame it held" value would read ~115.0 -- but
 		// the onset must stay pinned at its first frame.
@@ -31,7 +31,7 @@ int main()
 	}
 
 	// -------------------------------------------------------------------
-	// K7ClassifySwap: the doc's own worked cases (stop-fixes-design.md 2.5).
+	// K7ClassifySwap: worked cases.
 	// -------------------------------------------------------------------
 
 	// The case that must HOLD: onset 111.8, swap first seen 115.1, cur=6
@@ -39,7 +39,7 @@ int main()
 	Check(K7ClassifySwap(/*last29*/111.5, /*sig*/111.8, /*deletedSince*/0.0,
 	                     /*swapSeen*/115.1, /*now*/115.1, /*curType*/6,
 	                     MARGIN, HOLD_MAX) == K7_SWAP_HOLD,
-	      "r5 as recorded: died first, combat task -> HOLD");
+	      "a recorded stop: died first, combat task -> HOLD");
 
 	// Same signature, but the new task is not on the combat whitelist.
 	Check(K7ClassifySwap(111.5, 111.8, 0.0, 115.1, 115.1, /*curType*/26,
@@ -88,8 +88,8 @@ int main()
 	Check(!K7IsCombatTask(-1), "-1 (no task) is not combat");
 
 	// -------------------------------------------------------------------
-	// Regression families (stop-fixes-design.md 2.5): every one that must
-	// still DROP after Fix A.
+	// Regression families: no death first, a non-combat task, or a fight
+	// past the hold cap; none of them may HOLD indefinitely.
 	// -------------------------------------------------------------------
 
 	// Live move interrupted by combat, no death first (sig=0 entirely).
@@ -119,7 +119,7 @@ int main()
 	      "family: a genuine player-driven combat swap with no prior death -> DROP");
 
 	// -------------------------------------------------------------------
-	// K7DestReadyAllows (Fix B3).
+	// K7DestReadyAllows.
 	// -------------------------------------------------------------------
 	Check(K7DestReadyAllows(2 /* ZR_BUILDINGS_PENDING */, 0.0, 15.0),
 	      "the outdoor instance in the world always allows");
@@ -133,7 +133,7 @@ int main()
 	      "past the wait cap -> force allow regardless of class");
 
 	// -------------------------------------------------------------------
-	// Pin B1's invariant: K7RebasePausedClocks (k7_reissue.cpp) must
+	// Pin the pause-rebase invariant: K7RebasePausedClocks (k7_reissue.cpp) must
 	// shift every timestamp a K7 comparison reads together, never one alone.
 	// A uniform shift of every input by the same delta must never change the
 	// verdict; shifting deletedSince alone (the partial-rebase regression)

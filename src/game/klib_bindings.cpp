@@ -187,7 +187,7 @@ static void Resolve()
 	Bind("PlayerInterface::addTaskNearestSelectedCharacter", 0x7FA2D0, 0x7FA2D0, &PlayerInterface::addTaskNearestSelectedCharacter);
 	// The neighbour-seed hook target (game.h) and the sector lookup its
 	// classification makes. Bound in every build like the other covered
-	// targets; both exported since 0.5.0 (brdump.py Steam column).
+	// targets; both exported since 0.5.0 (KenshiLib's Steam address table, not its GOG header comments).
 	Bind("NavMeshGenerator::getSeedPointsFromAdjacentZone", 0x3C96E0, 0x3C96E0, &NavMeshGenerator::getSeedPointsFromAdjacentZone);
 	Bind("NavMesh::getSector(coords)", 0x3AB1F0, 0x3AB1F0, static_cast<NavMeshSector* (NavMesh::*)(const iVector2&, bool)>(&NavMesh::getSector));
 	// The shipped-tile load stitchUnloadedZone makes, and the zone lookup.

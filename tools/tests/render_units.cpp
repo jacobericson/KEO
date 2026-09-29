@@ -1797,7 +1797,7 @@ int main()
 		Check(d3d != NULL, "load D3D11 render system");
 		if (d3d)
 		{
-			// Slot RVA measured with tools/pe/symbols.py imports.
+			// Slot RVA measured from the DLL's import table.
 			void** slot = FindImportSlot(d3d, "OgreMain_x64.dll", GET_CONSTANT_DEFINITION);
 			Check(slot != NULL, "getConstantDefinition import slot found");
 			Check(slot && ((uintptr_t)slot - (uintptr_t)d3d) == 0x717F0, "slot RVA 0x717F0");

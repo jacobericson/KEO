@@ -47,10 +47,10 @@ int main()
 	Check(!K7ArrivalArmEdge(true, true, false, false, FAR, NOT_IN, -1.0),
 	      "edge: steady signal (no rising edge) -> no re-arm");
 	Check(!K7ArrivalArmEdge(false, true, true, false, FAR, NOT_IN, -1.0),
-	      "edge: formation still gathering -> no arm (B1)");
-	// The E1/E3/E4 shape: the cell is already in at the stop, but recently.
+	      "edge: formation still gathering -> no arm");
+	// The cell is already in at the stop, but only recently.
 	Check(K7ArrivalArmEdge(false, true, false, false, FAR, READY, 2.0),
-	      "edge: cell already in, recent transition (2s) -> armed (B2 option a)");
+	      "edge: cell already in, recent transition (2s) -> armed");
 	Check(!K7ArrivalArmEdge(false, true, false, false, FAR, READY, 6.0),
 	      "edge: cell already in, transition too old (6s) -> not armed");
 	Check(!K7ArrivalArmEdge(false, false, false, false, FAR, NOT_IN, -1.0),
@@ -84,7 +84,7 @@ int main()
 	Check(K7ArrivalPoll(UNKNOWN, 20.0, 15.0) == K7_ARRIVAL_EXPIRE,
 	      "poll: past the cap while unknown -> expire");
 	Check(K7ArrivalPoll(READY, 30.0, 15.0) == K7_ARRIVAL_FIRE,
-	      "poll: in-world even past the cap -> fire, not expire (K7TryArrivalReissue's own N3 gate handles a refused fire)");
+	      "poll: in-world even past the cap -> fire, not expire (K7TryArrivalReissue's own gate handles a refused fire)");
 
 	// -------------------------------------------------------------------
 	// K7ArrivalFireGate (8 cases, extended with destMatch/zonesOk)
@@ -105,12 +105,12 @@ int main()
 	      "gate: key false -> latch, never send");
 	Check(K7ArrivalFireGate(false, true,  true,  true, true, false, false, 0, 8) == K7_ARR_NONE,
 	      "gate: held wins even when the key is false");
-	// N2b: the destination-match and zone-accessibility gates.
+	// The destination-match and zone-accessibility gates.
 	Check(K7ArrivalFireGate(true,  false, true,  false, true, false, false, 0, 8) == K7_ARR_REFUSE,
 	      "gate: destination no longer matches (+0xDC) -> refuse");
 	Check(K7ArrivalFireGate(true,  false, true,  true, false, false, false, 0, 8) == K7_ARR_REFUSE,
 	      "gate: zones not accessible -> refuse");
-	// R4: refusal gates are evaluated regardless of `enabled`, so a
+	// Refusal gates are evaluated regardless of `enabled`, so a
 	// k7ArrivalTrigger=false poll that a refusal gate would also have
 	// refused never latches a would-fire time.
 	Check(K7ArrivalFireGate(false, false, false, true, true, false, false, 0, 8) == K7_ARR_REFUSE,

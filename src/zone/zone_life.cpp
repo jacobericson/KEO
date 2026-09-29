@@ -259,7 +259,7 @@ long   g_ftSkip          = 0;       // ftHandoff=<skip>/../../..: predicted firs
 
 namespace zone_life_detail {
 
-long   g_ftCleared       = 0;       //   ../<cleared>/../..: loaded, +176 cleared untouched (the P3 step)
+long   g_ftCleared       = 0;       //   ../<cleared>/../..: loaded, +176 cleared untouched (the pipeline handoff's step)
 long   g_ftLate          = 0;       //   ../../<late>/..: read first-time after the finalize, left to the zombie unload
 long   g_ftKeptLate      = 0;       //   ../../../<keptLate>: caught late with the unload unavailable, kept (cells)
 

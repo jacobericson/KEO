@@ -1,13 +1,7 @@
-# Python unit tests run by tools\tests\run_py_tests.py (from build_tests.bat), one repo-relative
-# path per line. Blank lines and lines starting with # are ignored.
-tools\metrics\test_survey.py
-tools\metrics\test_df_census.py
-tools\metrics\test_log_shapes.py
-tools\kenshilib\test_check_headers_pin.py
-tools\kenshilib\test_resources_root.py
-tools\build\test_verify_layout.py
-tools\hooks\test_hooks.py
-tools\build\test_move_tools.py
-tools\build\test_hook_sites.py
-tools\build\test_split_check.py
-tools\build\test_state_rename.py
+# Python unit tests run by tools\tests\run_py_tests.py (from build_tests.bat), one per line as
+# "<order> <repo-relative path>". Blank lines and lines starting with # are ignored. Where a
+# py_tests_private.txt sits beside this file, the runner merges its lines with these and runs
+# every module in ascending order.
+40 tools\kenshilib\test_check_headers_pin.py
+50 tools\kenshilib\test_resources_root.py
+90 tools\build\test_hook_sites.py

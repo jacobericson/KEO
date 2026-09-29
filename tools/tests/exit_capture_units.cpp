@@ -12,7 +12,7 @@ int main()
 	      "terminate source token");
 	Check(std::string(ExitCaptureSourceToken(99)) == "?", "an unknown source prints ? rather than garbage");
 
-	// B1: only the CRT's fabricated-code bypass may arm the UEF path. Every
+	// Only the CRT's fabricated-code bypass may arm the UEF path. Every
 	// code in, armed or not out -- including every code the VEH itself
 	// recognizes, which must never also arm the UEF detour.
 	Check(ExitCaptureUefCodeArmable(0xC0000409UL), "fail-fast arms");

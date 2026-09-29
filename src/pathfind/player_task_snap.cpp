@@ -60,7 +60,7 @@ static double lastStuckPollTime = 0.0;
 
 // POD snapshot filled by ReadPlayerTaskSnap. Integer fields use PT_NA for
 // "unreadable" (printed "-"); -1 in t / goal / permajobHead means a null link
-// (no current action, no goal, no permanent job), as the research table prints it.
+// (no current action, no goal, no permanent job).
 namespace player_task_snap_detail {
 struct PlayerTaskSnap
 {
