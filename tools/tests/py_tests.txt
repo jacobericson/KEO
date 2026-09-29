@@ -10,3 +10,4 @@ tools\hooks\test_hooks.py
 tools\build\test_move_tools.py
 tools\build\test_hook_sites.py
 tools\build\test_split_check.py
+tools\build\test_state_rename.py
