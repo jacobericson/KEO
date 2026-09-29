@@ -56,8 +56,8 @@ void* CloneNMG(void* realNMG, bool* stoppedOut);
 void FreeClonedNMG(void* clone);
 bool ResetWaitRevalidate(uintptr_t job, uintptr_t contentBefore, int* reasonOut);
 void ClearBusyBridgeIfIdle(uintptr_t nmg, bool lockHeld);
-int L2InFlightAcquire(const NavMeshCacheKey& key);
-void L2InFlightRelease(int slot);
+int L2InFlightAcquire(const NmCacheLock& held, const NavMeshCacheKey& key);
+void L2InFlightRelease(const NmCacheLock& held, int slot);
 uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut, NavMeshCacheKey* keyOut, ClaimedJob* claimedOut);
 bool WorkerProcessHit(void* nmg, uintptr_t job, int jobType, int hitIdx, const NavMeshCacheKey& key, LONGLONG claimQpc, LONG resetRaises);
 void BridgeLockQueue(void* nmg);
@@ -83,12 +83,19 @@ static inline void NoteWorkerPhase(LONG phase)
 	if (slot)
 		InterlockedExchange(slot, phase);
 }
-static inline void EnterProcessJobCS()
+// Every successful take of processJobCS, blocking or tried: this thread's hold
+// count (the populate split tests it), the owner tid the processJobAlt
+// tripwire reads, and the holder class. Called right after the take.
+static inline void PjNoteAcquired()
 {
-	EnterCriticalSection(&processJobCS);
 	++t_pjDepth;
 	InterlockedExchange(&g_processJobOwnerTid, (long)GetCurrentThreadId());
 	MissParHolderSet(MP_HOLD_OTHER);
+}
+static inline void EnterProcessJobCS()
+{
+	EnterCriticalSection(&processJobCS);
+	PjNoteAcquired();
 }
 
 static inline void LeaveProcessJobCS()

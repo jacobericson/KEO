@@ -505,6 +505,30 @@ extern CRITICAL_SECTION nmCacheCS;
 extern CRITICAL_SECTION processJobCS;
 extern CRITICAL_SECTION buildCollisionCS;
 
+// A hold of nmCacheCS, the L1 ring's lock. Taken after processJobCS when both
+// are held, never under the queue lock (+152). The ring's functions take a
+// reference to one as the caller's statement that it holds the lock.
+// Release() is for a region whose normal paths let go before the scope ends,
+// at the statement that released it; the destructor releases only on a C++
+// unwind.
+struct NmCacheLock
+{
+	NmCacheLock() : held(true) { EnterCriticalSection(&nmCacheCS); }
+	~NmCacheLock() { Release(); }
+	void Release()
+	{
+		if (!held)
+			return;
+		held = false;
+		LeaveCriticalSection(&nmCacheCS);
+	}
+
+private:
+	bool held;
+	NmCacheLock(const NmCacheLock&);
+	NmCacheLock& operator=(const NmCacheLock&);
+};
+
 inline bool L2Bypassed() { return InterlockedCompareExchange(&navmesh::g_nmCache.g_l2Bypass, 0, 0) != 0; }
 
 // True when the
@@ -534,18 +558,18 @@ void NoteZeroFaceMesh(const NavMeshCacheKey& key, int inputTri, int inputVert, i
 // Cache operations
 void           InitNavMeshCacheCS();
 void           ClearNavMeshCache();
-int            FindCacheEntry(const NavMeshCacheKey& key);
+int            FindCacheEntry(const NmCacheLock& held, const NavMeshCacheKey& key);
 void           EvictCacheEntry(int idx);
 // Deep-copies the generated mesh into the ring buffer. Returns the slot index,
 // or -1 when the mesh is out of bounds or an allocation failed (nothing is
 // stored in that case — never a valid entry with a NULL array).
 // Caller must hold nmCacheCS.
-int            StoreCacheEntry(const NavMeshCacheKey& key, uintptr_t navMeshPtr);
+int            StoreCacheEntry(const NmCacheLock& held, const NavMeshCacheKey& key, uintptr_t navMeshPtr);
 
 // Moves a freshly read L2 entry into the ring buffer and returns its slot
 // index, or -1 (the entry's arrays are freed) when it is inconsistent.
 // Takes ownership of `e` on success. Caller must hold nmCacheCS.
-int            PromoteDiskEntryToL1(NavMeshCacheEntry& e);
+int            PromoteDiskEntryToL1(const NmCacheLock& held, NavMeshCacheEntry& e);
 void*          ReconstructNavMesh(const NavMeshCacheEntry& entry);
 // Rebuilds the mesh of slot idx, an index taken under an earlier nmCacheCS
 // hold, only if the slot still holds `expected` (CacheSlotMatches). Caller
@@ -553,7 +577,7 @@ void*          ReconstructNavMesh(const NavMeshCacheEntry& entry);
 // `expected` (out of range, another key or no faces; *replacedOut true,
 // counted l1Replaced=) or the rebuild failed (*replacedOut false).
 // replacedOut may be NULL.
-void*          ReconstructExpected(const NavMeshCacheKey& expected, int idx, bool* replacedOut);
+void*          ReconstructExpected(const NmCacheLock& held, const NavMeshCacheKey& expected, int idx, bool* replacedOut);
 unsigned int   HashAABB(const float* aabb6);
 
 

@@ -116,18 +116,18 @@ bool WorkerProcessHit(void* nmg, uintptr_t job, int jobType, int hitIdx,
 
 	void* freshNavMesh = NULL;
 	bool replaced = false;
-	EnterCriticalSection(&nmCacheCS);
+	NmCacheLock cacheLock;
 	// The ring can publish over the slot after the lookup, so the saved index is re-checked against the key.
 	LARGE_INTEGER t0, t1;
 	QueryPerformanceCounter(&t0);
-	freshNavMesh = ReconstructExpected(key, hitIdx, &replaced);
+	freshNavMesh = ReconstructExpected(cacheLock, key, hitIdx, &replaced);
 	QueryPerformanceCounter(&t1);
 	if (!replaced)
 	{
 		long ms10 = (long)(QPCToMs(t0, t1) * 10.0);
 		InterlockedExchangeAdd(&navmesh::g_nmCache.nmSavedMsTimes10, ms10);
 	}
-	LeaveCriticalSection(&nmCacheCS);
+	cacheLock.Release();
 
 	if (!freshNavMesh)
 	{
@@ -371,14 +371,14 @@ void PjCtx::Lookup()
 	isL2Hit = false;
 	if (keyOk && navmesh::g_nmCache.nmDiagStage >= 2 && !InterlockedCompareExchange(&navmesh::g_nmCache.nmCacheDisabled, 0, 0))
 	{
-		EnterCriticalSection(&nmCacheCS);
+		NmCacheLock cacheLock;
 
-		hitIdx = FindCacheEntry(key);
+		hitIdx = FindCacheEntry(cacheLock, key);
 		isHit = (hitIdx >= 0 && navmesh::g_nmL1.nmCache[hitIdx].cachedFaces != NULL && game::g_gameFn.fn_navMeshCtor != NULL);
 
 		if (!isHit && game::g_gameFn.fn_navMeshCtor != NULL)
 		{
-			LeaveCriticalSection(&nmCacheCS);
+			cacheLock.Release();
 
 			LARGE_INTEGER tR0, tR1;
 			QueryPerformanceCounter(&tR0);
@@ -388,9 +388,9 @@ void PjCtx::Lookup()
 			bool l2Read = ReadDiskCache(key, diskEntry);
 			if (l2Read)
 			{
-				EnterCriticalSection(&nmCacheCS);
-				hitIdx = PromoteDiskEntryToL1(diskEntry);
-				LeaveCriticalSection(&nmCacheCS);
+				NmCacheLock promoteLock;
+				hitIdx = PromoteDiskEntryToL1(promoteLock, diskEntry);
+				promoteLock.Release();
 
 				if (hitIdx >= 0)
 				{
@@ -430,8 +430,8 @@ void PjCtx::Lookup()
 		{
 			if (isHit)
 			{
-				void* freshNavMesh = ReconstructExpected(key, hitIdx, NULL);
-				LeaveCriticalSection(&nmCacheCS);
+				void* freshNavMesh = ReconstructExpected(cacheLock, key, hitIdx, NULL);
+				cacheLock.Release();
 
 				if (freshNavMesh)
 				{
@@ -445,7 +445,7 @@ void PjCtx::Lookup()
 			}
 			else
 			{
-				LeaveCriticalSection(&nmCacheCS);
+				cacheLock.Release();
 			}
 		}
 	}
@@ -469,9 +469,9 @@ void PjCtx::OwnHit()
 		{
 			// The promotion released nmCacheCS, so the ring may have published
 			// over the slot since; a replaced slot regenerates, the job untouched.
-			EnterCriticalSection(&nmCacheCS);
-			void* freshNavMesh = ReconstructExpected(key, hitIdx, NULL);
-			LeaveCriticalSection(&nmCacheCS);
+			NmCacheLock cacheLock;
+			void* freshNavMesh = ReconstructExpected(cacheLock, key, hitIdx, NULL);
+			cacheLock.Release();
 
 			if (freshNavMesh)
 			{
@@ -591,11 +591,11 @@ void PjCtx::LateLookup()
 	if (keyOk && navmesh::g_nmCache.nmDiagStage >= 2 && game::g_gameFn.fn_navMeshCtor != NULL
 	    && !InterlockedCompareExchange(&navmesh::g_nmCache.nmCacheDisabled, 0, 0))
 	{
-		EnterCriticalSection(&nmCacheCS);
-		int lateIdx = FindCacheEntry(key);
+		NmCacheLock cacheLock;
+		int lateIdx = FindCacheEntry(cacheLock, key);
 		if (lateIdx >= 0)
-			lateMesh = ReconstructExpected(key, lateIdx, NULL);
-		LeaveCriticalSection(&nmCacheCS);
+			lateMesh = ReconstructExpected(cacheLock, key, lateIdx, NULL);
+		cacheLock.Release();
 	}
 }
 
@@ -854,11 +854,11 @@ void PjCtx::StoreGenerated(WbSwapRestore& swapRestore, ProcessJobLock& missLock,
 				InterlockedIncrement(&navmesh::g_nmCache.nmHashRaceCount);
 			if (storeOk)
 			{
-				EnterCriticalSection(&nmCacheCS);
-				storeIdx = StoreCacheEntry(key, storedResult);
+				NmCacheLock storeLock;
+				storeIdx = StoreCacheEntry(storeLock, key, storedResult);
 				if (storeIdx >= 0)
 					MissParNoteHash(navmesh::g_nmL1.nmCache[storeIdx], !onBgThread);
-				LeaveCriticalSection(&nmCacheCS);
+				storeLock.Release();
 			}
 		}
 	}
@@ -887,10 +887,10 @@ void PjCtx::StoreGenerated(WbSwapRestore& swapRestore, ProcessJobLock& missLock,
 	}
 	if (storeIdx >= 0)
 	{
-		EnterCriticalSection(&nmCacheCS);
+		NmCacheLock blobLock;
 		if (CacheSlotMatches(navmesh::g_nmL1.nmCache[storeIdx], key))
 			BuildDiskCacheBlob(key, navmesh::g_nmL1.nmCache[storeIdx], pendingWrite);
-		LeaveCriticalSection(&nmCacheCS);
+		blobLock.Release();
 	}
 }
 

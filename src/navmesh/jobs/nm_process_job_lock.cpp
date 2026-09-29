@@ -70,9 +70,7 @@ bool EnterProcessJobCSStopAware()
 			break;
 		if (TryEnterCriticalSection(&processJobCS))
 		{
-			++t_pjDepth;
-			InterlockedExchange(&g_processJobOwnerTid, (long)GetCurrentThreadId());
-			MissParHolderSet(MP_HOLD_OTHER);
+			PjNoteAcquired();
 			held = true;
 			break;
 		}
@@ -261,9 +259,7 @@ NavMeshPjLockResult NavMeshTryLockProcessJobFor(DWORD timeoutMs, DWORD* waitedMs
 	{
 		if (TryEnterCriticalSection(&processJobCS))
 		{
-			++t_pjDepth;
-			InterlockedExchange(&g_processJobOwnerTid, (long)GetCurrentThreadId());
-			MissParHolderSet(MP_HOLD_OTHER);
+			PjNoteAcquired();
 			// The unload priority request has done its job. Won while
 			// still up (not expired) counts ulPrioWin=; either way it is
 			// withdrawn and the next deferral may raise a fresh one at once.
@@ -290,9 +286,7 @@ NavMeshPjLockResult NavMeshTryLockProcessJobFor(DWORD timeoutMs, DWORD* waitedMs
 	{
 		if (TryEnterCriticalSection(&processJobCS))
 		{
-			++t_pjDepth;
-			InterlockedExchange(&g_processJobOwnerTid, (long)GetCurrentThreadId());
-			MissParHolderSet(MP_HOLD_OTHER);
+			PjNoteAcquired();
 			InterlockedDecrement(&g_pjPollWanting);
 			if (waitedMs) *waitedMs = (DWORD)(QpcDeltaUs(start, QpcNow()) / 1000);
 			return NM_PJLOCK_HELD;

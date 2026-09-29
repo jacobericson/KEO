@@ -126,7 +126,7 @@ static const int L2FLIGHT_BUSY = -1;
 static const int L2FLIGHT_FULL = -2;
 
 namespace nm_workers_detail {
-int L2InFlightAcquire(const NavMeshCacheKey& key)
+int L2InFlightAcquire(const NmCacheLock&, const NavMeshCacheKey& key)
 {
 	int free = -1;
 	for (int i = 0; i < NAVMESH_WORKER_COUNT + 1; ++i)
@@ -153,7 +153,7 @@ int L2InFlightAcquire(const NavMeshCacheKey& key)
 } // namespace nm_workers_detail
 
 namespace nm_workers_detail {
-void L2InFlightRelease(int slot)
+void L2InFlightRelease(const NmCacheLock&, int slot)
 {
 	if (slot >= 0 && slot < NAVMESH_WORKER_COUNT + 1)
 		g_l2InFlightUsed[slot] = false;
@@ -382,20 +382,20 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 
 	if (keyOk)
 	{
-		EnterCriticalSection(&nmCacheCS);
-		int found = FindCacheEntry(key);
+		NmCacheLock cacheLock;
+		int found = FindCacheEntry(cacheLock, key);
 		if (found >= 0 && navmesh::g_nmL1.nmCache[found].cachedFaces != NULL && game::g_gameFn.fn_navMeshCtor != NULL)
 			hitIdx = found;
-		LeaveCriticalSection(&nmCacheCS);
+		cacheLock.Release();
 	}
 
 	if (keyOk && hitIdx < 0 && game::g_gameFn.fn_navMeshCtor != NULL)
 	{
 		// Duplicate jobs for one zone do exist, so two workers can hold
 		// different jobs with the same key. Only one of them reads the file.
-		EnterCriticalSection(&nmCacheCS);
-		int flight = L2InFlightAcquire(key);
-		LeaveCriticalSection(&nmCacheCS);
+		NmCacheLock cacheLock;
+		int flight = L2InFlightAcquire(cacheLock, key);
+		cacheLock.Release();
 
 		if (flight == L2FLIGHT_BUSY)
 		{
@@ -415,12 +415,12 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 			long readUs = (long)(QPCToMs(tR0, tR1) * 1000.0);
 			InterlockedExchangeAdd(&navmesh::g_nmCache.nmDiskReadUsTimes1, readUs);
 
-			EnterCriticalSection(&nmCacheCS);
+			NmCacheLock promoteLock;
 			if (l2Hit)
-				hitIdx = PromoteDiskEntryToL1(diskEntry);
+				hitIdx = PromoteDiskEntryToL1(promoteLock, diskEntry);
 			if (flight >= 0)
-				L2InFlightRelease(flight);
-			LeaveCriticalSection(&nmCacheCS);
+				L2InFlightRelease(promoteLock, flight);
+			promoteLock.Release();
 
 			if (l2Hit && hitIdx >= 0)
 				InterlockedIncrement(&navmesh::g_nmCache.nmDiskHitCount);

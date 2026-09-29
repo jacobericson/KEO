@@ -165,7 +165,7 @@ void NoteZeroFaceMesh(const NavMeshCacheKey& key, int inputTri, int inputVert, i
 }
 
 
-int FindCacheEntry(const NavMeshCacheKey& key)
+int FindCacheEntry(const NmCacheLock&, const NavMeshCacheKey& key)
 {
 	for (int i = 0; i < navmesh::g_nmL1.nmCacheFill; ++i)
 	{
@@ -244,7 +244,7 @@ static int PublishEntry(NavMeshCacheEntry& src)
 	return idx;
 }
 
-int StoreCacheEntry(const NavMeshCacheKey& key, uintptr_t navMeshPtr)
+int StoreCacheEntry(const NmCacheLock&, const NavMeshCacheKey& key, uintptr_t navMeshPtr)
 {
 	if (!navMeshPtr) return -1;
 
@@ -305,7 +305,7 @@ int StoreCacheEntry(const NavMeshCacheKey& key, uintptr_t navMeshPtr)
 	return PublishEntry(e);
 }
 
-int PromoteDiskEntryToL1(NavMeshCacheEntry& e)
+int PromoteDiskEntryToL1(const NmCacheLock&, NavMeshCacheEntry& e)
 {
 	// An L2 file written before this rule can still hold a zero-face mesh.
 	// Drop it and let the job regenerate.
@@ -409,7 +409,7 @@ void* ReconstructNavMesh(const NavMeshCacheEntry& entry)
 	return navMesh;
 }
 
-void* ReconstructExpected(const NavMeshCacheKey& expected, int idx, bool* replacedOut)
+void* ReconstructExpected(const NmCacheLock&, const NavMeshCacheKey& expected, int idx, bool* replacedOut)
 {
 	const bool matches = CacheSlotMatchesAt(navmesh::g_nmL1.nmCache, idx, expected);
 	if (replacedOut)
