@@ -5,6 +5,17 @@
 #include <cstddef>
 #include <string.h>
 
+// graphHeuristicGuard: a boolean stored as 1 or 0; anything else is refused.
+static bool ParseGraphHeuristicGuard(const std::string& val, ConfigLogFn log)
+{
+	(void)log;
+	bool b;
+	if (!ParseBool(val, &b))
+		return false;
+	fixes::g_fixesCfg.graphHeuristicGuardOn = b ? 1 : 0;
+	return true;
+}
+
 namespace fixes {
 
 const FixesConfig kFixesDefaults =
@@ -34,6 +45,7 @@ const FixesConfig kFixesDefaults =
 	true, // physQueryGuardEnabled
 	true, // corpsePinEnabled
 	true, // nestValidationGuardEnabled
+	0, // graphHeuristicGuardOn
 };
 
 FixesConfig g_fixesCfg = kFixesDefaults;
@@ -129,6 +141,7 @@ const ConfigKey g_fixesConfigKeys[] =
 	  "Nest validation guard",
 	  "Skips the game's nest validation for a cell whose navmesh is not in yet, so no nest is destroyed"
 	  " against a missing mesh; the cell is checked again next loading cycle."),
+	CFG_OCUSTOM("graphHeuristicGuard", FixesConfig, graphHeuristicGuardOn, ParseGraphHeuristicGuard, NDOC),
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }
 };
 

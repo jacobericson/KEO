@@ -238,3 +238,5 @@ src\fixes\fixes_config.cpp
 src\gui\gui_config.cpp
 src\navmesh\jobs\nm_unload_fence_policy.cpp
 src\zone\retention\zone_save_rule.cpp
+src\fixes\search\graph_heuristic_guard_policy.cpp
+src\fixes\search\graph_heuristic_guard.cpp

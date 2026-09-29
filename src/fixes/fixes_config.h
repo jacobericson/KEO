@@ -177,6 +177,11 @@ struct FixesConfig
 	// no-op -- the original runs exactly as before the guard existed. Read on
 	// every call.
 	bool nestValidationGuardEnabled;
+
+	// graphHeuristicGuard: installs the three guards inside the A* search's hierarchical
+	// heuristic (graph_heuristic_guard.cpp); 0 by default. playerHierarchical other than off
+	// installs them too. Read at startup only.
+	int graphHeuristicGuardOn;
 };
 
 extern FixesConfig g_fixesCfg;

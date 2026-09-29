@@ -35,6 +35,7 @@ enum HookWant
 	HOOK_WANT_NAVMESH_LIFE,       // navMeshLife
 	HOOK_WANT_UNSTITCH_PROBE,     // unstitchProbe
 	HOOK_WANT_SECTION_KEY_PROBE,  // sectionKeyProbe
+	HOOK_WANT_GRAPH_HEURISTIC,    // graphHeuristicGuard
 	HOOK_WANT_UNCOUNTED
 };
 
@@ -62,6 +63,7 @@ struct HookWantInputs
 	bool pathExtractGuard;
 	bool sectionStamp;
 	bool gatePassDiag;
+	bool graphHeuristicGuard;
 };
 
 bool HookWantEval(HookWant want, const HookWantInputs& in);

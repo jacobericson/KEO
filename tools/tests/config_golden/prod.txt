@@ -22,6 +22,7 @@ gpuParamLookupDiag=false
 gpuUploadDiag=false
 gpuUploadSkip=true
 graphExpandGuard=true
+graphHeuristicGuard=0
 graphPositionGuard=true
 graphVisitorGuard=true
 groupCohesion=true

@@ -82,8 +82,9 @@ static bool HasName(const TestRow* rows, int n, const char* name)
 	return false;
 }
 
-// The 18 inputs, each with its field and the config global it is read from; a
-// NULL global is a key a PROD build does not carry.
+// The 19 inputs, each with its field and the config global it is read from; a
+// NULL global is a key a PROD build does not carry, or the int key
+// CheckInputMapping flips on its own.
 struct InputField
 {
 	const char*            name;
@@ -116,6 +117,7 @@ static const InputField kFields[] =
 	{ "pathExtractGuard",    &HookWantInputs::pathExtractGuard,    &fixes::g_fixesCfg.pathExtractGuardEnabled },
 	{ "sectionStamp",        &HookWantInputs::sectionStamp,        &fixes::g_fixesCfg.sectionStampEnabled },
 	{ "gatePassDiag",        &HookWantInputs::gatePassDiag,        &pathfind::g_pathfindCfg.gatePassDiagEnabled },
+	{ "graphHeuristicGuard", &HookWantInputs::graphHeuristicGuard, NULL },
 };
 static const int kFieldCount = (int)(sizeof(kFields) / sizeof(kFields[0]));
 
@@ -127,13 +129,14 @@ static int FieldIndex(const char* name)
 	return -1;
 }
 
-// The DEV defaults: every key true but unstitchProbe.
+// The DEV defaults: every key true but unstitchProbe and graphHeuristicGuard.
 static HookWantInputs DevDefaults()
 {
 	HookWantInputs in;
 	for (int i = 0; i < kFieldCount; ++i)
 		in.*kFields[i].field = true;
 	in.unstitchProbe = false;
+	in.graphHeuristicGuard = false;
 	return in;
 }
 
@@ -282,6 +285,7 @@ static const Flip kFlips[] =
 	{ "meshFaceGuard", { "meshFaceGuard" }, { "navMeshFaceAabb" } },
 	{ "unstitchProbe", { "unstitchProbe" }, { "deleteInstance" } },
 	{ "sectionKeyProbe", { "sectionKeyProbe" }, { "clearanceResetKeys", "sectionCutLookup" } },
+	{ "graphHeuristicGuard", { "graphHeuristicGuard" }, { "graphHeuristicGoalAdjacent", "graphHeuristicClusterCentre", "graphHeuristicCoarseSeed" } },
 };
 
 static void CheckWantTruthTable()
@@ -350,6 +354,13 @@ static void CheckInputMapping()
 		*kFields[i].global = saved;
 		Check(SameInputs(in, base, i), Msg1("inputs %s", kFields[i].name));
 	}
+
+	// graphHeuristicGuard is an int key, so the loop above cannot flip it.
+	const int savedHeuristic = fixes::g_fixesCfg.graphHeuristicGuardOn;
+	fixes::g_fixesCfg.graphHeuristicGuardOn = 1;
+	HookWantInputs heuristic = HookWantInputsFromConfig();
+	fixes::g_fixesCfg.graphHeuristicGuardOn = savedHeuristic;
+	Check(SameInputs(heuristic, base, FieldIndex("graphHeuristicGuard")), "inputs graphHeuristicGuard");
 }
 
 // The rows carrying HOOK_CAP_WORKER_POOL are exactly navMeshStop and
@@ -385,14 +396,14 @@ int main()
 {
 	CheckInstallAdmit();
 #if ZONEHAND_STEP >= 3
-	CheckVariant(kDevRows, kDevCount, "dev", 65, 50, 49, 25, 25, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 61, 46, 44, 25, 21, ProdDefaults());
+	CheckVariant(kDevRows, kDevCount, "dev", 68, 53, 49, 25, 28, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 64, 49, 44, 25, 24, ProdDefaults());
 #elif ZONEHAND_STEP == 2
-	CheckVariant(kDevRows, kDevCount, "dev", 64, 49, 48, 25, 24, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 60, 45, 43, 25, 20, ProdDefaults());
+	CheckVariant(kDevRows, kDevCount, "dev", 67, 52, 48, 25, 27, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 63, 48, 43, 25, 23, ProdDefaults());
 #else
-	CheckVariant(kDevRows, kDevCount, "dev", 61, 46, 45, 25, 21, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 57, 42, 40, 25, 17, ProdDefaults());
+	CheckVariant(kDevRows, kDevCount, "dev", 64, 49, 45, 25, 24, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 60, 45, 40, 25, 20, ProdDefaults());
 #endif
 	CheckDevMinusProd();
 	CheckWantTruthTable();

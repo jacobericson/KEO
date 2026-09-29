@@ -247,6 +247,18 @@ const size_t RVA_OPENSET_POP_NEXT = 0xD2C260;
 // Hooked by src/fixes/search/graph_position_guard.cpp in every build.
 const size_t RVA_GRAPH_POSITION_LOOKUP = 0xDA4470;
 
+// The hierarchical heuristic's goal-adjacency test, which reads a section's cluster-graph instance
+// unchecked. Hooked by src/fixes/search/graph_heuristic_guard.cpp while the guard is wanted.
+const size_t RVA_GRAPH_HEURISTIC_GOAL_ADJACENT = 0xDA6A30;
+
+// The hierarchical heuristic's cluster-centre lookup, the same unchecked instance read.
+// Hooked by src/fixes/search/graph_heuristic_guard.cpp while the guard is wanted.
+const size_t RVA_GRAPH_HEURISTIC_CLUSTER_CENTRE = 0xDA6690;
+
+// The coarse-search seed, shared by the heuristic's init and the pathExists setup.
+// Hooked by src/fixes/search/graph_heuristic_guard.cpp while the guard is wanted.
+const size_t RVA_GRAPH_HEURISTIC_COARSE_SEED = 0xDA5FE0;
+
 // The per-face AABB step a navmesh instance's clearance reset runs: it fetches
 // one face record and walks the consecutive edges the record names, bounding
 // neither the face index nor either end of the edge run. Prologue is a single

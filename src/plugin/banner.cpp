@@ -8,6 +8,7 @@
 #include "render/render_config.h"
 #include "gui/settings_panel.h"
 #include "bench/bench_runner.h"
+#include "fixes/search/graph_heuristic_guard.h"
 
 namespace plugin_entry_detail
 {
@@ -46,6 +47,7 @@ void LogInitBanner(int installed, int totalHooks, const std::string& gateTok,
 	    << ", graphVisitorGuard=" << (fixes::g_fixesCfg.graphVisitorGuardEnabled ? "ON" : "OFF")
 	    << ", graphExpandGuard=" << (fixes::g_fixesCfg.graphExpandGuardEnabled ? "ON" : "OFF")
 	    << ", graphPositionGuard=" << (fixes::g_fixesCfg.graphPositionGuardEnabled ? "ON" : "OFF")
+	    << ", graphHeuristicGuard=" << GraphHeuristicGuardToken()
 	    << ", createInstanceGuard=" << (fixes::g_fixesCfg.createInstanceGuardEnabled ? "ON" : "OFF")
 	    << ", hullDoublePushGuard=" << (fixes::g_fixesCfg.hullDoublePushGuardEnabled ? "ON" : "OFF")
 	    << ", stitchByteGuard=" << (fixes::g_fixesCfg.stitchByteGuardEnabled ? "ON" : "OFF")
