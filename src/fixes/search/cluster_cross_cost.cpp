@@ -34,8 +34,9 @@ static graphInstanceConnect_t orig_graphInstanceConnect = NULL;
 static const size_t OFF_SM_WORLD         = 0x88;   // SectionManager -> hkaiWorld*
 static const size_t OFF_WORLD_COLLECTION = 0x20;   // hkaiWorld -> hkaiStreamingCollection*
 
-// calls == notLive + the live connects. Each link counts once in rewritten or skipped; an owned
-// range skipped whole counts one skip and no link.
+// calls == notLive + the live connects. Each link counts once in rewritten or skipped (a link
+// rewritten on its own side whose reciprocal is absent counts skipped); an owned range skipped
+// whole counts one skip and no link.
 static volatile LONG s_calls     = 0;
 static volatile LONG s_links     = 0;
 static volatile LONG s_rewritten = 0;

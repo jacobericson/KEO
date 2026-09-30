@@ -165,11 +165,11 @@
 
 	// The hierarchical heuristic's three unchecked cluster-graph instance reads
 	// (src/fixes/search/graph_heuristic_guard.cpp): each prologue is argument
-	// spills and register loads (the seed's also one stack adjust), so the bytes
-	// a detour takes are whole, position-independent instructions with no branch
-	// among them. Wanted only while graphHeuristicGuard is set. diagnostic = true:
-	// a mismatch refuses these guards alone, and without them the sites behave
-	// exactly as vanilla does.
+	// spills, pushes and register loads (the seed's also one stack adjust), so the
+	// bytes a detour takes are whole, position-independent instructions with no
+	// branch among them. Wanted while graphHeuristicGuard is set or playerHierarchical
+	// is not off. diagnostic = true: a mismatch refuses these guards alone, and
+	// without them the sites behave exactly as vanilla does.
 	HOOK_ROW(HOOK_GRAPH_HEURISTIC_GOAL_ADJACENT, "graphHeuristicGoalAdjacent", RVA_GRAPH_HEURISTIC_GOAL_ADJACENT, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_GRAPH_HEURISTIC, HOOK_CAP_NONE,
 	         0x48,0x89,0x5C,0x24,0x08,0x48,0x89,0x6C,0x24,0x10,0x48,0x89,0x74,0x24,0x18,0x57)
 	HOOK_ROW(HOOK_GRAPH_HEURISTIC_CLUSTER_CENTRE, "graphHeuristicClusterCentre", RVA_GRAPH_HEURISTIC_CLUSTER_CENTRE, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_GRAPH_HEURISTIC, HOOK_CAP_NONE,

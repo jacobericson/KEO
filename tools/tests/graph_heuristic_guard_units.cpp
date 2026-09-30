@@ -1,7 +1,7 @@
 // The hierarchical heuristic guard's classification, over a fabricated visitor, coarse search
 // and collection at the real offsets: each site's slot and section field, the no-collection
 // rules, the section bound, the seed's early return and goal walk, the return-address rule and
-// the centre fallback.
+// the centre fallback, and the degrade's writes into a fabricated heuristic object.
 
 #include <cstdio>
 #include <cstring>
@@ -216,6 +216,9 @@ static void CheckSeed()
 	*(void**)(w.visitor + OFF_HVIS_FALLBACK)   = 0;
 	InspectGraphHeuristicSeed(w.coarse, w.visitor, goals, 1, Key(1, 0), &c);
 	Check(c.arm == GH_NO_COLLECTION, "seed: no collection and no fallback fires");
+	*(void**)(w.visitor + OFF_HVIS_FALLBACK) = w.graphA;
+	InspectGraphHeuristicSeed(w.coarse, w.visitor, goals, 1, Key(1, 0), &c);
+	Check(c.arm == GH_RUN, "seed: no collection with a fallback runs the original");
 
 	InspectGraphHeuristicSeed(w.coarse, 0, goals, 1, Key(1, 0), &c);
 	Check(c.arm == GH_UNJUDGED, "seed: no visitor is not judged");
@@ -246,11 +249,78 @@ static void CheckFallbackAndArms()
 	Check(GraphHeuristicArmFires(GH_NO_INSTANCE), "arm GH_NO_INSTANCE fires");
 }
 
+// A heuristic object filled with a pattern, its coarse search embedded at +0x180 and a goal
+// pointer at +0x240, so a write anywhere but its own field shows as a changed byte.
+struct Heuristic
+{
+	unsigned char bytes[0x280];
+};
+
+static void FillHeuristic(Heuristic* h, const GraphPositionVec4* goal0)
+{
+	for (size_t i = 0; i < sizeof(h->bytes); ++i)
+		h->bytes[i] = (unsigned char)(0xA5 ^ i);
+	*(const GraphPositionVec4**)(h->bytes + 0x240) = goal0;
+}
+
+// Every byte of h equals ref except [from, from + len), which must read as want.
+static bool OnlyChanged(const Heuristic* h, const Heuristic* ref, size_t from, size_t len,
+                        const unsigned char* want)
+{
+	for (size_t i = 0; i < sizeof(h->bytes); ++i)
+	{
+		const bool inField = i >= from && i < from + len;
+		if (h->bytes[i] != (inField ? want[i - from] : ref->bytes[i]))
+			return false;
+	}
+	return true;
+}
+
+static void CheckDegradeTargets()
+{
+	static const unsigned char minusOne[4] = { 0xFF, 0xFF, 0xFF, 0xFF };
+	GraphPositionVec4 goal0 = { 5.0f, 6.0f, 7.0f, 1.0f };
+	Heuristic h, ref;
+
+	FillHeuristic(&h, &goal0);
+	ref = h;
+	Check(GraphHeuristicStartCluster(h.bytes) == (int*)(h.bytes + 0x18),
+	      "degrade: the start cluster is the heuristic's +0x18");
+	GraphHeuristicMakeEuclidean(h.bytes);
+	Check(OnlyChanged(&h, &ref, 0x18, 4, minusOne),
+	      "degrade: the adjacency and centre write -1 at +0x18 and nothing else");
+
+	// The seed is handed the coarse search; its write must reach back to the same field.
+	FillHeuristic(&h, &goal0);
+	ref = h;
+	Check(GraphHeuristicOfSeedCoarse(h.bytes + 0x180) == (void*)h.bytes,
+	      "degrade: the seed's coarse search at +0x180 names its heuristic");
+	GraphHeuristicMakeEuclidean(GraphHeuristicOfSeedCoarse(h.bytes + 0x180));
+	Check(OnlyChanged(&h, &ref, 0x18, 4, minusOne),
+	      "degrade: the seed writes -1 at the heuristic's +0x18 and nothing else");
+
+	// The centre reads goal 0 through +0x240 and writes nothing into the heuristic.
+	FillHeuristic(&h, &goal0);
+	ref = h;
+	const GraphPositionVec4* point = GraphHeuristicCentreFallbackPoint(h.bytes);
+	GraphPositionVec4 centre = GraphHeuristicCentreFallback(point);
+	Check(point == &goal0 && centre.x == 5.0f && centre.y == 6.0f && centre.z == 7.0f
+	      && OnlyChanged(&h, &ref, 0, 0, 0),
+	      "degrade: the centre fallback reads goal 0 through +0x240 and writes nothing");
+
+	FillHeuristic(&h, 0);
+	GraphPositionVec4 farPoint = GraphHeuristicCentreFallback(GraphHeuristicCentreFallbackPoint(h.bytes));
+	GraphPositionVec4 sentinel = GraphPositionFarSentinel();
+	Check(farPoint.x == sentinel.x && farPoint.y == sentinel.y && farPoint.z == sentinel.z,
+	      "degrade: no goal at +0x240 gives the far sentinel");
+}
+
 int main()
 {
 	CheckAdjacent();
 	CheckCentre();
 	CheckSeed();
 	CheckFallbackAndArms();
+	CheckDegradeTargets();
 	return CheckExit("graph_heuristic_guard_units");
 }

@@ -592,7 +592,8 @@ void hook_findPathFull(void* streamingCollection, void* searchState, void* findP
 	BoostFindPathBudget(searchState, c);
 	CaptureFindPathProbe(searchState, c);
 
-	// The original A*, once, or with its hierarchical arm (astar_hier.h)
+	// The original A*, once, or with its hierarchical arm (astar_hier.h). The QPC pair times every
+	// call of that sequence; the iterations, status and cause read below are the last call's.
 	QueryPerformanceCounter(&c.pathPoolQpcBefore);
 	AstarHierSearch(streamingCollection, searchState, findPathOutput, astarReturnAddr, c.pathPoolPlayerByReq);
 

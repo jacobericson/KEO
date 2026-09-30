@@ -383,6 +383,8 @@ static void InstallPathfindHooks(int* installed, int*)
 		else
 		{
 			ErrorLog("FAILED to hook findPathFull");
+			// The heuristic guards, installed by an earlier step, stay in: each calls its site
+			// unchanged while the instances are in place, and NPC searches reach the same sites.
 			if (pathfind::g_pathfindCfg.playerHierarchicalMode != AHIER_OFF)
 			{
 				pathfind::g_pathfindCfg.playerHierarchicalMode = AHIER_OFF;
@@ -410,6 +412,18 @@ static void InstallPathfindHooks(int* installed, int*)
 		LogMsg(std::string("Pathfinding step 1: findPathFull alone for playerHierarchical=")
 		       + AstarHierModeName(pathfind::g_pathfindCfg.playerHierarchicalMode));
 	}
+}
+
+// Player searches reach the heuristic's three sites only through the hierarchical arm, so the
+// arm runs only over a complete guard: a partial or refused install turns it off here, before
+// findPathFull's want is read.
+static void HierarchicalGuardStep(int*, int*)
+{
+	if (pathfind::g_pathfindCfg.playerHierarchicalMode == AHIER_OFF || GraphHeuristicGuardComplete())
+		return;
+	pathfind::g_pathfindCfg.playerHierarchicalMode = AHIER_OFF;
+	ErrorLog(std::string("Graph heuristic guard ") + GraphHeuristicGuardToken()
+	         + "; playerHierarchical is off for this session");
 }
 
 // Priority boost (pathReqSubmit hook)
@@ -573,6 +587,7 @@ static void (*const kInstallSteps[])(int*, int*) =
 
 	// The hierarchical heuristic's three unchecked instance reads, only while wanted.
 	InstallGraphHeuristicGuard,
+	HierarchicalGuardStep,
 
 	// The cross-tile cluster link cost, rewritten as each graph instance registers, only while wanted.
 	InstallClusterCrossCost,

@@ -180,7 +180,9 @@ struct FixesConfig
 
 	// graphHeuristicGuard: installs the three guards inside the A* search's hierarchical
 	// heuristic (graph_heuristic_guard.cpp); 0 by default. playerHierarchical other than off
-	// installs them too. Read at startup only.
+	// installs them too. After an adjacency fire, the one evaluation that goes on to the coarse
+	// search relies on graphExpandGuard and graphVisitorGuard, separate keys both on by default.
+	// Read at startup only.
 	int graphHeuristicGuardOn;
 
 	// clusterCrossCost: rewrites each cross-tile cluster-graph link's cost to its world-frame

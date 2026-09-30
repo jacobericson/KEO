@@ -150,6 +150,8 @@ static void RewriteLink(void* inst, void* coll, unsigned node, unsigned mySec, u
 	const unsigned target = EdgeTarget(e);
 	void* nb = Neighbour(coll, target >> TARGET_SECTION_SHIFT);
 	const unsigned m = target & TARGET_NODE_MASK;
+	// The owned map holds one entry per node (the instance build, 0xD27740, sizes it so), so its
+	// count bounds the positions array too, here and in CrossCostRewrite's node loop.
 	const int nbNodes = nb ? IntAt(nb, OFF_GI_OWNED_MAP_COUNT) : 0;
 	if (!nb || nbNodes <= 0 || m >= (unsigned)nbNodes
 	    || !PtrAt<const float*>(inst, OFF_GI_POSITIONS) || !PtrAt<const float*>(nb, OFF_GI_POSITIONS))
@@ -159,6 +161,7 @@ static void RewriteLink(void* inst, void* coll, unsigned node, unsigned mySec, u
 	}
 	const unsigned short cost = CrossCostHalf(CrossCostWorldDistance(inst, node, nb, m));
 	*(unsigned short*)e = cost;
+	// Without a reciprocal the forward edge stays rewritten; the link is counted skipped.
 	if (WriteReciprocal(nb, m, node, mySec, cost))
 		++out->rewritten;
 	else

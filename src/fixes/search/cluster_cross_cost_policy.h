@@ -34,7 +34,8 @@ float CrossCostWorldDistance(const void* instA, unsigned nodeA, const void* inst
 unsigned short CrossCostHalf(float d);
 // Every cross owned edge of inst whose target section differs from inst's own: its cost and its
 // reciprocal's in the neighbour, rewritten; a link whose bound or NULL check fails is skipped
-// and counted. Idempotent. Adds to *out.
+// and counted. A link whose neighbour has no reciprocal edge keeps its own side rewritten and
+// is counted skipped too. Idempotent. Adds to *out.
 void CrossCostRewrite(void* inst, void* coll, CrossCostCounts* out);
 
 #endif

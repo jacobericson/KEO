@@ -51,4 +51,14 @@ bool GraphHeuristicSeedWritesStartCluster(unsigned returnRva, bool inExe);
 // The centre a failed 0xDA6690 reports: goal 0's position, or the far sentinel without one.
 GraphPositionVec4 GraphHeuristicCentreFallback(const GraphPositionVec4* goal0);
 
+// Where a fire degrades the heuristic object. The start cluster at +0x18: -1 there makes every
+// later evaluation of the search Euclidean. The heuristic embedding a coarse search at +0x180,
+// which the seed receives in place of the heuristic. Goal 0's position through the pointer at
+// +0x240, NULL when the search has no goal.
+int* GraphHeuristicStartCluster(void* heuristic);
+void* GraphHeuristicOfSeedCoarse(void* coarseSearch);
+const GraphPositionVec4* GraphHeuristicCentreFallbackPoint(const void* heuristic);
+// The degrade itself: the start cluster set to -1, and no other byte of the heuristic written.
+void GraphHeuristicMakeEuclidean(void* heuristic);
+
 #endif

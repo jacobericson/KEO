@@ -192,11 +192,6 @@ static const void* VisitorOf(void* heuristic)
 	return heuristic ? *(void* const*)((char*)heuristic + OFF_HEUR_VISITOR) : NULL;
 }
 
-static void HeuristicOff(void* heuristic)
-{
-	*(int*)((char*)heuristic + OFF_HEUR_START_CLUSTER) = -1;
-}
-
 static char hook_graphHeuristicGoalAdjacent(void* heuristic, unsigned int clusterKey, int* goalIdxOut,
                                             unsigned int* costOut)
 {
@@ -213,7 +208,7 @@ static char hook_graphHeuristicGoalAdjacent(void* heuristic, unsigned int cluste
 	// "Not adjacent", with both outputs untouched; the caller's next step asks the centre.
 	bool inExe;
 	const unsigned retRva = ReturnRva(_ReturnAddress(), &inExe);
-	HeuristicOff(heuristic);
+	GraphHeuristicMakeEuclidean(heuristic);
 	RecordFire(GH_SITE_ADJACENT, &call, retRva, true);
 	MaybeHeartbeat(calls);
 	return 0;
@@ -236,8 +231,8 @@ static unsigned __int64 hook_graphHeuristicClusterCentre(void* heuristic, unsign
 	bool inExe;
 	const unsigned retRva = ReturnRva(_ReturnAddress(), &inExe);
 	if (out)
-		*out = GraphHeuristicCentreFallback(*(GraphPositionVec4* const*)((char*)heuristic + OFF_HEUR_GOAL_POINTS));
-	HeuristicOff(heuristic);
+		*out = GraphHeuristicCentreFallback(GraphHeuristicCentreFallbackPoint(heuristic));
+	GraphHeuristicMakeEuclidean(heuristic);
 	RecordFire(GH_SITE_CENTRE, &call, retRva, true);
 	MaybeHeartbeat(calls);
 	// The positions pointer this normally returns; neither caller reads it.
@@ -265,7 +260,7 @@ static unsigned __int64 hook_graphHeuristicCoarseSeed(void* coarseSearch, void* 
 	*(void**)coarseSearch = visitor;
 	const bool heuristicOff = GraphHeuristicSeedWritesStartCluster(retRva, inExe);
 	if (heuristicOff)
-		HeuristicOff((char*)coarseSearch - OFF_HEUR_COARSE);
+		GraphHeuristicMakeEuclidean(GraphHeuristicOfSeedCoarse(coarseSearch));
 	if (inExe && retRva == GH_RET_PATH_EXISTS)
 		InterlockedIncrement(&s_seedPathExists);
 	RecordFire(GH_SITE_SEED, &call, retRva, heuristicOff);
@@ -319,10 +314,15 @@ void InstallGraphHeuristicGuard(int* installed, int*)
 	s_rowsInstalled = n;
 
 	LogMsg(std::string("Graph heuristic guard: installed ") + (char)('0' + n)
-	       + "/3 (a heartbeat line follows the first minute of searching)");
+	       + "/3 (a heartbeat line follows the first search, then one a minute)");
+}
+
+bool GraphHeuristicGuardComplete()
+{
+	return s_rowsInstalled == 3;
 }
 
 const char* GraphHeuristicGuardToken()
 {
-	return s_rowsInstalled == 3 ? "ON" : (s_rowsInstalled > 0 ? "PARTIAL" : "OFF");
+	return GraphHeuristicGuardComplete() ? "ON" : (s_rowsInstalled > 0 ? "PARTIAL" : "OFF");
 }

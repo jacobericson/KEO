@@ -16,6 +16,11 @@ struct SlotState
 	bool        hasFallback;     // false: with no collection, a cache miss dereferences it anyway
 };
 
+// The heuristic object's layout, fixed by the game: a changed offset fails the build.
+typedef char StartClusterAt0x18[OFF_HEUR_START_CLUSTER == 0x18 ? 1 : -1];
+typedef char CoarseAt0x180[OFF_HEUR_COARSE == 0x180 ? 1 : -1];
+typedef char GoalPointsAt0x240[OFF_HEUR_GOAL_POINTS == 0x240 ? 1 : -1];
+
 } // namespace graph_heuristic_guard_policy_detail
 using namespace graph_heuristic_guard_policy_detail;
 
@@ -157,4 +162,24 @@ bool GraphHeuristicSeedWritesStartCluster(unsigned returnRva, bool inExe)
 GraphPositionVec4 GraphHeuristicCentreFallback(const GraphPositionVec4* goal0)
 {
 	return goal0 ? *goal0 : GraphPositionFarSentinel();
+}
+
+int* GraphHeuristicStartCluster(void* heuristic)
+{
+	return (int*)((unsigned char*)heuristic + OFF_HEUR_START_CLUSTER);
+}
+
+void* GraphHeuristicOfSeedCoarse(void* coarseSearch)
+{
+	return (unsigned char*)coarseSearch - OFF_HEUR_COARSE;
+}
+
+const GraphPositionVec4* GraphHeuristicCentreFallbackPoint(const void* heuristic)
+{
+	return *(const GraphPositionVec4* const*)((const unsigned char*)heuristic + OFF_HEUR_GOAL_POINTS);
+}
+
+void GraphHeuristicMakeEuclidean(void* heuristic)
+{
+	*GraphHeuristicStartCluster(heuristic) = -1;
 }

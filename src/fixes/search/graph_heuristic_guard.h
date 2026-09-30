@@ -6,5 +6,7 @@
 void InstallGraphHeuristicGuard(int* installed, int*);
 // "ON" when all three rows installed, "PARTIAL" when some did, "OFF" when none.
 const char* GraphHeuristicGuardToken();
+// True when the token reads "ON".
+bool GraphHeuristicGuardComplete();
 
 #endif

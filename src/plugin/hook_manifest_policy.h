@@ -35,7 +35,7 @@ enum HookWant
 	HOOK_WANT_NAVMESH_LIFE,       // navMeshLife
 	HOOK_WANT_UNSTITCH_PROBE,     // unstitchProbe
 	HOOK_WANT_SECTION_KEY_PROBE,  // sectionKeyProbe
-	HOOK_WANT_GRAPH_HEURISTIC,    // graphHeuristicGuard
+	HOOK_WANT_GRAPH_HEURISTIC,    // graphHeuristicGuard or playerHierarchical != off
 	HOOK_WANT_FIND_PATH_FULL,     // pathfindDiag or playerHierarchical != off
 	HOOK_WANT_CLUSTER_CROSS_COST, // clusterCrossCost
 	HOOK_WANT_UNCOUNTED
