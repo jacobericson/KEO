@@ -248,3 +248,4 @@ src\planner\coarse_search.cpp
 src\planner\plan_policy.cpp
 src\planner\tagfile_reader.cpp
 src\planner\plan_store.cpp
+src\planner\tile_graph_extract.cpp
