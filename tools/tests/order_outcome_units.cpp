@@ -73,5 +73,9 @@ int main()
 	      " orders=3 longOrders=1 longStop=1 longFail=1 userRec=1 unrec=0",
 	      "span totals format");
 
+	// The planner column appended while the route planner is armed.
+	Check(OrderOutcomePlannerSuffix(0) == " plannerWait=0" && OrderOutcomePlannerSuffix(3) == " plannerWait=3",
+	      "suffix: plannerWait=<n>");
+
 	return CheckExit("order_outcome_units");
 }

@@ -83,3 +83,10 @@ std::string OrderOutcomeFormatSpanTotals(long orders, long longOrders, long long
 	   << " unrec=" << unrec;
 	return ss.str();
 }
+
+std::string OrderOutcomePlannerSuffix(int plannerWait)
+{
+	std::ostringstream ss;
+	ss << " plannerWait=" << plannerWait;
+	return ss.str();
+}

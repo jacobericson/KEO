@@ -22,6 +22,8 @@ struct OOMember
 	double stallStart;      // 0.0 = not currently stalled
 	bool   stallExcluded;   // ko or post ends this stall: never counted
 	bool   stallK7Sent;     // a K7-family re-issue landed during this stall
+	bool   stallPlannerWait;  // the planner owned this stall's wait
+	bool   ownedSinceMotion;  // the planner owned the wait since the last motion sample
 	double lastK7Send;      // 0.0 = none; last OOT_NoteReissueSent, whether or not a stall is open
 	const char* lastK7SendForm; // its form ("arr"/"del"/...), owned by the caller (a string literal)
 	const char* stallK7Form;    // the send's form once it credited the *open* stall (until
@@ -39,6 +41,7 @@ struct OrderRecord
 
 	int         arrived, ko, k7rec, userRec, unrec, selfRec;
 	int         stopCount;      // qualifying, non-excluded stalls (any resolution)
+	int         plannerWait;    // stalls whose wait the planner owned
 	double      stallCharS;
 	double      maxStallS;
 	std::string stopsGuess;
@@ -47,6 +50,7 @@ struct OrderRecord
 OrderRecord g_records[MAX_ORDER_RECORDS];
 int         g_nextOrderNum = 0;
 OotSink     g_sink = NULL;
+bool        g_plannerColumn = false;
 
 long g_totalOrders     = 0;
 long g_totalLongOrders = 0;
@@ -112,14 +116,24 @@ bool AnyMemberLeft(const OrderRecord& rec)
 
 // Resolves member m's stall (if any) with resolution `how` and folds the
 // result into rec's aggregates. A no-op when m is not currently stalled.
-void ResolveStall(OrderRecord& rec, OOMember& m, OrderOutcomeResolution how, double now)
+// `rescueCredit` false keeps the stop's count and time but credits no
+// recovery class.
+void ResolveStall(OrderRecord& rec, OOMember& m, OrderOutcomeResolution how, double now,
+                  bool rescueCredit = true)
 {
 	if (m.stallStart <= 0.0) return;
 	double dur = now - m.stallStart;
 	bool qualifies = OrderOutcomeStallQualifies(dur);
 	OrderOutcomeRecovery kind = OrderOutcomeClassifyStop(qualifies, m.stallExcluded, how, m.stallK7Sent);
+	if (!rescueCredit) kind = OO_REC_NONE;
 
-	if (qualifies && !m.stallExcluded)
+	if (m.stallPlannerWait)
+	{
+		// The planner's wait at a portal: counted in its own column only.
+		if (qualifies && !m.stallExcluded) rec.plannerWait++;
+		kind = OO_REC_NONE;
+	}
+	else if (qualifies && !m.stallExcluded)
 	{
 		rec.stopCount++;
 		rec.stallCharS += dur;
@@ -138,6 +152,7 @@ void ResolveStall(OrderRecord& rec, OOMember& m, OrderOutcomeResolution how, dou
 	m.stallExcluded = false;
 	m.stallK7Sent   = false;
 	m.stallK7Form   = NULL;
+	m.stallPlannerWait = false;
 }
 
 // Eviction is a bookkeeping event, never a routing answer -- an evicted
@@ -172,10 +187,29 @@ void PrintAndClose(OrderRecord& rec, double now, const char* endReason,
 		g_sink(OrderOutcomeFormatLine(rec.orderNum, rec.issueTime, rec.cellSpan,
 		                               rec.memberCount, walked, rec.arrived, rec.ko,
 		                               rec.k7rec, rec.userRec, rec.unrec, rec.selfRec,
-		                               rec.stallCharS, rec.maxStallS, rec.stopsGuess, endReason));
+		                               rec.stallCharS, rec.maxStallS, rec.stopsGuess, endReason)
+		       + (g_plannerColumn ? OrderOutcomePlannerSuffix(rec.plannerWait) : std::string()));
 
 	FoldIntoTotals(rec, finalRes);
 	rec.active = false;
+}
+
+// Opens an unlatched stall on m at `now`. A K7 send that landed just before
+// the stall opened would otherwise never be latched: a stall only opens 1-2s
+// after the real stop, and a fast recovery can resolve inside that gap.
+// Remember the form for OOT_NoteStopGuess to tag the line with -- not here,
+// since this stall has not yet reached the 2s floor and may never be counted
+// at all. Clearing lastK7Send means the same send cannot also credit a later,
+// unrelated stall.
+static void OpenStall(OOMember& m, double now)
+{
+	m.stallStart = now;
+	if (m.lastK7Send > 0.0 && now - m.lastK7Send <= OO_K7_SEND_LOOKBACK)
+	{
+		m.stallK7Sent = true;
+		m.stallK7Form = m.lastK7SendForm;
+		m.lastK7Send  = 0.0;
+	}
 }
 
 // Arrival and knockout are terminal for a member: whatever it was doing
@@ -209,13 +243,18 @@ void OOT_Reset(OotSink sink)
 		if (!rec.active) continue;
 		// No reliable "now" across a reload: an open stall is a genuine
 		// unrecovered failure, counted without a measured duration (so it
-		// adds to unrec but not to stallCharS/maxStallS).
+		// adds to unrec but not to stallCharS/maxStallS). An open stall the
+		// planner owns is its wait, counted in plannerWait the same way.
 		for (int m = 0; m < rec.memberCount; ++m)
 		{
 			OOMember& mem = rec.members[m];
 			if (mem.stallStart > 0.0 && !mem.stallExcluded)
-				rec.unrec++;
+			{
+				if (mem.stallPlannerWait) rec.plannerWait++;
+				else rec.unrec++;
+			}
 			mem.stallStart = 0.0;
+			mem.stallPlannerWait = false;
 		}
 		int walked = 0;
 		for (int m = 0; m < rec.memberCount; ++m)
@@ -224,7 +263,8 @@ void OOT_Reset(OotSink sink)
 			g_sink(OrderOutcomeFormatLine(rec.orderNum, rec.issueTime, rec.cellSpan,
 			                               rec.memberCount, walked, rec.arrived, rec.ko,
 			                               rec.k7rec, rec.userRec, rec.unrec, rec.selfRec,
-			                               rec.stallCharS, rec.maxStallS, rec.stopsGuess, "reset"));
+			                               rec.stallCharS, rec.maxStallS, rec.stopsGuess, "reset")
+			       + (g_plannerColumn ? OrderOutcomePlannerSuffix(rec.plannerWait) : std::string()));
 		FoldIntoTotals(rec, OO_RESOLVE_CLOSE);
 		rec.active = false;
 	}
@@ -305,11 +345,14 @@ void OOT_Begin(const size_t* chars, int n, int cellSpan, double now, bool paused
 		m.stallExcluded  = false;
 		m.stallK7Sent    = false;
 		m.stallK7Form    = NULL;
+		m.stallPlannerWait = false;
+		m.ownedSinceMotion = false;
 		m.lastK7Send     = 0.0;
 		m.lastK7SendForm = NULL;
 	}
 	rec.arrived = rec.ko = rec.k7rec = rec.userRec = rec.unrec = rec.selfRec = 0;
 	rec.stopCount   = 0;
+	rec.plannerWait = 0;
 	rec.stallCharS  = 0.0;
 	rec.maxStallS   = 0.0;
 	rec.stopsGuess.clear();
@@ -317,11 +360,19 @@ void OOT_Begin(const size_t* chars, int n, int cellSpan, double now, bool paused
 	g_totalOrders++;
 }
 
+// The planner's ownership reaches the table through OOT_NotePlannerWait, which
+// the glue calls after this function on the same poll. So this sample reads
+// whether the previous poll was owned (and clears the flag): a not-moving
+// member whose latched stall had no owned poll since the last sample ends its
+// owned segment here, one poll after the last owned one, and the stop goes on
+// as an unowned stall from this poll, classified like any other.
 void OOT_NoteMotion(size_t c, bool moving, bool post, double now, bool paused)
 {
 	now = ActiveTime(now, paused);
 	OrderRecord* rec; OOMember* m = FindMember(c, &rec);
 	if (!m) return;
+	bool ownedLastPoll = m->ownedSinceMotion;
+	m->ownedSinceMotion = false;
 
 	if (post)
 	{
@@ -346,6 +397,7 @@ void OOT_NoteMotion(size_t c, bool moving, bool post, double now, bool paused)
 				m->stallExcluded = false;
 				m->stallK7Sent   = false;
 				m->stallK7Form   = NULL;
+				m->stallPlannerWait = false;
 			}
 			else
 			{
@@ -353,22 +405,14 @@ void OOT_NoteMotion(size_t c, bool moving, bool post, double now, bool paused)
 			}
 		}
 	}
+	else if (m->stallStart > 0.0 && m->stallPlannerWait && !ownedLastPoll)
+	{
+		ResolveStall(*rec, *m, OO_RESOLVE_MOTION, now);   // latched: counted as the planner's wait
+		OpenStall(*m, now);                                // even while paused: the stop goes on
+	}
 	else if (m->stallStart <= 0.0 && !paused)
 	{
-		m->stallStart = now;
-		// A K7 send that landed just before this stall opened would otherwise
-		// never be latched: a stall only opens 1-2s after the real stop, and
-		// a fast recovery can resolve inside that gap. Remember the form for
-		// OOT_NoteStopGuess to tag the line with -- not here, since this
-		// stall has not yet reached the 2s floor and may never be counted at
-		// all. Clearing lastK7Send means the same send cannot also credit a
-		// later, unrelated stall.
-		if (m->lastK7Send > 0.0 && now - m->lastK7Send <= OO_K7_SEND_LOOKBACK)
-		{
-			m->stallK7Sent = true;
-			m->stallK7Form = m->lastK7SendForm;
-			m->lastK7Send  = 0.0;
-		}
+		OpenStall(*m, now);
 	}
 }
 
@@ -470,6 +514,38 @@ void OOT_NoteStopGuess(size_t c, const char* guess, double now)
 		else
 			rec->stopsGuess = guess;
 	}
+}
+
+// Called after OOT_NoteMotion on a poll the planner owns c's wait. It marks the
+// poll owned for the next motion sample, which ends the owned segment once a
+// poll passes without this call. An open stall that is not yet latched is
+// split here: its unowned segment resolves as a stop with no recovery class
+// (a member that has not departed drops it uncounted, as a start delay), and
+// a latched stall opens at this poll. With no stall open nothing is latched.
+void OOT_NotePlannerWait(size_t c, double now, bool paused)
+{
+	now = ActiveTime(now, paused);
+	OrderRecord* rec; OOMember* m = FindMember(c, &rec);
+	if (!m) return;
+	m->ownedSinceMotion = true;
+	if (m->stallStart <= 0.0 || m->stallPlannerWait) return;
+	if (m->departed)
+	{
+		ResolveStall(*rec, *m, OO_RESOLVE_MOTION, now, false);
+	}
+	else
+	{
+		m->stallExcluded = false;
+		m->stallK7Sent   = false;
+		m->stallK7Form   = NULL;
+	}
+	m->stallStart       = now;
+	m->stallPlannerWait = true;
+}
+
+void OOT_SetPlannerColumn(bool on)
+{
+	g_plannerColumn = on;
 }
 
 OotTotals OOT_GetTotals()

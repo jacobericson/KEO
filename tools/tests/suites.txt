@@ -78,3 +78,4 @@ astar_hier_policy_units | tools\tests\astar_hier_policy_units.cpp | src\pathfind
 cluster_cross_cost_units | tools\tests\cluster_cross_cost_units.cpp | src\fixes\search\cluster_cross_cost_policy.cpp |
 coarse_search_units | tools\tests\coarse_search_units.cpp | src\planner\coarse_search.cpp |
 plan_policy_units | tools\tests\plan_policy_units.cpp | src\planner\plan_policy.cpp |
+plan_store_units | tools\tests\plan_store_units.cpp | src\planner\plan_store.cpp src\planner\plan_policy.cpp |

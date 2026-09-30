@@ -389,5 +389,136 @@ int main()
 	      && Has(g_lines[0], "stallCharS=0.0"),
 	      "a paused walk flushed by a save load scores nothing");
 
+	// 22. A qualifying stall the route planner owned (latched while it was open) is counted in
+	// the planner column only: no stop, no stall time, no recovery class, even with a K7 send
+	// inside it that would otherwise credit k7rec.
+	Fresh();
+	OOT_SetPlannerColumn(true);
+	OOT_Begin(&A, 1, 29, 0.0);
+	OOT_NoteMotion(A, true, false, 1.0);
+	OOT_NoteMotion(A, false, false, 10.0);         // stall opens
+	OOT_NotePlannerWait(A, 10.5);
+	OOT_NoteReissueSent(A, "arr", 12.0);
+	OOT_NoteMotion(A, true, false, 16.0);          // 6s stall resolves on motion
+	OOT_NoteMotion(A, true, true, 20.0);           // arrives
+	{
+		OotTotals t = OOT_GetTotals();
+		Check(g_lines.size() == 1 && Has(g_lines[0], " plannerWait=1") && Has(g_lines[0], "k7rec=0")
+		      && Has(g_lines[0], "userRec=0") && Has(g_lines[0], "unrec=0") && Has(g_lines[0], "selfRec=0")
+		      && Has(g_lines[0], "stallCharS=0.0") && Has(g_lines[0], "maxStallS=0.0")
+		      && t.longOrders == 1 && t.longStop == 0 && t.longFail == 0 && t.userRec == 0 && t.unrec == 0,
+		      "outcome: a planner wait is not a stop");
+	}
+
+	// 23. The column: absent while off, present (with its zero) while on, on both print sites.
+	Fresh();
+	OOT_SetPlannerColumn(false);
+	OOT_Begin(&A, 1, 29, 0.0);
+	OOT_NoteMotion(A, true, true, 5.0);
+	OOT_Begin(&B, 1, 29, 6.0);
+	OOT_Reset(Sink);
+	bool offClean = g_lines.size() == 2 && !Has(g_lines[0], "plannerWait=")
+	                && Has(g_lines[1], "end=reset") && !Has(g_lines[1], "plannerWait=");
+	Fresh();
+	OOT_SetPlannerColumn(true);
+	OOT_Begin(&A, 1, 29, 0.0);
+	OOT_NoteMotion(A, true, true, 5.0);
+	OOT_Begin(&B, 1, 29, 6.0);
+	OOT_Reset(Sink);
+	Check(offClean && g_lines.size() == 2 && Has(g_lines[0], " plannerWait=0")
+	      && Has(g_lines[1], "end=reset") && Has(g_lines[1], " plannerWait=0"),
+	      "outcome: the plannerWait column prints only when set");
+
+	// 24. A planner-wait note with no stall open latches nothing: the stall that opens later is
+	// classified as before (k7rec, a stop, its stall time).
+	Fresh();
+	OOT_SetPlannerColumn(true);
+	OOT_Begin(&A, 1, 29, 0.0);
+	OOT_NoteMotion(A, true, false, 1.0);
+	OOT_NotePlannerWait(A, 2.0);                   // moving: no stall to latch
+	OOT_NoteMotion(A, false, false, 10.0);
+	OOT_NoteReissueSent(A, "arr", 12.0);
+	OOT_NoteMotion(A, true, false, 16.0);
+	OOT_NoteMotion(A, true, true, 20.0);
+	Check(g_lines.size() == 1 && Has(g_lines[0], " plannerWait=0") && Has(g_lines[0], "k7rec=1")
+	      && Has(g_lines[0], "stallCharS=6.0") && OOT_GetTotals().longStop == 1,
+	      "outcome: an unlatched stall is classified as before");
+
+	// 25. A latch ends with its stall: the member's next, unlatched stall is a stop again.
+	Fresh();
+	OOT_SetPlannerColumn(true);
+	OOT_Begin(&A, 1, 29, 0.0);
+	OOT_NoteMotion(A, true, false, 1.0);
+	OOT_NoteMotion(A, false, false, 10.0);
+	OOT_NotePlannerWait(A, 11.0);
+	OOT_NoteMotion(A, true, false, 15.0);          // the planner's wait ends
+	OOT_NoteMotion(A, false, false, 30.0);         // an ordinary stall
+	OOT_NoteMotion(A, true, false, 34.0);
+	OOT_NoteMotion(A, true, true, 40.0);
+	Check(g_lines.size() == 1 && Has(g_lines[0], " plannerWait=1") && Has(g_lines[0], "selfRec=1")
+	      && Has(g_lines[0], "stallCharS=4.0"),
+	      "outcome: a planner-wait latch ends with its stall");
+
+	// 26. The planner owns the wait for two polls, then a poll passes unowned while the member is
+	// still stopped: the owned segment ends at the next sample, and the stop that goes on is an
+	// ordinary stall that the K7 send inside it rescues.
+	Fresh();
+	OOT_SetPlannerColumn(true);
+	OOT_Begin(&A, 1, 29, 0.0);
+	OOT_NoteMotion(A, true, false, 1.0);
+	OOT_NoteMotion(A, false, false, 10.0);         // stall opens
+	OOT_NotePlannerWait(A, 10.0);                  // owned
+	OOT_NoteMotion(A, false, false, 13.0);
+	OOT_NotePlannerWait(A, 13.0);                  // owned
+	OOT_NoteMotion(A, false, false, 16.0);         // not owned from here on
+	OOT_NoteMotion(A, false, false, 19.0);         // owned segment 10..19 ends; the stop goes on
+	OOT_NoteReissueSent(A, "arr", 20.0);
+	OOT_NoteMotion(A, false, false, 22.0);
+	OOT_NoteMotion(A, true, false, 26.0);          // 7s unowned stall resolves on motion
+	OOT_NoteMotion(A, true, true, 30.0);
+	{
+		OotTotals t = OOT_GetTotals();
+		Check(g_lines.size() == 1 && Has(g_lines[0], " plannerWait=1") && Has(g_lines[0], "k7rec=1")
+		      && Has(g_lines[0], "selfRec=0") && Has(g_lines[0], "unrec=0") && Has(g_lines[0], "stallCharS=7.0")
+		      && t.longStop == 1 && t.longFail == 0,
+		      "outcome: a stall that outlives the planner's ownership is credited to its real rescue");
+	}
+
+	// 27. A member already stopped past the threshold gains an owned wait: the unowned segment is
+	// a stop with no recovery class, and the owned remainder is the planner's wait.
+	Fresh();
+	OOT_SetPlannerColumn(true);
+	OOT_Begin(&A, 1, 29, 0.0);
+	OOT_NoteMotion(A, true, false, 1.0);
+	OOT_NoteMotion(A, false, false, 10.0);         // stall opens
+	OOT_NoteMotion(A, false, false, 13.0);
+	OOT_NoteMotion(A, false, false, 16.0);
+	OOT_NotePlannerWait(A, 16.0);                  // owned: segment 10..16 is a stop
+	OOT_NoteMotion(A, false, false, 19.0);
+	OOT_NotePlannerWait(A, 19.0);
+	OOT_NoteMotion(A, true, false, 22.0);          // the 16..22 owned wait resolves on motion
+	OOT_NoteMotion(A, true, true, 25.0);
+	{
+		OotTotals t = OOT_GetTotals();
+		Check(g_lines.size() == 1 && Has(g_lines[0], " plannerWait=1") && Has(g_lines[0], "selfRec=0")
+		      && Has(g_lines[0], "k7rec=0") && Has(g_lines[0], "userRec=0") && Has(g_lines[0], "unrec=0")
+		      && Has(g_lines[0], "stallCharS=6.0") && Has(g_lines[0], "maxStallS=6.0")
+		      && t.longStop == 1 && t.longFail == 0,
+		      "outcome: a stuck member that gains an owned wait splits its stall");
+	}
+
+	// 28. A save load flushes an open owned wait into plannerWait, not unrec.
+	Fresh();
+	OOT_SetPlannerColumn(true);
+	OOT_Begin(&A, 1, 29, 0.0);
+	OOT_NoteMotion(A, true, false, 1.0);
+	OOT_NoteMotion(A, false, false, 10.0);
+	OOT_NotePlannerWait(A, 11.0);
+	OOT_Reset(Sink);
+	Check(g_lines.size() == 1 && Has(g_lines[0], "unrec=0") && Has(g_lines[0], " plannerWait=1")
+	      && OOT_GetTotals().longFail == 0,
+	      "outcome: a planner wait open at a reset is not unrec");
+	OOT_SetPlannerColumn(false);
+
 	return CheckExit("order_outcome_table_units");
 }

@@ -15,6 +15,7 @@
 #include <cstring>
 #include "movement/islands_reissue_internal.h"
 #include "movement/islands_reissue_counters.h"
+#include "planner/plan_store.h"
 namespace island_orders_detail {
 struct PollOrdersCtx {
 	uintptr_t zm;
@@ -128,6 +129,7 @@ bool IsCharacterParkedNow(uintptr_t character, float destX, float destZ, double 
 	float posZ = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_pos_z, OFF_CMOV_POS + 8));
 	if (Dist2(posX, posZ, destX, destZ) < PARK_MIN_DEST_DIST * PARK_MIN_DEST_DIST)
 		return false;   // arrived, not parked
+	if (planner::PlannerOwnsWait(cm, posX, posZ)) return false;   // the planner's wait, not a park
 
 	float lastX = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_destination_x, OFF_CMOV_LAST_DEST));
 	float lastZ = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_destination_z, OFF_CMOV_LAST_DEST + 8));
@@ -563,6 +565,16 @@ static void PollOneOrder(IslandOrder& o, PollOrdersCtx& c)
 {
 	if (PollOrderRead(o, c)) return;
 	if (PollOrderK7(o, c)) return;
+	// A character the route planner is walking leg by leg waits at a portal for its next section:
+	// that is the planner's wait, not a park, so no park form, re-issue or crossing test runs on it.
+	if (planner::PlannerOwnsWait(c.cm, c.posX, c.posZ))
+	{
+		o.stoppedSince = 0.0;
+		o.parked = false;
+		o.retryArmed = false;
+		InterlockedIncrement(&planner::PlannerCountersGet()->ownedSkips);
+		return;
+	}
 	if (PollOrderFormation(o, c)) return;
 	if (PollOrderParkForms(o, c)) return;
 	PollOrderCrossing(o, c);

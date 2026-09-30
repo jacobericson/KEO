@@ -89,6 +89,14 @@ void OOT_Poll(const size_t* live, int liveCount, bool haveList, double now, bool
 // has already confirmed the stall is not excluded (ko/post).
 void OOT_NoteStopGuess(size_t c, const char* guess, double now);
 
+// The route planner owned `c`'s wait this poll: latches onto `c`'s open stall (none open, no-op).
+// Such a stall resolves into its record's plannerWait count and nowhere else: not a stop, not a
+// recovery class, not stall time.
+void OOT_NotePlannerWait(size_t c, double now, bool paused = false);
+
+// Whether the closed-record lines carry the planner column (" plannerWait=<n>"); off by default.
+void OOT_SetPlannerColumn(bool on);
+
 struct OotTotals
 {
 	long orders;       // every order ever begun

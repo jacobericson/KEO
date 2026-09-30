@@ -76,4 +76,8 @@ std::string OrderOutcomeFormatLine(int orderNum, double issueTime, int cellSpan,
 std::string OrderOutcomeFormatSpanTotals(long orders, long longOrders, long longStop,
                                           long longFail, long userRec, long unrec);
 
+// The planner column appended to an "OrderOutcome:" line while the route planner is armed: stalls
+// whose wait the planner owned, counted there instead of as stops.
+std::string OrderOutcomePlannerSuffix(int plannerWait);   // " plannerWait=<n>"
+
 #endif // KENSHI_ZONE_OPT_ORDER_OUTCOME_POLICY_H

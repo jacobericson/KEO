@@ -10,6 +10,7 @@
 #include "zone/grid.h"
 #include "movement/island_span_policy.h"
 #include "zone/zone_pause.h"
+#include "planner/plan_store.h"
 
 namespace order_outcome_detail {
 
@@ -24,6 +25,7 @@ using namespace order_outcome_detail;
 void OrderOutcomeReset()
 {
 	OOT_Reset(Sink);
+	OOT_SetPlannerColumn(planner::PlanStoreMode() != planner::PLANNER_OFF);
 }
 
 void OrderOutcomeBegin(const uintptr_t* chars, int count, float destX, float destZ, double now)
@@ -44,6 +46,13 @@ void OrderOutcomeBegin(const uintptr_t* chars, int count, float destX, float des
 void OrderOutcomeNoteMotion(uintptr_t character, bool moving, bool post, double now)
 {
 	OOT_NoteMotion((size_t)character, moving, post, now, ZonePauseIsPaused());
+	if (planner::PlanStoreMode() == planner::PLANNER_OFF) return;
+	uintptr_t cm = *(uintptr_t*)(KLIB_MEMBER(3, character, Character_movement, OFF_CHAR_MOVEMENT));
+	if (!cm) return;
+	float x = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_pos_x, OFF_CMOV_POS));
+	float z = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_pos_z, OFF_CMOV_POS + 8));
+	if (planner::PlannerOwnsWait(cm, x, z))
+		OOT_NotePlannerWait((size_t)character, now, ZonePauseIsPaused());
 }
 
 void OrderOutcomeNoteKo(uintptr_t character, double now)
