@@ -20,7 +20,23 @@ if errorlevel 1 (
 python tools\tests\check_test_guards.py
 if errorlevel 1 exit /b 1
 
-python tools\tests\run_suites.py
+REM A private suite list beside this file runs merged with suites.txt; the
+REM public export carries neither it nor the suites it names. The merge is not
+REM a parenthesized block: an exit /b inside one, with commands after it, ends
+REM the script but leaves cmd /c returning 0.
+set SUITES=tools\tests\suites.txt
+if not exist "%~dp0suites_private.txt" goto run_suites
+if not exist build\tests mkdir build\tests
+if errorlevel 1 exit /b 1
+copy /y tools\tests\suites.txt build\tests\suites_merged.txt >nul
+if errorlevel 1 exit /b 1
+echo.>> build\tests\suites_merged.txt
+type "%~dp0suites_private.txt" >> build\tests\suites_merged.txt
+if errorlevel 1 exit /b 1
+set SUITES=build\tests\suites_merged.txt
+echo build_tests: merging the private suite list suites_private.txt
+:run_suites
+python tools\tests\run_suites.py --suites %SUITES%
 if errorlevel 1 exit /b 1
 
 REM The Python unit tests (tools\tests\py_tests.txt) have no C++ suite of

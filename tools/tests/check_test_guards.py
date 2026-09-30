@@ -35,6 +35,7 @@ import sys
 import tempfile
 
 SUITES_TXT = "tools/tests/suites.txt"
+PRIVATE_SUITES_TXT = os.path.join(os.path.dirname(SUITES_TXT), "suites_private.txt")
 UNITS_GLOB = "tools/tests/*_units.cpp"
 RUN_SUITES = "tools/tests/run_suites.py"
 EXCLUDE_RE = re.compile(r"^#\s*excluded:\s*(\S+)\s*-\s*\S", re.IGNORECASE)
@@ -75,6 +76,14 @@ def check_coverage():
     except ValueError as exc:
         print("check_test_guards: %s" % exc)
         return False
+    if os.path.isfile(PRIVATE_SUITES_TXT):
+        try:
+            private_listed, private_excluded = load_suites_file(PRIVATE_SUITES_TXT)
+        except ValueError as exc:
+            print("check_test_guards: %s" % exc)
+            return False
+        listed |= private_listed
+        excluded |= private_excluded
 
     on_disk = set(to_slash(p) for p in glob.glob(UNITS_GLOB))
     if not on_disk:

@@ -246,3 +246,4 @@ src\fixes\search\cluster_cross_cost_policy.cpp
 src\fixes\search\cluster_cross_cost.cpp
 src\planner\coarse_search.cpp
 src\planner\plan_policy.cpp
+src\planner\tagfile_reader.cpp
