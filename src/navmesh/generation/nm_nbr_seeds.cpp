@@ -353,13 +353,10 @@ private:
 	NbrBuildMutexScope(const NbrBuildMutexScope&);
 	NbrBuildMutexScope& operator=(const NbrBuildMutexScope&);
 };
-} // namespace nm_nbr_seeds_detail
-using namespace nm_nbr_seeds_detail;
 
 // The file name std::string getFilename constructs (the game's own allocation),
 // released through the game's own string routine: no CRT string object of ours
 // on a NavMesh thread.
-namespace nm_nbr_seeds_detail {
 struct NbrGameString
 {
 	unsigned __int64 storage[GAME_STRING_SIZE / 8];
@@ -621,9 +618,7 @@ bool NbrCheckStandInCallees()
 	}
 	return ok;
 }
-} // namespace nm_workers_detail
 
-namespace nm_workers_detail {
 // Frees every record. Only from the NavMesh::stop hook, after the original has
 // run (the game has joined its bg thread and deleted the generator, so no
 // generation and no bg prefetch remains) and only when no worker is alive,
@@ -639,9 +634,7 @@ void NbrSeedFreeTable()
 			free(p);
 	}
 }
-} // namespace nm_workers_detail
 
-namespace nm_workers_detail {
 int hook_getSeedPointsAdj(void* nmg, const void* zone, const int* dir)
 {
 	int n = orig_getSeedPointsAdj(nmg, zone, dir);
@@ -712,10 +705,7 @@ int hook_getSeedPointsAdj(void* nmg, const void* zone, const int* dir)
 	}
 	return n;
 }
-} // namespace nm_workers_detail
 
-
-namespace nm_workers_detail {
 // Around ProcessNavMeshJob's processJobAlt call. Begin arms the thread's record
 // for a type-0 job (the only type whose generation calls the hook); End
 // disarms it and, in DEV, queues one line per generation:
@@ -733,9 +723,7 @@ void NbrSeedJobBegin(int jobType, int gridX, int gridY)
 	t_nbrJob.gridY = gridY;
 	t_nbrJob.armed = 1;
 }
-} // namespace nm_workers_detail
 
-namespace nm_workers_detail {
 void NbrSeedJobEnd()
 {
 	if (!t_nbrJob.armed)

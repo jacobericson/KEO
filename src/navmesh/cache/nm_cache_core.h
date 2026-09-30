@@ -384,8 +384,10 @@ struct NavMeshCacheState
 
 	// Mod-unload protocol (nm_workers.h). Cumulative, printed on the stats
 	// line (DEV and PROD) so a session can see unloads being deferred:
-	//   ulSkipJob=   NavMeshUnloadFence::TryBegin refused: a job for the zone was queued
-	//   ulSkipClaim= NavMeshUnloadFence::TryBegin refused: a claim for the zone in flight
+	//   ulSkipJob=   NavMeshUnloadFence::TryBegin refused: a job for the zone
+	//                was queued
+	//   ulSkipClaim= NavMeshUnloadFence::TryBegin refused: a claim for the zone
+	//                in flight
 	//   ulSkipPj=    processJobCS try failed while an unload was published
 	//   ulHeld=      claim attempts that left the unloading zone's job queued
 	//                (printed only when non-zero)
@@ -505,9 +507,10 @@ extern CRITICAL_SECTION nmCacheCS;
 extern CRITICAL_SECTION processJobCS;
 extern CRITICAL_SECTION buildCollisionCS;
 
-// A hold of nmCacheCS, the L1 ring's lock. Taken after processJobCS when both
-// are held, never under the queue lock (+152). The ring's functions take a
-// reference to one as the caller's statement that it holds the lock.
+// A hold of nmCacheCS, the L1 ring's lock, on the NavMesh bg thread and the
+// added workers. Taken after processJobCS when both are held, never under the
+// queue lock (+152). The ring's functions take a reference to one as the
+// caller's statement that it holds the lock.
 // Release() is for a region whose normal paths let go before the scope ends,
 // at the statement that released it; the destructor releases only on a C++
 // unwind.
@@ -559,10 +562,12 @@ void NoteZeroFaceMesh(const NavMeshCacheKey& key, int inputTri, int inputVert, i
 void           InitNavMeshCacheCS();
 void           ClearNavMeshCache();
 int            FindCacheEntry(const NmCacheLock& held, const NavMeshCacheKey& key);
+// Frees slot idx's arrays and marks it invalid. Caller holds nmCacheCS once it is initialised.
 void           EvictCacheEntry(int idx);
 // Deep-copies the generated mesh into the ring buffer. Returns the slot index,
-// or -1 when the mesh is out of bounds or an allocation failed (nothing is
-// stored in that case — never a valid entry with a NULL array).
+// or -1 when the mesh is out of bounds or one of its arrays is missing
+// (nothing is stored in that case — never a valid entry with a NULL array).
+// The game's array new throws on exhaustion rather than returning NULL.
 // Caller must hold nmCacheCS.
 int            StoreCacheEntry(const NmCacheLock& held, const NavMeshCacheKey& key, uintptr_t navMeshPtr);
 

@@ -135,8 +135,10 @@ enum NavMeshPjLockResult
 //   done), clearing the publication first (NM_FENCE_REFUSED_CLAIM,
 //   ulSkipClaim=). NM_FENCE_REFUSED (transient) when: zone is NULL,
 //   processJobCS is not initialised, no dispatch has run yet (no generator
-//   known), or an earlier publication has not been ended. Once begun, the
-//   zone stays free of mod NavMesh work until Release, and TryBegin makes one
+//   known), or an earlier publication has not been ended, or this fence's last
+//   result still stands (a fence begins again only after Release; the refusal
+//   calls nothing and keeps that result). Once begun, the zone stays free of
+//   mod NavMesh work until Release, and TryBegin makes one
 //   NavMeshTryLockProcessJobFor(0, ...): NM_FENCE_HELD when it takes
 //   processJobCS; when it fails, TryBegin ends the publication and calls
 //   NavMeshRequestPjPriority before returning NM_FENCE_DEFER_PJ. Never

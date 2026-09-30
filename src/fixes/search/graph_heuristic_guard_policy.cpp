@@ -16,7 +16,8 @@ struct SlotState
 	bool        hasFallback;     // false: with no collection, a cache miss dereferences it anyway
 };
 
-// The heuristic object's layout, fixed by the game: a changed offset fails the build.
+// The heuristic object's layout, fixed by the game: a change to an offset must
+// be made here too; the suite's rows pin the values.
 typedef char StartClusterAt0x18[OFF_HEUR_START_CLUSTER == 0x18 ? 1 : -1];
 typedef char CoarseAt0x180[OFF_HEUR_COARSE == 0x180 ? 1 : -1];
 typedef char GoalPointsAt0x240[OFF_HEUR_GOAL_POINTS == 0x240 ? 1 : -1];

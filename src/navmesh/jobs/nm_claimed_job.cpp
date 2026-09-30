@@ -1,4 +1,4 @@
-// nm_claimed_job.cpp - ClaimedJob's release checkpoints bound to the game operations. NavMesh bg and worker threads.
+// nm_claimed_job.cpp - ClaimedJob's raise and release checkpoints bound to the game operations. NavMesh bg and worker threads.
 #include "navmesh/jobs/nm_claimed_job.h"
 #include "navmesh/nm_workers_internal.h"
 

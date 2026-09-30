@@ -82,7 +82,7 @@ bool IsCurrentProcess(HANDLE h)
 
 // Whether this death is the one the instrument exists for -- the boolean
 // logic itself is host-tested (exit_capture_policy.cpp); this just reads the
-// three live globals it needs.
+// three live inputs it needs: the stop hook's row state and two globals.
 bool ShouldArm()
 {
 	return ExitCaptureShouldArm(

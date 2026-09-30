@@ -157,9 +157,10 @@ void InstallNavMeshLazyHooks()
 	// Retire the workers before the game tears the NavMesh down. Its prologue
 	// is `test rcx, rcx` + a short `jz` into the body, so the 5 bytes contain a
 	// relative branch that the trampoline has to relocate rather than copy —
-	// the one hook in this file where that is true, and the reason the marker
-	// below matters more here than elsewhere. A failed install logs once, and
-	// the worker pool is then refused for the session.
+	// the one hook in this file where that is true, and the reason its row's
+	// installed mark (set by the install on success, read by the worker pool's
+	// start decision) matters more here than elsewhere. A failed install logs
+	// once, and the worker pool is then refused for the session.
 	if (HookInstall(HOOK_NAVMESH_STOP, hook_navMeshStop, &orig_navMeshStop,
 	                NULL, true) == NULL)
 	{

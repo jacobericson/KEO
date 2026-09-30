@@ -160,7 +160,8 @@ bool WorkerProcessHit(void* nmg, const ClaimedJob* claimed, int hitIdx, const Na
 		}
 	}
 
-	// Before the busy raise below, so the drop has nothing to release.
+	// A drop here returns before the cache lock; the worker loop's single finish
+	// releases the busy bridge the claim raised, as on every exit.
 	{
 		NoteClaimAge(false, claimed->claimQpc, QpcNow());
 		int staleReason = STALE_REASON_NONE;
@@ -170,7 +171,6 @@ bool WorkerProcessHit(void* nmg, const ClaimedJob* claimed, int hitIdx, const Na
 			return true;
 		}
 	}
-
 
 	void* freshNavMesh = NULL;
 	bool replaced = false;
@@ -197,23 +197,18 @@ bool WorkerProcessHit(void* nmg, const ClaimedJob* claimed, int hitIdx, const Na
 
 	// A reset drop keeps +80 NULL (never built) and takes the non-enqueue branch.
 	bool resetDrop = false;
-	if (freshNavMesh)
-	{
-		*(void**)(KLIB_MEMBER(4, claimed->job, NavMeshGenerator__Task_mesh, 72)) = freshNavMesh;
-		*(void**)(KLIB_MEMBER(4, claimed->job, NavMeshGenerator__Task_output, 80)) = NULL;
-		InterlockedIncrement(&navmesh::g_nmCache.nmCacheHitCount);
-		if (ResetWaitThenBuild(nmg, *claimed, STALE_SITE_HIT, NULL))
-			resetDrop = true;
-		else
-			NoteWorkerPhase(WPHASE_STORING);
-	}
+	*(void**)(KLIB_MEMBER(4, claimed->job, NavMeshGenerator__Task_mesh, 72)) = freshNavMesh;
+	*(void**)(KLIB_MEMBER(4, claimed->job, NavMeshGenerator__Task_output, 80)) = NULL;
+	InterlockedIncrement(&navmesh::g_nmCache.nmCacheHitCount);
+	if (ResetWaitThenBuild(nmg, *claimed, STALE_SITE_HIT, NULL))
+		resetDrop = true;
+	else
+		NoteWorkerPhase(WPHASE_STORING);
 
 	HandOffJob((uintptr_t)nmg, claimed->job, resetDrop, false);
 
-
 	return true;
 }
-
 
 } // namespace nm_workers_detail
 // --------------------------------------------------------------------

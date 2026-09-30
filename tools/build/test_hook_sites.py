@@ -12,6 +12,10 @@ Every row use, and every entry of a passed `Rows` array, must sit under
 conditions that imply its row's `#if`/`#ifdef` block; the one `NmPoolDecide(`
 call must sit under no open directive. The step list is still read as text, so
 a step under the wrong compile gate is not seen.
+
+Every install outside src/plugin/hook_manifest.h is spelled HookInstall(; a raw
+HookInstallRow( call naming a row or a `Rows` array entry is refused, and so is
+a cast inside HookInstall(, which takes the detour and its slot uncast.
 """
 import collections, os, re, subprocess, sys, unittest
 sys.dont_write_bytecode = True
@@ -22,6 +26,7 @@ ROWS_PATH = 'src/plugin/hook_manifest_rows.inc'
 STEPS_PATH = 'src/plugin/hook_manifest.cpp'
 POOL_PATH = 'src/navmesh/jobs/nm_dispatch.cpp'
 POOL_CAP = 'HOOK_CAP_WORKER_POOL'
+RAW_OK_PATH = 'src/plugin/hook_manifest.h'
 
 INSTALLED_BY_MANIFEST = ('HOOK_BY_STARTUP', 'HOOK_BY_MODULE', 'HOOK_BY_LAZY')
 OUTSIDE_MANIFEST = ('HOOK_BY_RENDER', 'HOOK_BY_GUI')
@@ -330,6 +335,39 @@ def read(rel):
         return f.read()
 
 
+def check_raw_installs(files):
+    """The problem lines for a raw HookInstallRow( call naming a row or an entry
+    of a `Rows` array, in any file but RAW_OK_PATH."""
+    problems = []
+    for path in sorted(files):
+        if path == RAW_OK_PATH:
+            continue
+        text = strip_comments(files[path], blank_literals=True)
+        for m in re.finditer(r'\bHookInstallRow\s*\(\s*(?:HOOK_\w+|\w+Rows\s*\[)', text):
+            line = text.count('\n', 0, m.start()) + 1
+            problems.append('test_hook_sites: raw HookInstallRow( call at %s:%d; install through HookInstall('
+                            % (path, line))
+    return problems
+
+
+def check_typed_casts(files):
+    """The problem lines for a (void* or _cast<void* cast among the arguments of a
+    HookInstall( call; the typed install takes the detour and its slot uncast."""
+    problems = []
+    for path in sorted(files):
+        text = strip_comments(files[path], blank_literals=True)
+        for m in re.finditer(r'\bHookInstall\s*\(', text):
+            depth, i = 1, m.end()
+            while i < len(text) and depth:
+                depth += (text[i] == '(') - (text[i] == ')')
+                i += 1
+            if re.search(r'\(\s*void\s*\*|_cast\s*<\s*void\s*\*', text[m.end():i]):
+                line = text.count('\n', 0, m.start()) + 1
+                problems.append('test_hook_sites: cast inside HookInstall( at %s:%d; '
+                                'the typed install takes the detour and its slot uncast' % (path, line))
+    return problems
+
+
 def real_tree_problems():
     out = subprocess.check_output(['git', 'ls-files', 'src'], cwd=ROOT, universal_newlines=True)
     paths = [p for p in out.split('\n') if p.endswith(('.cpp', '.h'))]
@@ -345,6 +383,8 @@ def real_tree_problems():
     problems += check(rows, calls, steps)
     problems += check_pool_inputs(rows, read(POOL_PATH))
     problems += check_conditions(row_conditions(read(ROWS_PATH)), find_uses(files))
+    problems += check_raw_installs(files)
+    problems += check_typed_casts(files)
     return problems
 
 
@@ -612,6 +652,17 @@ class ConditionTests(unittest.TestCase):
     def check_site(self, site):
         return check_conditions(self.row_conds(), self.uses(site))
 
+    def test_typed_array_entry_under_its_block_passes(self):
+        site = '''static const HookRowId kModRows[] = {
+#ifdef ZONEOPT_DEBUG
+	HOOK_D,
+#endif
+	HOOK_A };
+void Install(int i) { HookInstall(kModRows[i], h, &o, installed, true); }
+'''
+        self.assertEqual(sorted(u[0] for u in self.uses(site)), ['HOOK_A', 'HOOK_D'])
+        self.assertEqual(self.check_site(site), [])
+
     def test_row_conditions(self):
         rc = self.row_conds()
         self.assertEqual(rc['HOOK_A'], [])
@@ -765,6 +816,52 @@ HookRowWanted(HOOK_A);
     def test_unknown_id_gives_no_condition_problem(self):
         site = 'HookInstallRow(HOOK_NOPE, h, (void**)&o, i, true);\n'
         self.assertEqual(self.check_site(site), [])
+
+
+class RawInstallTests(unittest.TestCase):
+    RAW = 'HookInstallRow(HOOK_A, (void*)h, (void**)&o, i, true);'
+    MSG = 'test_hook_sites: raw HookInstallRow( call at %s:%d; install through HookInstall('
+
+    def test_raw_row_call_refused_at_its_line(self):
+        self.assertEqual(check_raw_installs({'site.cpp': '\n' + self.RAW + '\n'}),
+                         [self.MSG % ('site.cpp', 2)])
+
+    def test_raw_array_entry_call_refused(self):
+        site = 'HookInstallRow(kPushRows[k], d, (void**)&o, i, true);\n'
+        self.assertEqual(len(check_raw_installs({'site.cpp': site})), 1)
+
+    def test_forwarder_path_allowed(self):
+        self.assertEqual(check_raw_installs({'src/plugin/hook_manifest.h': FORWARDER}), [])
+
+    def test_definition_and_comment_allowed(self):
+        self.assertEqual(check_raw_installs({'helper.cpp': HELPER}), [])
+
+    def test_comment_and_literal_allowed(self):
+        site = '// HookInstallRow(HOOK_B, h)\nLogMsg("HookInstallRow(HOOK_B");\n'
+        self.assertEqual(check_raw_installs({'site.cpp': site}), [])
+
+
+class TypedCastTests(unittest.TestCase):
+    def test_cast_detour_refused(self):
+        site = 'HookInstall(HOOK_A, (void*)h, &o, i, true);\n'
+        self.assertEqual(len(check_typed_casts({'site.cpp': site})), 1)
+
+    def test_cast_slot_on_second_line_reports_first_line(self):
+        site = '\nHookInstall(HOOK_A, h,\n\t(void**)&o, i, true);\n'
+        self.assertEqual(check_typed_casts({'site.cpp': site}),
+                         ['test_hook_sites: cast inside HookInstall( at site.cpp:2; '
+                          'the typed install takes the detour and its slot uncast'])
+
+    def test_named_casts_refused(self):
+        site = ('HookInstall(HOOK_A, reinterpret_cast<void*>(h),\n'
+                '\treinterpret_cast<void**>(&o), i, true);\n')
+        self.assertEqual(len(check_typed_casts({'site.cpp': site})), 1)
+        site = 'HookInstall(HOOK_A, h, static_cast< void ** >(&o), i, true);\n'
+        self.assertEqual(len(check_typed_casts({'site.cpp': site})), 1)
+
+    def test_forwarder_and_typed_pass(self):
+        self.assertEqual(check_typed_casts({'f.h': FORWARDER}), [])
+        self.assertEqual(check_typed_casts({'t.cpp': TYPED}), [])
 
 
 class RealTreeTest(unittest.TestCase):

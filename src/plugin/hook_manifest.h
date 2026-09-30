@@ -15,9 +15,10 @@ enum HookRowId
 };
 
 // Installs one row's detour at its RVA. With reverify, the row's prologue is
-// checked first through VerifyPrologueByRva, which logs its own lines. On
-// success the row is marked installed, *installed (when not NULL) is
-// incremented, and the result is NULL. On failure *orig is set NULL and the
+// checked first through VerifyPrologueByRva, which logs its own lines. Without
+// reverify, the row is refused unless the startup gate passed it. On success
+// the row is marked installed, *installed (when not NULL) is incremented, and
+// the result is NULL. On failure *orig is set NULL and the
 // result names the step that refused it (the prologue or the hook). Takes no
 // lock, so it is safe on any thread.
 const char* HookInstallRow(HookRowId id, void* detour, void** orig, int* installed,

@@ -31,8 +31,12 @@ struct NmFenceOps
 
 // Reads both refusal counts, begins, and on a refusal names it by the count
 // the begin raised. Once begun, tries processJobCS once; when it is busy,
-// ends the publication and asks for priority before returning.
-NmFenceResult NmFenceTryBegin(const NmFenceOps& ops);
+// ends the publication and asks for priority before returning. *r is the
+// fence's record: unless it reads NM_FENCE_RELEASED, the call returns
+// NM_FENCE_REFUSED before any operation and leaves *r as it was, so a second
+// begin never drops a hold the first still owes. Otherwise *r becomes the
+// result.
+NmFenceResult NmFenceTryBegin(NmFenceResult* r, const NmFenceOps& ops);
 // For a result that may run: processJobCS first when held, then the
 // publication. *r becomes NM_FENCE_RELEASED, so a second call releases nothing.
 void NmFenceRelease(NmFenceResult* r, const NmFenceOps& ops);

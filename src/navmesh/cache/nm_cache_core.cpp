@@ -200,8 +200,9 @@ void EvictCacheEntry(int idx)
 	navmesh::g_nmL1.nmCache[idx].valid = false;
 }
 
-// Deep-copies one array out of the generated mesh. Returns false on allocation
-// failure so the caller can discard the whole entry.
+// Deep-copies one array out of the generated mesh. Returns false when the mesh
+// has no array to copy, so the caller discards the whole entry. The game's array
+// new throws on exhaustion instead of returning NULL; the NULL test is defensive.
 static bool CopyMeshArray(uintptr_t navMeshPtr, int arrayOff, int count, int unit, void** dest)
 {
 	*dest = NULL;
@@ -270,9 +271,10 @@ int StoreCacheEntry(const NmCacheLock&, const NavMeshCacheKey& key, uintptr_t na
 	if (faceDataCnt  < 0 || faceDataCnt  > L2_MAX_FACEDATA) return -1;
 	if (edgeDataCnt  < 0 || edgeDataCnt  > L2_MAX_EDGEDATA) return -1;
 
-	// Build the entry off to the side, then publish it. A failed allocation
+	// Build the entry off to the side, then publish it. A missing source array
 	// frees everything taken so far and stores nothing, so a valid slot never
-	// holds a NULL array.
+	// holds a NULL array. The game's array new throws on exhaustion rather
+	// than returning NULL, and nothing on this thread catches it.
 	NavMeshCacheEntry e;
 	memset(&e, 0, sizeof(e));
 	e.key = key;

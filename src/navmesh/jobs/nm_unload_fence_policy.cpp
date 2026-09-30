@@ -1,7 +1,7 @@
 // nm_unload_fence_policy.cpp - The mod-unload fence's order. No game or platform types.
 #include "navmesh/jobs/nm_unload_fence_policy.h"
 
-NmFenceResult NmFenceTryBegin(const NmFenceOps& ops)
+static NmFenceResult NmFenceBeginOnce(const NmFenceOps& ops)
 {
 	long job0 = ops.skipJobCount(ops.ctx);
 	long claim0 = ops.skipClaimCount(ops.ctx);
@@ -24,6 +24,14 @@ NmFenceResult NmFenceTryBegin(const NmFenceOps& ops)
 		return NM_FENCE_DEFER_PJ;
 	}
 	return pj == NM_FENCE_PJ_HELD ? NM_FENCE_HELD : NM_FENCE_NO_LOCK;
+}
+
+NmFenceResult NmFenceTryBegin(NmFenceResult* r, const NmFenceOps& ops)
+{
+	if (*r != NM_FENCE_RELEASED)
+		return NM_FENCE_REFUSED;
+	*r = NmFenceBeginOnce(ops);
+	return *r;
 }
 
 void NmFenceRelease(NmFenceResult* r, const NmFenceOps& ops)

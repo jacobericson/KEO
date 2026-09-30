@@ -114,11 +114,11 @@ static void CheckFinishTwice(const char* label, CjReleasePoint point, CjReleaseF
 {
 	Recorder r = { "", { true, true }, 0 };
 	int stage = CJ_STAGE_CLAIMED;
-	CjFinishRun(&stage, CjReleasePlanFor(point, facts), Ops(&r));
-	CjFinishRun(&stage, CjReleasePlanFor(point, facts), Ops(&r));
+	bool first = CjFinishRun(&stage, CjReleasePlanFor(point, facts), Ops(&r));
+	bool second = CjFinishRun(&stage, CjReleasePlanFor(point, facts), Ops(&r));
 	if (std::strcmp(r.trace, once) != 0)
 		std::printf("trace %s: got [%s], expected [%s]\n", label, r.trace, once);
-	Check(std::strcmp(r.trace, once) == 0, label);
+	Check(first && !second && std::strcmp(r.trace, once) == 0, label);
 }
 
 static void CheckFinishOnce()
@@ -136,8 +136,8 @@ static void CheckFinishOnce()
 
 	Recorder r = { "", { true, true }, 0 };
 	stage = CJ_STAGE_EMPTY;
-	CjFinishRun(&stage, CjReleasePlanFor(CJ_FINISH_WORKER, none), Ops(&r));
-	Check(r.trace[0] == 0, "a finish of a job never claimed runs no release");
+	bool ran = CjFinishRun(&stage, CjReleasePlanFor(CJ_FINISH_WORKER, none), Ops(&r));
+	Check(!ran && r.trace[0] == 0, "a finish of a job never claimed runs no release");
 }
 
 int main()

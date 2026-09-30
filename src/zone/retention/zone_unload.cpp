@@ -23,7 +23,8 @@ using namespace zone_life_detail;
 // ZoneManager::deactivateZoneMap (0xA09BB0, via its thunk 0x365ED: the reset
 // hook's fn_unloadZoneFromReset), never _dactivateMT directly: only
 // deactivateZoneMap also erases the zone from Set B and releases its water
-// scene node. Main thread only. Preconditions, in order, each failure
+// scene node. Main thread only. It returns a ZlUnloadResult: the outcome, and
+// the deferral kind when deferred. Preconditions, in order, each failure
 // deferring the zone to a later frame and counting it in
 // zlDefer=<job>/<claim>/<pj>/<state>:
 //   1. the protocol can pass in this build and session
@@ -45,6 +46,8 @@ using namespace zone_life_detail;
 //      applies                                                          -> state
 //   5b. a +176 zone: terrain collision loaded, or its record at least
 //      60 s old (the optional soft precondition)                        -> state
+//   5c. save, or the zone not accessible: a discard of an accessible zone is refused
+//      -- not a deferral: ZLO_ANOMALY, counted zlAnomaly=
 //   6. NavMeshUnloadFence::TryBegin(zone): refused for a queued job -> job, a
 //      claim in flight -> claim, anything else (no dispatch yet, an
 //      un-ended publication) -> state; NM_FENCE_UNAVAILABLE -> as 1

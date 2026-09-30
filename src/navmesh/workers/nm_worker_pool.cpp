@@ -88,10 +88,7 @@ bool WorkerCleanupBegin()
 	}
 	return true;
 }
-} // namespace nm_workers_detail
 
-
-namespace nm_workers_detail {
 // Each worker's phase (NavMeshWorkerPhase, core.h): printed per live worker on
 // every retire slice line and the final record, and read by the crash handler
 // through the worker's own t_navMeshWorkerPhase, which points at its slot here.
@@ -203,11 +200,7 @@ void NoteBusyBridge(bool held)
 	if (!held)
 		InterlockedIncrement(&navmesh::g_nmCache.nmBusyBridgeViolCount);
 }
-} // namespace nm_workers_detail
-using namespace nm_workers_detail;
 
-
-namespace nm_workers_detail {
 // The bg thread's backstop for a byte the original left at 1 with nothing
 // claimed: it clears the byte when the count reads 0. It takes the generator's
 // queue lock (+152) only when the byte reads 1, so an idle poll costs no lock,
@@ -216,13 +209,11 @@ void ClearBusyBridgeIfIdle(uintptr_t nmg, const NmQueueLock* held)
 {
 	NoteBusyBridge(BusyBridge(GameBusyBridgeOps(nmg), BUSY_BRIDGE_CLEAR_IF_IDLE, held != NULL));
 }
-} // namespace nm_workers_detail
 
 // --------------------------------------------------------------------
 // Worker thread entry
 // --------------------------------------------------------------------
 
-namespace nm_workers_detail {
 static bool WorkerInitHavok(int workerId, char (&ctx128)[128], char (&buf8)[8], char (&name)[32])
 {
 	// Havok thread init (5-step sequence, matches Kenshi's 4 game threads):

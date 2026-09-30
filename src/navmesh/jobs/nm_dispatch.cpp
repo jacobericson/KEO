@@ -177,7 +177,8 @@ static uintptr_t BgFirstDispatchPhase(void* thisNMG)
 	// install finished. It starts only with both NavMesh::stop and
 	// buildCollision hooked: the first retires the workers before the game
 	// frees the Havok heap, the second covers their collision builds. The
-	// install above ran on this thread, so both flags are final here.
+	// install above ran on this thread, so both rows' installed marks are final
+	// here.
 	{
 		static volatile long poolDecided = 0;
 		if (!InterlockedCompareExchange(&poolDecided, 0, 0))
@@ -433,10 +434,10 @@ char BgDispatchCtx::ProcessPicked()
 	// The bg thread's claim markers, raised BEFORE the unlock exactly as a
 	// worker's are (WorkerTryDequeueAny): the busy bridge (so workerBusyCount
 	// covers this job from the unlink, which is what NavMeshWorkersIdle reads)
-	// and the claimed-zone slot (so NavMeshUnloadFence::TryBegin sees this zone as in
-	// flight), so the job is never invisible to either check. Released once, after
-	// ProcessNavMeshJob returns (its L2 write included, as for a worker), or on
-	// the vanilla content-check return below.
+	// and the claimed-zone slot (so NavMeshUnloadFence::TryBegin sees this zone
+	// as in flight), so the job is never invisible to either check. Released
+	// once, after ProcessNavMeshJob returns (its L2 write included, as for a
+	// worker), or on the vanilla content-check return below.
 	ClaimedJobBeginLocked(*queue, claimed, job, jobType, peekZone, CLAIM_SLOT_BG);
 
 	queue->Release();

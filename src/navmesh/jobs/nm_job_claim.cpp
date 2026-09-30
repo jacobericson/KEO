@@ -343,8 +343,9 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 	// nor +232 and isBusy would report idle. Released once, at the end of the
 	// worker loop body, on every exit path.
 	// The claim marker for the mod-unload protocol, also before the unlock:
-	// from here until the worker loop clears it, NavMeshUnloadFence::TryBegin refuses
-	// this zone (the building hash below reads its content with no lock).
+	// from here until the worker loop clears it,
+	// NavMeshUnloadFence::TryBegin refuses this zone (the building hash below
+	// reads its content with no lock).
 	ClaimedJobBeginLocked(queue, claimedOut, job, jobType, jobZone, claimSlot);
 
 	queue.Release();

@@ -20,8 +20,8 @@ static inline void NmQueueMutexUnlock(uintptr_t nmg)
 	game::g_gameFn.fn_readerUnlock((void*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_mutex, 152)));
 }
 
-// A hold of the queue lock. A function whose name ends in Locked takes a
-// reference to one as its first parameter: the caller states it holds +152
+// A hold of the queue lock. A navmesh function whose name ends in Locked takes
+// a reference to one as its first parameter: the caller states it holds +152
 // for the call. Release() is for a region whose normal paths let go before
 // the scope ends, at the statement that released it; the destructor releases
 // only on a C++ unwind. Acquire() takes a hold after the scope exists: the bg

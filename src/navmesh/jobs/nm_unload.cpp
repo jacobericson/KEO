@@ -227,8 +227,7 @@ static NmFenceOps FenceOps(void* zone)
 
 NmFenceResult NavMeshUnloadFence::TryBegin(void* zone)
 {
-	result = NmFenceTryBegin(FenceOps(zone));
-	return result;
+	return NmFenceTryBegin(&result, FenceOps(zone));
 }
 
 void NavMeshUnloadFence::Release()

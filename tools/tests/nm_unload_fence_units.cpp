@@ -26,6 +26,12 @@ static void UnlockPj(void* p)   { Note((FakeFence*)p, 'u'); }
 static void End(void* p)        { Note((FakeFence*)p, 'e'); }
 static void Priority(void* p)   { Note((FakeFence*)p, 'r'); }
 
+static NmFenceOps Ops(FakeFence* f)
+{
+	NmFenceOps ops = { f, &Begin, &SkipJob, &SkipClaim, &TryPj, &UnlockPj, &End, &Priority };
+	return ops;
+}
+
 static NmFenceResult Run(FakeFence* f, int beginAnswer, int pjAnswer, bool bumpJob, bool bumpClaim)
 {
 	memset(f, 0, sizeof(*f));
@@ -33,14 +39,13 @@ static NmFenceResult Run(FakeFence* f, int beginAnswer, int pjAnswer, bool bumpJ
 	f->pjAnswer = pjAnswer;
 	f->bumpJob = bumpJob;
 	f->bumpClaim = bumpClaim;
-	NmFenceOps ops = { f, &Begin, &SkipJob, &SkipClaim, &TryPj, &UnlockPj, &End, &Priority };
-	return NmFenceTryBegin(ops);
+	NmFenceResult rec = NM_FENCE_RELEASED;
+	return NmFenceTryBegin(&rec, Ops(f));
 }
 
 static void Release(FakeFence* f, NmFenceResult* r)
 {
-	NmFenceOps ops = { f, &Begin, &SkipJob, &SkipClaim, &TryPj, &UnlockPj, &End, &Priority };
-	NmFenceRelease(r, ops);
+	NmFenceRelease(r, Ops(f));
 }
 
 int main()
@@ -68,5 +73,38 @@ int main()
 	Check(r == NM_FENCE_NO_LOCK && strcmp(f.trace, "jcbp") == 0, "no lock: begun, nothing locked");
 	Release(&f, &r);
 	Check(strcmp(f.trace, "jcbpe") == 0, "no lock: only the publication ends");
+
+	static const bool kProceeds[NM_FENCE_RELEASED + 1] = { true, true, false, false, false, false, false, false };
+	bool proceedsOk = NM_FENCE_RELEASED == 7;
+	for (int v = 0; v <= NM_FENCE_RELEASED; ++v)
+		proceedsOk = proceedsOk && NmFenceProceeds((NmFenceResult)v) == kProceeds[v];
+	Check(proceedsOk, "only a begun fence proceeds");
+
+	struct RefusalCase { int begin; bool bumpJob, bumpClaim; NmFenceResult want; const char* trace; };
+	static const RefusalCase kRefusals[4] =
+	{
+		{ NM_FENCE_BEGIN_UNAVAILABLE, false, false, NM_FENCE_UNAVAILABLE,   "jcb" },
+		{ NM_FENCE_BEGIN_REFUSED,     true,  false, NM_FENCE_REFUSED_JOB,   "jcbj" },
+		{ NM_FENCE_BEGIN_REFUSED,     false, true,  NM_FENCE_REFUSED_CLAIM, "jcbjc" },
+		{ NM_FENCE_BEGIN_REFUSED,     false, false, NM_FENCE_REFUSED,       "jcbjc" }
+	};
+	bool refusalsOk = true;
+	for (int i = 0; i < 4; ++i)
+	{
+		r = Run(&f, kRefusals[i].begin, NM_FENCE_PJ_HELD, kRefusals[i].bumpJob, kRefusals[i].bumpClaim);
+		refusalsOk = refusalsOk && r == kRefusals[i].want;
+		Release(&f, &r);
+		refusalsOk = refusalsOk && strcmp(f.trace, kRefusals[i].trace) == 0 && r == NM_FENCE_RELEASED;
+	}
+	Check(refusalsOk, "a refusal owes no release: the trace stays the begin's and the record reads released");
+
+	NmFenceResult held = Run(&f, NM_FENCE_BEGIN_OK, NM_FENCE_PJ_HELD, false, false);
+	NmFenceResult again = NmFenceTryBegin(&held, Ops(&f));
+	Check(again == NM_FENCE_REFUSED && held == NM_FENCE_HELD && strcmp(f.trace, "jcbp") == 0,
+	      "a second begin on a held fence refuses before any operation and keeps the hold");
+	Release(&f, &held);
+	again = NmFenceTryBegin(&held, Ops(&f));
+	Check(strcmp(f.trace, "jcbpuejcbp") == 0 && again == NM_FENCE_HELD && held == NM_FENCE_HELD,
+	      "the kept hold releases once, and the released fence begins again");
 	return CheckExit("nm_unload_fence_units");
 }

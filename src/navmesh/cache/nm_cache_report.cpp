@@ -318,6 +318,7 @@ static void AppendBuildAndTrip(std::ostringstream& ss)
 
 	ss << BuildLockStatsSuffix();
 
+	// Without the tripwire, trip= reads off: no violation counted is not the same as none possible.
 	if (HookRowInstalled(HOOK_PROCESS_JOB_ALT))
 		ss << " trip=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmTripCount, 0, 0);
 	else

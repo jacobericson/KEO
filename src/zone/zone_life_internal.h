@@ -30,12 +30,12 @@ enum ZlOutcome
 	ZLO_UNLOADED = 0,
 	ZLO_DEFERRED,       // ZlUnloadResult::defer says why
 	ZLO_RELEASED,       // no longer the mod's to unload (gone, or in Set A/B)
-	ZLO_ANOMALY,        // flags without a content, or a content the call left in place
+	ZLO_ANOMALY,        // flags without a content, a content the call left in place, or a refused discard
 	ZLO_UNAVAILABLE     // the unload protocol can never pass here
 };
 
 // One unload attempt's outcome, returned by value; defer names the kind when
-// outcome is ZLO_DEFERRED and is -1 otherwise.
+// outcome is ZLO_DEFERRED and is -1 otherwise. Main thread.
 struct ZlUnloadResult
 {
 	int outcome;
