@@ -1,0 +1,227 @@
+// plan_policy.cpp - The route planner's decisions as pure functions of their inputs: no state, no
+// lock, no allocation, any thread.
+
+#include <cmath>
+#include "planner/plan_policy.h"
+
+namespace planner {
+
+static const float GRID_ORIGIN = 147456.0f;
+static const float GRID_CELL   = 4608.0f;
+
+static const double ARRIVAL_TIMEOUT_SECONDS = 8.0;
+static const double PLAN_AGE_SECONDS        = 120.0;
+static const int    RUNGS_BEFORE_REPLAN     = 3;
+
+static bool LegLoaded(unsigned loadedMask, int i)
+{
+	return i >= 0 && i < PLAN_MAX_LEGS && ((loadedMask >> i) & 1u) != 0;
+}
+
+static float DistanceXz(const float a[3], const float b[3])
+{
+	float dx = a[0] - b[0], dz = a[2] - b[2];
+	return std::sqrt(dx * dx + dz * dz);
+}
+
+static void Copy3(float out[3], const float in[3])
+{
+	out[0] = in[0];
+	out[1] = in[1];
+	out[2] = in[2];
+}
+
+void PlanCellOf(float x, float z, int* cx, int* cy)
+{
+	*cx = (int)std::floor((x + GRID_ORIGIN) / GRID_CELL);
+	*cy = (int)std::floor((z + GRID_ORIGIN) / GRID_CELL);
+}
+
+int PlanCellSpan(int ax, int ay, int bx, int by)
+{
+	int sx = ax - bx, sy = ay - by;
+	if (sx < 0) sx = -sx;
+	if (sy < 0) sy = -sy;
+	return (sx > sy) ? sx : sy;
+}
+
+PlanVerdict PlanDecideVerdict(bool routeFound, int legCount, unsigned loadedMask, int span, int legSpan)
+{
+	if (!routeFound) return PV_NO_ROUTE;
+	if (legCount < 0) legCount = 0;
+	unsigned all = (legCount >= 32) ? 0xFFFFFFFFu : ((1u << legCount) - 1u);
+	if ((loadedMask & all) == all && span < legSpan) return PV_DIRECT;
+	return PV_LEGGED;
+}
+
+// The scan walks the route from leg `from` while each leg's far section is loaded and its cell is
+// inside the bound: an unloaded leg or one past the bound ends the run, so the target is never
+// beyond a stretch the character cannot walk or a leg that leaves the bounded span. A portal leg
+// with no qualifying run is still the next step; the destination leg is never a fallback.
+int PlanLegTarget(const PlanLeg* legs, int n, unsigned loadedMask, int from, int cx, int cy, int legSpan)
+{
+	if (n > PLAN_MAX_LEGS) n = PLAN_MAX_LEGS;
+	if (!legs || from < 0 || from >= n) return -1;
+	int target = -1;
+	for (int i = from; i < n; ++i)
+	{
+		if (!LegLoaded(loadedMask, i)) break;
+		if (!(PlanCellSpan(legs[i].cellX, legs[i].cellY, cx, cy) <= legSpan - 1)) break;
+		target = i;
+	}
+	if (target >= 0) return target;
+	return legs[from].isDestination ? -1 : from;
+}
+
+static void EdgeRecheck(const PlanLeg* legs, int n, const PlanEdgeIn& in, PlanEdgeOut* out)
+{
+	const PlanLeg& cur = legs[in.legIndex];
+	Copy3(out->point, cur.point);
+	if (!(DistanceXz(in.pos, cur.point) < PLAN_REACH) || cur.isDestination) return;
+
+	// Past the current portal only once its far section is in: until then the character holds it.
+	int target = -1;
+	if (LegLoaded(in.loadedMask, in.legIndex))
+	{
+		int cx, cy;
+		PlanCellOf(in.pos[0], in.pos[2], &cx, &cy);
+		target = PlanLegTarget(legs, n, in.loadedMask, in.legIndex + 1, cx, cy, in.legSpan);
+		// A truncated plan's destination leg is not the order's end: hold its last portal instead.
+		if (in.routeTruncated && target >= 0 && legs[target].isDestination) target -= 1;
+	}
+	if (target > in.legIndex)
+	{
+		out->newLegIndex = target;
+		Copy3(out->point, legs[target].point);
+		return;
+	}
+	out->waiting = 1;
+}
+
+void PlanEdgeStep(const PlanLeg* legs, int n, const PlanEdgeIn& in, PlanEdgeOut* out)
+{
+	out->action      = PEA_PASS;
+	out->newLegIndex = in.legIndex;
+	out->waiting     = 0;
+	out->rung        = 0;
+	out->point[0] = out->point[1] = out->point[2] = 0.0f;
+	if (n > PLAN_MAX_LEGS) n = PLAN_MAX_LEGS;
+	if (!legs || in.legIndex < 0 || in.legIndex >= n) return;
+	if (in.site != PES_RECHECK && in.site != PES_COMPUTE) return;
+
+	out->action = PEA_POINT;
+	if (in.site == PES_RECHECK)
+	{
+		EdgeRecheck(legs, n, in, out);
+		return;
+	}
+	const PlanLeg& cur = legs[in.legIndex];
+	if (in.offset != 0.0f)
+	{
+		out->rung = 1;
+		if (!cur.isDestination)
+		{
+			PlanRungSlide(cur, in.offset, out->point);
+			return;
+		}
+	}
+	Copy3(out->point, cur.point);
+}
+
+void PlanRungSlide(const PlanLeg& leg, float offset, float out[3])
+{
+	const float* a = leg.edgeA;
+	const float* b = leg.edgeB;
+	float dx = b[0] - a[0], dz = b[2] - a[2];
+	float len = std::sqrt(dx * dx + dz * dz);
+	if (!(len >= 2.0f * PLAN_RUNG_INSET))
+	{
+		out[0] = (a[0] + b[0]) * 0.5f;
+		out[1] = (a[1] + b[1]) * 0.5f;
+		out[2] = (a[2] + b[2]) * 0.5f;
+		return;
+	}
+	float ux = dx / len, uz = dz / len;
+	float t = (leg.point[0] - a[0]) * ux + (leg.point[2] - a[2]) * uz + offset;
+	if (!(t >= PLAN_RUNG_INSET)) t = PLAN_RUNG_INSET;
+	else if (t > len - PLAN_RUNG_INSET) t = len - PLAN_RUNG_INSET;
+	out[0] = a[0] + ux * t;
+	out[1] = a[1] + (b[1] - a[1]) * (t / len);
+	out[2] = a[2] + uz * t;
+}
+
+PlanFlipAnswer PlanFlipRule(const PlanFlipIn& in)
+{
+	if (in.mode != PLANNER_ON) return PFA_NOT_MINE;
+	return PlanFlipRuleOn(in);
+}
+
+PlanFlipAnswer PlanFlipRuleOn(const PlanFlipIn& in)
+{
+	if (!in.haveChar || !in.haveSlot) return PFA_NOT_MINE;
+	if (in.verdict != PV_DIRECT && in.verdict != PV_LEGGED) return PFA_NOT_MINE;
+	if (!PlanDestMatches(in.dest, in.finalDest)) return PFA_NOT_MINE;
+	if (in.verdict == PV_LEGGED && !in.legIsDestination) return PFA_FALSE;
+	return PFA_VANILLA;
+}
+
+bool PlanDestMatches(const float a[3], const float b[3])
+{
+	float dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
+	return dx * dx + dy * dy + dz * dz <= PLAN_DEST_MATCH * PLAN_DEST_MATCH;
+}
+
+bool PlanEdgeSteers(int mode, int verdict, bool destMatches)
+{
+	return mode == PLANNER_ON && verdict == PV_LEGGED && destMatches;
+}
+
+bool PlanReplacesAhead(int mode, int verdict)
+{
+	return mode == PLANNER_ON && verdict == PV_LEGGED;
+}
+
+bool PlanOwnsWait(int mode, int verdict, int legIsDestination, int waiting, float distToPortal)
+{
+	if (mode != PLANNER_ON || verdict != PV_LEGGED) return false;
+	return !legIsDestination && waiting != 0 && distToPortal < PLAN_REACH;
+}
+
+PlanReplanWhy PlanReplanDue(const PlanReplanIn& in)
+{
+	bool nearPortal = in.distToPortal < PLAN_REACH;
+	if (in.rungs >= RUNGS_BEFORE_REPLAN) return PRW_RUNGS;
+	if (in.completeSince > 0.0 && in.now - in.completeSince >= ARRIVAL_TIMEOUT_SECONDS && !nearPortal)
+		return PRW_ARRIVAL_TIMEOUT;
+	if (in.routeTruncated && in.legIndex == in.legCount - 2 && nearPortal) return PRW_ROUTE_END;
+	if (in.waitSince > 0.0 && in.now - in.waitSince >= (double)in.waitSeconds && !in.awaitedLoaded &&
+	    in.loadedChangedSincePlan)
+		return PRW_WAIT;
+	if (in.goalByFootprint && in.goalLoaded) return PRW_GOAL_LOADED;
+	if (in.now - in.planTime >= PLAN_AGE_SECONDS) return PRW_AGE;
+	return PRW_NONE;
+}
+
+int PlanFeedCells(const PlanLeg* legs, int n, int from, int ahead, int exteriorSlots, int* outXY)
+{
+	if (n > PLAN_MAX_LEGS) n = PLAN_MAX_LEGS;
+	if (!legs || !outXY || ahead <= 0) return 0;
+	bool haveFrom = from >= 0 && from < n;
+	int count = 0;
+	for (int i = (from + 1 > 0) ? from + 1 : 0; i < n && count < ahead; ++i)
+	{
+		const PlanLeg& leg = legs[i];
+		if (leg.farSection >= exteriorSlots) continue;
+		if (haveFrom && leg.cellX == legs[from].cellX && leg.cellY == legs[from].cellY) continue;
+		bool seen = false;
+		for (int k = 0; k < count && !seen; ++k)
+			seen = outXY[k * 2] == leg.cellX && outXY[k * 2 + 1] == leg.cellY;
+		if (seen) continue;
+		outXY[count * 2]     = leg.cellX;
+		outXY[count * 2 + 1] = leg.cellY;
+		++count;
+	}
+	return count;
+}
+
+} // namespace planner
