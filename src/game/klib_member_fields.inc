@@ -29,6 +29,7 @@ KLIB_FIELD(AbstractMovementBase_currentlyMoving, AbstractMovementBase, currently
 KLIB_FIELD(AbstractMovementBase_pos, AbstractMovementBase, pos, 0xC4, 12)
 KLIB_FIELD(AbstractMovementBase_destination, AbstractMovementBase, destination, 0xDC, 12)
 KLIB_FIELD(AbstractMovementBase_pathDestination, AbstractMovementBase, pathDestination, 0xE8, 12)
+KLIB_FIELD(CharMovement_roadWeight, CharMovement, roadWeight, 0x100, 4)
 KLIB_FIELD(CharMovement_havokCharacter, CharMovement, havokCharacter, 0x320, 8)
 KLIB_FIELD(CharMovement_edgeTarget, CharMovement, edgeTarget, 0x368, 4)
 KLIB_FIELD(CharMovement_movingToEdge, CharMovement, movingToEdge, 0x370, 1)

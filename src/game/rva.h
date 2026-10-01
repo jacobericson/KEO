@@ -370,6 +370,7 @@ const size_t RVA_CS_FIND_PATH_FALLBACK = 0x3AABF0;
 const size_t RVA_REQUEST_PATH       = 0x145CB0;
 const size_t RVA_PATH_REQ_SUBMIT    = 0x3AAEF0;
 const size_t RVA_ENQUEUE_PATH_REQ   = 0x3B6110;
+const size_t RVA_NAVMESH_GET_FACE_KEY_VEC4 = 0x3A1CB0;  // NavMesh::getFaceKey_hkVector4f(pos, rayLength): lock-free, the caller holds +0x200 shared
 
 // Island routing. Verified against the IDB (kenshi_x64.exe 1.0.65).
 //   ZoneMap::isInIsland      0xA07EB0 (19 bytes): `b && a->island == b->island`.

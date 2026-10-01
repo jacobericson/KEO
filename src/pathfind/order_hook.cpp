@@ -11,6 +11,7 @@
 #include "movement/islands.h"
 #include "movement/order_outcome.h"
 #include "bench/bench_runner.h"
+#include "planner/planner_tick.h"
 
 // =========================================================================
 // Hook 4: addOrderSelectedCharacters -- player move order capture
@@ -45,6 +46,52 @@ static void NoteMissingSelectedCharacter(void* character)
 	}
 }
 #endif
+
+// Main thread, from the non-move branch before the original: drops every selected character's
+// island order, formation membership and route plan, and closes its order outcome as a cancel.
+static void DropSelectedCharacterOrders(void* thisPI)
+{
+	uintptr_t piAddr = (uintptr_t)thisPI;
+	uintptr_t count = *(uintptr_t*)(KLIB_MEMBER(3, piAddr, PlayerInterface_selected_count, OFF_PI_SEL_COUNT));
+	if (count > 0)
+	{
+		uintptr_t arrayPtr = *(uintptr_t*)(KLIB_MEMBER(3, piAddr, PlayerInterface_selected_buckets, OFF_PI_SEL_ARRAY));
+		uintptr_t index    = *(uintptr_t*)(KLIB_MEMBER(3, piAddr, PlayerInterface_selected_bucketCount, OFF_PI_SEL_INDEX));
+		if (arrayPtr && index < 1024)
+		{
+			uintptr_t* node = *(uintptr_t**)(arrayPtr + 8 * index);
+			void* sentinel = *(void**)(gameBase + RVA_HANDLE_SENTINEL);
+			int maxIter = (int)count + 16;
+			int iter = 0;
+			while (node)
+			{
+				if (++iter > maxIter) break;
+				int nodeType = *(int*)(KLIB_MEMBER(3, (uintptr_t)node, HandSetNode_handle_type, OFF_SEL_NODE_TYPE));
+				if (nodeType == 1)
+				{
+					void* resolved = KlibSelectedCharacter((const void*)(KLIB_MEMBER(3, (uintptr_t)node, HandSetNode_value_base_, OFF_SEL_NODE_HANDLE)));
+					uintptr_t character = (uintptr_t)resolved;
+#ifdef ZONEOPT_DEBUG
+					NoteMissingSelectedCharacter(resolved);
+#endif
+					if (character && (void*)character != sentinel)
+					{
+						IslandDropOrder(character);
+						planner::PlannerDrop(character);
+						// Any non-move order supersedes squad membership too
+						// (attack, job, pick-up, talk): drop it from its
+						// formation group the same way.
+						FormationDetachCharacters(&character, 1);
+						// A player-issued cancel, not a routing failure --
+						// an open stall resolves as a user re-order.
+						OrderOutcomeCancel(character, ElapsedSec());
+					}
+				}
+				node = *(uintptr_t**)KLIB_MEMBER(3, node, HandSetNode_next_, 0);
+			}
+		}
+	}
+}
 
 void hook_addOrderSelected(void* thisPI, void* destIndoors, int task,
                             void* subject, bool shift, bool addDontClear,
@@ -138,6 +185,8 @@ void hook_addOrderSelected(void* thisPI, void* destIndoors, int task,
 			}
 		}
 
+		planner::PlannerNoteOrder(collectedChars, collectedCount, location, destIndoors, shift, addDontClear);
+
 		// One order-outcome record per player move order, for every
 		// selected character (not just the ones movement-aware preload
 		// tracks). Main thread; the detour already logs and allocates above.
@@ -213,45 +262,7 @@ void hook_addOrderSelected(void* thisPI, void* destIndoors, int task,
 		// test (item (e)) to eventually re-issue to a character the player
 		// deliberately redirected. Same selected-characters walk as the task
 		// 29 branch above.
-		uintptr_t piAddr = (uintptr_t)thisPI;
-		uintptr_t count = *(uintptr_t*)(KLIB_MEMBER(3, piAddr, PlayerInterface_selected_count, OFF_PI_SEL_COUNT));
-		if (count > 0)
-		{
-			uintptr_t arrayPtr = *(uintptr_t*)(KLIB_MEMBER(3, piAddr, PlayerInterface_selected_buckets, OFF_PI_SEL_ARRAY));
-			uintptr_t index    = *(uintptr_t*)(KLIB_MEMBER(3, piAddr, PlayerInterface_selected_bucketCount, OFF_PI_SEL_INDEX));
-			if (arrayPtr && index < 1024)
-			{
-				uintptr_t* node = *(uintptr_t**)(arrayPtr + 8 * index);
-				void* sentinel = *(void**)(gameBase + RVA_HANDLE_SENTINEL);
-				int maxIter = (int)count + 16;
-				int iter = 0;
-				while (node)
-				{
-					if (++iter > maxIter) break;
-					int nodeType = *(int*)(KLIB_MEMBER(3, (uintptr_t)node, HandSetNode_handle_type, OFF_SEL_NODE_TYPE));
-					if (nodeType == 1)
-					{
-						void* resolved = KlibSelectedCharacter((const void*)(KLIB_MEMBER(3, (uintptr_t)node, HandSetNode_value_base_, OFF_SEL_NODE_HANDLE)));
-						uintptr_t character = (uintptr_t)resolved;
-#ifdef ZONEOPT_DEBUG
-						NoteMissingSelectedCharacter(resolved);
-#endif
-						if (character && (void*)character != sentinel)
-						{
-							IslandDropOrder(character);
-							// Any non-move order supersedes squad membership too
-							// (attack, job, pick-up, talk): drop it from its
-							// formation group the same way.
-							FormationDetachCharacters(&character, 1);
-							// A player-issued cancel, not a routing failure --
-							// an open stall resolves as a user re-order.
-							OrderOutcomeCancel(character, ElapsedSec());
-						}
-					}
-					node = *(uintptr_t**)KLIB_MEMBER(3, node, HandSetNode_next_, 0);
-				}
-			}
-		}
+		DropSelectedCharacterOrders(thisPI);
 	}
 
 	game::g_hookOrig.orig_addOrderSelected(thisPI, destIndoors, task, subject, shift, addDontClear, location);

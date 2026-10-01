@@ -37,6 +37,7 @@
 #include "zone/retention/zone_retention.h"
 #include "zone/preload/camera_focus.h"
 #include "planner/coarse_graph_base.h"
+#include "planner/planner_tick.h"
 
 // =========================================================================
 // NavMesh scheduling helpers (builds context from preload/tracking state)
@@ -324,6 +325,7 @@ static double CameraZoneReports(void* zoneMgr)
 	// Island routing overlay: Set B signature, component rebuild, parked-squad
 	// re-issue, diagnostics (main thread; hooks read the published snapshot)
 	IslandTick(zoneMgr, now);
+	planner::PlannerTick(zoneMgr, now);
 
 	// Republish the player-owned HavokCharacter* set every frame (main
 	// thread; hook_requestPath reads the published snapshot, main or AI

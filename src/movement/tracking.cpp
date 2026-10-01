@@ -6,6 +6,7 @@
 #include "movement/tracking.h"
 #include "movement/mover_policy.h"
 #include "zone/preload/coverage_stats.h"
+#include "planner/planner_tick.h"
 
 // Registry evictions. Defined here, where they happen; the counter line that
 // prints it lives in pathfind_hooks.cpp, which not every variant compiles.
@@ -386,6 +387,23 @@ void ScanCharacterZones(void* zoneMgr)
 // Tiered character polling
 // =========================================================================
 
+// Main thread, from the active-mover poll: queues the cells one step toward the mover's destination
+// cell (x, y and diagonal) and returns how many the queue took.
+static int EnqueueAheadOfMover(int i, int curGX, int curGY)
+{
+	if (planner::PlannerRouteReplacesAhead(watchedChars[i].character)) return 0;   // the route planner queues this character's route tiles instead
+	int edgePreloads = 0;
+	int dirX = 0, dirY = 0;
+	if (watchedChars[i].destZoneX > curGX) dirX = 1;
+	else if (watchedChars[i].destZoneX < curGX) dirX = -1;
+	if (watchedChars[i].destZoneY > curGY) dirY = 1;
+	else if (watchedChars[i].destZoneY < curGY) dirY = -1;
+	if (dirX != 0 && EnqueueCharacterZone(curGX + dirX, curGY)) edgePreloads++;
+	if (dirY != 0 && EnqueueCharacterZone(curGX, curGY + dirY)) edgePreloads++;
+	if (dirX != 0 && dirY != 0 && EnqueueCharacterZone(curGX + dirX, curGY + dirY)) edgePreloads++;
+	return edgePreloads;
+}
+
 void PollActiveMovers(void* zoneMgr, double now)
 {
 	int removals = 0;
@@ -486,16 +504,7 @@ void PollActiveMovers(void* zoneMgr, double now)
 		// Always ensure next zone in path is preloaded (no edge threshold).
 		// Characters must always have at least their current zone and next
 		// zone ahead available for pathfinding.
-		{
-			int dirX = 0, dirY = 0;
-			if (watchedChars[i].destZoneX > curGX) dirX = 1;
-			else if (watchedChars[i].destZoneX < curGX) dirX = -1;
-			if (watchedChars[i].destZoneY > curGY) dirY = 1;
-			else if (watchedChars[i].destZoneY < curGY) dirY = -1;
-			if (dirX != 0 && EnqueueCharacterZone(curGX + dirX, curGY)) edgePreloads++;
-			if (dirY != 0 && EnqueueCharacterZone(curGX, curGY + dirY)) edgePreloads++;
-			if (dirX != 0 && dirY != 0 && EnqueueCharacterZone(curGX + dirX, curGY + dirY)) edgePreloads++;
-		}
+		edgePreloads += EnqueueAheadOfMover(i, curGX, curGY);
 
 		// Edge-detection branch: preload 3x3 around near-edge position
 		// plus 3 movement-ahead zones.

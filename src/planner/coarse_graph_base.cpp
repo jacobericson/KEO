@@ -17,12 +17,15 @@
 #include "planner/coarse_graph_cache.h"
 #include "planner/coarse_graph_live.h"
 #include "planner/planner_config.h"
+#include "planner/plan_store.h"
+#include "planner/planner_tick.h"
 #include "game/game.h"
 #include "base/core.h"
 #include "zone/readiness/readiness_bindings.h"
 #include <windows.h>
 #include <stdio.h>
 #include <exception>
+#include <sstream>
 #include <string>
 #include <vector>
 #include "base/klib_include.h"
@@ -446,6 +449,18 @@ void PlannerBaseStartStep(int* installed, int* total)
 		g_plannerCfg.mode = PLANNER_OFF;
 		return;
 	}
+	PlanStoreArm(g_plannerCfg.mode);
+	if (!PlannerTickArm())
+	{
+		ErrorLog("Planner: search scratch allocation failed; the planner is off for this session");
+		g_plannerCfg.mode = PLANNER_OFF;
+		PlanStoreArm(PLANNER_OFF);
+	}
+	std::ostringstream arm;
+	arm << "Planner arm: mode=" << PlannerModeName(g_plannerCfg.mode) << " legSpan=" << g_plannerCfg.legSpan
+	    << " aheadTiles=" << g_plannerCfg.aheadTiles << " waitSeconds=" << g_plannerCfg.waitSeconds
+	    << " baseBuild=" << g_plannerCfg.baseBuild;
+	LogMsg(arm.str());
 	InitializeCriticalSection(&s_requestCS);
 	if (!g_plannerCfg.baseBuild)
 		return;
