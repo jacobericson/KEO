@@ -28,7 +28,7 @@ bool HookWantEval(HookWant want, const HookWantInputs& in)
 	case HOOK_WANT_SECTION_KEY_PROBE: return in.sectionKeyProbe;
 	case HOOK_WANT_GRAPH_HEURISTIC:   return in.graphHeuristicGuard || in.playerHierarchical;
 	case HOOK_WANT_FIND_PATH_FULL:    return in.pathfindDiag || in.playerHierarchical;
-	case HOOK_WANT_CLUSTER_CROSS_COST: return in.clusterCrossCost;
+	case HOOK_WANT_CLUSTER_CROSS_COST: return in.clusterCrossCost || in.planner;
 	case HOOK_WANT_UNCOUNTED:         return false;
 	}
 	return false;
@@ -63,6 +63,7 @@ HookWantInputs HookWantInputsFromConfig()
 	in.graphHeuristicGuard = fixes::g_fixesCfg.graphHeuristicGuardOn != 0;
 	in.playerHierarchical  = pathfind::g_pathfindCfg.playerHierarchicalMode != AHIER_OFF;
 	in.clusterCrossCost    = fixes::g_fixesCfg.clusterCrossCostOn != 0;
+	in.planner = planner::g_plannerCfg.mode != planner::PLANNER_OFF;
 	return in;
 }
 

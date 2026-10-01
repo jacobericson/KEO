@@ -15,6 +15,7 @@
 #include "planner/coarse_graph_base.h"
 #include "planner/coarse_graph.h"
 #include "planner/coarse_graph_cache.h"
+#include "planner/coarse_graph_live.h"
 #include "planner/planner_config.h"
 #include "game/game.h"
 #include "base/core.h"
@@ -541,6 +542,7 @@ void PlannerOnFrame(void* zoneMgr, bool saveLoading)
 
 	CgDrainHandOff();
 	CgPromoteLive(8);
+	CgLiveReport(ElapsedSec());
 	CgDrainRetired();
 }
 

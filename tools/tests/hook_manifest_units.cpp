@@ -82,7 +82,7 @@ static bool HasName(const TestRow* rows, int n, const char* name)
 	return false;
 }
 
-// The 21 inputs, each with its field and the config global it is read from; a
+// The 22 inputs, each with its field and the config global it is read from; a
 // NULL global is a key a PROD build does not carry, or an int key
 // CheckInputMapping flips on its own.
 struct InputField
@@ -120,6 +120,7 @@ static const InputField kFields[] =
 	{ "graphHeuristicGuard", &HookWantInputs::graphHeuristicGuard, NULL },
 	{ "playerHierarchical",  &HookWantInputs::playerHierarchical,  NULL },
 	{ "clusterCrossCost",    &HookWantInputs::clusterCrossCost,    NULL },
+	{ "planner", &HookWantInputs::planner, NULL },
 };
 static const int kFieldCount = (int)(sizeof(kFields) / sizeof(kFields[0]));
 
@@ -131,8 +132,8 @@ static int FieldIndex(const char* name)
 	return -1;
 }
 
-// The DEV defaults: every key true but unstitchProbe, graphHeuristicGuard, playerHierarchical
-// and clusterCrossCost.
+// The DEV defaults: every key true but unstitchProbe, graphHeuristicGuard, playerHierarchical,
+// clusterCrossCost and planner.
 static HookWantInputs DevDefaults()
 {
 	HookWantInputs in;
@@ -142,6 +143,7 @@ static HookWantInputs DevDefaults()
 	in.graphHeuristicGuard = false;
 	in.playerHierarchical = false;
 	in.clusterCrossCost = false;
+	in.planner = false;
 	return in;
 }
 
@@ -297,6 +299,7 @@ static const Flip kFlips[] =
 	    "contentStreamCallee_0x8869", "graphHeuristicGoalAdjacent", "graphHeuristicClusterCentre",
 	    "graphHeuristicCoarseSeed" } },
 	{ "clusterCrossCost", { "clusterCrossCost" }, { "graphInstanceConnect" } },
+	{ "plannerMode", { "planner" }, { "graphInstanceConnect" } },
 };
 
 static void CheckWantTruthTable()
@@ -389,6 +392,16 @@ static void CheckInputMapping()
 	HookWantInputs cross = HookWantInputsFromConfig();
 	fixes::g_fixesCfg.clusterCrossCostOn = savedCross;
 	Check(SameInputs(cross, base, FieldIndex("clusterCrossCost")), "inputs clusterCrossCost");
+
+	// plannerMode is an int key: observe and on each flip exactly the planner input.
+	const int savedPlanner = planner::g_plannerCfg.mode;
+	planner::g_plannerCfg.mode = planner::PLANNER_OBSERVE;
+	HookWantInputs plannerObserve = HookWantInputsFromConfig();
+	planner::g_plannerCfg.mode = planner::PLANNER_ON;
+	HookWantInputs plannerOn = HookWantInputsFromConfig();
+	planner::g_plannerCfg.mode = savedPlanner;
+	Check(SameInputs(plannerObserve, base, FieldIndex("planner")), "inputs plannerMode observe");
+	Check(SameInputs(plannerOn, base, FieldIndex("planner")), "inputs plannerMode on");
 }
 
 // The rows carrying HOOK_CAP_WORKER_POOL are exactly navMeshStop and

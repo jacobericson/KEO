@@ -253,3 +253,5 @@ src\planner\planner_config.cpp
 src\planner\coarse_graph.cpp
 src\planner\coarse_graph_cache.cpp
 src\planner\coarse_graph_base.cpp
+src\planner\coarse_graph_live.cpp
+src\planner\coarse_graph_live_site.cpp

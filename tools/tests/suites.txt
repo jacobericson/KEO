@@ -80,3 +80,4 @@ coarse_search_units | tools\tests\coarse_search_units.cpp | src\planner\coarse_s
 plan_policy_units | tools\tests\plan_policy_units.cpp | src\planner\plan_policy.cpp |
 plan_store_units | tools\tests\plan_store_units.cpp | src\planner\plan_store.cpp src\planner\plan_policy.cpp |
 coarse_graph_units | tools\tests\coarse_graph_units.cpp | src\planner\coarse_graph.cpp src\planner\coarse_graph_cache.cpp src\planner\tile_graph_extract.cpp src\planner\tagfile_reader.cpp |
+coarse_graph_live_units | tools\tests\coarse_graph_live_units.cpp | src\planner\coarse_graph_live.cpp src\planner\coarse_graph.cpp |
