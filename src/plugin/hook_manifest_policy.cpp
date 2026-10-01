@@ -29,6 +29,7 @@ bool HookWantEval(HookWant want, const HookWantInputs& in)
 	case HOOK_WANT_GRAPH_HEURISTIC:   return in.graphHeuristicGuard || in.playerHierarchical;
 	case HOOK_WANT_FIND_PATH_FULL:    return in.pathfindDiag || in.playerHierarchical;
 	case HOOK_WANT_CLUSTER_CROSS_COST: return in.clusterCrossCost || in.planner;
+	case HOOK_WANT_PLANNER:            return in.planner;
 	case HOOK_WANT_UNCOUNTED:         return false;
 	}
 	return false;

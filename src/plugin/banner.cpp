@@ -11,6 +11,7 @@
 #include "fixes/search/graph_heuristic_guard.h"
 #include "fixes/search/cluster_cross_cost.h"
 #include "pathfind/astar_hier_policy.h"
+#include "planner/planner_hooks.h"
 
 namespace plugin_entry_detail
 {
@@ -62,6 +63,7 @@ void LogInitBanner(int installed, int totalHooks, const std::string& gateTok,
 	    << ", islandFix=" << (movement::g_movementCfg.islandFixEnabled ? "ON" : "OFF")
 	    << ", islandFarSpan=" << movement::g_movementCfg.cfg_islandFarSpan
 	    << ", islandEdgeRing=" << IslandEdgeRingModeStr()
+	    << ", planner=" << planner::PlannerBannerToken()
 	    // The *Step= tokens are fixed values, kept for the line's format.
 	    << ", islandStep=" << 4
 	    << ", preloadStep=" << 1

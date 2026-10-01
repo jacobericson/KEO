@@ -47,6 +47,7 @@
 #include "fixes/search/graph_position_guard.h"
 #include "fixes/search/graph_heuristic_guard.h"
 #include "fixes/search/cluster_cross_cost.h"
+#include "planner/planner_hooks.h"
 #include "fixes/streaming/create_instance_guard.h"
 #include "fixes/physx/hull_queue_guard.h"
 #include "fixes/streaming/mesh_face_guard.h"
@@ -647,6 +648,8 @@ static void (*const kInstallSteps[])(int*, int*) =
 	InstallPathExtractHooks,
 	InstallPathPoolHooks,
 
+	// The route planner's two detours, only while plannerMode is set; a refusal clears it before the store is made.
+	planner::InstallPlannerHooks,
 	// The route planner's store and whole-map base, only while plannerMode is set. No hook.
 	planner::PlannerBaseStartStep,
 };

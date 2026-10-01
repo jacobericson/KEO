@@ -398,7 +398,12 @@ const size_t RVA_GETISLAND_RET_EDGE   = 0x3A3A81;
 const size_t RVA_GETISLAND_RET_SMELL  = 0x8F4AE3;
 const size_t RVA_LEKTOR_RESERVE       = 0x16630;   // thunk -> 0x37E3A0
 const size_t RVA_CALCULATE_ISLANDS    = 0xA09520;  // documented; never called/hooked
-const size_t RVA_COMPUTE_PROJECTED_DEST = 0x3A39C0; // documented; emulated in island_stuck.cpp (IslandEmulateCrossing)
+const size_t RVA_GET_ZONE_EDGE = 0x3A39C0;  // NavMesh::getZoneEdge; emulated in island_stuck.cpp (IslandEmulateCrossing), hooked by src/planner/planner_hooks.cpp while plannerMode is set
+const size_t RVA_SET_DESTINATION_VEC3      = 0x6607E0;  // CharMovement::setDestination_Vec3 (vtable slot 18 via 0x4E73D)
+const size_t RVA_SETDEST_RET_EDGE_RECHECK  = 0x660EFD;  // returns from its getZoneEdge call at 0x660EF8 (arrival recheck)
+const size_t RVA_SETDEST_RET_EDGE_COMPUTE  = 0x660F43;  // returns from its call at 0x660F3E (initial, rung, recompute)
+const size_t RVA_NAVMESH_GET_CLOSEST_POINT = 0x3A21C0;  // NavMesh::getClosestPoint(point, radius, inset, filter, out, key)
+const size_t RVA_DOOR_HIT_FILTER_VTABLE    = 0x16C9188; // DoorHitFilter's vftable, the snap's filter
 const size_t RVA_IS_ZONE_STILL_LOADING  = 0x3AC810; // documented
 
 // Global data RVAs

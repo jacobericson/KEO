@@ -7,6 +7,7 @@
 #include "movement/islands_internal.h"
 #include "movement/island_overlay_internal.h"
 #include "movement/island_edge_ring.h"
+#include "planner/planner_hooks.h"
 #include <intrin.h>
 
 #pragma intrinsic(_ReturnAddress)
@@ -91,9 +92,14 @@ bool hook_isInIsland(void* zoneA, void* zoneB)
 	if (!a || !b)
 		return vanilla;
 
+	// The route planner answers for a character walking a plan whose destination this call carries;
+	// every other call gets vanilla, then the far-span rule. IslandDecide combines the two.
+	const planner::PlanFlipAnswer planned = planner::PlannerIslandVerdict();
+	bool spanFlip = false;
+	int span = -1;
 	if (vanilla)
 	{
-		int span = HookCellSpan(a, b);
+		span = HookCellSpan(a, b);
 		IsInIslandCensus(a, span);
 
 		// Far-span rule: a direct path across several cells exhausts the
@@ -104,14 +110,19 @@ bool hook_isInIsland(void* zoneA, void* zoneB)
 			int la0 = ZoneLabel(a);
 			if (span < 0 && la0 > 0)
 				InterlockedIncrement(&g_isInRuleUnk);
-			else if (IslandFarSpanFlips(true, la0, span, movement::g_movementCfg.cfg_islandFarSpan))
-			{
-				InterlockedIncrement(&g_isInRuleFlip);
-				InterlockedIncrement(&g_isInFlipSpan[IslandSpanBucket(span)]);
-				return false;
-			}
+			else
+				spanFlip = IslandFarSpanFlips(true, la0, span, movement::g_movementCfg.cfg_islandFarSpan);
 		}
 	}
+	const IslandDecision d = IslandDecide(vanilla, planned != planner::PFA_NOT_MINE,
+	                                      planned == planner::PFA_FALSE, spanFlip);
+	if (d.countFlip)
+	{
+		InterlockedIncrement(&g_isInRuleFlip);
+		InterlockedIncrement(&g_isInFlipSpan[IslandSpanBucket(span)]);
+	}
+	if (d.final)
+		return d.answer;
 
 	// 2. Vanilla positive match: each vanilla island lies inside one component,
 	//    so this can never contradict the overlay.

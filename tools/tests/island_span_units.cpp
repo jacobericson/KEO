@@ -38,6 +38,24 @@ int main()
 				Check(IslandSpanBucket(sp) >= 0 && IslandSpanBucket(sp) < ISLAND_SPAN_BUCKETS,
 				      "every flipped span has a bucket");
 
+	// The answer's composition: a planned answer is final and replaces the far-span rule.
+	{
+		IslandDecision d = IslandDecide(true, true, true, true);
+		Check(!d.answer && d.final && !d.countFlip, "decide: a plan's false is final and uncounted");
+		d = IslandDecide(true, true, false, true);
+		Check(d.answer && d.final && !d.countFlip, "decide: a plan's vanilla stays final when far-span would flip");
+		d = IslandDecide(false, true, false, false);
+		IslandDecision e = IslandDecide(false, true, true, false);
+		Check(!d.answer && d.final && !d.countFlip && !e.answer && e.final && !e.countFlip,
+		      "decide: a plan's answer with vanilla false stays false");
+		d = IslandDecide(true, false, false, true);
+		Check(!d.answer && d.final && d.countFlip, "decide: an unplanned far-span flip is final, false and counted");
+		d = IslandDecide(true, false, false, false);
+		Check(d.answer && !d.final && !d.countFlip, "decide: an unplanned call without a flip goes on");
+		d = IslandDecide(false, false, false, false);
+		Check(!d.answer && !d.final && !d.countFlip, "decide: an unplanned vanilla false goes on");
+	}
+
 	// Edge parks. haltDist = |destination - pos|; an order still running keeps
 	// its destination far away.
 	Check(IslandClassifyEdgePark(false, true, 5000.0f, 5.0f, 5000.0f) == EDGEPARK_NONE, "not in edge mode is no edge park");

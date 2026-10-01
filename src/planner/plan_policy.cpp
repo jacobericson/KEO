@@ -224,4 +224,11 @@ int PlanFeedCells(const PlanLeg* legs, int n, int from, int ahead, int exteriorS
 	return count;
 }
 
+PlanArm PlanArmDecide(int mode, bool playerHierarchicalOn)
+{
+	if (mode == PLANNER_OBSERVE) return PLAN_ARM_GO;
+	if (mode == PLANNER_ON) return playerHierarchicalOn ? PLAN_ARM_GO : PLAN_ARM_REFUSE_PREREQ;
+	return PLAN_ARM_OFF;
+}
+
 } // namespace planner

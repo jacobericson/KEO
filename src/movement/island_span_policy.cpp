@@ -22,6 +22,30 @@ int IslandSpanBucket(int span)
 	return (b < ISLAND_SPAN_BUCKETS - 1) ? b : ISLAND_SPAN_BUCKETS - 1;
 }
 
+IslandDecision IslandDecide(bool vanilla, bool planned, bool planFlip, bool spanFlip)
+{
+	IslandDecision d;
+	if (planned)
+	{
+		d.answer = planFlip ? false : vanilla;
+		d.final = true;
+		d.countFlip = false;
+	}
+	else if (spanFlip)
+	{
+		d.answer = false;
+		d.final = true;
+		d.countFlip = true;
+	}
+	else
+	{
+		d.answer = vanilla;
+		d.final = false;
+		d.countFlip = false;
+	}
+	return d;
+}
+
 IslandEdgePark IslandClassifyEdgePark(bool movingToEdge, bool idle, float haltDist,
                                       float wpDist, float destDist)
 {

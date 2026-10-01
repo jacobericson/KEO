@@ -138,6 +138,11 @@ PlanReplanWhy PlanReplanDue(const PlanReplanIn& in);
 // interior sections (farSection >= exteriorSlots) and the cell of leg `from`. Writes x,y pairs.
 int PlanFeedCells(const PlanLeg* legs, int n, int from, int ahead, int exteriorSlots, int* outXY);
 
+// The install step's decision: off stays off; observe arms; on arms only with the hierarchical
+// player search on (a multi-cell leg under the straight-line heuristic caps).
+enum PlanArm { PLAN_ARM_OFF = 0, PLAN_ARM_GO, PLAN_ARM_REFUSE_PREREQ };
+PlanArm PlanArmDecide(int mode, bool playerHierarchicalOn);
+
 } // namespace planner
 
 #endif

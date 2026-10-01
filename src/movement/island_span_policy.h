@@ -22,6 +22,13 @@ bool IslandFarSpanFlips(bool vanilla, int labelA, int span, int farSpan);
 const int ISLAND_SPAN_BUCKETS = 6;
 int IslandSpanBucket(int span);   // -1 below 1
 
+// One isInIsland call's answer. planned: the route planner answered for the call (a character walking
+// a plan whose destination the call carries); planFlip: it answered false. spanFlip: the far-span rule
+// would flip vanilla's true. A planned answer is final and replaces the far-span rule; otherwise a
+// far-span flip is final, false and counted; otherwise the hook goes on to its later steps.
+struct IslandDecision { bool answer; bool final; bool countFlip; };
+IslandDecision IslandDecide(bool vanilla, bool planned, bool planFlip, bool spanFlip);
+
 // A character idle in edge mode, far from its order's destination, is parked.
 // CharMovement::halt leaves edge mode set but copies the position into the
 // destination, so a destination on the character is an ended order, not a

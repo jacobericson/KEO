@@ -273,6 +273,16 @@
 	         0x48,0x85,0xD2,0x74,0x0B,0x8B,0x42,0x20,0x39,0x41,0x20,0x75,0x03,0xB0,0x01,0xC3)
 	HOOK_ROW(HOOK_GETISLAND_IMPL, "getIsland", RVA_GETISLAND_IMPL, HOOK_FATAL, HOOK_BY_STARTUP, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
 	         0x48,0x89,0x5C,0x24,0x18,0x48,0x89,0x6C,0x24,0x20,0x57,0x48,0x83,0xEC,0x20,0x48)
+	// --- src/planner/planner_hooks.cpp, the route planner ---
+	// setDestination_Vec3: the five bytes a detour takes are four whole pushes, no branch and no
+	// jump target among them; its one reference is vtable slot 18 through a thunk. getZoneEdge:
+	// mov rax,rsp; push rbp; push rdi, whole and position-independent. Wanted only while plannerMode
+	// is set. diagnostic = true: a mismatch refuses the planner alone, and without these rows both
+	// functions run as vanilla does.
+	HOOK_ROW(HOOK_SET_DESTINATION_VEC3, "setDestinationVec3", RVA_SET_DESTINATION_VEC3, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_PLANNER, HOOK_CAP_NONE,
+	         0x40,0x55,0x53,0x56,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x48,0x8D,0xAC,0x24,0x10)
+	HOOK_ROW(HOOK_GET_ZONE_EDGE, "getZoneEdge", RVA_GET_ZONE_EDGE, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_PLANNER, HOOK_CAP_NONE,
+	         0x48,0x8B,0xC4,0x55,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x48,0x8D,0x68,0xA9,0x48)
 	// --- hook_manifest.cpp, player cancel hooks ---
 	// Bytes read from the IDB (ida MCP read_data/disassemble).
 	// All three prologues are position-independent over the bytes a detour

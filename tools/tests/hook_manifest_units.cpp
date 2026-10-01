@@ -299,7 +299,7 @@ static const Flip kFlips[] =
 	    "contentStreamCallee_0x8869", "graphHeuristicGoalAdjacent", "graphHeuristicClusterCentre",
 	    "graphHeuristicCoarseSeed" } },
 	{ "clusterCrossCost", { "clusterCrossCost" }, { "graphInstanceConnect" } },
-	{ "plannerMode", { "planner" }, { "graphInstanceConnect" } },
+	{ "plannerMode", { "planner" }, { "graphInstanceConnect", "getZoneEdge", "setDestinationVec3" } },
 };
 
 static void CheckWantTruthTable()
@@ -437,14 +437,14 @@ int main()
 {
 	CheckInstallAdmit();
 #if ZONEHAND_STEP >= 3
-	CheckVariant(kDevRows, kDevCount, "dev", 69, 54, 49, 25, 29, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 65, 50, 44, 25, 25, ProdDefaults());
+	CheckVariant(kDevRows, kDevCount, "dev", 71, 56, 49, 25, 31, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 67, 52, 44, 25, 27, ProdDefaults());
 #elif ZONEHAND_STEP == 2
-	CheckVariant(kDevRows, kDevCount, "dev", 68, 53, 48, 25, 28, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 64, 49, 43, 25, 24, ProdDefaults());
+	CheckVariant(kDevRows, kDevCount, "dev", 70, 55, 48, 25, 30, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 66, 51, 43, 25, 26, ProdDefaults());
 #else
-	CheckVariant(kDevRows, kDevCount, "dev", 65, 50, 45, 25, 25, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 61, 46, 40, 25, 21, ProdDefaults());
+	CheckVariant(kDevRows, kDevCount, "dev", 67, 52, 45, 25, 27, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 63, 48, 40, 25, 23, ProdDefaults());
 #endif
 	CheckDevMinusProd();
 	CheckWantTruthTable();

@@ -473,6 +473,16 @@ static void CheckFeed()
 	Check(two && all && none == 0, "feed: at most ahead distinct exterior cells after the current leg");
 }
 
+static void CheckArm()
+{
+	Check(PlanArmDecide(PLANNER_OFF, false) == PLAN_ARM_OFF && PlanArmDecide(PLANNER_OFF, true) == PLAN_ARM_OFF,
+	      "arm: off stays off");
+	Check(PlanArmDecide(PLANNER_OBSERVE, false) == PLAN_ARM_GO && PlanArmDecide(PLANNER_OBSERVE, true) == PLAN_ARM_GO,
+	      "arm: observe arms without playerHierarchical");
+	Check(PlanArmDecide(PLANNER_ON, true) == PLAN_ARM_GO, "arm: on with playerHierarchical=on arms");
+	Check(PlanArmDecide(PLANNER_ON, false) == PLAN_ARM_REFUSE_PREREQ, "arm: on without playerHierarchical=on refuses");
+}
+
 int main()
 {
 	CheckCellsAndMode();
@@ -485,5 +495,6 @@ int main()
 	CheckOwns();
 	CheckReplan();
 	CheckFeed();
+	CheckArm();
 	return CheckExit("plan_policy_units");
 }
