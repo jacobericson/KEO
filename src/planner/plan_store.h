@@ -79,7 +79,7 @@ struct PlannerCounters
 {
 	volatile LONG plans, direct, legged, noRoute, legs, arrivals, rungs, replans, drops;
 	volatile LONG roadPreempt, notConsulted, staleRerequest, snapFail, flips, waits;
-	volatile LONG slotFull, queued, locFail, notSite, staleAdvance, rung17, ownedSkips, noLocation;
+	volatile LONG slotFull, repeats, locFail, goalUnlocated, startUnlocated, notSite, staleAdvance, rung17, ownedSkips, noLocation;
 };
 PlannerCounters* PlannerCountersGet();   // any thread; the fields are interlocked
 

@@ -7,7 +7,8 @@
 namespace planner {
 
 // Main thread, from hook_addOrderSelected's task-29 branch before the original: one plan per
-// selected character chars[0..n) toward location, or, for a shift or addDontClear order, a drop.
+// selected character chars[0..n) toward location, whatever the order's two flags carry; a repeat
+// of the character's plan inside its first second is counted and skipped.
 void PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void* destIndoors,
                       bool shift, bool addDontClear);
 // Main thread: drop a character's plan (a non-move order from the player).

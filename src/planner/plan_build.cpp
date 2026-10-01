@@ -9,6 +9,7 @@ namespace planner {
 static const float FOOTPRINT_WIDEN_XZ   = 5.0f;
 static const float FOOTPRINT_WIDEN_Y    = 30.0f;
 static const float FOOTPRINT_FALLBACK   = 200.0f;
+static const float REPEAT_DEST_MATCH    = 1.0f;
 
 static void Copy3(float out[3], const float in[3])
 {
@@ -128,6 +129,11 @@ PlanDropWhy PlanDropDue(bool livePlayer, bool unconscious, float distToDest,
 	if (haveDest && DistanceSqXz(moveDest, planDest) > PLAN_DEST_MATCH * PLAN_DEST_MATCH)
 		return PDW_NEW_DEST;
 	return PDW_NONE;
+}
+
+bool PlanRepeatDue(const float planDest[3], const float newDest[3], double planAge)
+{
+	return planAge < PLAN_ORDER_SETTLE && DistanceSqXz(planDest, newDest) < REPEAT_DEST_MATCH * REPEAT_DEST_MATCH;
 }
 
 unsigned __int64 PlanMemoKey(unsigned startNode, unsigned goalNode)

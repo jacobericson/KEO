@@ -557,17 +557,28 @@ static void DropOrderPlans(const uintptr_t* chars, int n, volatile LONG* counter
 	}
 }
 
+// Whether the character's current plan already answers this order: inside its first second and
+// toward the same point. Main thread, the store's one writer; reads the slot without a lock.
+static bool IsRepeatOrder(uintptr_t cm, const float dest[3], double now)
+{
+	PlanView v;
+	int slot = PlanStoreFind(cm);
+	if (slot < 0 || !PlanStoreRead(slot, &v) || v.cm != cm)
+		return false;
+	return PlanRepeatDue(v.finalDest, dest, now - PlanStoreMain(slot)->planTime);
+}
+
+// The engine's move branch applies the destination at once whatever the order's two flags carry
+// (a plain click sends the add flag set; the flags matter only to the engine's other orders), so
+// every captured move order is planned.
 void PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void* destIndoors, bool shift, bool addDontClear)
 {
 	if (PlanStoreMode() == PLANNER_OFF) return;
+	(void)shift;
+	(void)addDontClear;
 	if (!location)
 	{
 		InterlockedIncrement(&PlannerCountersGet()->noLocation);
-		return;
-	}
-	if (shift || addDontClear)
-	{
-		DropOrderPlans(chars, n, &PlannerCountersGet()->queued);
 		return;
 	}
 	if (n <= 0)
@@ -578,7 +589,7 @@ void PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void
 	Located goal;
 	if (!Locate(dest, &goal))
 	{
-		DropOrderPlans(chars, n, NULL);
+		DropOrderPlans(chars, n, &PlannerCountersGet()->goalUnlocated);
 		return;
 	}
 	s_memoCount = 0;
@@ -588,11 +599,17 @@ void PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void
 		uintptr_t cm = MovementOf(chars[k]);
 		if (!cm)
 			continue;
+		if (IsRepeatOrder(cm, dest, now))
+		{
+			InterlockedIncrement(&PlannerCountersGet()->repeats);
+			continue;
+		}
 		float pos[3];
 		CharPos(chars[k], pos);
 		Located start;
 		if (!Locate(pos, &start))
 		{
+			InterlockedIncrement(&PlannerCountersGet()->startUnlocated);
 			DropPlan(cm);
 			continue;
 		}

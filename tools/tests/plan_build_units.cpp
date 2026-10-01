@@ -1,6 +1,6 @@
 // The route planner's plan-building rules: the legs from a coarse route, the footprint pick, the
-// drop predicate and the memo key. Routes run east along one row of cells; each section change's
-// portal sits on the border between two cells.
+// drop predicate, the repeat rule and the memo key. Routes run east along one row of cells; each
+// section change's portal sits on the border between two cells.
 
 #include <cmath>
 #include <cstdio>
@@ -167,6 +167,18 @@ static void CheckDrop()
 	      "drop: a new destination after the settle second drops");
 }
 
+static void CheckRepeat()
+{
+	float planDest[3], same[3], apart[3];
+	Set3(planDest, 5000.0f, 40.0f, -7000.0f);
+	Set3(same, 5000.5f, 0.0f, -7000.0f);
+	Set3(apart, 5002.0f, 0.0f, -7000.0f);
+
+	Check(PlanRepeatDue(planDest, same, 0.3), "repeat: the same destination inside the settle second is a repeat");
+	Check(!PlanRepeatDue(planDest, apart, 0.3), "repeat: a destination two units away is not a repeat");
+	Check(!PlanRepeatDue(planDest, same, 1.5), "repeat: the same destination after the settle second is not a repeat");
+}
+
 static void CheckMemo()
 {
 	Check(PlanMemoKey(7, 9) == PlanMemoKey(7, 9), "memo: equal start and goal share a key");
@@ -179,6 +191,7 @@ int main()
 	CheckLegs();
 	CheckFootprint();
 	CheckDrop();
+	CheckRepeat();
 	CheckMemo();
 	return CheckExit("plan_build_units");
 }

@@ -151,12 +151,15 @@ static int LoadTileFile(const wchar_t* path, int gx, int gy, TileGraph* g)
 	return tail ? TL_OK_TAIL : TL_OK;
 }
 
-// Every tile<x>.<y>.hkt in dir (which ends in a separator) with 0 <= x, y < 64.
-static std::vector<TileName> ListTiles(const std::wstring& dir)
+// Every tile<x>.<y>.hkt in dir (which ends in a separator) with 0 <= x, y < 64. findError, when not
+// NULL, receives the find's error code when it found nothing at all, else 0.
+static std::vector<TileName> ListTiles(const std::wstring& dir, DWORD* findError)
 {
 	std::vector<TileName> out;
 	WIN32_FIND_DATAW fd;
 	HANDLE h = FindFirstFileW((dir + L"tile*.hkt").c_str(), &fd);
+	if (findError)
+		*findError = h == INVALID_HANDLE_VALUE ? GetLastError() : 0;
 	if (h == INVALID_HANDLE_VALUE)
 		return out;
 	do
@@ -225,18 +228,78 @@ static long UnsearchableSoFar()
 	return s.unsearchable;
 }
 
-// ---- The base (builder thread) -----------------------------------------------------------------
+// ---- The data root (main thread, then the builder) ----------------------------------------------
 
-static std::wstring GameFolder()
+// The folder holding the game's data folder, ending in a separator, and which candidate gave it.
+// The main thread writes both once, before it starts the builder thread, which reads them only
+// after: the thread start orders the writes before the reads, so neither takes a lock.
+static wchar_t     s_dataRoot[MAX_PATH];
+static const char* s_dataRootSource = "none";
+
+// Takes root (ending in a separator) as the data root when it holds the shipped navtiles folder.
+// Main thread.
+static bool TakeDataRoot(const wchar_t* root, const char* source)
 {
-	wchar_t exe[MAX_PATH];
-	DWORD n = GetModuleFileNameW(NULL, exe, MAX_PATH);
-	if (n == 0 || n >= MAX_PATH)
-		return std::wstring();
-	std::wstring s(exe, n);
-	size_t cut = s.find_last_of(L"\\/");
-	return cut == std::wstring::npos ? std::wstring() : s.substr(0, cut + 1);
+	wchar_t dir[MAX_PATH];
+	if (_snwprintf_s(dir, MAX_PATH, _TRUNCATE, L"%lsdata\\newland\\land\\navtiles\\", root) < 0)
+		return false;
+	DWORD a = GetFileAttributesW(dir);
+	if (a == INVALID_FILE_ATTRIBUTES || (a & FILE_ATTRIBUTE_DIRECTORY) == 0)
+		return false;
+	memcpy(s_dataRoot, root, sizeof(s_dataRoot[0]) * (wcslen(root) + 1));
+	s_dataRootSource = source;
+	return true;
 }
+
+// The first candidate that holds the navtiles folder: the working directory (the game's own data
+// paths are relative to it), the exe's folder, then the plugin folder's grandparent. None leaves
+// the root empty. Main thread, before the builder thread starts.
+static void ResolveDataRoot()
+{
+	wchar_t cand[MAX_PATH];
+	DWORD n = GetCurrentDirectoryW(MAX_PATH, cand);
+	if (n > 0 && n < MAX_PATH - 1)
+	{
+		if (cand[n - 1] != L'\\' && cand[n - 1] != L'/')
+		{
+			cand[n] = L'\\';
+			cand[n + 1] = 0;
+		}
+		if (TakeDataRoot(cand, "cwd"))
+			return;
+	}
+	n = GetModuleFileNameW(NULL, cand, MAX_PATH);
+	if (n > 0 && n < MAX_PATH)
+	{
+		DWORD cut = n;
+		while (cut > 0 && cand[cut - 1] != L'\\' && cand[cut - 1] != L'/')
+			--cut;
+		cand[cut] = 0;
+		if (cut > 0 && TakeDataRoot(cand, "exe"))
+			return;
+	}
+	std::string dll = GetDLLDirectory();
+	wchar_t wide[MAX_PATH];
+	if (!dll.empty() && MultiByteToWideChar(CP_ACP, 0, dll.c_str(), -1, wide, MAX_PATH)
+	    && _snwprintf_s(cand, MAX_PATH, _TRUNCATE, L"%ls..\\..\\", wide) >= 0)
+		TakeDataRoot(cand, "dll");
+}
+
+// The root line, once per session before the base line. Builder thread.
+static void LogDataRoot(const std::wstring& root, size_t listed, DWORD findError)
+{
+	char narrow[MAX_PATH * 2];
+	if (root.empty())
+		_snprintf_s(narrow, sizeof(narrow), _TRUNCATE, "-");
+	else if (!WideCharToMultiByte(CP_ACP, 0, root.c_str(), -1, narrow, (int)sizeof(narrow), NULL, NULL))
+		_snprintf_s(narrow, sizeof(narrow), _TRUNCATE, "?");
+	char line[MAX_PATH * 2 + 96];
+	_snprintf_s(line, sizeof(line), _TRUNCATE, "Planner base: root=%s source=%s listed=%d err=%lu",
+	            narrow, s_dataRootSource, (int)listed, (unsigned long)findError);
+	LogMsgDeferrable(line);
+}
+
+// ---- The base (builder thread) -----------------------------------------------------------------
 
 static std::wstring CacheFolder()
 {
@@ -271,7 +334,7 @@ static bool WriteCache(const std::wstring& path, const std::vector<CgCacheIndexE
 static void BuildBase()
 {
 	LONGLONG t0 = QpcNow();
-	std::wstring game = GameFolder();
+	std::wstring game(s_dataRoot);
 	std::wstring cacheDir = CacheFolder();
 	std::wstring cachePath = cacheDir + L"coarse_base.bin";
 	if (!cacheDir.empty())
@@ -280,9 +343,11 @@ static void BuildBase()
 	bool valid = !cacheDir.empty() && ReadWholeFile(cachePath.c_str(), CACHE_MAX_BYTES, &old) && !old.empty()
 	          && CgCacheValidate(&old[0], old.size()) == CGC_OK;
 	const CgCacheHeader* oldHead = valid ? (const CgCacheHeader*)&old[0] : NULL;
+	DWORD findError = 0;
 	std::vector<TileName> names = game.empty() ? std::vector<TileName>()
-	                                           : ListTiles(game + L"data\\newland\\land\\navtiles\\");
+	                                           : ListTiles(game + L"data\\newland\\land\\navtiles\\", &findError);
 	InterlockedExchange(&s_tilesFound, (LONG)names.size());
+	LogDataRoot(game, names.size(), findError);
 
 	PassTotals t;
 	memset(&t, 0, sizeof(t));
@@ -336,8 +401,8 @@ static void BuildBase()
 		t.tiles++;
 		InterlockedIncrement(&s_tilesPublished);
 	}
-	const char* write = "skip";
-	if (changed)
+	const char* write = "skip";   // an empty listing never replaces the cache
+	if (changed && names.size() > 0)
 		write = !cacheDir.empty() && WriteCache(cachePath, entries, payload) ? "ok" : "fail";
 
 	char line[320];
@@ -361,7 +426,7 @@ static void ReplaceSaveTiles(const SaveRequest& req)
 	for (int layer = req.layers - 1; layer >= 0 && CgStoreGen() == req.storeGen; --layer)
 	{
 		std::wstring dir = std::wstring(req.path[layer]) + L"\\zone\\";
-		std::vector<TileName> names = ListTiles(dir);
+		std::vector<TileName> names = ListTiles(dir, NULL);
 		for (size_t i = 0; i < names.size() && CgStoreGen() == req.storeGen; ++i)
 		{
 			int bit = CgExteriorIndex(names[i].gx, names[i].gy);
@@ -464,6 +529,7 @@ void PlannerBaseStartStep(int* installed, int* total)
 	InitializeCriticalSection(&s_requestCS);
 	if (!g_plannerCfg.baseBuild)
 		return;
+	ResolveDataRoot();
 	s_requestEvent = CreateEventW(NULL, FALSE, FALSE, NULL);
 	HANDLE thread = s_requestEvent ? CreateThread(NULL, 0, BuilderMain, NULL, CREATE_SUSPENDED, NULL) : NULL;
 	if (!thread)

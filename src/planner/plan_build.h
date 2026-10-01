@@ -37,6 +37,11 @@ enum PlanDropWhy { PDW_NONE = 0, PDW_NOT_PLAYER, PDW_KO, PDW_ARRIVED, PDW_NEW_DE
 PlanDropWhy PlanDropDue(bool livePlayer, bool unconscious, float distToDest,
                         const float moveDest[3], const float planDest[3], double planAge);
 
+// One click reaches the order capture as a burst of identical move orders. A repeat: the plan is
+// under PLAN_ORDER_SETTLE seconds old (planAge) and the new destination lies within one unit of
+// the plan's in x-z.
+bool PlanRepeatDue(const float planDest[3], const float newDest[3], double planAge);
+
 // The memo key of one order's searches: characters whose start and goal nodes match share one.
 unsigned __int64 PlanMemoKey(unsigned startNode, unsigned goalNode);
 
