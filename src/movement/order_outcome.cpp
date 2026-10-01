@@ -51,7 +51,9 @@ void OrderOutcomeNoteMotion(uintptr_t character, bool moving, bool post, double 
 	if (!cm) return;
 	float x = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_pos_x, OFF_CMOV_POS));
 	float z = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_pos_z, OFF_CMOV_POS + 8));
-	if (planner::PlannerOwnsWait(cm, x, z))
+	float wx = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_pathDestination_x, OFF_CMOV_PATH_DEST));
+	float wz = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_pathDestination_z, OFF_CMOV_PATH_DEST + 8));
+	if (planner::PlannerOwnsWait(cm, x, z, wx, wz))
 		OOT_NotePlannerWait((size_t)character, now, ZonePauseIsPaused());
 }
 

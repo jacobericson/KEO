@@ -28,6 +28,7 @@ struct PlanWrite
 	unsigned  loadedMask;
 	float     finalDest[3];
 	double    now;
+	int       keepSends;        // 1: a re-plan of the same character keeps the mod's recorded sends
 	PlanLeg   legs[PLAN_MAX_LEGS];
 };
 // A consistent copy for any thread.
@@ -39,10 +40,11 @@ struct PlanView
 	int       verdict, legIndex, legCount, waiting, rungs, routeTruncated;
 	unsigned  loadedMask;
 	float     finalDest[3];
+	float     resend[PLAN_RESEND_POINTS][3]; int resendCount;
 	PlanLeg   legs[PLAN_MAX_LEGS];
 };
 // The main thread's own fields for one slot (never read off the main thread).
-struct PlanMainState { double planTime, waitSince, completeSince; int goalByFootprint, routeTruncated, consultedAtPlan; unsigned loadedGenAtPlan; };
+struct PlanMainState { double planTime, waitSince, completeSince; int goalByFootprint, routeTruncated, consultedAtPlan; unsigned loadedGenAtPlan; double holdTime; float holdDest[3]; int haveHold; };
 
 // Main thread.
 void PlanStoreArm(int mode);                 // PlannerMode; PLANNER_OFF disarms
@@ -66,20 +68,36 @@ void PlanStoreNoteArrival(int slot, unsigned epoch);    // sets the arrival word
 int  PlanStoreTakeArrival(int slot);                    // main thread: reads and clears it
 void PlanStoreNoteConsulted(int slot);
 
-// Main thread: the tracker's query. The character's wait belongs to the planner (PlanOwnsWait on
-// the slot's current state and the position the caller already read). Unarmed: false at once.
-bool PlannerOwnsWait(uintptr_t cm, float posX, float posZ);
+// Main thread: the tracker's query. The character's stop at its current portal belongs to the planner
+// (PlanOwnsWait on the slot's current state and the position and waypoint the caller already read).
+// Unarmed: false at once.
+bool PlannerOwnsWait(uintptr_t cm, float posX, float posZ, float wpX, float wpZ);
+
+enum PlanSendKind { PLAN_SEND_RESEND = 1, PLAN_SEND_HOLD = 2 };
+// Main thread, the movement module's send paths, before the order is sent. PLAN_SEND_RESEND: the
+// order's destination re-sent (nudged past the engine's two-unit drop); it joins the slot's record of
+// the two newest distinct re-sends unless the plan already accepts it, and a call carrying it is the
+// plan's. PLAN_SEND_HOLD: a detour that keeps the plan for PLAN_HOLD_SECONDS without steering it.
+// 1: the character holds a plan (the send is counted); 0: no plan, or unarmed; -1: a re-send farther
+// than PLAN_RESEND_REACH from the plan's destination (refused and counted; the plan then drops).
+int PlannerNoteModSend(uintptr_t cm, const float sent[3], int kind, double now);
+// Any thread, from the getZoneEdge detour: the snap's raw-to-snapped distance; interlocked only.
+void PlannerNoteSnap(float distance);
 
 // Host tests only: a callback run inside a rewrite while the epoch is odd, and one run by a read
 // between its two legWord loads; NULL in the game.
 void PlanStoreTestPauseInRewrite(void (*fn)(void* ctx), void* ctx);
 void PlanStoreTestPauseInRead(void (*fn)(void* ctx), void* ctx);
 
+const int PLAN_DROP_REASONS = 7; const int PLAN_REPLAN_REASONS = 7;
+
 struct PlannerCounters
 {
 	volatile LONG plans, direct, legged, noRoute, legs, arrivals, rungs, replans, drops;
 	volatile LONG roadPreempt, notConsulted, staleRerequest, snapFail, flips, waits;
 	volatile LONG slotFull, repeats, locFail, goalUnlocated, startUnlocated, notSite, staleAdvance, rung17, ownedSkips, noLocation;
+	volatile LONG reissuedPlanned, heldPlanned, reissueRefused, snapFar, snapMax;
+	volatile LONG dropsBy[PLAN_DROP_REASONS], replansBy[PLAN_REPLAN_REASONS];   // by PlanDropWhy / PlanReplanWhy
 };
 PlannerCounters* PlannerCountersGet();   // any thread; the fields are interlocked
 

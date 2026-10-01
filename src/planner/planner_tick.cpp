@@ -28,6 +28,8 @@
 namespace planner {
 
 static_assert(CG_NODE_ARCS_MAX == COARSE_ARCS_MAX, "a node reports at most as many arcs as the search takes");
+static_assert(PDW_COUNT == PLAN_DROP_REASONS, "one drop count per drop reason");
+static_assert(PRW_COUNT == PLAN_REPLAN_REASONS, "one re-plan count per re-plan reason");
 
 namespace planner_tick_detail {
 
@@ -38,7 +40,6 @@ const int    MEMO_ENTRIES       = 8;
 const int    NODES_PER_SECTION  = 1 << CG_NODE_BITS;
 const int    PLAYER_SCAN_MAX    = 200;
 const int    LINE_TILES_MAX     = 16;
-const int    HC_PATH_COMPLETE   = 1;      // HavokCharacter::PathState COMPLETE
 const float  FACE_RAY_LENGTH    = 500.0f; // Havok units, both ways along the vertical
 const float  WORLD_TO_HAVOK     = 0.1f;
 
@@ -452,11 +453,12 @@ static const Built* SearchAndBuild(const Located& start, const Located& goal, co
 
 // Writes the character's plan and feeds its route's next tiles; -1 when the store is full.
 static int WritePlan(uintptr_t cm, const float pos[3], const Located& goal, const float dest[3],
-                     const Built& b, double now, int* verdictOut)
+                     const Built& b, double now, int* verdictOut, int keepSends)
 {
 	PlanWrite& w = s_write;
 	memset(&w, 0, sizeof(w));
 	w.cm = cm;
+	w.keepSends = keepSends;
 	w.legCount = b.found ? b.legCount : 0;
 	memcpy(w.legs, b.legs, sizeof(PlanLeg) * w.legCount);
 	w.routeTruncated = b.truncated;
@@ -487,8 +489,8 @@ static int WritePlan(uintptr_t cm, const float pos[3], const Located& goal, cons
 	return slot;
 }
 
-// Drops the character's plan, counting it, and a legged plan the edge branch never consulted.
-static void DropPlan(uintptr_t cm)
+// Drops the character's plan, counting it by reason, and a legged plan the edge branch never consulted.
+static void DropPlan(uintptr_t cm, PlanDropWhy why)
 {
 	PlanView v;
 	int slot = PlanStoreFind(cm);
@@ -497,6 +499,8 @@ static void DropPlan(uintptr_t cm)
 	if (consulted < 0)
 		return;
 	InterlockedIncrement(&PlannerCountersGet()->drops);
+	if (why > PDW_NONE && why < PDW_COUNT)
+		InterlockedIncrement(&PlannerCountersGet()->dropsBy[why]);
 	if (verdict == PV_LEGGED && consulted == 0)
 		InterlockedIncrement(&PlannerCountersGet()->notConsulted);
 }
@@ -553,7 +557,7 @@ static void DropOrderPlans(const uintptr_t* chars, int n, volatile LONG* counter
 			continue;
 		if (counter)
 			InterlockedIncrement(counter);
-		DropPlan(cm);
+		DropPlan(cm, PDW_UNLOCATED);
 	}
 }
 
@@ -610,12 +614,12 @@ void PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void
 		if (!Locate(pos, &start))
 		{
 			InterlockedIncrement(&PlannerCountersGet()->startUnlocated);
-			DropPlan(cm);
+			DropPlan(cm, PDW_UNLOCATED);
 			continue;
 		}
 		const Built* b = SearchAndBuild(start, goal, dest);
 		int verdict = PV_NONE;
-		if (WritePlan(cm, pos, goal, dest, *b, now, &verdict) < 0)
+		if (WritePlan(cm, pos, goal, dest, *b, now, &verdict, 0) < 0)
 			continue;
 		int sx, sy, gx, gy;
 		PlanCellOf(pos[0], pos[2], &sx, &sy);
@@ -627,7 +631,7 @@ void PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void
 void PlannerDrop(uintptr_t character)
 {
 	if (PlanStoreMode() == PLANNER_OFF) return;
-	DropPlan(MovementOf(character));
+	DropPlan(MovementOf(character), PDW_ORDER);
 }
 
 bool PlannerRouteReplacesAhead(uintptr_t character)
@@ -687,18 +691,20 @@ static int ReadPlayers(PlayerChar* out)
 // Why the slot's plan ends now, from the character's state and the plan's age.
 static PlanDropWhy SlotDropDue(const PlanView& v, uintptr_t character, const float pos[3], double now)
 {
-	double planAge = now - PlanStoreMain(v.slot)->planTime;
+	const PlanMainState* m = PlanStoreMain(v.slot);
+	double planAge = now - m->planTime;
 	if (!character)
-		return PlanDropDue(false, false, 0.0f, v.finalDest, v.finalDest, planAge);
+		return PlanDropDue(false, false, 0.0f, v.finalDest, v.finalDest, planAge, false);
 	float moveDest[3];
 	moveDest[0] = *(float*)(KLIB_MEMBER(3, v.cm, AbstractMovementBase_destination_x, OFF_CMOV_LAST_DEST));
 	moveDest[1] = 0.0f;
 	moveDest[2] = *(float*)(KLIB_MEMBER(3, v.cm, AbstractMovementBase_destination_z, OFF_CMOV_LAST_DEST + 8));
-	return PlanDropDue(true, IslandK7IsUnconcious(character), DistXz(pos, v.finalDest), moveDest, v.finalDest, planAge);
+	return PlanDropDue(true, IslandK7IsUnconcious(character), DistXz(pos, v.finalDest), moveDest, v.finalDest, planAge,
+	                   PlanIsModSend(moveDest, v.resend, v.resendCount, m->holdDest, m->haveHold, now - m->holdTime));
 }
 
 // The slot's wait and completion clocks: a wait begins when the waiting word rises; a portal leg
-// is complete when the character's path finished while it stands outside the portal's reach.
+// is complete when the character stopped at its path's end outside the portal's reach.
 static void UpdateClocks(int slot, const PlanView& v, double now, float distToPortal, bool portalLeg)
 {
 	PlanMainState* m = PlanStoreMain(slot);
@@ -710,8 +716,9 @@ static void UpdateClocks(int slot, const PlanView& v, double now, float distToPo
 	else if (!v.waiting)
 		m->waitSince = 0.0;
 	uintptr_t hc = *(uintptr_t*)(KLIB_MEMBER(3, v.cm, CharMovement_havokCharacter, OFF_CMOV_HAVOK_CHAR));
-	bool complete = portalLeg && hc && distToPortal > PLAN_REACH
-	             && *(int*)(KLIB_MEMBER(3, hc, HavokCharacter_pathState, OFF_HC_PATH_STATE)) == HC_PATH_COMPLETE;
+	bool complete = hc && PlanLegComplete(portalLeg ? 1 : 0, distToPortal,
+	                                      *(int*)(KLIB_MEMBER(3, hc, HavokCharacter_pathState, OFF_HC_PATH_STATE)),
+	                                      *(int*)(KLIB_MEMBER(3, hc, HavokCharacter_characterState, OFF_HC_ARRIVAL)));
 	if (!complete)
 		m->completeSince = 0.0;
 	else if (m->completeSince == 0.0)
@@ -731,7 +738,7 @@ static bool Replan(const PlanView& v, uintptr_t character, double now, PlanRepla
 	s_memoCount = 0;
 	const Built* b = SearchAndBuild(start, goal, v.finalDest);
 	int verdict = PV_NONE;
-	int slot = WritePlan(v.cm, pos, goal, v.finalDest, *b, now, &verdict);
+	int slot = WritePlan(v.cm, pos, goal, v.finalDest, *b, now, &verdict, 1);
 	if (slot < 0)
 		return false;
 	if (why == PRW_GOAL_LOADED && !goal.exact)
@@ -774,9 +781,10 @@ static bool TickSlot(int slot, const PlayerChar* players, int nPlayers, double n
 	float pos[3] = { 0.0f, 0.0f, 0.0f };
 	if (character)
 		CharPos(character, pos);
-	if (SlotDropDue(v, character, pos, now) != PDW_NONE)
+	PlanDropWhy dropWhy = SlotDropDue(v, character, pos, now);
+	if (dropWhy != PDW_NONE)
 	{
-		DropPlan(v.cm);
+		DropPlan(v.cm, dropWhy);
 		return false;
 	}
 	unsigned mask = LoadedMaskOf(v.legs, v.legCount);
@@ -799,7 +807,10 @@ static bool TickSlot(int slot, const PlayerChar* players, int nPlayers, double n
 	if (why == PRW_NONE)
 		return false;
 	if (Replan(v, character, now, why))
+	{
 		InterlockedIncrement(&PlannerCountersGet()->replans);
+		InterlockedIncrement(&PlannerCountersGet()->replansBy[why]);
+	}
 	return true;
 }
 

@@ -102,7 +102,7 @@ static float* hook_getZoneEdge(void* nm, float* retstr, const float* start, cons
 	PlanView v;
 	if (!PlanStoreRead(t.slot, &v) || v.cm != t.cm)
 		return r;
-	if (!PlanEdgeSteers(s_mode, v.verdict, t.haveDest && PlanDestMatches(t.dest, v.finalDest)))
+	if (!PlanEdgeSteers(s_mode, v.verdict, t.haveDest && PlanDestIsPlans(t.dest, v.finalDest, v.resend, v.resendCount)))
 		return r;
 	PlanEdgeIn in;
 	in.site = site; in.offset = offset; in.pos[0] = start[0]; in.pos[1] = start[1]; in.pos[2] = start[2];
@@ -123,7 +123,10 @@ static float* hook_getZoneEdge(void* nm, float* retstr, const float* start, cons
 	float snapped[3];
 	unsigned key = 0;
 	if (fn_getClosestPoint(nm, o.point, 300.0f, 5.0f, &f, snapped, &key) == 1)
-		{ retstr[0] = snapped[0]; retstr[1] = snapped[1]; retstr[2] = snapped[2]; }
+	{
+		retstr[0] = snapped[0]; retstr[1] = snapped[1]; retstr[2] = snapped[2];
+		PlannerNoteSnap(PlanSnapDistance(o.point, snapped));
+	}
 	else
 	{
 		retstr[0] = o.point[0]; retstr[1] = o.point[1]; retstr[2] = o.point[2];
@@ -152,6 +155,8 @@ PlanFlipAnswer PlannerIslandVerdict()
 		in.legIsDestination = v.legs[v.legIndex].isDestination;
 		memcpy(in.dest, t.dest, sizeof(in.dest));
 		memcpy(in.finalDest, v.finalDest, sizeof(in.finalDest));
+		memcpy(in.resend, v.resend, sizeof(in.resend));
+		in.resendCount = v.resendCount;
 	}
 	if (PlanFlipRuleOn(in) == PFA_FALSE) { t.flipped = 1; InterlockedIncrement(&PlannerCountersGet()->flips); }
 	return PlanFlipRule(in);

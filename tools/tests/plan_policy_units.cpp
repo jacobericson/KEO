@@ -300,6 +300,14 @@ static void CheckFlip()
 	FlipIn(&in, PLANNER_OFF, PV_LEGGED, 0);
 	Check(PlanFlipRule(in) == PFA_NOT_MINE, "flip: off answers not-mine");
 
+	FlipIn(&in, PLANNER_ON, PV_LEGGED, 0);
+	Set3(in.dest, 109.0f, 20.0f, 300.5f);
+	Set3(in.resend[0], 109.0f, 20.0f, 300.5f);
+	in.resendCount = 1;
+	Check(PlanFlipRule(in) == PFA_FALSE, "flip: a call carrying the recorded re-send answers false");
+	in.resendCount = 0;
+	Check(PlanFlipRule(in) == PFA_NOT_MINE, "flip: a call eight units off without a recorded re-send answers not-mine");
+
 	bool same = true;
 	for (int v = PV_NONE; v <= PV_NO_ROUTE; ++v)
 		for (int d = 0; d < 2; ++d)
@@ -321,6 +329,24 @@ static void CheckDestSteerAhead()
 	Check(PlanDestMatches(a, b), "dest: within two units matches");
 	Set3(b, 10.0f, 8.0f, 20.0f);
 	Check(!PlanDestMatches(a, b), "dest: three units does not match");
+
+	float finalDest[3], probe[3];
+	float rec[PLAN_RESEND_POINTS][3];
+	memset(rec, 0, sizeof(rec));
+	Set3(finalDest, 10.0f, 5.0f, 20.0f);
+	Set3(rec[0], 18.0f, 5.0f, 20.0f);
+	Set3(probe, 19.0f, 5.0f, 20.5f);
+	bool near = PlanDestIsPlans(probe, finalDest, rec, 1);
+	Set3(probe, 21.0f, 5.0f, 20.0f);
+	bool past = PlanDestIsPlans(probe, finalDest, rec, 1);
+	Set3(probe, 18.0f, 5.0f, 20.0f);
+	bool unrecorded = PlanDestIsPlans(probe, finalDest, rec, 0);
+	Check(near && !past && !unrecorded, "dest: a recorded re-send matches within two units only");
+
+	float raw[3], snapped[3];
+	Set3(raw, 0.0f, 0.0f, 0.0f);
+	Set3(snapped, 3.0f, 9.0f, 4.0f);
+	Check(std::fabs(PlanSnapDistance(raw, snapped) - 5.0f) < 0.001f, "snap: the snap distance is measured in x-z");
 
 	Check(!PlanEdgeSteers(PLANNER_OBSERVE, PV_LEGGED, true) && !PlanEdgeSteers(PLANNER_OFF, PV_LEGGED, true),
 	      "steer: observe never steers");
@@ -346,21 +372,38 @@ static bool ParkedAtEdge(bool movingToEdge, bool idle, float haltDist, float wpD
 
 static void CheckOwns()
 {
-	Check(PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 12.0f), "owns: on, legged, waiting and within reach owns the wait");
-	Check(!PlanOwnsWait(PLANNER_OBSERVE, PV_LEGGED, 0, 1, 12.0f) && !PlanOwnsWait(PLANNER_OFF, PV_LEGGED, 0, 1, 12.0f),
+	static const float FAR_WP = 1.0e9f;
+	Check(PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 12.0f, FAR_WP, FAR_WP), "owns: on, legged, waiting and within reach owns the wait");
+	Check(!PlanOwnsWait(PLANNER_OBSERVE, PV_LEGGED, 0, 1, 12.0f, FAR_WP, FAR_WP) && !PlanOwnsWait(PLANNER_OFF, PV_LEGGED, 0, 1, 12.0f, FAR_WP, FAR_WP),
 	      "owns: observe never owns a wait");
-	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 1, 1, 12.0f), "owns: the destination leg is never owned");
-	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 20.0f) && !PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 35.0f),
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 1, 1, 12.0f, FAR_WP, FAR_WP), "owns: the destination leg is never owned");
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 20.0f, FAR_WP, FAR_WP) && !PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 35.0f, FAR_WP, FAR_WP),
 	      "owns: beyond reach is not owned");
-	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 12.0f) && !PlanOwnsWait(PLANNER_ON, PV_DIRECT, 0, 1, 12.0f),
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 12.0f, FAR_WP, FAR_WP) && !PlanOwnsWait(PLANNER_ON, PV_DIRECT, 0, 1, 12.0f, FAR_WP, FAR_WP),
 	      "owns: no waiting word or a direct plan is not owned");
 
 	bool subset = PLAN_REACH <= PARK_REACH && PLAN_POST_ARRIVAL == PARK_FAR_DEST;
 	float dists[5] = { 0.0f, 5.0f, 12.0f, 19.0f, 19.99f };
 	for (int i = 0; i < 5; ++i)
-		if (PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, dists[i]))
+		if (PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, dists[i], FAR_WP, FAR_WP))
 			subset = subset && ParkedAtEdge(true, true, 50.0f, dists[i], 500.0f);
-	Check(subset && PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 19.99f), "owns: an owned wait satisfies the parked predicate");
+	Check(subset && PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 19.99f, FAR_WP, FAR_WP), "owns: an owned wait satisfies the parked predicate");
+
+	// The stop at the planner's own portal, before the engine's next advance: waiting word clear.
+	Check(PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 7.0f, 5.0f, 3.0f), "owns: standing at the planner's waypoint owns the arrival");
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 300.0f, 5.0f, 295.0f), "owns: walking toward the planner's waypoint is not owned");
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 27.0f, 25.0f, 3.0f), "owns: a waypoint beyond reach of the portal is not owned");
+	Check(!PlanOwnsWait(PLANNER_OBSERVE, PV_LEGGED, 0, 0, 7.0f, 5.0f, 3.0f) && !PlanOwnsWait(PLANNER_OFF, PV_LEGGED, 0, 0, 7.0f, 5.0f, 3.0f),
+	      "owns: observe never owns an arrival");
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 1, 0, 7.0f, 5.0f, 3.0f), "owns: the destination leg's arrival is never owned");
+
+	bool arrivalSubset = true;
+	float toWp[5] = { 0.0f, 5.0f, 12.0f, 19.0f, 19.99f };
+	for (int i = 0; i < 5; ++i)
+		if (PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, toWp[i] + 5.0f, 5.0f, toWp[i]))
+			arrivalSubset = arrivalSubset && ParkedAtEdge(true, true, 50.0f, toWp[i], 500.0f);
+	Check(arrivalSubset && PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 24.99f, 5.0f, 19.99f),
+	      "owns: an owned arrival satisfies the parked predicate");
 }
 
 static void Quiet(PlanReplanIn* in)
@@ -453,6 +496,16 @@ static void CheckReplan()
 	Check(first && second && third && PlanReplanDue(in) == PRW_AGE, "replan: the triggers are taken in order");
 }
 
+static void CheckComplete()
+{
+	Check(!PlanLegComplete(1, 300.0f, 1, 2), "complete: a character walking its leg is not complete");
+	Check(PlanLegComplete(1, 30.0f, 1, 1) && PlanLegComplete(1, 30.0f, 1, 0),
+	      "complete: a character stopped at its path's end outside reach is complete");
+	Check(!PlanLegComplete(1, 10.0f, 1, 1), "complete: a character stopped within reach is not complete");
+	Check(!PlanLegComplete(1, 30.0f, 4, 1) && !PlanLegComplete(1, 30.0f, 0, 1), "complete: a path still waiting is not complete");
+	Check(!PlanLegComplete(0, 30.0f, 1, 1), "complete: the destination leg is never complete");
+}
+
 static void CheckFeed()
 {
 	PlanLeg legs[7];
@@ -494,6 +547,7 @@ int main()
 	CheckDestSteerAhead();
 	CheckOwns();
 	CheckReplan();
+	CheckComplete();
 	CheckFeed();
 	CheckArm();
 	return CheckExit("plan_policy_units");

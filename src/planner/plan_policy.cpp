@@ -160,7 +160,7 @@ PlanFlipAnswer PlanFlipRuleOn(const PlanFlipIn& in)
 {
 	if (!in.haveChar || !in.haveSlot) return PFA_NOT_MINE;
 	if (in.verdict != PV_DIRECT && in.verdict != PV_LEGGED) return PFA_NOT_MINE;
-	if (!PlanDestMatches(in.dest, in.finalDest)) return PFA_NOT_MINE;
+	if (!PlanDestIsPlans(in.dest, in.finalDest, in.resend, in.resendCount)) return PFA_NOT_MINE;
 	if (in.verdict == PV_LEGGED && !in.legIsDestination) return PFA_FALSE;
 	return PFA_VANILLA;
 }
@@ -169,6 +169,16 @@ bool PlanDestMatches(const float a[3], const float b[3])
 {
 	float dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
 	return dx * dx + dy * dy + dz * dz <= PLAN_DEST_MATCH * PLAN_DEST_MATCH;
+}
+
+bool PlanDestIsPlans(const float dest[3], const float finalDest[3], const float resend[][3], int resendCount)
+{
+	if (PlanDestMatches(dest, finalDest)) return true;
+	if (!resend || resendCount < 0) resendCount = 0;
+	if (resendCount > PLAN_RESEND_POINTS) resendCount = PLAN_RESEND_POINTS;
+	for (int i = 0; i < resendCount; ++i)
+		if (PlanDestMatches(dest, resend[i])) return true;
+	return false;
 }
 
 bool PlanEdgeSteers(int mode, int verdict, bool destMatches)
@@ -181,10 +191,22 @@ bool PlanReplacesAhead(int mode, int verdict)
 	return mode == PLANNER_ON && verdict == PV_LEGGED;
 }
 
-bool PlanOwnsWait(int mode, int verdict, int legIsDestination, int waiting, float distToPortal)
+bool PlanOwnsWait(int mode, int verdict, int legIsDestination, int waiting, float distToPortal,
+                  float wpToPortal, float posToWp)
 {
-	if (mode != PLANNER_ON || verdict != PV_LEGGED) return false;
-	return !legIsDestination && waiting != 0 && distToPortal < PLAN_REACH;
+	if (mode != PLANNER_ON || verdict != PV_LEGGED || legIsDestination) return false;
+	if (waiting != 0 && distToPortal < PLAN_REACH) return true;
+	return wpToPortal < PLAN_REACH && posToWp < PLAN_REACH;
+}
+
+bool PlanLegComplete(int portalLeg, float distToPortal, int pathState, int characterState)
+{
+	return portalLeg && distToPortal > PLAN_REACH && pathState == PLAN_PATH_COMPLETE && characterState >= 0 && characterState <= PLAN_CHAR_GOAL_REACHED;
+}
+
+float PlanSnapDistance(const float raw[3], const float snapped[3])
+{
+	return DistanceXz(raw, snapped);
 }
 
 PlanReplanWhy PlanReplanDue(const PlanReplanIn& in)

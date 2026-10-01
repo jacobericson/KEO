@@ -16,6 +16,8 @@ const float PLAN_REACH        = 20.0f;   // the parked test's reach; arrival at 
 const float PLAN_DEST_MATCH   = 2.0f;    // a call carries the plan's destination within this
 const float PLAN_RUNG_INSET   = 5.0f;    // a slid portal stays this far inside its edge
 const float PLAN_POST_ARRIVAL = 100.0f;  // within this of the destination the order is done
+const float PLAN_RESEND_REACH = 10.0f;   // a re-send of the destination lies within this of it (x-z)
+const int   PLAN_RESEND_POINTS = 2;      // the mod's distinct re-sent points a plan keeps
 
 enum PlanVerdict { PV_NONE = 0, PV_DIRECT, PV_LEGGED, PV_NO_ROUTE };
 
@@ -91,9 +93,10 @@ struct PlanFlipIn
 	int   legIsDestination;
 	float dest[3];         // the call's destination, copied at entry
 	float finalDest[3];    // the plan's
+	float resend[PLAN_RESEND_POINTS][3]; int resendCount;   // the mod's recorded re-sends of finalDest
 };
-// NOT_MINE: off, no character, no slot, NO_ROUTE or NONE, or dest farther than PLAN_DEST_MATCH from
-// finalDest. Otherwise, in on: FALSE for LEGGED with the current leg not the destination, else
+// NOT_MINE: off, no character, no slot, NO_ROUTE or NONE, or dest not the plan's (PlanDestIsPlans).
+// Otherwise, in on: FALSE for LEGGED with the current leg not the destination, else
 // VANILLA (the planner's answer, which the far-span rule does not modify). In observe: NOT_MINE
 // always (the caller counts what on would have answered).
 PlanFlipAnswer PlanFlipRule(const PlanFlipIn& in);
@@ -102,6 +105,9 @@ PlanFlipAnswer PlanFlipRuleOn(const PlanFlipIn& in);
 
 // |a - b| <= PLAN_DEST_MATCH in three dimensions: a call carries the plan's destination.
 bool PlanDestMatches(const float a[3], const float b[3]);
+// Whether a call's destination is the plan's: within PLAN_DEST_MATCH (three dimensions) of the plan's
+// destination or of one of the first resendCount recorded re-sends (at most PLAN_RESEND_POINTS).
+bool PlanDestIsPlans(const float dest[3], const float finalDest[3], const float resend[][3], int resendCount);
 // Whether the getZoneEdge detour returns the planner's point: on, a LEGGED plan and a matching
 // destination; observe and off never steer.
 bool PlanEdgeSteers(int mode, int verdict, bool destMatches);
@@ -109,13 +115,25 @@ bool PlanEdgeSteers(int mode, int verdict, bool destMatches);
 // and off keep it.
 bool PlanReplacesAhead(int mode, int verdict);
 
-// Whether the planner owns a character's wait (PlannerOwnsWait's pure half): on, LEGGED, the
-// current leg not the destination, the slot's waiting word set, and within PLAN_REACH of the
-// current portal.
-bool PlanOwnsWait(int mode, int verdict, int legIsDestination, int waiting, float distToPortal);
+// Whether the planner owns a character's stop at its current portal (PlannerOwnsWait's pure half):
+// on, LEGGED, the current leg not the destination, and either the slot's waiting word set within
+// PLAN_REACH of the portal (a held wait), or the character within PLAN_REACH of its waypoint while
+// that waypoint lies within PLAN_REACH of the portal (it stands at the portal the planner gave,
+// before the engine's next advance). Distances x-z.
+bool PlanOwnsWait(int mode, int verdict, int legIsDestination, int waiting, float distToPortal,
+                  float wpToPortal, float posToWp);
+
+const int PLAN_PATH_COMPLETE     = 1;   // HavokCharacter::PathState COMPLETE
+const int PLAN_CHAR_GOAL_REACHED = 1;   // HavokCharacter::CharacterState GOAL_REACHED (IDLE is 0)
+// A portal leg is complete when its path search finished and the character has stopped at the path's
+// end (IDLE or GOAL_REACHED, the engine's own advance test) farther than PLAN_REACH from the portal in
+// x-z. A path stays COMPLETE for the whole walk along it.
+bool PlanLegComplete(int portalLeg, float distToPortal, int pathState, int characterState);
+
+float PlanSnapDistance(const float raw[3], const float snapped[3]);   // x-z
 
 // The re-plan triggers (main thread, per slot per tick).
-enum PlanReplanWhy { PRW_NONE = 0, PRW_WAIT, PRW_ARRIVAL_TIMEOUT, PRW_RUNGS, PRW_AGE, PRW_GOAL_LOADED, PRW_ROUTE_END };
+enum PlanReplanWhy { PRW_NONE = 0, PRW_WAIT, PRW_ARRIVAL_TIMEOUT, PRW_RUNGS, PRW_AGE, PRW_GOAL_LOADED, PRW_ROUTE_END, PRW_COUNT };
 struct PlanReplanIn
 {
 	double now, planTime, waitSince, completeSince;   // 0: not waiting / not complete

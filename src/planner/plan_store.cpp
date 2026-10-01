@@ -22,6 +22,7 @@ struct PlanSlot
 	uintptr_t         cm;          // 0 free; written only under an odd epoch
 	int               verdict, legCount, routeTruncated;
 	float             finalDest[3];
+	float             resend[PLAN_RESEND_POINTS][3]; int resendCount;   // written only under an odd epoch
 	PlanLeg           legs[PLAN_MAX_LEGS];
 	PlanMainState     main;
 };
@@ -75,6 +76,15 @@ static unsigned BeginRewrite(PlanSlot& s)
 	return e;
 }
 
+// Main thread: as BeginRewrite, returning the current leg from the exchange itself, so an AI-thread
+// advance that landed before the exchange is kept.
+static unsigned BeginRewriteKeepLeg(PlanSlot& s, unsigned* leg)
+{
+	unsigned e = EpochOf(s.legWord);
+	*leg = LegOf(InterlockedExchange64(&s.legWord, MakeWord(e + 1u, 0u)));
+	return e;
+}
+
 // Main thread: publishes the rewritten fields under the next even epoch, with the current leg.
 static void EndRewrite(PlanSlot& s, unsigned e, int leg)
 {
@@ -100,6 +110,8 @@ static void ClearSlot(PlanSlot& s)
 	s.legCount = 0;
 	s.routeTruncated = 0;
 	memset(s.finalDest, 0, sizeof(s.finalDest));
+	memset(s.resend, 0, sizeof(s.resend));
+	s.resendCount = 0;
 	memset(s.legs, 0, sizeof(s.legs));
 	memset(&s.main, 0, sizeof(s.main));
 	InterlockedExchange(&s.loadedMask, 0);
@@ -146,12 +158,21 @@ int PlanStoreWrite(const PlanWrite& w)
 	int firstLeg = (w.firstLeg >= 0 && w.firstLeg < legCount) ? w.firstLeg : 0;
 
 	PlanSlot& s = s_slots[slot];
+	bool keep = w.keepSends && s.cm == w.cm;
 	unsigned e = BeginRewrite(s);
 	s.cm = w.cm;
 	s.verdict = w.verdict;
 	s.legCount = legCount;
 	s.routeTruncated = w.routeTruncated;
 	memcpy(s.finalDest, w.finalDest, sizeof(s.finalDest));
+	if (!keep)
+	{
+		memset(s.resend, 0, sizeof(s.resend));
+		s.resendCount = 0;
+		s.main.haveHold = 0;
+		s.main.holdTime = 0.0;
+		memset(s.main.holdDest, 0, sizeof(s.main.holdDest));
+	}
 	memset(s.legs, 0, sizeof(s.legs));
 	memcpy(s.legs, w.legs, sizeof(PlanLeg) * legCount);
 	InterlockedExchange(&s.loadedMask, (LONG)w.loadedMask);
@@ -237,6 +258,8 @@ bool PlanStoreRead(int slot, PlanView* out)
 		out->waiting = (int)s.waiting;
 		out->rungs = (int)s.rungs;
 		memcpy(out->finalDest, s.finalDest, sizeof(out->finalDest));
+		memcpy(out->resend, s.resend, sizeof(out->resend));
+		out->resendCount = s.resendCount;
 		memcpy(out->legs, s.legs, sizeof(out->legs));
 		LONGLONG w2 = LoadWord(s);
 		if (EpochOf(w2) != e) continue;
@@ -309,7 +332,13 @@ void PlanStoreNoteConsulted(int slot)
 	InterlockedIncrement(&s_slots[slot].consulted);
 }
 
-bool PlannerOwnsWait(uintptr_t cm, float posX, float posZ)
+static float DistXz(float ax, float az, float bx, float bz)
+{
+	float dx = ax - bx, dz = az - bz;
+	return sqrtf(dx * dx + dz * dz);
+}
+
+bool PlannerOwnsWait(uintptr_t cm, float posX, float posZ, float wpX, float wpZ)
 {
 	if (PlanStoreMode() == PLANNER_OFF) return false;
 	int slot = PlanStoreFind(cm);
@@ -318,9 +347,63 @@ bool PlannerOwnsWait(uintptr_t cm, float posX, float posZ)
 	if (!PlanStoreRead(slot, &v) || v.cm != cm) return false;
 	if (v.legIndex < 0 || v.legIndex >= v.legCount) return false;
 	const PlanLeg& leg = v.legs[v.legIndex];
-	float dx = posX - leg.point[0];
-	float dz = posZ - leg.point[2];
-	return PlanOwnsWait(PlanStoreMode(), v.verdict, leg.isDestination, v.waiting, sqrtf(dx * dx + dz * dz));
+	float posToPortal = DistXz(posX, posZ, leg.point[0], leg.point[2]);
+	float wpToPortal = DistXz(wpX, wpZ, leg.point[0], leg.point[2]);
+	float posToWp = DistXz(posX, posZ, wpX, wpZ);
+	return PlanOwnsWait(PlanStoreMode(), v.verdict, leg.isDestination, v.waiting, posToPortal, wpToPortal, posToWp);
+}
+
+// Main thread (the slots' one writer).
+int PlannerNoteModSend(uintptr_t cm, const float sent[3], int kind, double now)
+{
+	if (PlanStoreMode() == PLANNER_OFF || !cm || !sent) return 0;
+	int slot = SlotOfKey(cm);
+	if (slot < 0) return 0;
+	PlanSlot& s = s_slots[slot];
+	if (kind == PLAN_SEND_HOLD)
+	{
+		memcpy(s.main.holdDest, sent, sizeof(s.main.holdDest));
+		s.main.holdTime = now;
+		s.main.haveHold = 1;
+		InterlockedIncrement(&s_counters.heldPlanned);
+		return 1;
+	}
+	if (kind != PLAN_SEND_RESEND) return 0;
+	if (DistXz(sent[0], sent[2], s.finalDest[0], s.finalDest[2]) > PLAN_RESEND_REACH)
+	{
+		InterlockedIncrement(&s_counters.reissueRefused);
+		return -1;
+	}
+	InterlockedIncrement(&s_counters.reissuedPlanned);
+	if (PlanDestIsPlans(sent, s.finalDest, s.resend, s.resendCount)) return 1;
+	unsigned leg = 0;
+	unsigned e = BeginRewriteKeepLeg(s, &leg);
+	if (s.resendCount >= PLAN_RESEND_POINTS)
+	{
+		memmove(s.resend[0], s.resend[1], sizeof(s.resend[0]) * (PLAN_RESEND_POINTS - 1));
+		s.resendCount = PLAN_RESEND_POINTS - 1;
+	}
+	memcpy(s.resend[s.resendCount], sent, sizeof(s.resend[0]));
+	++s.resendCount;
+	EndRewrite(s, e, (int)leg);
+	return 1;
+}
+
+// Any thread: the far-snap count is one interlocked increment; the maximum is raised by a
+// compare-exchange loop that retries only when another thread raised it in between.
+void PlannerNoteSnap(float distance)
+{
+	if (!(distance >= 0.0f)) return;   // negative or NaN
+	if (distance > 1.0e6f) distance = 1.0e6f;
+	if (distance > PLAN_REACH) InterlockedIncrement(&s_counters.snapFar);
+	LONG d = (LONG)(distance + 0.5f);
+	LONG cur = InterlockedCompareExchange(&s_counters.snapMax, 0, 0);
+	while (d > cur)
+	{
+		LONG seen = InterlockedCompareExchange(&s_counters.snapMax, d, cur);
+		if (seen == cur) break;
+		cur = seen;
+	}
 }
 
 void PlanStoreTestPauseInRewrite(void (*fn)(void* ctx), void* ctx)

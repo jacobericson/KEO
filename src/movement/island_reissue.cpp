@@ -15,6 +15,7 @@
 #include <cstring>
 #include "movement/islands_reissue_internal.h"
 #include "movement/islands_reissue_counters.h"
+#include "planner/plan_store.h"
 namespace island_reissue_detail {
 // One summary-mode FormationReissueTravel call (group above 6 members).
 struct ReissueDispatch {
@@ -217,6 +218,8 @@ bool ReissueCharacter(uintptr_t character, float dx, float dy, float dz, double 
 		float lx = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_destination_x, OFF_CMOV_LAST_DEST));
 		float lz = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_destination_z, OFF_CMOV_LAST_DEST + 8));
 		IslandNudgeAwayFromLastDest(lx, lz, &dest[0], &dest[2]);
+		// The route planner keeps a character's plan across this re-send of its order.
+		planner::PlannerNoteModSend(cm, dest, planner::PLAN_SEND_RESEND, now);
 	}
 
 	// (a) Discriminator line: capture state immediately before fn_moveOrder,

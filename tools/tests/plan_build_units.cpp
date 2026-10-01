@@ -143,28 +143,62 @@ static void CheckDrop()
 	Set3(planDest, 5000.0f, 40.0f, -7000.0f);
 	Set3(moveDest, 5000.0f, 0.0f, -7000.0f);
 
-	Check(PlanDropDue(false, false, 900.0f, moveDest, planDest, 5.0) == PDW_NOT_PLAYER, "drop: not a player drops");
-	Check(PlanDropDue(true, true, 900.0f, moveDest, planDest, 5.0) == PDW_KO, "drop: unconscious drops");
-	Check(PlanDropDue(true, false, 99.0f, moveDest, planDest, 5.0) == PDW_ARRIVED
-	      && PlanDropDue(true, false, 101.0f, moveDest, planDest, 5.0) == PDW_NONE,
+	Check(PlanDropDue(false, false, 900.0f, moveDest, planDest, 5.0, false) == PDW_NOT_PLAYER, "drop: not a player drops");
+	Check(PlanDropDue(true, true, 900.0f, moveDest, planDest, 5.0, false) == PDW_KO, "drop: unconscious drops");
+	Check(PlanDropDue(true, false, 99.0f, moveDest, planDest, 5.0, false) == PDW_ARRIVED
+	      && PlanDropDue(true, false, 101.0f, moveDest, planDest, 5.0, false) == PDW_NONE,
 	      "drop: within 100 of the destination drops");
 
 	float off[3];
 	Set3(off, 5003.0f, 0.0f, -7000.0f);
-	Check(PlanDropDue(true, false, 900.0f, off, planDest, 5.0) == PDW_NEW_DEST, "drop: a movement destination 3 units off drops");
+	Check(PlanDropDue(true, false, 900.0f, off, planDest, 5.0, false) == PDW_NEW_DEST, "drop: a movement destination 3 units off drops");
 
 	float zero[3];
 	Set3(zero, 0.0f, 0.0f, 0.0f);
-	Check(PlanDropDue(true, false, 900.0f, zero, planDest, 5.0) == PDW_NONE, "drop: a zero movement destination does not drop");
+	Check(PlanDropDue(true, false, 900.0f, zero, planDest, 5.0, false) == PDW_NONE, "drop: a zero movement destination does not drop");
 
-	Check(PlanDropDue(true, false, 900.0f, moveDest, planDest, 5.0) == PDW_NONE, "drop: a matching destination does not drop");
+	Check(PlanDropDue(true, false, 900.0f, moveDest, planDest, 5.0, false) == PDW_NONE, "drop: a matching destination does not drop");
 
 	float moved[3];
 	Set3(moved, 5050.0f, 0.0f, -7000.0f);
-	Check(PlanDropDue(true, false, 900.0f, moved, planDest, 0.5) == PDW_NONE,
+	Check(PlanDropDue(true, false, 900.0f, moved, planDest, 0.5, false) == PDW_NONE,
 	      "drop: a new destination inside the settle second is not a drop");
-	Check(PlanDropDue(true, false, 900.0f, moved, planDest, 1.5) == PDW_NEW_DEST,
+	Check(PlanDropDue(true, false, 900.0f, moved, planDest, 1.5, false) == PDW_NEW_DEST,
 	      "drop: a new destination after the settle second drops");
+
+	// The mod's own sends: a recorded re-send, a halt at the character's position and the gather's hold.
+	float rec[PLAN_RESEND_POINTS][3];
+	memset(rec, 0, sizeof(rec));
+	float hold[3], resent[3];
+	Set3(hold, 0.0f, 0.0f, 0.0f);
+	Set3(rec[0], 5008.0f, 40.0f, -7000.0f);
+	Set3(resent, 5008.0f, 0.0f, -7000.0f);
+	bool sent = PlanIsModSend(resent, rec, 1, hold, 0, 0.0);
+	Check(sent && PlanDropDue(true, false, 900.0f, resent, planDest, 5.0, sent) == PDW_NONE,
+	      "drop: a re-sent destination the mod recorded does not drop");
+	bool unrecorded = PlanIsModSend(resent, rec, 0, hold, 0, 0.0);
+	Check(!unrecorded && PlanDropDue(true, false, 900.0f, resent, planDest, 5.0, unrecorded) == PDW_NEW_DEST,
+	      "drop: an unrecorded destination eight units off drops");
+	Set3(rec[1], 4992.0f, 40.0f, -7000.0f);
+	float earlier[3];
+	Set3(earlier, 5008.5f, 0.0f, -7000.0f);
+	bool kept = PlanIsModSend(earlier, rec, 2, hold, 0, 0.0);
+	Check(kept && PlanDropDue(true, false, 900.0f, earlier, planDest, 5.0, kept) == PDW_NONE,
+	      "drop: an earlier recorded re-send still matches");
+	float halt[3];
+	Set3(halt, 5900.0f, 0.0f, -7000.0f);
+	bool halted = PlanIsModSend(halt, rec, 1, hold, 0, 0.0);
+	Check(!halted && PlanDropDue(true, false, 900.0f, halt, planDest, 5.0, halted) == PDW_NEW_DEST,
+	      "drop: a halt at the character's position drops although a re-send is recorded");
+	float gather[3];
+	Set3(hold, 4100.0f, 0.0f, -7300.0f);
+	Set3(gather, 4100.5f, 0.0f, -7300.0f);
+	bool young = PlanIsModSend(gather, rec, 0, hold, 1, 5.0);
+	Check(young && PlanDropDue(true, false, 900.0f, gather, planDest, 5.0, young) == PDW_NONE,
+	      "drop: the gather point keeps the plan while the hold is young");
+	bool old = PlanIsModSend(gather, rec, 0, hold, 1, 21.0);
+	Check(!old && PlanDropDue(true, false, 900.0f, gather, planDest, 5.0, old) == PDW_NEW_DEST,
+	      "drop: the gather point drops the plan once the hold is older than its bound");
 }
 
 static void CheckRepeat()

@@ -262,21 +262,23 @@ static void HeldAtPortal(int mode)
 static void OwnsRows()
 {
 	HeldAtPortal(PLANNER_OFF);
-	Check(!PlannerOwnsWait(CM_A, 1005.0f, 5.0f), "owns: an unarmed store owns nothing");
+	Check(!PlannerOwnsWait(CM_A, 1005.0f, 5.0f, 9000.0f, 9000.0f), "owns: an unarmed store owns nothing");
 
 	HeldAtPortal(PLANNER_OBSERVE);
-	Check(!PlannerOwnsWait(CM_A, 1005.0f, 5.0f), "owns: observe never owns a wait");
+	Check(!PlannerOwnsWait(CM_A, 1005.0f, 5.0f, 9000.0f, 9000.0f), "owns: observe never owns a wait");
 
 	HeldAtPortal(PLANNER_ON);
-	Check(PlannerOwnsWait(CM_A, 1005.0f, 5.0f), "owns: on owns a held portal wait within reach");
-	Check(!PlannerOwnsWait(CM_A, 1025.0f, 0.0f), "owns: a wait beyond reach of the portal is not owned");
-	Check(!PlannerOwnsWait(CM_B, 1005.0f, 5.0f), "owns: an unplanned character's wait is not owned");
+	Check(PlannerOwnsWait(CM_A, 1005.0f, 5.0f, 9000.0f, 9000.0f), "owns: on owns a held portal wait within reach");
+	Check(!PlannerOwnsWait(CM_A, 1025.0f, 0.0f, 9000.0f, 9000.0f), "owns: a wait beyond reach of the portal is not owned");
+	Check(!PlannerOwnsWait(CM_B, 1005.0f, 5.0f, 9000.0f, 9000.0f), "owns: an unplanned character's wait is not owned");
 
 	PlanView v;
 	int slot = PlanStoreFind(CM_A);
 	PlanStoreRead(slot, &v);
 	PlanStoreSetWaiting(slot, v.epoch, 0);
-	Check(!PlannerOwnsWait(CM_A, 1005.0f, 5.0f), "owns: a portal without the waiting word set is not owned");
+	Check(!PlannerOwnsWait(CM_A, 1005.0f, 5.0f, 9000.0f, 9000.0f), "owns: a portal without the waiting word set is not owned");
+	Check(PlannerOwnsWait(CM_A, 1003.0f, 2.0f, 1005.0f, 0.0f), "owns: on owns a stop at the planner's waypoint at the portal");
+	Check(!PlannerOwnsWait(CM_A, 1503.0f, 2.0f, 1505.0f, 0.0f), "owns: a waypoint away from the portal is not owned");
 
 	// The current leg is the destination (the plan written starting on leg 2), waiting set.
 	PlanWrite w;
@@ -286,7 +288,7 @@ static void OwnsRows()
 	slot = PlanStoreWrite(w);
 	PlanStoreRead(slot, &v);
 	PlanStoreSetWaiting(slot, v.epoch, 1);
-	Check(v.legIndex == 2 && !PlannerOwnsWait(CM_A, 3000.0f, 0.0f), "owns: a destination leg is never owned");
+	Check(v.legIndex == 2 && !PlannerOwnsWait(CM_A, 3000.0f, 0.0f, 9000.0f, 9000.0f), "owns: a destination leg is never owned");
 
 	Fresh(PLANNER_ON);
 	MakeWrite(&w, CM_A, 1.0f);
@@ -294,7 +296,107 @@ static void OwnsRows()
 	slot = PlanStoreWrite(w);
 	PlanStoreRead(slot, &v);
 	PlanStoreSetWaiting(slot, v.epoch, 1);
-	Check(!PlannerOwnsWait(CM_A, 1005.0f, 5.0f), "owns: a direct plan's wait is not owned");
+	Check(!PlannerOwnsWait(CM_A, 1005.0f, 5.0f, 9000.0f, 9000.0f), "owns: a direct plan's wait is not owned");
+	Fresh(PLANNER_OFF);
+}
+
+// ---- Re-send rows -----------------------------------------------------------------------------
+
+static void Set3(float out[3], float x, float y, float z)
+{
+	out[0] = x;
+	out[1] = y;
+	out[2] = z;
+}
+
+// The counters are global, so each row reads a delta.
+static void SendRows()
+{
+	PlanWrite w;
+	PlanView v;
+	float p[3];
+	PlannerCounters* c = PlannerCountersGet();
+
+	Fresh(PLANNER_ON);
+	MakeWrite(&w, CM_A, 1.0f);
+	int slot = PlanStoreWrite(w);
+	PlanStoreRead(slot, &v);
+	PlanStoreAdvance(slot, v.epoch, 0, 1);
+	Set3(p, 3008.0f, 1.0f, 0.0f);
+	int sent = PlannerNoteModSend(CM_A, p, PLAN_SEND_RESEND, 20.0);
+	Check(sent == 1 && PlanStoreRead(slot, &v) && v.resendCount == 1 && v.resend[0][0] == 3008.0f && v.legIndex == 1,
+	      "store: a recorded re-send is in the view and keeps the leg");
+
+	LONG before = c->reissuedPlanned;
+	int again = PlannerNoteModSend(CM_A, p, PLAN_SEND_RESEND, 21.0);
+	Set3(p, 3000.5f, 1.0f, 0.0f);
+	int accepted = PlannerNoteModSend(CM_A, p, PLAN_SEND_RESEND, 22.0);
+	Check(again == 1 && accepted == 1 && PlanStoreRead(slot, &v) && v.resendCount == 1
+	      && c->reissuedPlanned == before + 2,
+	      "store: a re-send the plan already accepts is not recorded twice");
+
+	Fresh(PLANNER_ON);
+	MakeWrite(&w, CM_A, 1.0f);
+	slot = PlanStoreWrite(w);
+	Set3(p, 3008.0f, 1.0f, 0.0f);
+	PlannerNoteModSend(CM_A, p, PLAN_SEND_RESEND, 20.0);
+	Set3(p, 2992.0f, 1.0f, 0.0f);
+	PlannerNoteModSend(CM_A, p, PLAN_SEND_RESEND, 22.0);
+	Set3(p, 3000.0f, 1.0f, 8.0f);
+	PlannerNoteModSend(CM_A, p, PLAN_SEND_RESEND, 24.0);
+	Check(PlanStoreRead(slot, &v) && v.resendCount == 2 && v.resend[0][0] == 2992.0f && v.resend[0][2] == 0.0f
+	      && v.resend[1][0] == 3000.0f && v.resend[1][2] == 8.0f,
+	      "store: a third distinct re-send keeps the two newest");
+
+	LONG refusedBefore = c->reissueRefused;
+	Set3(p, 3030.0f, 1.0f, 0.0f);
+	int refused = PlannerNoteModSend(CM_A, p, PLAN_SEND_RESEND, 26.0);
+	Check(refused == -1 && c->reissueRefused == refusedBefore + 1 && PlanStoreRead(slot, &v) && v.resendCount == 2
+	      && v.resend[0][0] == 2992.0f && v.resend[1][2] == 8.0f,
+	      "store: a re-send beyond the reach is refused and counted");
+
+	MakeWrite(&w, CM_A, 1.0f);
+	w.keepSends = 1;
+	PlanStoreWrite(w);
+	Check(PlanStoreRead(slot, &v) && v.resendCount == 2 && v.resend[0][0] == 2992.0f && v.resend[1][2] == 8.0f,
+	      "store: a re-plan keeps the recorded re-sends");
+
+	MakeWrite(&w, CM_A, 1.0f);
+	w.keepSends = 0;
+	PlanStoreWrite(w);
+	Check(PlanStoreRead(slot, &v) && v.resendCount == 0, "store: a new order clears the recorded re-sends");
+
+	Set3(p, 3008.0f, 1.0f, 0.0f);
+	PlannerNoteModSend(CM_A, p, PLAN_SEND_RESEND, 30.0);
+	bool recorded = PlanStoreRead(slot, &v) && v.resendCount == 1;
+	PlanStoreDrop(CM_A);
+	MakeWrite(&w, CM_A, 1.0f);
+	w.keepSends = 1;
+	slot = PlanStoreWrite(w);
+	Check(recorded && PlanStoreRead(slot, &v) && v.resendCount == 0, "store: a drop clears the recorded re-sends");
+
+	Set3(p, 3008.0f, 1.0f, 0.0f);
+	int unplanned = PlannerNoteModSend(CM_B, p, PLAN_SEND_RESEND, 32.0);
+	PlanStoreArm(PLANNER_OFF);
+	int unarmed = PlannerNoteModSend(CM_A, p, PLAN_SEND_RESEND, 32.0);
+	PlanStoreArm(PLANNER_ON);
+	Check(unplanned == 0 && unarmed == 0 && PlanStoreRead(slot, &v) && v.resendCount == 0,
+	      "store: an unplanned or unarmed character records nothing");
+
+	LONG heldBefore = c->heldPlanned;
+	Set3(p, 500.0f, 1.0f, 40.0f);
+	int held = PlannerNoteModSend(CM_A, p, PLAN_SEND_HOLD, 34.5);
+	PlanMainState* ms = PlanStoreMain(slot);
+	Check(held == 1 && ms && ms->haveHold == 1 && ms->holdTime == 34.5 && ms->holdDest[0] == 500.0f
+	      && ms->holdDest[2] == 40.0f && PlanStoreRead(slot, &v) && v.resendCount == 0
+	      && c->heldPlanned == heldBefore + 1,
+	      "store: a hold is recorded on the main side only");
+
+	LONG farBefore = c->snapFar;
+	PlannerNoteSnap(5.0f);
+	PlannerNoteSnap(25.0f);
+	PlannerNoteSnap(12.0f);
+	Check(c->snapFar == farBefore + 1 && c->snapMax == 25, "store: a snap beyond reach is counted and raises the maximum");
 	Fresh(PLANNER_OFF);
 }
 
@@ -302,5 +404,6 @@ int main()
 {
 	StoreRows();
 	OwnsRows();
+	SendRows();
 	return CheckExit("plan_store_units");
 }

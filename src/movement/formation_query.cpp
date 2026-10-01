@@ -6,6 +6,7 @@
 // REISSUE_COOLDOWN, IslandNudgeAwayFromLastDest and the (a) discriminator trace.
 #include "movement/islands.h"
 #include "movement/order_outcome.h"
+#include "planner/plan_store.h"
 
 // =========================================================================
 // Island re-issue helpers for islands_reissue.cpp. Main thread only.
@@ -174,6 +175,16 @@ void FormationCohesionSample(int* groups, int* liveMembers,
 	if (worstGroupId) *worstGroupId = worstId;
 }
 
+// Main thread: the route planner holds this member at one of its portals.
+static bool PlannerOwnsMember(uintptr_t cm)
+{
+	float px = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_pos_x, OFF_CMOV_POS));
+	float pz = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_pos_z, OFF_CMOV_POS + 8));
+	float wx = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_pathDestination_x, OFF_CMOV_PATH_DEST));
+	float wz = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_pathDestination_z, OFF_CMOV_PATH_DEST + 8));
+	return planner::PlannerOwnsWait(cm, px, pz, wx, wz);
+}
+
 bool FormationReissueTravel(int slot, const char* why, double now)
 {
 	if (slot < 0 || slot >= MAX_FORMATION_GROUPS) return false;
@@ -229,6 +240,9 @@ bool FormationReissueTravel(int slot, const char* why, double now)
 		// an order sent now would be appended behind the preempting task.
 		if (IslandK7Preempted(mem.character))
 			continue;
+		uintptr_t cm = *(uintptr_t*)(KLIB_MEMBER(3, mem.character, Character_movement, OFF_CHAR_MOVEMENT));
+		// A member the route planner holds at a portal is not re-sent.
+		if (cm && PlannerOwnsMember(cm)) { InterlockedIncrement(&planner::PlannerCountersGet()->ownedSkips); continue; }
 
 		uintptr_t charVtable = *(uintptr_t*)mem.character;
 		if (!charVtable) continue;
@@ -241,7 +255,6 @@ bool FormationReissueTravel(int slot, const char* why, double now)
 		// CharMovement::setDestination drops a new order within 2 units of the
 		// last requested destination while it is routing to an island edge.
 		// Every member received the exact grp.dest (scatter patch), so nudge.
-		uintptr_t cm = *(uintptr_t*)(KLIB_MEMBER(3, mem.character, Character_movement, OFF_CHAR_MOVEMENT));
 		// (a)/(b): capture the pre-call trace and use the direction-aware nudge.
 		IslandReissueTrace trace;
 		IslandCaptureReissueTrace(mem.character, &trace);
@@ -253,6 +266,7 @@ bool FormationReissueTravel(int slot, const char* why, double now)
 			if (destPos[0] != grp.destX || destPos[2] != grp.destZ)
 				nudged++;
 		}
+		if (cm) planner::PlannerNoteModSend(cm, destPos, planner::PLAN_SEND_RESEND, now);
 
 		KlibDispatchMoveOrder(fn_moveOrder, mem.character, NULL, NULL, destPos);
 		sent++;

@@ -32,10 +32,21 @@ const double PLAN_ORDER_SETTLE = 1.0;
 // Why the tick drops a plan, in this order: not a live player character, unconscious, within
 // PLAN_POST_ARRIVAL of the destination, or, once the plan is PLAN_ORDER_SETTLE seconds old
 // (planAge, seconds since the plan was written), a non-zero movement destination more than
-// PLAN_DEST_MATCH from the plan's (a new order or the stop key's halt).
-enum PlanDropWhy { PDW_NONE = 0, PDW_NOT_PLAYER, PDW_KO, PDW_ARRIVED, PDW_NEW_DEST };
+// PLAN_DEST_MATCH from the plan's that the mod did not send for this plan (moveDestIsModSend): a new
+// order or the stop key's halt. PDW_ORDER (a non-move order) and PDW_UNLOCATED (an order whose goal
+// or start could not be located) are the order capture's drops, counted by reason; PlanDropDue never
+// returns them.
+enum PlanDropWhy { PDW_NONE = 0, PDW_NOT_PLAYER, PDW_KO, PDW_ARRIVED, PDW_NEW_DEST, PDW_ORDER, PDW_UNLOCATED, PDW_COUNT };
 PlanDropWhy PlanDropDue(bool livePlayer, bool unconscious, float distToDest,
-                        const float moveDest[3], const float planDest[3], double planAge);
+                        const float moveDest[3], const float planDest[3], double planAge, bool moveDestIsModSend);
+
+// A mod detour (the formation's gather) keeps a plan for this long without steering it.
+const double PLAN_HOLD_SECONDS = 20.0;
+// Whether the movement destination is one the mod sent for this plan: within PLAN_DEST_MATCH in x-z of
+// one of the first resendCount re-sends (at most PLAN_RESEND_POINTS), or of the hold point while
+// haveHold and holdAge (seconds since the hold was sent) is under PLAN_HOLD_SECONDS.
+bool PlanIsModSend(const float moveDest[3], const float resend[][3], int resendCount,
+                   const float holdDest[3], int haveHold, double holdAge);
 
 // One click reaches the order capture as a burst of identical move orders. A repeat: the plan is
 // under PLAN_ORDER_SETTLE seconds old (planAge) and the new destination lies within one unit of

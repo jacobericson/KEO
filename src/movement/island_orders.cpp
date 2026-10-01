@@ -129,12 +129,12 @@ bool IsCharacterParkedNow(uintptr_t character, float destX, float destZ, double 
 	float posZ = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_pos_z, OFF_CMOV_POS + 8));
 	if (Dist2(posX, posZ, destX, destZ) < PARK_MIN_DEST_DIST * PARK_MIN_DEST_DIST)
 		return false;   // arrived, not parked
-	if (planner::PlannerOwnsWait(cm, posX, posZ)) return false;   // the planner's wait, not a park
+	float wpX   = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_pathDestination_x, OFF_CMOV_PATH_DEST));
+	float wpZ   = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_pathDestination_z, OFF_CMOV_PATH_DEST + 8));
+	if (planner::PlannerOwnsWait(cm, posX, posZ, wpX, wpZ)) return false;   // the planner's stop at its portal, not a park
 
 	float lastX = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_destination_x, OFF_CMOV_LAST_DEST));
 	float lastZ = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_destination_z, OFF_CMOV_LAST_DEST + 8));
-	float wpX   = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_pathDestination_x, OFF_CMOV_PATH_DEST));
-	float wpZ   = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_pathDestination_z, OFF_CMOV_PATH_DEST + 8));
 	bool edge   = *(unsigned char*)(KLIB_MEMBER(3, cm, CharMovement_movingToEdge, OFF_CMOV_MOVING_TO_EDGE)) != 0;
 
 	bool edgeParked = edge && Dist2(wpX, wpZ, posX, posZ) < PARK_WP_DIST * PARK_WP_DIST;
@@ -565,9 +565,10 @@ static void PollOneOrder(IslandOrder& o, PollOrdersCtx& c)
 {
 	if (PollOrderRead(o, c)) return;
 	if (PollOrderK7(o, c)) return;
-	// A character the route planner is walking leg by leg waits at a portal for its next section:
-	// that is the planner's wait, not a park, so no park form, re-issue or crossing test runs on it.
-	if (planner::PlannerOwnsWait(c.cm, c.posX, c.posZ))
+	// A character the route planner is walking leg by leg stops at a portal it gave, waiting for the
+	// next section or before the engine's next advance: that is the planner's stop, not a park, so no
+	// park form, re-issue or crossing test runs on it.
+	if (planner::PlannerOwnsWait(c.cm, c.posX, c.posZ, c.wpX, c.wpZ))
 	{
 		o.stoppedSince = 0.0;
 		o.parked = false;

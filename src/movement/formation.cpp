@@ -6,6 +6,7 @@
 #include "pathfind/pathfinding.h"
 #include "movement/formation_internal.h"
 #include "movement/order_outcome.h"
+#include "planner/plan_store.h"
 
 FormationGroup formationGroups[MAX_FORMATION_GROUPS];
 
@@ -419,6 +420,9 @@ bool PollFormationGather(FormationGroup& grp, PollFormationGroupCtx& c)
 					if (fn_moveOrder)
 					{
 						float gatherPos[3] = { grp.startX, grp.startY, grp.startZ };
+						uintptr_t cm = *(uintptr_t*)(KLIB_MEMBER(3, mem.character, Character_movement, OFF_CHAR_MOVEMENT));
+						// The route planner keeps a member's plan through its walk to the gather point.
+						if (cm) planner::PlannerNoteModSend(cm, gatherPos, planner::PLAN_SEND_HOLD, c.now);
 						KlibDispatchMoveOrder(fn_moveOrder, mem.character, NULL, NULL, gatherPos);
 					}
 				}

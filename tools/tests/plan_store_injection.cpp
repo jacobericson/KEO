@@ -1,7 +1,8 @@
 // Races the plan store's lock-free read against its rewrite: a writer thread rewrites slot 0 for
 // one character 200,000 times, stamping its sequence number into the plan's destination and into
-// every leg's point, while a reader thread reads the slot in a loop. Every view the read accepts
-// must carry one stamp throughout; a mixed view is a torn read the sequence word failed to refuse.
+// every leg's point, then records a re-send of that destination 8 units off, while a reader thread
+// reads the slot in a loop. Every view the read accepts must carry one stamp throughout, its newest
+// re-send included; a mixed view is a torn read the sequence word failed to refuse.
 // The threads yield with SwitchToThread only, so the interleaving is the scheduler's.
 //
 // Links src/planner/plan_store.cpp and plan_policy.cpp unmodified.
@@ -46,6 +47,8 @@ namespace plan_store_injection_detail
 		{
 			Stamp(&w, seq);
 			if (PlanStoreWrite(w) != 0) break;
+			float sent[3] = { (float)seq + 8.0f, 0.0f, 0.0f };
+			PlannerNoteModSend(CM, sent, PLAN_SEND_RESEND, 0.0);
 			InterlockedIncrement(&g_writes);
 			if ((seq & 1023) == 0) SwitchToThread();
 		}
@@ -62,6 +65,16 @@ namespace plan_store_injection_detail
 			return true;
 		}
 		g_reads++;
+		// The newest recorded re-send carries its own write's stamp plus 8.
+		bool countTorn = v->resendCount < 0 || v->resendCount > PLAN_RESEND_POINTS;
+		if (countTorn || (v->resendCount > 0 && v->resend[v->resendCount - 1][0] != v->finalDest[0] + 8.0f))
+		{
+			g_torn++;
+			g_tornFinal = v->finalDest[0];
+			g_tornLeg = countTorn ? (float)v->resendCount : v->resend[v->resendCount - 1][0];
+			g_tornIndex = -1;
+			return false;
+		}
 		for (int i = 0; i < PLAN_MAX_LEGS; ++i)
 		{
 			if (v->legs[i].point[0] != v->finalDest[0])
