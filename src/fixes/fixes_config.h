@@ -95,11 +95,11 @@ struct FixesConfig
 	bool meshFaceGuardEnabled;
 
 	// createInstanceGuard: skips a NavMesh::createInstance call whose NavInstance
-	// is already queued in addList by pointer with a live instance
-	// (src/fixes/streaming/create_instance_guard.h); vanilla frees that object and queues
-	// the freed pointer. The detour installs in every build regardless of this
-	// key; the key chooses only whether such a call is skipped (true, the
-	// default) or counted and passed to the original unchanged (false, observe).
+	// is already queued in addList by pointer with a live instance (vanilla frees
+	// it and queues the freed pointer) or already has its instance in the world
+	// (vanilla orphans that instance's collection slot); see
+	// src/fixes/streaming/create_instance_guard.h. The detour installs in every
+	// build; the key chooses only skip (true, the default) or count-and-pass (false).
 	// Read when the guard installs, and never again.
 	bool createInstanceGuardEnabled;
 

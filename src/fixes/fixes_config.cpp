@@ -117,7 +117,7 @@ const ConfigKey g_fixesConfigKeys[] =
 	  " instead of walking outside the section and crashing."),
 	CFG_OBOOL("createInstanceGuard", FixesConfig, createInstanceGuardEnabled,   DOC, SHOW,
 	  "Queued navmesh piece guard",
-	  "Stops the game freeing a navmesh piece that is already queued to be added. Off only counts it."),
+	  "Stops a late stitch from re-creating a navmesh piece that is already queued or already added. Off only counts it."),
 	CFG_OBOOL("hullDoublePushGuard", FixesConfig, hullDoublePushGuardEnabled,   DOC, SHOW,
 	  "Physics double delete guard",
 	  "Drops a second destroy entry for one physics object before the physics thread deletes it twice."

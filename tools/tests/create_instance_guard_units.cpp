@@ -1,5 +1,6 @@
-// Host tests for the createInstance self-duplicate policy: every arm, the
-// caller table, the task attribution, and the act/observe call decision.
+// Host tests for the createInstance policy: every arm (the self-duplicate
+// and the registered skips among them), the caller table, the task attribution,
+// and the act/observe call decision.
 
 #include <cstdio>
 #include <cstring>
@@ -15,7 +16,8 @@ struct Fake
 	unsigned char zone[0x40];
 	unsigned char ni[4][0x48];
 	void*         list[8];
-	int           meshA, meshB, inst;
+	int           meshA, meshB;
+	unsigned char inst[0x1B0];  // an instance, its runtime id at OFF_CI_NMI_RUNTIME_ID
 };
 
 static void SetList(Fake* f, unsigned int count)
@@ -33,8 +35,11 @@ static void Init(Fake* f)
 	*(int*)(f->zone + OFF_CI_ZONE_COORDS)     = 24;
 	*(int*)(f->zone + OFF_CI_ZONE_COORDS + 4) = 40;
 	*(void**)(f->task + OFF_CI_TASK_ZONE) = f->zone;
+	*(int*)(f->inst + OFF_CI_NMI_RUNTIME_ID) = -1;
 	SetList(f, 0);
 }
+
+static void SetRuntime(Fake* f, int id) { *(int*)(f->inst + OFF_CI_NMI_RUNTIME_ID) = id; }
 
 static void TestArms()
 {
@@ -45,6 +50,7 @@ static void TestArms()
 	Check(c.arm == CI_ARM_UNJUDGED_ARGS, "null navMesh is unjudged");
 	InspectCreateInstanceCall(f.navMesh, 0, &c);
 	Check(c.arm == CI_ARM_UNJUDGED_ARGS, "null n is unjudged");
+	Check(c.runtimeId == -1, "unjudged reports runtime -1");
 
 	// Empty list: a genuinely new instance.
 	InspectCreateInstanceCall(f.navMesh, f.ni[0], &c);
@@ -63,11 +69,11 @@ static void TestArms()
 	Check(!CreateInstanceArmSkips(c.arm), "same uid, other pointer is not skipped");
 
 	// n itself queued with a live instance: the recorded case.
-	*(void**)(f.ni[0] + OFF_CI_NI_INSTANCE) = &f.inst;
+	*(void**)(f.ni[0] + OFF_CI_NI_INSTANCE) = f.inst;
 	f.list[1] = f.ni[0]; SetList(&f, 3);
 	InspectCreateInstanceCall(f.navMesh, f.ni[0], &c);
 	Check(c.arm == CI_ARM_SELF_LIVE && c.index == 1 && c.uid == 0x390a10u, "self live found at its index");
-	Check(c.instance == &f.inst, "self live reports the instance");
+	Check(c.instance == f.inst, "self live reports the instance");
 	Check(CreateInstanceArmSkips(c.arm), "self live skips");
 
 	// n queued with no instance.
@@ -77,10 +83,33 @@ static void TestArms()
 	Check(!CreateInstanceArmSkips(c.arm), "self null is not skipped");
 
 	// Live instance, not queued.
-	*(void**)(f.ni[0] + OFF_CI_NI_INSTANCE) = &f.inst;
+	*(void**)(f.ni[0] + OFF_CI_NI_INSTANCE) = f.inst;
 	f.list[1] = f.ni[2]; SetList(&f, 2);
 	InspectCreateInstanceCall(f.navMesh, f.ni[0], &c);
 	Check(c.arm == CI_ARM_NEW && c.liveOutside, "live but unqueued is new with liveOutside");
+	Check(c.runtimeId == -1 && !CreateInstanceArmSkips(c.arm), "unregistered outside is new with runtime -1");
+
+	// Live instance already in the world, not queued: the orphaning call.
+	SetRuntime(&f, 56);
+	InspectCreateInstanceCall(f.navMesh, f.ni[0], &c);
+	Check(c.arm == CI_ARM_LIVE_REGISTERED && c.liveOutside && c.index == -1 && c.runtimeId == 56,
+	      "registered outside is its own arm");
+	Check(CreateInstanceArmSkips(c.arm), "registered outside skips");
+	SetRuntime(&f, 0);
+	InspectCreateInstanceCall(f.navMesh, f.ni[0], &c);
+	Check(c.arm == CI_ARM_LIVE_REGISTERED && c.runtimeId == 0, "slot 0 counts as registered");
+
+	// A same-uid other object queued beside the registered n still skips.
+	SetRuntime(&f, 56);
+	f.list[0] = f.ni[3]; f.list[1] = f.ni[2]; SetList(&f, 2);
+	InspectCreateInstanceCall(f.navMesh, f.ni[0], &c);
+	Check(c.arm == CI_ARM_LIVE_REGISTERED && c.uidOther, "registered with a same-uid other queued still skips");
+
+	// Queued by pointer wins, and the runtime id is then not read.
+	f.list[1] = f.ni[0]; SetList(&f, 2);
+	InspectCreateInstanceCall(f.navMesh, f.ni[0], &c);
+	Check(c.arm == CI_ARM_SELF_LIVE && c.runtimeId == -1, "queued by pointer wins over registered");
+	SetRuntime(&f, -1);
 
 	// Unbelievable lists.
 	SetList(&f, 2);
@@ -97,6 +126,8 @@ static void TestDecision()
 {
 	Check(!CreateInstanceCallsOriginal(CI_ARM_SELF_LIVE, true), "act: self live not called");
 	Check(CreateInstanceCallsOriginal(CI_ARM_SELF_LIVE, false), "observe: self live called");
+	Check(!CreateInstanceCallsOriginal(CI_ARM_LIVE_REGISTERED, true), "act: registered not called");
+	Check(CreateInstanceCallsOriginal(CI_ARM_LIVE_REGISTERED, false), "observe: registered called");
 	Check(CreateInstanceCallsOriginal(CI_ARM_SELF_NULL, true), "act: self null called");
 	Check(CreateInstanceCallsOriginal(CI_ARM_NEW, true), "act: new called");
 	Check(CreateInstanceCallsOriginal(CI_ARM_UNJUDGED_ARGS, true), "act: unjudged args called");

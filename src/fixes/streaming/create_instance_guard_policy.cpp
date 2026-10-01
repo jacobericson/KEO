@@ -2,7 +2,7 @@
 
 bool CreateInstanceArmSkips(CreateInstanceArm arm)
 {
-	return arm == CI_ARM_SELF_LIVE;
+	return arm == CI_ARM_SELF_LIVE || arm == CI_ARM_LIVE_REGISTERED;
 }
 
 bool CreateInstanceCallsOriginal(CreateInstanceArm arm, bool actMode)
@@ -18,6 +18,7 @@ void InspectCreateInstanceCall(const void* navMesh, const void* n, CreateInstanc
 	out->mesh        = 0;
 	out->count       = 0;
 	out->index       = -1;
+	out->runtimeId   = -1;
 	out->uidOther    = false;
 	out->liveOutside = false;
 
@@ -59,8 +60,13 @@ void InspectCreateInstanceCall(const void* navMesh, const void* n, CreateInstanc
 
 	if (out->index >= 0)
 		out->arm = out->instance ? CI_ARM_SELF_LIVE : CI_ARM_SELF_NULL;
-	else
-		out->liveOutside = out->instance != 0;
+	else if (out->instance)
+	{
+		out->liveOutside = true;
+		out->runtimeId = *(const int*)((const unsigned char*)out->instance + OFF_CI_NMI_RUNTIME_ID);
+		if (out->runtimeId >= 0)
+			out->arm = CI_ARM_LIVE_REGISTERED;
+	}
 }
 
 CreateInstanceCaller ClassifyCreateInstanceCaller(size_t returnRva)

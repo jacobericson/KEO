@@ -13,6 +13,13 @@
 // n->instance out of freed memory. The walk compares uids, so a different
 // object with n's uid is the case it was written for and still runs.
 //
+// It also never takes n's current instance out of the world. When that
+// instance is registered (its runtime id names a collection slot) and n is
+// not queued, the original replaces n->instance anyway and queues n; the
+// add-list drain refuses the queued entry because its uid is already in the
+// world. The old instance then keeps its slot, reachable only through the
+// collection, and n's teardown deletes the mesh, graph and mediator it uses.
+//
 // No Windows header and no game pointer here, so a host test can fabricate
 // the add list and drive every arm.
 
@@ -25,6 +32,10 @@ const size_t OFF_CI_NAVMESH_GENERATOR     = 0x290;
 const size_t OFF_CI_NI_MESH     = 0x08;
 const size_t OFF_CI_NI_INSTANCE = 0x28;
 const size_t OFF_CI_NI_UID      = 0x3C;
+
+// hkaiNavMeshInstance: its collection slot, -1 while it is not in the world
+// (addInstance writes it, removeInstance resets it).
+const size_t OFF_CI_NMI_RUNTIME_ID = 0x1A4;
 
 // NavMeshGenerator: the done queue's front task, and the task's fields.
 const size_t OFF_CI_NMG_DONE_FRONT = 0xB8;
@@ -58,10 +69,14 @@ enum CreateInstanceArm
 
 	// n is in the add list by pointer. The original frees n on both arms.
 	CI_ARM_SELF_NULL,         // with no instance: skipping would leave a NULL for the drain, so it runs
-	CI_ARM_SELF_LIVE          // with a live instance: already queued, so the call is redundant
+	CI_ARM_SELF_LIVE,         // with a live instance: already queued, so the call is redundant
+
+	// n is not queued, and its instance is already in the world: the call
+	// would orphan that instance's slot, so it is redundant.
+	CI_ARM_LIVE_REGISTERED
 };
 
-// The one arm the guard skips.
+// The two arms the guard skips.
 bool CreateInstanceArmSkips(CreateInstanceArm arm);
 
 // Whether the detour calls the original: always, except on the skip arm with
@@ -76,6 +91,7 @@ struct CreateInstanceCall
 	const void*       mesh;         // n->mesh at entry
 	unsigned int      count;        // add-list length at entry
 	int               index;        // n's add-list index, -1 when absent
+	int               runtimeId;    // n->instance's slot, read only when n is not queued; else -1
 	bool              uidOther;     // another object with n's uid is queued
 	bool              liveOutside;  // n has an instance but is not queued
 };

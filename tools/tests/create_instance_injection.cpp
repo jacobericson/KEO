@@ -10,7 +10,12 @@
 //   3. observe mode: the same classification, and the stand-in is called
 //      once with the caller's own arguments -- so the fault still happens;
 //   4. a genuinely new instance, and an entry sharing n's uid through a
-//      different object, both reach the original in act mode.
+//      different object, both reach the original in act mode;
+//   5. an instance already in the world: vanilla replaces n->instance, the
+//      add-list drain refuses the duplicate uid, and after the teardown a
+//      query through the old slot faults on the deleted mediator; act mode
+//      leaves n alone and the teardown empties the slot; observe mode faults;
+//   6. an instance not in the world, n not queued, still reaches the original.
 //
 // Links src/fixes/streaming/create_instance_guard_policy.cpp unmodified. Kept out of
 // build_tests.bat because it raises an access violation on purpose.
@@ -22,7 +27,9 @@
 
 #include "check.h"
 
-const size_t OFF_NMI_RUNTIME_ID = 0x1A4;
+const size_t OFF_NMI_SECTION_UID = 0x1A0;   // hkaiNavMeshInstance: the uid the drain looks up
+const size_t OFF_NI_MEDIATOR     = 0x20;    // NavInstance: the mediator the teardown deletes
+const int    SLOTS               = 64;
 
 struct World
 {
@@ -32,24 +39,37 @@ struct World
 	unsigned char fresh[0x200];      // the one the stand-in hands out
 	unsigned char other[0x48];       // a different object with n's uid
 	unsigned char* n;                // n on its own page, so "free" can decommit it
+	void*         slotInstance[SLOTS];  // the collection, as far as the model goes
+	void*         slotMediator[SLOTS];
+	unsigned char* mediator;         // n's mediator on its own page, so the teardown can decommit it
 };
 
 static unsigned int Count(World* w) { return *(unsigned int*)(w->navMesh + OFF_CI_NAVMESH_ADDLIST_COUNT); }
 static void SetCount(World* w, unsigned int c) { *(unsigned int*)(w->navMesh + OFF_CI_NAVMESH_ADDLIST_COUNT) = c; }
 
-static void Init(World* w)
+// Reserves the page once, then commits and zeroes it.
+static unsigned char* Page(unsigned char* page)
 {
-	unsigned char* page = w->n;
-	memset(w, 0, sizeof(*w));
 	if (!page)
 		page = (unsigned char*)VirtualAlloc(0, 4096, MEM_RESERVE, PAGE_READWRITE);
 	VirtualAlloc(page, 4096, MEM_COMMIT, PAGE_READWRITE);
 	memset(page, 0, 4096);
-	w->n = page;
+	return page;
+}
+
+static void Init(World* w)
+{
+	unsigned char* page = w->n;
+	unsigned char* mediatorPage = w->mediator;
+	memset(w, 0, sizeof(*w));
+	w->n = Page(page);
+	w->mediator = Page(mediatorPage);
+	*(void**)w->mediator = w;
+	*(void**)(w->n + OFF_NI_MEDIATOR) = w->mediator;
 	*(unsigned int*)(w->n + OFF_CI_NI_UID) = 0x390a19u;
 	*(void**)(w->n + OFF_CI_NI_INSTANCE)   = w->instance;
-	*(int*)(w->instance + OFF_NMI_RUNTIME_ID) = -1;
-	*(int*)(w->fresh + OFF_NMI_RUNTIME_ID)    = -1;
+	*(int*)(w->instance + OFF_CI_NMI_RUNTIME_ID) = -1;
+	*(int*)(w->fresh + OFF_CI_NMI_RUNTIME_ID)    = -1;
 	*(unsigned int*)(w->other + OFF_CI_NI_UID) = 0x390a19u;
 	*(void**)(w->navMesh + OFF_CI_NAVMESH_ADDLIST_STUFF) = w->list;
 }
@@ -108,8 +128,8 @@ static bool DrainFaults(World* w, size_t* offset)
 	{
 		*offset = OFF_CI_NI_INSTANCE;
 		const unsigned char* inst = *(const unsigned char* const*)(e + OFF_CI_NI_INSTANCE);
-		*offset = OFF_NMI_RUNTIME_ID;
-		volatile int id = *(const int*)(inst + OFF_NMI_RUNTIME_ID);
+		*offset = OFF_CI_NMI_RUNTIME_ID;
+		volatile int id = *(const int*)(inst + OFF_CI_NMI_RUNTIME_ID);
 		(void)id;
 		return false;
 	}
@@ -123,6 +143,85 @@ static void QueueN(World* w)
 {
 	w->list[0] = w->n;
 	SetCount(w, 1);
+}
+
+// n's instance already in the world at slot 56, n not queued.
+static void InitRegistered(World* w)
+{
+	Init(w);
+	*(unsigned int*)(w->instance + OFF_NMI_SECTION_UID) = 0x390a19u;
+	*(int*)(w->instance + OFF_CI_NMI_RUNTIME_ID) = 56;
+	w->slotInstance[56] = w->instance;
+	w->slotMediator[56] = w->mediator;
+	SetCount(w, 0);
+}
+
+// The add-list drain: an entry whose uid is already in the world is dropped
+// as a duplicate, keeping the instance createInstance gave it; any other
+// entry's instance takes the first free slot.
+static void DrainAddList(World* w)
+{
+	for (unsigned int i = 0; i < Count(w); ++i)
+	{
+		unsigned char* e = (unsigned char*)w->list[i];
+		unsigned char* inst = *(unsigned char**)(e + OFF_CI_NI_INSTANCE);
+		const unsigned int uid = *(unsigned int*)(e + OFF_CI_NI_UID);
+		int freeSlot = -1;
+		bool dup = false;
+		for (int s = 0; s < SLOTS; ++s)
+		{
+			if (!w->slotInstance[s]) { if (freeSlot < 0) freeSlot = s; continue; }
+			if (*(unsigned int*)((unsigned char*)w->slotInstance[s] + OFF_NMI_SECTION_UID) == uid)
+				dup = true;
+		}
+		if (dup || !inst || freeSlot < 0)
+			continue;
+		*(unsigned int*)(inst + OFF_NMI_SECTION_UID) = uid;
+		*(int*)(inst + OFF_CI_NMI_RUNTIME_ID) = freeSlot;
+		w->slotInstance[freeSlot] = inst;
+		w->slotMediator[freeSlot] = *(void**)(e + OFF_NI_MEDIATOR);
+	}
+	SetCount(w, 0);
+}
+
+// The parent's teardown: the instance leaves the world only when its runtime
+// id names a slot; then the mediator is deleted outright.
+static void Teardown(World* w)
+{
+	unsigned char* inst = *(unsigned char**)(w->n + OFF_CI_NI_INSTANCE);
+	if (inst)
+	{
+		const int id = *(int*)(inst + OFF_CI_NMI_RUNTIME_ID);
+		if (id >= 0 && id < SLOTS)
+		{
+			w->slotInstance[id] = 0;
+			w->slotMediator[id] = 0;
+			*(int*)(inst + OFF_CI_NMI_RUNTIME_ID) = -1;
+		}
+		*(void**)(w->n + OFF_CI_NI_INSTANCE) = 0;
+	}
+	VirtualFree(w->mediator, 4096, MEM_DECOMMIT);
+}
+
+// A path query over every occupied slot: one load through each mediator.
+static bool QueryFaults(World* w, int* slot)
+{
+	for (int s = 0; s < SLOTS; ++s)
+	{
+		if (!w->slotInstance[s])
+			continue;
+		__try
+		{
+			const void* volatile vt = *(const void* const*)w->slotMediator[s];
+			(void)vt;
+		}
+		__except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH)
+		{
+			*slot = s;
+			return true;
+		}
+	}
+	return false;
 }
 
 int main()
@@ -175,6 +274,51 @@ int main()
 	arm = GuardedCall(&w, w.n, true, VanillaCreateInstance);
 	Check(arm == CI_ARM_NEW && s_origCalls == 1, "act: a same-uid other object still reaches the original");
 	Check(Count(&w) == 1 && w.list[0] == w.n && !DrainFaults(&w, &off), "act: vanilla replaces the other object with n");
+
+	// 5. n not queued, its instance already in the world: vanilla.
+	InitRegistered(&w);
+	s_origCalls = 0;
+	VanillaCreateInstance(w.navMesh, w.n);
+	DrainAddList(&w);
+	Check(w.slotInstance[56] == w.instance && *(void**)(w.n + OFF_CI_NI_INSTANCE) == w.fresh,
+	      "registered vanilla: the drain refuses n and the slot keeps the old instance");
+	Teardown(&w);
+	int slot = -1;
+	Check(QueryFaults(&w, &slot) && slot == 56, "registered vanilla: a query through the orphaned slot faults");
+	printf("vanilla: slot %d query faulted through the deleted mediator\n", slot);
+
+	// Act mode over the same state.
+	InitRegistered(&w);
+	s_origCalls = 0;
+	arm = GuardedCall(&w, w.n, true, VanillaCreateInstance);
+	Check(arm == CI_ARM_LIVE_REGISTERED, "registered act: classified registered");
+	Check(s_origCalls == 0, "registered act: the original is not called");
+	Check(*(void**)(w.n + OFF_CI_NI_INSTANCE) == w.instance && Count(&w) == 0,
+	      "registered act: n keeps its instance and is not queued");
+	DrainAddList(&w);
+	Teardown(&w);
+	Check(w.slotInstance[56] == 0, "registered act: the teardown takes the instance out of the world");
+	Check(!QueryFaults(&w, &slot), "registered act: no slot reaches the deleted mediator");
+
+	// Observe mode: counted, then passed unchanged -- the fault stays.
+	InitRegistered(&w);
+	s_origCalls = 0;
+	arm = GuardedCall(&w, w.n, false, VanillaCreateInstance);
+	Check(arm == CI_ARM_LIVE_REGISTERED, "registered observe: classified registered");
+	Check(s_origCalls == 1 && s_origNavMesh == w.navMesh && s_origN == w.n,
+	      "registered observe: the original is called once with the caller's arguments");
+	DrainAddList(&w);
+	Teardown(&w);
+	Check(QueryFaults(&w, &slot), "registered observe: the query still faults");
+
+	// 6. An instance not in the world, n not queued.
+	Init(&w);
+	SetCount(&w, 0);
+	s_origCalls = 0;
+	arm = GuardedCall(&w, w.n, true, VanillaCreateInstance);
+	Check(arm == CI_ARM_NEW && s_origCalls == 1 && Count(&w) == 1 && w.list[0] == w.n
+	      && *(void**)(w.n + OFF_CI_NI_INSTANCE) == w.fresh,
+	      "unregistered outside: the original runs and queues n");
 
 	return CheckExit("create_instance_injection");
 }

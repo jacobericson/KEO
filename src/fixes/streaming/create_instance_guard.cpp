@@ -32,6 +32,7 @@ KLIB_ASSERT_OFFSET(NavInstance_instance, OFF_CI_NI_INSTANCE);
 KLIB_ASSERT_OFFSET(NavInstance_uid, OFF_CI_NI_UID);
 KLIB_ASSERT_OFFSET(ZoneMap_coordinates, OFF_CI_ZONE_COORDS);
 static_assert(OFF_CI_NAVMESH_ADDLIST_COUNT == OFF_RDY_SM_PENDING_SECTIONS, "add-list count offset");
+static_assert(OFF_CI_NMI_RUNTIME_ID == OFF_RDY_NMI_RUNTIME_INDEX, "instance runtime id offset");
 
 // Every caller of createInstance runs inside NavMesh::update on the path
 // thread, and every add-list writer runs there too; the function itself takes
@@ -44,8 +45,10 @@ static_assert(OFF_CI_NAVMESH_ADDLIST_COUNT == OFF_RDY_SM_PENDING_SECTIONS, "add-
 // calls == fromGen + fromZoneSector + fromZoneInterior + fromUnknown
 // calls == passed + skipped
 // passed == fresh + unjudged + selfNull + observed
-// fired  == skipped + observed == stitch + regen + genNoTask + zone + unknown
+// fired  == skipped + observed == selfLive + liveReg
+//        == stitch + regen + genNoTask + zone + unknown
 // stitch == stitchStale + stitchSame
+// liveOutside >= liveReg
 static volatile LONG s_calls       = 0;
 static volatile LONG s_fromGen          = 0;
 static volatile LONG s_fromZoneSector   = 0;
@@ -59,6 +62,8 @@ static volatile LONG s_offThread   = 0;  //   of which: not the path thread
 static volatile LONG s_selfNull    = 0;  // queued by pointer with no instance; runs, and frees
 static volatile LONG s_observed    = 0;  // would have skipped (observe mode)
 static volatile LONG s_fired       = 0;
+static volatile LONG s_selfLive    = 0;  //   n queued by pointer with a live instance
+static volatile LONG s_liveReg     = 0;  //   n not queued, its instance already in the world
 static volatile LONG s_stitch      = 0;  //   the drain was finishing a stitch task for n
 static volatile LONG s_stitchStale = 0;  //     which stitched a mesh n no longer holds
 static volatile LONG s_stitchSame  = 0;  //     which stitched n's current mesh
@@ -80,7 +85,7 @@ static const char* s_why = "";
 static double s_lastBeat = -1.0;
 static const double kBeatSeconds = 60.0;
 
-// Read once at install. true skips the self-duplicate call; false counts it
+// Read once at install. true skips the two redundant calls; false counts them
 // and calls the original unchanged.
 static bool s_actMode = true;
 
@@ -120,6 +125,8 @@ static const GuardCounter kBeatRows[] =
 static const GuardCounter kFiredRows[] =
 {
 	{ "fired",       GF_COUNT,    &s_fired,       0 },
+	{ "selfLive",    GF_COUNT,    &s_selfLive,    0 },
+	{ "liveReg",     GF_COUNT,    &s_liveReg,     0 },
 	{ "stitch",      GF_COUNT,    &s_stitch,      0 },
 	{ "stitchStale", GF_COUNT,    &s_stitchStale, 0 },
 	{ "stitchSame",  GF_COUNT,    &s_stitchSame,  0 },
@@ -178,15 +185,29 @@ static const char* CallerName(CreateInstanceCaller c)
 	}
 }
 
+static const char* ArmName(CreateInstanceArm arm)
+{
+	switch (arm)
+	{
+	case CI_ARM_SELF_LIVE:       return "self-duplicate";
+	case CI_ARM_LIVE_REGISTERED: return "registered";
+	default:                     return "self-duplicate-null";
+	}
+}
+
 static void EmitFireLine(const CreateInstanceCall* call, CreateInstanceCaller caller,
                          const CreateInstanceTask* task, const void* n, bool skipped)
 {
 	FixedLogBuf o; FlbInit(&o);
 	FlbStr(&o, "CreateInstanceGuard FIRED: ");
-	FlbStr(&o, call->arm == CI_ARM_SELF_LIVE ? "self-duplicate" : "self-duplicate-null");
+	FlbStr(&o, ArmName(call->arm));
 	FlbStr(&o, " uid=");      FlbUid(&o, call->uid);
 	FlbStr(&o, " n=");        FlbHex(&o, (unsigned __int64)n);
 	FlbStr(&o, " instance="); FlbHex(&o, (unsigned __int64)call->instance);
+	if (call->arm == CI_ARM_LIVE_REGISTERED)
+	{
+		FlbStr(&o, " slot="); FlbDec(&o, call->runtimeId);
+	}
 	FlbStr(&o, " index=");    FlbDec(&o, call->index);
 	FlbStr(&o, "/");          FlbDec(&o, call->count);
 	FlbStr(&o, " caller=");   FlbStr(&o, CallerName(caller));
@@ -203,15 +224,37 @@ static void EmitFireLine(const CreateInstanceCall* call, CreateInstanceCaller ca
 	{
 		FlbChar(&o, '?');
 	}
-	if (call->arm != CI_ARM_SELF_LIVE)
+	if (call->arm == CI_ARM_SELF_NULL)
 		FlbStr(&o, "; no instance to keep -- the original runs and frees it. fired=");
-	else if (skipped)
-		FlbStr(&o, "; already queued with a live instance -- skipped. fired=");
-	else
+	else if (!skipped)
 		FlbStr(&o, "; not acted on (observe mode) -- the original runs. fired=");
+	else if (call->arm == CI_ARM_LIVE_REGISTERED)
+		FlbStr(&o, "; already in the world -- skipped, n keeps its instance. fired=");
+	else
+		FlbStr(&o, "; already queued with a live instance -- skipped. fired=");
 	FlbDec(&o, Read(&s_fired));
 	FlbStr(&o, " tid="); FlbDec(&o, (__int64)GetCurrentThreadId());
 	LogMsgDeferrable(FlbDone(&o));
+}
+
+static void CountFiredCaller(CreateInstanceCaller caller, const CreateInstanceTask* task)
+{
+	if (caller == CI_CALLER_GENERATOR)
+	{
+		if (!task->have)
+			InterlockedIncrement(&s_genNoTask);
+		else if (task->type == CI_TASK_TYPE_STITCH)
+		{
+			InterlockedIncrement(&s_stitch);
+			InterlockedIncrement(task->meshSame ? &s_stitchSame : &s_stitchStale);
+		}
+		else
+			InterlockedIncrement(&s_regen);
+	}
+	else if (caller == CI_CALLER_UNKNOWN)
+		InterlockedIncrement(&s_unknown);
+	else
+		InterlockedIncrement(&s_zone);
 }
 
 static void hook_createInstance(void* navMesh, void* n)
@@ -261,8 +304,8 @@ static void hook_createInstance(void* navMesh, void* n)
 		return;
 	}
 
-	// n is queued by pointer. Who called is attribution only; the decision
-	// below rests on the scan alone.
+	// n is queued by pointer, or its instance is already in the world. Who
+	// called is attribution only; the decision below rests on the scan alone.
 	CreateInstanceTask task;
 	if (caller == CI_CALLER_GENERATOR)
 	{
@@ -286,22 +329,8 @@ static void hook_createInstance(void* navMesh, void* n)
 	}
 
 	InterlockedIncrement(&s_fired);
-	if (caller == CI_CALLER_GENERATOR)
-	{
-		if (!task.have)
-			InterlockedIncrement(&s_genNoTask);
-		else if (task.type == CI_TASK_TYPE_STITCH)
-		{
-			InterlockedIncrement(&s_stitch);
-			InterlockedIncrement(task.meshSame ? &s_stitchSame : &s_stitchStale);
-		}
-		else
-			InterlockedIncrement(&s_regen);
-	}
-	else if (caller == CI_CALLER_UNKNOWN)
-		InterlockedIncrement(&s_unknown);
-	else
-		InterlockedIncrement(&s_zone);
+	InterlockedIncrement(call.arm == CI_ARM_LIVE_REGISTERED ? &s_liveReg : &s_selfLive);
+	CountFiredCaller(caller, &task);
 
 	const bool act = !CreateInstanceCallsOriginal(call.arm, s_actMode);
 	if (act)
