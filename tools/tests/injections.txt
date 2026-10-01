@@ -18,3 +18,4 @@ reset_drain_injection | /EHa | | | tools\tests\reset_drain_injection.cpp src\zon
 reset_lock_injection | /EHa | | | tools\tests\reset_lock_injection.cpp src\zone\reset\zone_reset_sequence.cpp src\zone\reset\zone_reset_gate.cpp src\zone\reset\zone_reset_fence.cpp | t2: lock timed out (pjWaitMs=10000), native unload ran anyway
 retire_stall_injection | /EHa | | | tools\tests\retire_stall_injection.cpp src\navmesh\workers\nm_retire_policy.cpp src\base\log_bounded.cpp | stall: terminate recorded code=3
 plan_store_injection | /EHsc | | | tools\tests\plan_store_injection.cpp src\planner\plan_store.cpp src\planner\plan_policy.cpp | plan race:
+coarse_graph_injection | /EHsc | | | tools\tests\coarse_graph_injection.cpp src\planner\coarse_graph.cpp | store race:

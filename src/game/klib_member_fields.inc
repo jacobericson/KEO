@@ -66,6 +66,8 @@ KLIB_FIELD(ZoneManager_processingNewActiveZones, ZoneManager, processingNewActiv
 KLIB_FIELD(ZoneManager_activeZones, ZoneManager, activeZones, 0x168108, 64)
 KLIB_FIELD(ZoneManager_centralZone, ZoneManager, centralZone, 0x1681D0, 8)
 KLIB_FIELD(ZoneManager_loadingPhase, ZoneManager, loadingPhase, 0x1681D8, 4)
+KLIB_FIELD(SaveFileSystem_paths, SaveFileSystem, paths, 0xF0, 24)
+KLIB_FIELD(SaveFileSystem_currentMutex, SaveFileSystem, currentMutex, 0x1A0, 32)
 KLIB_FIELD(ZoneMap_mapContent, ZoneMap, mapContent, 0x0, 8)
 KLIB_FIELD(ZoneMap_coordinates, ZoneMap, coordinates, 0x18, 8)
 KLIB_FIELD(ZoneMap_island, ZoneMap, island, 0x20, 4)

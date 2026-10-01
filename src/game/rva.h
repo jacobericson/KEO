@@ -402,6 +402,7 @@ const size_t RVA_IS_ZONE_STILL_LOADING  = 0x3AC810; // documented
 
 // Global data RVAs
 const size_t RVA_GLOBAL_SECTION_MGR  = 0x2133560;  // pauseState.navmesh (SectionManager*)
+const size_t RVA_SAVE_FILE_SYSTEM = 0x212DC08;  // SaveFileSystem* singleton, read by src/planner/coarse_graph_base.cpp
 // pauseState.physics (PhysicsInterface*, i.e. ou->physics). Fields we touch:
 //   +0x1B0/+0x200/+0x2A8/+0x2F8  work-queue counts read by isReadyForSections
 //   +0x320 (800)  bool _queuesClear  -- the ready flag loadSingleZone clears

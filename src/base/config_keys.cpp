@@ -120,6 +120,7 @@ extern const ConfigModule kConfigModules[] =
 	{ "pathfind", "Pathfinding", pathfind::g_pathfindConfigKeys, &pathfind::g_pathfindCfg, &pathfind::kPathfindDefaults, sizeof(pathfind::PathfindConfig) },
 	{ "movement", "Movement and orders", movement::g_movementConfigKeys, &movement::g_movementCfg, &movement::kMovementDefaults, sizeof(movement::MovementConfig) },
 	{ "fixes", "Crash guards and probes", fixes::g_fixesConfigKeys, &fixes::g_fixesCfg, &fixes::kFixesDefaults, sizeof(fixes::FixesConfig) },
+	{ "planner", "Route planner", planner::g_plannerConfigKeys, &planner::g_plannerCfg, &planner::kPlannerDefaults, sizeof(planner::PlannerConfig) },
 	{ "gui", "Settings panel", zoneopt_gui::g_guiConfigKeys, &zoneopt_gui::g_guiCfg, &zoneopt_gui::kGuiDefaults, sizeof(zoneopt_gui::GuiConfig) },
 	{ "core", "Benchmark and retired keys", kCoreKeys, NULL, NULL, 0 },
 };

@@ -14,6 +14,7 @@ struct HavokCharacterMessage;
 
 #include <kenshi/GameWorld.h>
 #include <kenshi/ZoneManager.h>
+#include <kenshi/SaveFileSystem.h>
 #include <kenshi/ZoneMapContent.h>
 #include <kenshi/NavMesh.h>
 #include <kenshi/NavMeshGenerator.h>

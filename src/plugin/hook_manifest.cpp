@@ -36,6 +36,7 @@
 #include "pathfind/gate_pass.h"
 #include "bench/bench_runner.h"
 #include "fixes/world/corpse_pin.h"
+#include "planner/coarse_graph_base.h"
 #if ZONEHAND_STEP >= 2
 #include "fixes/world/nest_validation.h"
 #endif
@@ -645,6 +646,9 @@ static void (*const kInstallSteps[])(int*, int*) =
 	InstallFallbackHook,
 	InstallPathExtractHooks,
 	InstallPathPoolHooks,
+
+	// The route planner's store and whole-map base, only while plannerMode is set. No hook.
+	planner::PlannerBaseStartStep,
 };
 
 void InstallHooks(int* installed, int* total)

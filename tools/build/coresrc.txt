@@ -249,3 +249,7 @@ src\planner\plan_policy.cpp
 src\planner\tagfile_reader.cpp
 src\planner\plan_store.cpp
 src\planner\tile_graph_extract.cpp
+src\planner\planner_config.cpp
+src\planner\coarse_graph.cpp
+src\planner\coarse_graph_cache.cpp
+src\planner\coarse_graph_base.cpp

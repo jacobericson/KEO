@@ -98,6 +98,11 @@ static const Owner kOwners[] =
 	{ "reprioritizeInterval", "navmesh" },
 	{ "zoneLifeRetainRadius", "zone" },
 	{ "zoneLifeIdleSeconds", "zone" },
+	{ "plannerMode", "planner" },
+	{ "plannerLegSpan", "planner" },
+	{ "plannerBaseBuild", "planner" },
+	{ "plannerAheadTiles", "planner" },
+	{ "plannerWaitSeconds", "planner" },
 };
 static const Expected kExpected[] =
 {
@@ -107,6 +112,7 @@ static const Expected kExpected[] =
 	{ "pathfind", "Pathfinding", sizeof(pathfind::PathfindConfig), &pathfind::kPathfindDefaults },
 	{ "movement", "Movement and orders", sizeof(movement::MovementConfig), &movement::kMovementDefaults },
 	{ "fixes", "Crash guards and probes", sizeof(fixes::FixesConfig), &fixes::kFixesDefaults },
+	{ "planner", "Route planner", sizeof(planner::PlannerConfig), &planner::kPlannerDefaults },
 	{ "gui", "Settings panel", sizeof(zoneopt_gui::GuiConfig), &zoneopt_gui::kGuiDefaults },
 	{ "core", "Benchmark and retired keys", 0, NULL }
 };
@@ -119,13 +125,13 @@ static void Fail(const char* key, const std::string& reason)
 
 int main()
 {
-	Check(kConfigModuleCount == 8 && kConfigModuleCount <= CONFIG_MODULE_MAX, "eight modules within stage capacity");
+	Check(kConfigModuleCount == 9 && kConfigModuleCount <= CONFIG_MODULE_MAX, "nine modules within stage capacity");
 	std::set<std::string> names;
 	int moduleKeys = 0, activeCore = 0, retiredCore = 0, debug = 0;
 	for (int m = 0; m < kConfigModuleCount; ++m)
 	{
 		const ConfigModule& mod = kConfigModules[m];
-		if (m >= 8) { Fail(mod.name, "unexpected module"); continue; }
+		if (m >= 9) { Fail(mod.name, "unexpected module"); continue; }
 		const Expected& e = kExpected[m];
 		if (strcmp(mod.name, e.name) || strcmp(mod.title, e.title)) Fail(mod.name, "module order or title");
 		if (mod.state)
@@ -174,7 +180,7 @@ int main()
 		}
 		if (i == CONFIG_STAGE_MAX) Fail(mod.name, "no table end within stage capacity");
 	}
-	Check(moduleKeys == 78 && activeCore == 2 && retiredCore == 22 && debug == 2, "module and core row counts");
+	Check(moduleKeys == 83 && activeCore == 2 && retiredCore == 22 && debug == 2, "module and core row counts");
 	for (size_t i = 0; i < sizeof(kOwners) / sizeof(kOwners[0]); ++i)
 	{
 		const ConfigModule* mod = NULL;

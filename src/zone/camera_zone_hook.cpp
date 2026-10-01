@@ -36,6 +36,7 @@
 #include "zone/geometry/zone_geometry_epoch.h"
 #include "zone/retention/zone_retention.h"
 #include "zone/preload/camera_focus.h"
+#include "planner/coarse_graph_base.h"
 
 // =========================================================================
 // NavMesh scheduling helpers (builds context from preload/tracking state)
@@ -218,6 +219,7 @@ static bool CameraZoneSaveLoad(void* zoneMgr)
 	// Drop all mod state across a save load, and do no preload work while
 	// the game is loading one (every pointer we would cache is about to die).
 	bool saveLoading = PreloadCheckSaveLoad(zoneMgr);
+	planner::PlannerOnFrame(zoneMgr, saveLoading);
 
 	// destroyListOE mitigation (destroy_list_defer.h): perform the inserts that background threads
 	// queued instead of writing the container themselves. It runs after the
