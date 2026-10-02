@@ -12,7 +12,7 @@ namespace planner {
 // be. Read on any thread; every field is read at startup or through a snapshot taken at arm.
 struct PlannerConfig
 {
-	int mode;          // plannerMode: PlannerMode; off by default
+	int mode;          // plannerMode: PlannerMode; on by default
 	int legSpan;       // plannerLegSpan: 1..8, default 2; the leg bound and the direct threshold
 	int baseBuild;     // plannerBaseBuild: 1 builds the whole-map base at startup; default 1
 	int aheadTiles;    // plannerAheadTiles: 0..8, default 3; route tiles fed to the preload queue

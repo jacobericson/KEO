@@ -99,7 +99,7 @@ namespace planner {
 
 const PlannerConfig kPlannerDefaults =
 {
-	PLANNER_OFF, // mode
+	PLANNER_ON, // mode
 	2, // legSpan
 	1, // baseBuild
 	3, // aheadTiles

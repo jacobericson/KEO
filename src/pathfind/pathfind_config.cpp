@@ -76,7 +76,7 @@ const PathfindConfig kPathfindDefaults =
 	true, // pathCostLinesEnabled
 	CGB_BYPASS, // clusterGraphBypassMode
 	true, // playerRepathTierEnabled
-	AHIER_OFF, // playerHierarchicalMode
+	AHIER_ON, // playerHierarchicalMode
 	AHIER_CAP_RERUN, // playerHierOnCapMode
 };
 

@@ -84,7 +84,7 @@ struct PathfindConfig
 	bool playerRepathTierEnabled;
 
 	// playerHierarchical: the player search's hierarchical arm (astar_hier_policy.h's
-	// AstarHierMode); off by default. playerHierOnCap: what on does with a hierarchical
+	// AstarHierMode); on by default. playerHierOnCap: what on does with a hierarchical
 	// status 3 (AstarHierOnCap). Both read at startup and by AstarHierSearch on the search threads.
 	int playerHierarchicalMode;
 	int playerHierOnCapMode;
