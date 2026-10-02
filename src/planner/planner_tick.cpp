@@ -169,6 +169,32 @@ static int AdapterArcs(void* ctx, unsigned key, CoarseArc* out, int max)
 	return count;
 }
 
+// Whether every arc into the node has its reverse among the node's arcs: no list cut at the cap, and
+// each border resolved against a readable far block through a border that block names (read as a
+// save block, the far block's geometry is withheld, so a border it alone resolves reads dropped).
+static int AdapterInboundMirrored(void* ctx, unsigned key)
+{
+	(void)ctx;
+	int idx, dir;
+	const CgBlock* b = BlockOfKey(key, &idx);
+	if (!b || b->nodes[idx].arcCount + b->nodes[idx].borderCount > CG_NODE_ARCS_MAX)
+		return 0;
+	for (int k = 0; k < b->nodes[idx].borderCount; ++k)
+	{
+		int bi = b->nodeBorders[b->nodes[idx].firstBorder + k];
+		if (bi < 0 || bi >= b->borderCount)
+			continue;
+		const CgBlock* nb = NeighbourOf(NULL, b->borders[bi].oppUid, &dir);
+		if (!nb)
+			return 0;
+		CgBlock named = *nb;
+		named.source = CG_SAVE;
+		if (CgClassifyBorder(b, b->borders[bi], &named) == CG_BORDER_DROPPED)
+			return 0;
+	}
+	return 1;
+}
+
 static bool AdapterPosition(void* ctx, unsigned key, float out[3])
 {
 	(void)ctx;
@@ -450,6 +476,7 @@ const Built* planner_tick_detail::SearchAndBuild(const Located& start, const Loc
 	ops.ctx = &m;
 	ops.arcs = AdapterArcs;
 	ops.position = AdapterPosition;
+	ops.inboundMirrored = AdapterInboundMirrored;
 	LONGLONG t0 = QpcNow();
 	CoarseResult r = CoarseSearch(ops, start.key, goal.key, COARSE_SCRATCH_MAX, s_scratch, &s_route);
 	b->ms = QpcToMs(QpcNow() - t0);

@@ -1,7 +1,9 @@
 // coarse_graph_live.h - The live overlay: a registering section's coarse graph, copied from its
-// navmesh and graph instances into a store buffer. The walk is pure over the instances' memory;
-// the path thread runs it inside NavMesh::update's exclusive world lock, where nothing it reads can
-// change, and it allocates nothing and takes no lock.
+// navmesh and graph instances into a store buffer, and the comparison that finds the registered
+// sections a later stitch changed. The walk and the comparison are pure over the instances' memory;
+// the path thread runs them inside NavMesh::update's exclusive world lock, where the instances and
+// their arrays stay put (a stitch on a generator thread may still rewrite a mesh's streaming sets),
+// and they allocate nothing and take no lock.
 #ifndef KENSHI_ZONE_OPT_PLANNER_COARSE_GRAPH_LIVE_H
 #define KENSHI_ZONE_OPT_PLANNER_COARSE_GRAPH_LIVE_H
 
@@ -40,7 +42,8 @@ enum CgLiveResult
 	CGL_OVER_ARCS,
 	CGL_OVER_BORDERS
 };
-struct CgLiveCounts { int slot; long faces; long bordersSkipped; long arcsSkipped; long waterNodes; long noFaceData; };
+struct CgLiveCounts { int slot; long faces; long bordersSkipped; long arcsSkipped; long waterNodes; long noFaceData;
+                      long zeroStride; };
 
 // Fills buf (a live buffer from CgLiveAcquire) from the registering graph instance and its mesh
 // instance, and reports the graph instance's collection slot in counts->slot. shift is
@@ -56,9 +59,34 @@ const void* CgCollectionMeshInstance(const void* coll, int slot);   // NULL out 
 int         CgMeshInstanceUid(const void* meshInst);
 int         CgInstanceFaceCluster(const void* meshInst, unsigned face);   // -1 when out of range
 
+// The stitch comparison (path thread). A record per collection slot holds the section uid, the
+// store generation and the signature of its own streaming sets at its last posted copy.
+const int CG_LIVE_REFRESH_MAX = 128;   // opposite sections one registration compares
+struct CgLiveSig { int valid; int uid; unsigned gen; unsigned sig; };
+// FNV-1a over mesh's sets whose this-side uid is uid, in set order: the opposite uid's 4 bytes,
+// the connection count's 4 bytes, then each connection's 16 bytes. A NULL array or a negative count
+// reads as empty.
+unsigned    CgLiveSetSignature(const void* mesh, int uid);
+// The section at slot: its uid and its own sets' signature; false without a mesh instance or mesh.
+bool        CgLiveSlotSignature(const void* coll, int slot, int* uidOut, unsigned* sigOut);
+const void* CgCollectionGraphInstance(const void* coll, int slot);   // InstanceInfo[slot]+16; NULL out of range
+// The first slot whose mesh instance carries uid and that holds a graph instance; -1 when none.
+int         CgCollectionSlotOfUid(const void* coll, int uid);
+// Each distinct opposite uid meshInst's own sets name, registered at a slot other than ownSlot, is
+// compared with sigs[slot] and counted in *checked; it is listed (its slot and current signature)
+// when the record is not valid, names another uid or generation, or holds another signature. A slot
+// at or past sigCount has no record. Opposites past max count in *overflow, neither listed nor
+// compared. Returns the slots listed.
+int         CgLiveStaleNeighbours(const void* coll, const void* meshInst, int ownSlot, const CgLiveSig* sigs,
+                                  int sigCount, unsigned gen, int* slotsOut, unsigned* sigsOut, int max,
+                                  int* checked, int* overflow);
+
 // Game side (coarse_graph_live_site.cpp). Path thread, from the graph-instance connect's post-call
 // on the live collection: one acquire, one copy, one post into the slot's record; every refusal
-// counted. Returns at once when the store is not ready.
+// counted. Then each registered section the registering mesh's sets name whose sets changed since
+// its last copy (a stitch from a later navmesh) is copied again. Every copy and the comparison run
+// under a fault guard, and a copy whose signature moved while it ran is discarded. Returns at once
+// when the store is not ready.
 void CgLiveOnConnect(void* graphInst, void* coll);
 // Main thread, from the planner's frame step: the PlannerLive: line on its timer.
 void CgLiveReport(double now);

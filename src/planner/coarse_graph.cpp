@@ -1,5 +1,5 @@
 // coarse_graph.cpp - The coarse graph store: directory, epochs, retire stack, interior uid table,
-// live pool and records, hand-off, block building and the read-time cross resolution.
+// live pool and records, hand-off and block building (the cross resolution is coarse_graph_cross.cpp).
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -39,6 +39,8 @@ struct CgStoreState
 // Byte offsets of a block's arrays in its allocation, header first.
 struct CgLayout { size_t nodes, arcs, borders, nodeBorders, total; };
 
+struct CgDeferred { int dirIndex; CgBlock* block; bool isBase; };   // a main-thread publish past its bounded take
+
 } // namespace coarse_graph_detail
 using namespace coarse_graph_detail;
 
@@ -49,6 +51,11 @@ static int            s_promoteCursor = 0;
 static volatile CgStats s_count;
 static void         (*s_pauseAfterTake)(void* ctx) = NULL;
 static void*          s_pauseAfterTakeCtx = NULL;
+static volatile LONG  s_liveSeq = 0;
+static const int      MAIN_TAKE_SPINS = 64;
+static const int      DEFERRED_MAX = 64;
+static CgDeferred     s_deferred[DEFERRED_MAX];   // main thread only
+static int            s_deferredCount = 0;
 
 static size_t RoundUp(size_t v, size_t a)
 {
@@ -242,6 +249,9 @@ void CgStoreDestroy()
 	}
 	FreeList(&st->retire);
 	FreeList(&st->handOff);
+	for (int i = 0; i < s_deferredCount; ++i)
+		FreeBlock(s_deferred[i].block);
+	s_deferredCount = 0;
 	s_store = NULL;
 	FreeState(st);
 }
@@ -345,15 +355,18 @@ void CgTestPauseAfterTake(void (*fn)(void* ctx), void* ctx)
 	s_pauseAfterTake = fn;
 }
 
-// The take: the entry's epoch from even e to e + 1 with one compare-exchange, retried while
-// another writer holds it. Returns e.
-static LONG TakeEntry(CgEntry* ent)
+// The take: the entry's epoch from even e to e + 1 with one compare-exchange, retried while another
+// writer holds it, for at most `spins` attempts (spins < 0: until it succeeds). Returns e, or -1 when
+// still held; -1 is never a returned epoch, which is always even (a take moves e to e + 1, a release writes e + 2).
+static LONG TakeEntry(CgEntry* ent, int spins)
 {
-	for (;;)
+	for (int tries = 1;; ++tries)
 	{
 		LONG e = ent->epoch;
 		if ((e & 1) == 0 && InterlockedCompareExchange(&ent->epoch, e + 1, e) == e)
 			return e;
+		if (spins >= 0 && tries >= spins)
+			return -1;
 		InterlockedIncrement(&s_count.busy);
 		SwitchToThread();
 	}
@@ -386,12 +399,9 @@ static bool PublishArgsOk(int dirIndex, CgBlock* b)
 	return true;
 }
 
-CgPublishResult CgPublishBase(int dirIndex, CgBlock* b)
+// The swaps of an entry taken at epoch e, released on every path.
+static CgPublishResult SwapBase(CgEntry* ent, LONG e, CgBlock* b)
 {
-	if (!PublishArgsOk(dirIndex, b))
-		return CGP_NO_SLOT;
-	CgEntry* ent = &s_store->dir[dirIndex];
-	LONG e = TakeEntry(ent);
 	PauseAfterTake();
 	CgBlock* old = ent->base;
 	ent->base = b;
@@ -401,23 +411,21 @@ CgPublishResult CgPublishBase(int dirIndex, CgBlock* b)
 	return CGP_OK;
 }
 
-// A current-generation over is replaced only by another current-generation over, and a
-// current-generation live copy never by a save block.
+// A current-generation over is replaced only by another current-generation over; an older live
+// copy never replaces a newer one; a save block never replaces a current live copy, whenever its
+// file was written (the builder cannot see what is registered).
 static bool Outranks(const CgBlock* cur, const CgBlock* b, unsigned gen)
 {
 	if (!cur || cur->storeGen != gen)
 		return false;
 	if (b->storeGen != gen)
 		return true;
+	if (cur->source == CG_LIVE && b->source == CG_LIVE && (LONG)(b->liveSeq - cur->liveSeq) < 0) return true;
 	return cur->source == CG_LIVE && b->source == CG_SAVE;
 }
 
-CgPublishResult CgPublishOver(int dirIndex, CgBlock* b)
+static CgPublishResult SwapOver(CgEntry* ent, LONG e, CgBlock* b)
 {
-	if (!PublishArgsOk(dirIndex, b))
-		return CGP_NO_SLOT;
-	CgEntry* ent = &s_store->dir[dirIndex];
-	LONG e = TakeEntry(ent);
 	PauseAfterTake();
 	CgBlock* cur = ent->over;
 	if (Outranks(cur, b, CgStoreGen()))
@@ -434,10 +442,70 @@ CgPublishResult CgPublishOver(int dirIndex, CgBlock* b)
 	return CGP_OK;
 }
 
+CgPublishResult CgPublishBase(int dirIndex, CgBlock* b)
+{
+	if (!PublishArgsOk(dirIndex, b))
+		return CGP_NO_SLOT;
+	CgEntry* ent = &s_store->dir[dirIndex];
+	return SwapBase(ent, TakeEntry(ent, -1), b);
+}
+
+CgPublishResult CgPublishOver(int dirIndex, CgBlock* b)
+{
+	if (!PublishArgsOk(dirIndex, b))
+		return CGP_NO_SLOT;
+	CgEntry* ent = &s_store->dir[dirIndex];
+	return SwapOver(ent, TakeEntry(ent, -1), b);
+}
+
+// Main thread: a publish with the bounded take. A block whose entry stays held is kept unpublished
+// for the next promotion (CGP_DEFERRED); with the array full, the take waits as the builder's does.
+static CgPublishResult PublishMain(int dirIndex, CgBlock* b, bool isBase)
+{
+	if (!PublishArgsOk(dirIndex, b))
+		return CGP_NO_SLOT;
+	CgEntry* ent = &s_store->dir[dirIndex];
+	LONG e = TakeEntry(ent, MAIN_TAKE_SPINS);
+	if (e != -1)
+		return isBase ? SwapBase(ent, e, b) : SwapOver(ent, e, b);
+	if (s_deferredCount >= DEFERRED_MAX)
+		return isBase ? CgPublishBase(dirIndex, b) : CgPublishOver(dirIndex, b);
+	CgDeferred d = { dirIndex, b, isBase };
+	s_deferred[s_deferredCount++] = d;
+	InterlockedIncrement(&s_count.deferred);
+	return CGP_DEFERRED;
+}
+
+// Each deferred publish again, in order: one of an older generation is retired (stale), one whose
+// entry is still held is deferred again. Returns the blocks published.
+static int RetryDeferred(unsigned gen)
+{
+	CgDeferred pending[DEFERRED_MAX];
+	int n = s_deferredCount, published = 0;
+	memcpy(pending, s_deferred, sizeof(CgDeferred) * (size_t)n);
+	s_deferredCount = 0;
+	for (int i = 0; i < n; ++i)
+	{
+		CgBlock* b = pending[i].block;
+		bool live = b->source == CG_LIVE;
+		if (!pending[i].isBase && b->storeGen != gen)
+		{
+			InterlockedIncrement(&s_count.stale);
+			Retire(b);
+		}
+		else if (PublishMain(pending[i].dirIndex, b, pending[i].isBase) == CGP_OK)
+		{
+			++published;
+			if (live)
+				InterlockedIncrement(&s_count.promoted);
+		}
+	}
+	return published;
+}
+
 bool CgRead(int dirIndex, CgView* out)
 {
 	out->block = NULL;
-	out->epoch = 0;
 	if (!s_store || dirIndex < 0 || dirIndex >= CG_DIR_SLOTS)
 		return false;
 	CgEntry* ent = &s_store->dir[dirIndex];
@@ -457,7 +525,6 @@ bool CgRead(int dirIndex, CgView* out)
 		if (!pick)
 			return false;
 		out->block = pick;
-		out->epoch = (unsigned)e1;
 		return true;
 	}
 	InterlockedIncrement(&s_count.readBusy);
@@ -479,7 +546,8 @@ CgBlock* CgLiveAcquire()
 	CgBlock* b = (CgBlock*)e;
 	b->uid = 0;
 	b->source = CG_LIVE;
-	b->storeGen = 0;
+	b->storeGen = CgStoreGen();
+	b->liveSeq = (unsigned)InterlockedIncrement(&s_liveSeq);
 	b->collSlot = -1;
 	b->arcsTrunc = 0;
 	b->nodeCount = b->arcCount = b->borderCount = 0;
@@ -504,7 +572,6 @@ void CgLivePost(int slot, CgBlock* buf)
 		return;
 	}
 	buf->collSlot = slot;
-	buf->storeGen = CgStoreGen();
 	CgBlock* prev = (CgBlock*)InterlockedExchangePointer((PVOID volatile*)&s_store->records[slot], buf);
 	InterlockedIncrement(&s_count.posted);
 	if (prev)
@@ -570,7 +637,7 @@ int CgDrainHandOff()
 			FreeBlock(b);
 			continue;
 		}
-		CgPublishResult r = b->source == CG_BASE ? CgPublishBase(dir, b) : CgPublishOver(dir, b);
+		CgPublishResult r = PublishMain(dir, b, b->source == CG_BASE);
 		if (r == CGP_OK)
 			++published;
 	}
@@ -593,6 +660,7 @@ static CgBlock* CopyLive(const CgBlock* buf)
 	h->uid       = buf->uid;
 	h->source    = CG_LIVE;
 	h->storeGen  = buf->storeGen;
+	h->liveSeq   = buf->liveSeq;
 	h->collSlot  = buf->collSlot;
 	h->arcsTrunc = buf->arcsTrunc;
 	memcpy(h->nodes, buf->nodes, sizeof(CgNode) * (size_t)buf->nodeCount);
@@ -607,7 +675,7 @@ int CgPromoteLive(int max)
 	if (!s_store)
 		return 0;
 	unsigned gen = CgStoreGen();
-	int taken = 0, published = 0;
+	int taken = 0, published = RetryDeferred(gen);
 	for (int scanned = 0; scanned < CG_LIVE_RECORDS && taken < max; ++scanned)
 	{
 		int slot = s_promoteCursor;
@@ -630,7 +698,7 @@ int CgPromoteLive(int max)
 			continue;
 		}
 		CountUnsearchable(h);
-		if (CgPublishOver(dir, h) == CGP_OK)
+		if (PublishMain(dir, h, false) == CGP_OK)
 		{
 			InterlockedIncrement(&s_count.promoted);
 			++published;
@@ -717,84 +785,16 @@ CgBlock* CgBlockFromTile(const TileGraph& g, int section, int source, unsigned s
 	return b;
 }
 
-// ---- Cross resolution --------------------------------------------------------------------------
-
-// The first border of nb with (oppUid, face) == (uid, face), or -1.
-static int FindBorder(const CgBlock* nb, int uid, int face)
-{
-	int lo = 0, hi = nb->borderCount;
-	while (lo < hi)
-	{
-		int mid = lo + (hi - lo) / 2;
-		const CgBorder& m = nb->borders[mid];
-		if (m.oppUid < uid || (m.oppUid == uid && m.face < face))
-			lo = mid + 1;
-		else
-			hi = mid;
-	}
-	if (lo < nb->borderCount && nb->borders[lo].oppUid == uid && nb->borders[lo].face == face)
-		return lo;
-	return -1;
-}
-
-static float Dist2(const float* a, const float* b)
-{
-	float dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
-	return dx * dx + dy * dy + dz * dz;
-}
-
-int CgCrossArcs(const CgBlock* a, int node, CgNeighbourFn neighbourOf, void* ctx, CgResolved* out, int max)
-{
-	if (!a || !neighbourOf || node < 0 || node >= a->nodeCount || max <= 0)
-		return 0;
-	const CgNode& from = a->nodes[node];
-	float best[CG_NODE_ARCS_MAX];               // each written arc's longest edge, squared
-	int written = 0;
-	for (int k = 0; k < from.borderCount; ++k)
-	{
-		int bi = a->nodeBorders[from.firstBorder + k];
-		if (bi < 0 || bi >= a->borderCount)
-			continue;
-		const CgBorder& br = a->borders[bi];
-		int dir = -1;
-		const CgBlock* nb = neighbourOf(ctx, br.oppUid, &dir);
-		if (!nb)
-			continue;
-		int m = FindBorder(nb, a->uid, br.oppFace);
-		if (m < 0)
-			continue;
-		int target = nb->borders[m].from;
-		if (target < 0 || target >= nb->nodeCount)
-			continue;
-		float len = Dist2(br.a, br.b);
-		int j = 0;
-		while (j < written && !(out[j].dirIndex == dir && out[j].node == target))
-			++j;
-		if (j == written)
-		{
-			if (written >= max || written >= CG_NODE_ARCS_MAX)
-				continue;
-			out[j].dirIndex = dir;
-			out[j].node = target;
-			out[j].cost = sqrtf(Dist2(from.centre, nb->nodes[target].centre));
-			out[j].water = nb->nodes[target].water;
-			best[j] = -1.0f;
-			++written;
-		}
-		if (len > best[j])
-		{
-			best[j] = len;
-			Midpoint(br.a, br.b, out[j].portal);
-			memcpy(out[j].edgeA, br.a, sizeof(out[j].edgeA));
-			memcpy(out[j].edgeB, br.b, sizeof(out[j].edgeB));
-		}
-	}
-	return written;
-}
-
 void CgStatsGet(CgStats* out)
 {
 	*out = const_cast<const CgStats&>(s_count);   // each counter read whole; the set is not a snapshot
+}
+
+void CgStatsAddCross(long noBlock, long dropped, long oneSided)
+{
+	if (noBlock) InterlockedExchangeAdd(&s_count.crossNoBlock, noBlock);
+	if (dropped) InterlockedExchangeAdd(&s_count.crossDropped, dropped);
+	if (oneSided) InterlockedExchangeAdd(&s_count.crossOneSided, oneSided);
 }
 
 } // namespace planner

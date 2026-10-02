@@ -61,12 +61,38 @@ static bool GraphPosition(void* ctx, unsigned node, float out[3])
 	return true;
 }
 
+// The honest report: every node holding an arc to node is among node's own arc targets.
+static int GraphInboundMirrored(void* ctx, unsigned node)
+{
+	const Graph* g = (const Graph*)ctx;
+	if (node >= (unsigned)g->arcs.size()) return 0;
+	const std::vector<CoarseArc>& own = g->arcs[node];
+	for (size_t m = 0; m < g->arcs.size(); ++m)
+		for (size_t k = 0; k < g->arcs[m].size(); ++k)
+		{
+			if (g->arcs[m][k].to != node) continue;
+			bool back = false;
+			for (size_t j = 0; j < own.size() && !back; ++j) back = own[j].to == (unsigned)m;
+			if (!back) return 0;
+		}
+	return 1;
+}
+
 static CoarseGraphOps Ops(Graph* g)
 {
 	CoarseGraphOps ops;
 	ops.ctx = g;
 	ops.arcs = GraphArcs;
 	ops.position = GraphPosition;
+	ops.inboundMirrored = NULL;
+	return ops;
+}
+
+// The same graph with each node's inbound arcs reported honestly: the search runs the goal-side probe.
+static CoarseGraphOps ProbedOps(Graph* g)
+{
+	CoarseGraphOps ops = Ops(g);
+	ops.inboundMirrored = GraphInboundMirrored;
 	return ops;
 }
 
@@ -183,12 +209,13 @@ static void CheckTies(CoarseScratch* s)
 	Graph g;
 	CoarseRoute r;
 	BuildDiamond(&g, 5, 3);
-	CoarseResult res = CoarseSearch(Ops(&g), 0, 9, COARSE_SCRATCH_MAX, s, &r);
+	CoarseResult res = CoarseSearch(ProbedOps(&g), 0, 9, COARSE_SCRATCH_MAX, s, &r);
 	unsigned viaThree[3] = { 0, 3, 9 };
-	bool first = res == CS_FOUND && RouteIs(r, viaThree, 3);
+	bool first = res == CS_FOUND && RouteIs(r, viaThree, 3) && r.probed == 1;
 	BuildDiamond(&g, 3, 5);
-	res = CoarseSearch(Ops(&g), 0, 9, COARSE_SCRATCH_MAX, s, &r);
-	Check(first && res == CS_FOUND && RouteIs(r, viaThree, 3), "search: equal costs break ties by node key");
+	res = CoarseSearch(ProbedOps(&g), 0, 9, COARSE_SCRATCH_MAX, s, &r);
+	Check(first && res == CS_FOUND && RouteIs(r, viaThree, 3) && r.probed == 1,
+	      "search: equal costs break ties by node key");
 }
 
 // Node 1 is closed first through the dear arc 0->1 (f 110); node 2 (f 140) then reaches it for 15
@@ -206,9 +233,9 @@ static void CheckReopen(CoarseScratch* s)
 	Arc(&g, 2, 1, 5.0f);
 	Arc(&g, 1, 3, 100.0f);
 	CoarseRoute r;
-	CoarseResult res = CoarseSearch(Ops(&g), 0, 3, COARSE_SCRATCH_MAX, s, &r);
+	CoarseResult res = CoarseSearch(ProbedOps(&g), 0, 3, COARSE_SCRATCH_MAX, s, &r);
 	unsigned want[4] = { 0, 2, 1, 3 };
-	Check(res == CS_FOUND && RouteIs(r, want, 4) && Near(r.cost, 115.0f),
+	Check(res == CS_FOUND && RouteIs(r, want, 4) && Near(r.cost, 115.0f) && r.probed == 1,
 	      "search: a node reached again cheaper is re-opened");
 }
 
@@ -290,6 +317,11 @@ static bool WaterPosition(void* ctx, unsigned node, float out[3])
 	return GraphPosition(&((WaterGraph*)ctx)->g, node, out);
 }
 
+static int WaterInboundMirrored(void* ctx, unsigned node)
+{
+	return GraphInboundMirrored(&((WaterGraph*)ctx)->g, node);
+}
+
 static void CheckLake(CoarseScratch* s)
 {
 	WaterGraph w;
@@ -310,15 +342,99 @@ static void CheckLake(CoarseScratch* s)
 	ops.ctx = &w;
 	ops.arcs = WaterArcs;
 	ops.position = WaterPosition;
+	ops.inboundMirrored = WaterInboundMirrored;
 	CoarseRoute* r = new CoarseRoute;
 	const unsigned across[3] = { 0, 1, 3 };
 	const unsigned round[3] = { 0, 2, 3 };
 	w.m = 1.0f;
 	CoarseResult r1 = CoarseSearch(ops, 0, 3, COARSE_SCRATCH_MAX, s, r);
-	Check(r1 == CS_FOUND && RouteIs(*r, across, 3) && Near(r->cost, 200.0f), "search: at m 1 the route crosses the lake");
+	Check(r1 == CS_FOUND && RouteIs(*r, across, 3) && Near(r->cost, 200.0f) && r->probed == 1,
+	      "search: at m 1 the route crosses the lake");
 	w.m = 5.0f;
 	CoarseResult r5 = CoarseSearch(ops, 0, 3, COARSE_SCRATCH_MAX, s, r);
-	Check(r5 == CS_FOUND && RouteIs(*r, round, 3) && Near(r->cost, 300.0f), "search: at m 5 the route goes round the lake");
+	Check(r5 == CS_FOUND && RouteIs(*r, round, 3) && Near(r->cost, 300.0f) && r->probed == 1,
+	      "search: at m 5 the route goes round the lake");
+	delete r;
+}
+
+// Nodes [first, first + n) in a two-way chain, 10 apart on x from x0.
+static void AddChain(Graph* g, unsigned first, int n, float x0)
+{
+	for (int i = 0; i < n; ++i) At(g, first + (unsigned)i, x0 + 10.0f * (float)i, 0.0f, 0.0f);
+	for (int i = 0; i + 1 < n; ++i)
+	{
+		Arc(g, first + (unsigned)i, first + (unsigned)(i + 1), 10.0f);
+		Arc(g, first + (unsigned)(i + 1), first + (unsigned)i, 10.0f);
+	}
+}
+
+static void CheckProbe(CoarseScratch* s)
+{
+	// The start in a chain of 1,000 nodes; the goal in a separate four-node pocket.
+	Graph g;
+	Reset(&g, 1004);
+	AddChain(&g, 0, 1000, 0.0f);
+	AddChain(&g, 1000, 4, 50000.0f);
+	CoarseRoute* r = new CoarseRoute;
+	long before = CoarseProbeRefusals();
+	CoarseResult res = CoarseSearch(ProbedOps(&g), 0, 1003, COARSE_SCRATCH_MAX, s, r);
+	Check(res == CS_NO_ROUTE && r->count == 0 && r->probed == 4 && r->expanded == 4 && CoarseProbeRefusals() == before + 1,
+	      "probe: a goal whose closure is exhausted within the bound without the start answers noRoute in that many expansions");
+
+	// The goal in a chain longer than the bound; the start in a separate three-node chain.
+	Reset(&g, 603);
+	AddChain(&g, 0, 3, 0.0f);
+	AddChain(&g, 3, 600, 50000.0f);
+	before = CoarseProbeRefusals();
+	res = CoarseSearch(ProbedOps(&g), 0, 602, COARSE_SCRATCH_MAX, s, r);
+	Check(res == CS_NO_ROUTE && r->probed > 0 && r->probed <= COARSE_PROBE_MAX && r->expanded - r->probed == 3
+	      && CoarseProbeRefusals() == before,
+	      "probe: a goal whose closure passes the bound hands the search to the forward A*");
+
+	// A reachable pair: the probe meets the start and the forward search's route stands.
+	BuildChain(&g, 20);
+	CoarseResult plain = CoarseSearch(Ops(&g), 0, 19, COARSE_SCRATCH_MAX, s, r);
+	float plainCost = r->cost;
+	int plainCount = r->count;
+	before = CoarseProbeRefusals();
+	res = CoarseSearch(ProbedOps(&g), 0, 19, COARSE_SCRATCH_MAX, s, r);
+	Check(plain == CS_FOUND && res == CS_FOUND && r->count == plainCount && r->count == 20 && Near(r->cost, plainCost)
+	      && r->probed > 0 && CoarseProbeRefusals() == before,
+	      "probe: a goal whose closure meets the start keeps the forward search's route");
+
+	// The diamond's goal has no arc out: with no inbound report the search runs forward and finds it.
+	BuildDiamond(&g, 5, 3);
+	res = CoarseSearch(Ops(&g), 0, 9, COARSE_SCRATCH_MAX, s, r);
+	Check(res == CS_FOUND && r->probed == 0, "probe: with no inbound report a one-way goal is searched forward");
+
+	// A four-node pocket entered only by the one-way arc 5->1000: the pocket's closure is exhausted
+	// within the bound, but its entry node does not mirror that arc, so the forward A* runs and finds it.
+	Reset(&g, 1004);
+	AddChain(&g, 0, 1000, 0.0f);
+	AddChain(&g, 1000, 4, 50000.0f);
+	before = CoarseProbeRefusals();
+	res = CoarseSearch(ProbedOps(&g), 0, 1003, COARSE_SCRATCH_MAX, s, r);
+	Check(res == CS_NO_ROUTE && r->probed == 4 && CoarseProbeRefusals() == before + 1,
+	      "probe: a clean closed pocket still answers noRoute within the bound");
+	Arc(&g, 5, 1000, 50000.0f);
+	before = CoarseProbeRefusals();
+	res = CoarseSearch(ProbedOps(&g), 0, 1003, COARSE_SCRATCH_MAX, s, r);
+	Check(res == CS_FOUND && r->count == 10 && r->nodes[r->count - 1] == 1003u && r->probed > 0
+	      && r->probed <= 4 && CoarseProbeRefusals() == before,
+	      "probe: a one-way arc into a four-node pocket keeps the route found");
+
+	// The bound: a closed chain of exactly COARSE_PROBE_MAX nodes is exhausted; one node more is open.
+	Reset(&g, COARSE_PROBE_MAX + 2);
+	AddChain(&g, 1, COARSE_PROBE_MAX, 0.0f);
+	At(&g, 0, -1000.0f, 0.0f, 0.0f);
+	int atBound = 0, pastBound = 0;
+	CoarseProbeVerdict closed = CoarseProbeGoal(ProbedOps(&g), 1, 0, COARSE_PROBE_MAX, &atBound);
+	Reset(&g, COARSE_PROBE_MAX + 2);
+	AddChain(&g, 1, COARSE_PROBE_MAX + 1, 0.0f);
+	At(&g, 0, -1000.0f, 0.0f, 0.0f);
+	CoarseProbeVerdict open = CoarseProbeGoal(ProbedOps(&g), 1, 0, COARSE_PROBE_MAX, &pastBound);
+	Check(closed == CPV_CLOSED && atBound == COARSE_PROBE_MAX && open == CPV_OPEN && pastBound <= COARSE_PROBE_MAX,
+	      "probe: a closure of COARSE_PROBE_MAX nodes is exhausted and one of a node more passes the bound");
 	delete r;
 }
 
@@ -335,6 +451,7 @@ int main()
 	CheckBudget(s);
 	CheckEndpoints(s);
 	CheckLake(s);
+	CheckProbe(s);
 	delete s;
 	return CheckExit("coarse_search_units");
 }

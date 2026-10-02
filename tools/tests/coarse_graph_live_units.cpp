@@ -4,13 +4,20 @@
 // value below is worked by hand from the fabricated numbers. Each over-capacity row allocates its
 // section and its buffer one element past the capacity, so a dropped bound prints the row's FAIL
 // line instead of writing past an allocation. One row runs a copy through the store's own pool,
-// record and promotion.
+// record and promotion. The stitch rows add a second section to the collection, rewrite the
+// exterior's streaming sets as the game's stitch does, and run the registration's comparison and
+// re-copy through the store into the cross resolution. One row packs the first section of a shipped
+// tile into the live layout.
 
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
+#include <iterator>
 #include <vector>
 #include "planner/coarse_graph_live.h"
+#include "base/hash.h"
+#include "planner/tagfile_reader.h"
 
 #include "check.h"
 
@@ -38,6 +45,15 @@ struct Buffer
 	std::vector<CgArc>    arcs;
 	std::vector<CgBorder> borders;
 	std::vector<int>      nodeBorders;
+};
+
+// A second section in the collection: a graph instance of two nodes with no arcs, a mesh instance
+// in the exterior's frame, its mesh with one streaming set. Face 0 (cluster 0) and face 1 (cluster
+// 1) both run edges 0-2 over vertices (0,0,2), (2,0,2), (1,0,3); edge 0 lies on the exterior's
+// edge 3, reversed.
+struct Side
+{
+	Bytes gi, nmi, mesh, gnodes, gpos, faces, edges, verts, sets, conn;
 };
 
 } // namespace coarse_graph_live_units_detail
@@ -333,24 +349,28 @@ static void CheckWater()
 	      && x.nodes[2].water == 0 && c.waterNodes == 2 && c.noFaceData == 0,
 	      "live: a node's water is the area share of its FaceData-3 faces");
 
-	// No array (the base world), a striding of 0, and an array two words short of the four faces.
+	// No array with a striding of 1, and an array two words short of the four faces.
 	World none;
 	Build(none, 3);
+	PutInt(none.mesh, LIVE_NM_FACE_DATA_STRIDING, 1);
 	Buffer y;
 	MakeBuffer(y, 8, 8, 8);
 	CgLiveCounts cn;
 	bool noArray = Copy(none, y, &cn) == CGL_OK && y.nodes[0].water == 0 && y.nodes[1].water == 0
-	            && cn.noFaceData == 1 && cn.waterNodes == 0;
-	PutInt(w.mesh, LIVE_NM_FACE_DATA_STRIDING, 0);
-	CgLiveCounts cz;
-	bool zeroStride = Copy(w, x, &cz) == CGL_OK && x.nodes[0].water == 0 && x.nodes[1].water == 0
-	               && cz.noFaceData == 1 && cz.waterNodes == 0;
-	PutInt(w.mesh, LIVE_NM_FACE_DATA_STRIDING, 1);
+	            && cn.noFaceData == 1 && cn.zeroStride == 0 && cn.waterNodes == 0;
 	PutArray(w.mesh, LIVE_NM_FACE_DATA, faceData, 2);
 	CgLiveCounts cs;
 	bool shortArray = Copy(w, x, &cs) == CGL_OK && x.nodes[0].water == 0 && x.nodes[1].water == 0
-	               && cs.noFaceData == 1 && cs.waterNodes == 0;
-	Check(noArray && zeroStride && shortArray, "live: a mesh without face data reads dry and counts noFaceData");
+	               && cs.noFaceData == 1 && cs.zeroStride == 0 && cs.waterNodes == 0;
+	Check(noArray && shortArray, "live: a mesh without face data reads dry and counts noFaceData");
+
+	// The four-word array with a striding of 0: Havok's mesh without face data.
+	PutArray(w.mesh, LIVE_NM_FACE_DATA, faceData, 4);
+	PutInt(w.mesh, LIVE_NM_FACE_DATA_STRIDING, 0);
+	CgLiveCounts cz;
+	bool zeroStride = Copy(w, x, &cz) == CGL_OK && x.nodes[0].water == 0 && x.nodes[1].water == 0
+	               && cz.zeroStride == 1 && cz.noFaceData == 0 && cz.waterNodes == 0;
+	Check(zeroStride, "live: a zero-striding mesh reads dry and counts zeroStride, not noFaceData");
 }
 
 static void CheckRefusals()
@@ -494,8 +514,496 @@ static void CheckFaceCluster()
 	Check(CgInstanceFaceCluster(m, 1) == -1, "face: a map entry past the instanced array is out of range");
 }
 
-// The copy through the store: a pool buffer, its record, and the frame step's promotion into the
-// section's over block. Counters are read as deltas.
+// ---- The stitch comparison ------------------------------------------------------------------------
+
+static const int INTERIOR = 0x60499;
+
+static int IntOf(const Bytes& b, size_t off)
+{
+	int v;
+	memcpy(&v, &b[off], 4);
+	return v;
+}
+
+// Points the exterior mesh at w.conns.size() sets of the given this-side and opposite uids.
+static void SetExteriorSets(World& w, const int* thisUid, const int* oppUid)
+{
+	w.sets.assign(w.conns.size() * LIVE_SET_STRIDE, 0);
+	for (size_t k = 0; k < w.conns.size(); ++k)
+	{
+		PutInt(w.sets, k * LIVE_SET_STRIDE + LIVE_SET_THIS_UID, thisUid[k]);
+		PutInt(w.sets, k * LIVE_SET_STRIDE + LIVE_SET_OPP_UID, oppUid[k]);
+	}
+	Link(w, 3, 4, 4, 6);
+}
+
+// Builds side `x` of uid `uid` with one set toward oppUid holding (face, edge, oppFace, oppEdge),
+// and places it in collection slot `slot` of w.
+static void BuildSide(World& w, Side& x, int slot, int uid, int oppUid, int face, int edge, int oppFace, int oppEdge)
+{
+	x.gi.assign(272, 0);
+	x.gnodes.assign(2 * 8, 0);
+	x.gpos.assign(2 * 16, 0);
+	PutInt(x.gi, OFF_GI_SECTION, slot);
+	PutVec(x.gi, OFF_GI_ROW0, 1.0f, 0.0f, 0.0f);
+	PutVec(x.gi, OFF_GI_ROW0 + 16, 0.0f, 1.0f, 0.0f);
+	PutVec(x.gi, OFF_GI_ROW0 + 32, 0.0f, 0.0f, 1.0f);
+	PutVec(x.gi, OFF_GI_TRANSLATION, 1000.0f, 0.0f, 2000.0f);
+	PutVec(x.gpos, 0, 1.0f, 0.0f, 2.5f);
+	PutVec(x.gpos, 16, 1.0f, 0.0f, 2.8f);
+	PutPtr(x.gi, LIVE_GI_ORIGINAL_NODES, &x.gnodes[0]);
+	PutInt(x.gi, LIVE_GI_NUM_ORIGINAL_NODES, 2);
+	PutPtr(x.gi, OFF_GI_POSITIONS, &x.gpos[0]);
+	x.nmi.assign(0x1B0, 0);
+	x.mesh.assign(0xB0, 0);
+	x.faces.assign(2 * 16, 0);
+	x.edges.assign(3 * 20, 0);
+	x.verts.assign(3 * 16, 0);
+	PutInt(x.nmi, OFF_NMI_SECTION_UID, uid);
+	PutVec(x.nmi, LIVE_NMI_FRAME_COL0, 1.0f, 0.0f, 0.0f);
+	PutVec(x.nmi, LIVE_NMI_FRAME_COL1, 0.0f, 1.0f, 0.0f);
+	PutVec(x.nmi, LIVE_NMI_FRAME_COL2, 0.0f, 0.0f, 1.0f);
+	PutVec(x.nmi, LIVE_NMI_FRAME_TRANSLATION, 1000.0f, 0.0f, 2000.0f);
+	PutVec(x.verts, 0, 0.0f, 0.0f, 2.0f);
+	PutVec(x.verts, 16, 2.0f, 0.0f, 2.0f);
+	PutVec(x.verts, 32, 1.0f, 0.0f, 3.0f);
+	SetEdge(x.edges, 0, 0, 1);
+	SetEdge(x.edges, 1, 1, 2);
+	SetEdge(x.edges, 2, 2, 0);
+	SetFace(x.faces, 0, 0, 3, 0);
+	SetFace(x.faces, 1, 0, 3, 1);
+	PutPtr(x.nmi, OFF_NMI_ORIGINAL_FACES, &x.faces[0]);
+	PutInt(x.nmi, OFF_NMI_NUM_ORIGINAL_FACES, 2);
+	PutPtr(x.nmi, OFF_NMI_ORIGINAL_EDGES, &x.edges[0]);
+	PutInt(x.nmi, OFF_NMI_NUM_ORIGINAL_EDGES, 3);
+	PutPtr(x.nmi, OFF_NMI_ORIGINAL_VERTICES, &x.verts[0]);
+	PutInt(x.nmi, OFF_NMI_NUM_ORIGINAL_VERTICES, 3);
+	PutPtr(x.nmi, OFF_NMI_ORIGINAL_MESH, &x.mesh[0]);
+	x.conn.assign(16, 0);
+	SetConnection(x.conn, 0, face, edge, oppFace, oppEdge);
+	x.sets.assign(LIVE_SET_STRIDE, 0);
+	PutInt(x.sets, LIVE_SET_THIS_UID, uid);
+	PutInt(x.sets, LIVE_SET_OPP_UID, oppUid);
+	PutArray(x.sets, LIVE_SET_CONNECTIONS, x.conn, 1);
+	PutArray(x.mesh, LIVE_NM_STREAMING_SETS, x.sets, 1);
+	PutPtr(w.infos, (size_t)slot * SIZE_CCC_INSTANCE_INFO, &x.nmi[0]);
+	PutPtr(w.infos, (size_t)slot * SIZE_CCC_INSTANCE_INFO + OFF_CCC_INFO_GRAPH, &x.gi[0]);
+}
+
+static void CheckSignature()
+{
+	World w;
+	Build(w, 3);
+	unsigned base = CgLiveSetSignature(&w.mesh[0], UID);
+	Check(base == CgLiveSetSignature(&w.mesh[0], UID) && base != FNV1A32_OFFSET, "sig: the signature is repeatable");
+
+	w.conns.push_back(Bytes(16, 0));
+	SetConnection(w.conns[3], 0, 0, 0, 1, 1);
+	int thisUid[4] = { UID, OTHER_UID, UID, UID };
+	int oppUid[4] = { OPP_HIGH, 0x7777, OPP_LOW, INTERIOR };
+	SetExteriorSets(w, thisUid, oppUid);
+	Check(CgLiveSetSignature(&w.mesh[0], UID) != base, "sig: a set added after the copy moves the signature");
+
+	World r;
+	Build(r, 3);
+	SetConnection(r.conns[0], 0, 1, 3, 8, 9);
+	Check(CgLiveSetSignature(&r.mesh[0], UID) != base && IntOf(r.sets, LIVE_SET_CONNECTIONS + 8) == 4,
+	      "sig: a rewritten connection moves the signature with the count unchanged");
+
+	World o;
+	Build(o, 3);
+	SetConnection(o.conns[1], 0, 3, 3, 3, 3);
+	Check(CgLiveSetSignature(&o.mesh[0], UID) == base, "sig: a set naming another uid leaves the signature unchanged");
+
+	World e;
+	Build(e, 3);
+	PutInt(e.sets, 2 * LIVE_SET_STRIDE + LIVE_SET_CONNECTIONS + 8, 0);
+	unsigned empty = CgLiveSetSignature(&e.mesh[0], UID);
+	PutPtr(e.sets, 2 * LIVE_SET_STRIDE + LIVE_SET_CONNECTIONS, NULL);
+	PutInt(e.sets, 2 * LIVE_SET_STRIDE + LIVE_SET_CONNECTIONS + 8, 5);
+	unsigned nullArray = CgLiveSetSignature(&e.mesh[0], UID);
+	PutArray(e.sets, 2 * LIVE_SET_STRIDE + LIVE_SET_CONNECTIONS, e.conns[2], -3);
+	unsigned negative = CgLiveSetSignature(&e.mesh[0], UID);
+	Check(empty != base && nullArray == empty && negative == empty && CgLiveSetSignature(NULL, UID) == FNV1A32_OFFSET,
+	      "sig: a NULL connection array or a negative count reads as empty");
+}
+
+static void CheckStitchReads()
+{
+	World w;
+	Build(w, 3);
+	Side x;
+	BuildSide(w, x, 1, INTERIOR, UID, 0, 0, 1, 3);
+	const void* coll = &w.coll[0];
+	bool found = CgCollectionSlotOfUid(coll, UID) == SLOT && CgCollectionSlotOfUid(coll, INTERIOR) == 1
+	          && CgCollectionSlotOfUid(coll, 0x7777) == -1;
+	PutPtr(w.infos, SLOT * SIZE_CCC_INSTANCE_INFO + OFF_CCC_INFO_GRAPH, NULL);
+	bool noGraph = CgCollectionSlotOfUid(coll, UID) == -1;
+	Check(found && noGraph, "reads: a uid's slot by the mesh-instance walk, -1 when absent or without a graph instance");
+	PutPtr(w.infos, SLOT * SIZE_CCC_INSTANCE_INFO + OFF_CCC_INFO_GRAPH, &w.gi[0]);
+	Check(CgCollectionGraphInstance(coll, SLOT) == &w.gi[0] && CgCollectionGraphInstance(coll, 1) == &x.gi[0]
+	      && CgCollectionGraphInstance(coll, 0) == NULL && CgCollectionGraphInstance(coll, 3) == NULL
+	      && CgCollectionGraphInstance(coll, -1) == NULL && CgCollectionGraphInstance(NULL, 1) == NULL,
+	      "reads: a slot's graph instance, NULL out of range");
+}
+
+// The exterior (slot 2) names the interior (slot 1) through one extra set; the listing is taken
+// from the exterior's mesh instance against the record table.
+struct Listing { int n; int slot; unsigned sig; int checked; int overflow; };
+
+static Listing List(World& w, const std::vector<CgLiveSig>& sigs, unsigned gen, int max)
+{
+	Listing l;
+	int slots[CG_LIVE_REFRESH_MAX];
+	unsigned got[CG_LIVE_REFRESH_MAX];
+	l.n = CgLiveStaleNeighbours(&w.coll[0], &w.nmi[0], SLOT, &sigs[0], (int)sigs.size(), gen, slots, got, max,
+	                            &l.checked, &l.overflow);
+	l.slot = l.n > 0 ? slots[0] : -1;
+	l.sig = l.n > 0 ? got[0] : 0;
+	return l;
+}
+
+static void NameInterior(World& w, int sets)
+{
+	w.conns.assign((size_t)sets, Bytes(16, 0));
+	std::vector<int> thisUid((size_t)sets, UID), oppUid((size_t)sets, INTERIOR);
+	for (int k = 0; k < sets; ++k)
+		SetConnection(w.conns[(size_t)k], 0, 1, 3, 0, 0);
+	SetExteriorSets(w, &thisUid[0], &oppUid[0]);
+}
+
+static void CheckStaleListing()
+{
+	World w;
+	Build(w, 3);
+	Side x;
+	BuildSide(w, x, 1, INTERIOR, UID, 0, 0, 1, 3);
+	NameInterior(w, 1);
+	std::vector<CgLiveSig> sigs((size_t)CG_LIVE_RECORDS);
+	memset(&sigs[0], 0, sizeof(CgLiveSig) * sigs.size());
+	unsigned current = CgLiveSetSignature(&x.mesh[0], INTERIOR);
+	Listing a = List(w, sigs, 7u, CG_LIVE_REFRESH_MAX);
+	Check(a.n == 1 && a.slot == 1 && a.sig == current && a.checked == 1 && a.overflow == 0,
+	      "refresh: an opposite with no record is listed");
+
+	CgLiveSig rec = { 1, INTERIOR, 7u, current };
+	sigs[1] = rec;
+	Listing b = List(w, sigs, 7u, CG_LIVE_REFRESH_MAX);
+	Check(b.n == 0 && b.checked == 1, "refresh: an opposite whose signature matches its record is not listed");
+
+	SetConnection(x.conn, 0, 0, 0, 2, 3);
+	Listing c = List(w, sigs, 7u, CG_LIVE_REFRESH_MAX);
+	Check(c.n == 1 && c.slot == 1 && c.sig != current && c.checked == 1,
+	      "refresh: an opposite whose set changed since its record is listed");
+	SetConnection(x.conn, 0, 0, 0, 1, 3);
+
+	Listing d = List(w, sigs, 8u, CG_LIVE_REFRESH_MAX);
+	Check(d.n == 1 && d.slot == 1 && d.checked == 1, "refresh: a record from an older generation is listed");
+
+	sigs[1].uid = 0x1405;
+	Listing e = List(w, sigs, 7u, CG_LIVE_REFRESH_MAX);
+	Check(e.n == 1 && e.slot == 1 && e.checked == 1, "refresh: a record naming another uid is listed");
+	sigs[1] = rec;
+
+	NameInterior(w, 2);
+	memset(&sigs[0], 0, sizeof(CgLiveSig) * sigs.size());
+	Listing f = List(w, sigs, 7u, CG_LIVE_REFRESH_MAX);
+	Check(f.n == 1 && f.slot == 1 && f.checked == 1, "refresh: an opposite named twice is listed once");
+
+	int thisUid[1] = { UID };
+	int oppUid[1] = { 0x7777 };
+	w.conns.assign(1, Bytes(16, 0));
+	SetExteriorSets(w, thisUid, oppUid);
+	Listing g = List(w, sigs, 7u, CG_LIVE_REFRESH_MAX);
+	Check(g.n == 0 && g.checked == 0 && g.overflow == 0, "refresh: an unregistered opposite is neither listed nor checked");
+
+	Side y;
+	BuildSide(w, y, 0, 0x1405, UID, 0, 0, 1, 3);
+	int thisTwo[2] = { UID, UID };
+	int oppTwo[2] = { INTERIOR, 0x1405 };
+	w.conns.assign(2, Bytes(16, 0));
+	SetExteriorSets(w, thisTwo, oppTwo);
+	Listing h = List(w, sigs, 7u, 1);
+	Check(h.n == 1 && h.slot == 1 && h.checked == 1 && h.overflow == 1,
+	      "refresh: opposites past the cap count in overflow and are not listed");
+}
+
+// The site's registration on the fabricated collection: the registering copy posted with its
+// slot's record, then the comparison from the registering mesh and a re-copy of each slot it lists,
+// posted only when the slot's signature held across the copy.
+static void Register(World& w, const void* gi, std::vector<CgLiveSig>& sigs)
+{
+	const void* coll = &w.coll[0];
+	int slot = *(const int*)((const unsigned char*)gi + OFF_GI_SECTION);
+	int uid = 0;
+	unsigned before = 0;
+	CgBlock* buf = CgLiveAcquire();
+	CgLiveCounts c;
+	if (buf && CgLiveSlotSignature(coll, slot, &uid, &before) && CgLiveCopy(gi, coll, w.shift, buf, &c) == CGL_OK)
+	{
+		CgLiveSig rec = { 1, uid, buf->storeGen, before };
+		CgLivePost(c.slot, buf);
+		sigs[(size_t)slot] = rec;
+	}
+	else if (buf)
+		CgLiveRelease(buf);
+	int slots[CG_LIVE_REFRESH_MAX];
+	unsigned got[CG_LIVE_REFRESH_MAX];
+	int checked = 0, overflow = 0;
+	int n = CgLiveStaleNeighbours(coll, CgCollectionMeshInstance(coll, slot), slot, &sigs[0], (int)sigs.size(),
+	                              CgStoreGen(), slots, got, CG_LIVE_REFRESH_MAX, &checked, &overflow);
+	for (int i = 0; i < n; ++i)
+	{
+		CgBlock* re = CgLiveAcquire();
+		unsigned b0 = 0, b1 = 0;
+		int u0 = 0, u1 = 0;
+		bool ok = re && CgLiveSlotSignature(coll, slots[i], &u0, &b0)
+		       && CgLiveCopy(CgCollectionGraphInstance(coll, slots[i]), coll, w.shift, re, &c) == CGL_OK
+		       && CgLiveSlotSignature(coll, slots[i], &u1, &b1) && b0 == b1;
+		if (ok)
+		{
+			CgLiveSig rec = { 1, u0, re->storeGen, b0 };
+			CgLivePost(c.slot, re);
+			sigs[(size_t)slots[i]] = rec;
+		}
+		else if (re)
+			CgLiveRelease(re);
+	}
+}
+
+static const CgBlock* StoreNeighbour(void*, int uid, int* dirOut)
+{
+	int dir = CgIndexOfUid(uid);
+	CgView v;
+	if (dir < 0 || !CgRead(dir, &v))
+		return NULL;
+	*dirOut = dir;
+	return v.block;
+}
+
+// Whether the store's block of `from` resolves node `node` to node `to` of `toUid`, and that the
+// call counted no one-sided or dropped border.
+static bool ResolvesTo(int from, int node, int toUid, int to)
+{
+	int dir = CgIndexOfUid(from);
+	CgView v;
+	if (dir < 0 || !CgRead(dir, &v))
+		return false;
+	CgStats s0;
+	CgStatsGet(&s0);
+	CgResolved out[8];
+	int n = CgCrossArcs(v.block, node, StoreNeighbour, NULL, out, 8);
+	CgStats s1;
+	CgStatsGet(&s1);
+	bool hit = false;
+	for (int i = 0; i < n; ++i)
+		hit = hit || (out[i].dirIndex == CgIndexOfUid(toUid) && out[i].node == to);
+	return hit && s1.crossOneSided == s0.crossOneSided && s1.crossDropped == s0.crossDropped;
+}
+
+static bool HasArcTo(int from, int node, int toUid)
+{
+	int dir = CgIndexOfUid(from);
+	CgView v;
+	if (dir < 0 || !CgRead(dir, &v))
+		return false;
+	CgResolved out[8];
+	int n = CgCrossArcs(v.block, node, StoreNeighbour, NULL, out, 8);
+	bool hit = false;
+	for (int i = 0; i < n; ++i)
+		hit = hit || out[i].dirIndex == CgIndexOfUid(toUid);
+	return hit;
+}
+
+// One stitch shape: the exterior registers with `before` in its set toward the partner (or no such
+// set when before < 0), the partner's stitch rewrites that set to (1, 3, 0, 0), then the partner
+// registers in slot 1 with its set (0, 0, 1, 3) toward the exterior.
+static bool StitchResolves(int partner, int before, bool* arcBeforeRecopy)
+{
+	CgStoreDestroy();
+	bool created = CgStoreCreate();
+	World w;
+	Build(w, 3);
+	std::vector<CgLiveSig> sigs((size_t)CG_LIVE_RECORDS);
+	memset(&sigs[0], 0, sizeof(CgLiveSig) * sigs.size());
+	if (before >= 0)
+	{
+		NameInterior(w, 1);
+		SetConnection(w.conns[0], 0, 1, 3, before, 0);
+		int thisUid[1] = { UID };
+		int oppUid[1] = { partner };
+		SetExteriorSets(w, thisUid, oppUid);
+	}
+	Register(w, &w.gi[0], sigs);
+	CgPromoteLive(CG_LIVE_RECORDS);
+	int thisUid[1] = { UID };
+	int oppUid[1] = { partner };
+	w.conns.assign(1, Bytes(16, 0));
+	SetConnection(w.conns[0], 0, 1, 3, 0, 0);
+	SetExteriorSets(w, thisUid, oppUid);
+	Side x;
+	BuildSide(w, x, 1, partner, UID, 0, 0, 1, 3);
+	if (arcBeforeRecopy)
+	{
+		CgBlock* buf = CgLiveAcquire();
+		CgLiveCounts c;
+		if (buf && CgLiveCopy(&x.gi[0], &w.coll[0], w.shift, buf, &c) == CGL_OK)
+			CgLivePost(c.slot, buf);
+		else if (buf)
+			CgLiveRelease(buf);
+		CgPromoteLive(CG_LIVE_RECORDS);
+		*arcBeforeRecopy = HasArcTo(UID, 1, partner);
+	}
+	Register(w, &x.gi[0], sigs);
+	CgPromoteLive(CG_LIVE_RECORDS);
+	bool both = created && ResolvesTo(UID, 1, partner, 0) && ResolvesTo(partner, 0, UID, 1);
+	CgStoreDestroy();
+	return both;
+}
+
+static void CheckStitchRefresh()
+{
+	bool arcBefore = true;
+	StitchResolves(INTERIOR, -1, &arcBefore);
+	Check(!arcBefore, "refresh: before the re-copy the exterior has no arc into an interior stitched after its copy");
+	Check(StitchResolves(INTERIOR, -1, NULL), "refresh: an interior stitched in after its exterior's copy resolves both ways after the re-copy");
+	Check(StitchResolves(INTERIOR, 7, NULL),
+	      "refresh: an exterior whose door set was refilled for a regenerated interior resolves after the re-copy");
+	Check(StitchResolves(0x1405, 7, NULL), "refresh: a neighbour of a regenerated exterior resolves toward it after the re-copy");
+}
+
+// ---- A shipped tile ------------------------------------------------------------------------------
+
+static std::vector<unsigned char> ReadBytes(const char* path)
+{
+	std::ifstream f(path, std::ios::binary);
+	if (!f.is_open())
+		return std::vector<unsigned char>();
+	return std::vector<unsigned char>((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+}
+
+static __int64 IntField(const TfDoc& d, int st, const char* name)
+{
+	__int64 v = 0;
+	return TfAsInt(d, TfFind(d, st, name), &v) ? v : 0;
+}
+
+static int ArrayOf(const TfDoc& d, int st, const char* name, int* count)
+{
+	int a = TfFind(d, st, name);
+	int n = TfArrayCount(d, a);
+	*count = n < 0 ? 0 : n;
+	return a;
+}
+
+// The first NavMesh entry of the tile's root and the first Graph after it, as the extractor groups
+// them; -1 when either is missing.
+static bool FirstSection(const TfDoc& d, int* mesh, int* graph)
+{
+	*mesh = *graph = -1;
+	int count = 0;
+	int variants = ArrayOf(d, TfRoot(d), "namedVariants", &count);
+	for (int k = 0; k < count; ++k)
+	{
+		int e = TfArrayAt(d, variants, k);
+		const char* name = TfAsString(d, TfFind(d, e, "name"));
+		if (*mesh < 0 && strcmp(name, "NavMesh") == 0)
+			*mesh = TfDeref(d, TfFind(d, e, "variant"));
+		else if (*mesh >= 0 && strcmp(name, "Graph") == 0)
+		{
+			*graph = TfDeref(d, TfFind(d, e, "variant"));
+			break;
+		}
+	}
+	return *mesh >= 0 && *graph >= 0;
+}
+
+// tile63.28's first section packed into the live layout at slot 2 with identity frames and no
+// shift: its faces (start, count, cluster), edges, vertices, face data and striding, no streaming
+// set, and a graph instance of its node count with no arcs. *nodes receives the node count.
+static bool PackTile(World& w, Bytes& faceData, int* nodes)
+{
+	std::vector<unsigned char> bytes = ReadBytes("tools/tests/fixtures/planner/tile63.28.hkt");
+	if (bytes.empty())
+		return false;
+	TfDoc d;
+	TfResult r = TfParse(&bytes[0], bytes.size(), &d);
+	int mesh = -1, graph = -1;
+	if ((r != TF_OK && r != TF_TAIL_STOP) || !FirstSection(d, &mesh, &graph))
+		return false;
+	int nf = 0, ne = 0, nv = 0, nd = 0, nn = 0;
+	int faces = ArrayOf(d, mesh, "faces", &nf);
+	int edges = ArrayOf(d, mesh, "edges", &ne);
+	int verts = ArrayOf(d, mesh, "vertices", &nv);
+	int data = ArrayOf(d, mesh, "faceData", &nd);
+	ArrayOf(d, graph, "nodes", &nn);
+	if (nf <= 0 || ne <= 0 || nv <= 0 || nn <= 0 || nn > CG_LIVE_MAX_NODES)
+		return false;
+	Build(w, 3);
+	w.faces.assign((size_t)nf * 16, 0);
+	w.edges.assign((size_t)ne * 20, 0);
+	w.verts.assign((size_t)nv * 16, 0);
+	for (int f = 0; f < nf; ++f)
+	{
+		int st = TfArrayAt(d, faces, f);
+		SetFace(w.faces, f, (int)IntField(d, st, "startEdgeIndex"), (short)IntField(d, st, "numEdges"),
+		        (short)IntField(d, st, "clusterIndex"));
+	}
+	for (int e = 0; e < ne; ++e)
+	{
+		int st = TfArrayAt(d, edges, e);
+		SetEdge(w.edges, e, (int)IntField(d, st, "a"), (int)IntField(d, st, "b"));
+	}
+	for (int v = 0; v < nv; ++v)
+	{
+		float c[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+		TfAsVec(d, TfArrayAt(d, verts, v), c, 4);
+		PutVec(w.verts, (size_t)v * 16, c[0], c[1], c[2]);
+	}
+	faceData.assign((size_t)(nd > 0 ? nd : 1) * 4, 0);
+	for (int k = 0; k < nd; ++k)
+	{
+		__int64 word = 0;
+		TfAsInt(d, TfArrayAt(d, data, k), &word);
+		PutInt(faceData, (size_t)k * 4, (int)word);
+	}
+	w.gnodes.assign((size_t)nn * 8, 0);
+	w.gpos.assign((size_t)nn * 16, 0);
+	PutVec(w.gi, OFF_GI_ROW0, 1.0f, 0.0f, 0.0f);
+	PutVec(w.gi, OFF_GI_ROW0 + 16, 0.0f, 1.0f, 0.0f);
+	PutVec(w.gi, OFF_GI_ROW0 + 32, 0.0f, 0.0f, 1.0f);
+	PutVec(w.gi, OFF_GI_TRANSLATION, 0.0f, 0.0f, 0.0f);
+	PutVec(w.nmi, LIVE_NMI_FRAME_TRANSLATION, 0.0f, 0.0f, 0.0f);
+	w.conns.clear();
+	w.sets.clear();
+	Link(w, nn, 0, nf, ne);
+	PutInt(w.nmi, OFF_NMI_NUM_ORIGINAL_VERTICES, nv);
+	PutArray(w.nmi, OFF_NMI_OWNED_VERTICES, w.owned, 0);
+	PutArray(w.mesh, LIVE_NM_STREAMING_SETS, w.sets, 0);
+	PutArray(w.mesh, LIVE_NM_FACE_DATA, faceData, nd);
+	PutInt(w.mesh, LIVE_NM_FACE_DATA_STRIDING, (int)IntField(d, mesh, "faceDataStriding"));
+	w.shift[0] = w.shift[1] = w.shift[2] = 0.0f;
+	*nodes = nn;
+	return true;
+}
+
+static void CheckShippedTile()
+{
+	World w;
+	Bytes faceData;
+	int nodes = 0;
+	bool packed = PackTile(w, faceData, &nodes);
+	Buffer x;
+	MakeBuffer(x, packed ? nodes : 1, 8, 8);
+	CgLiveCounts c;
+	CgLiveResult r = packed ? Copy(w, x, &c) : CGL_NO_MESH;
+	if (r == CGL_OK && nodes == 3)
+		printf("live: tile63.28 water bytes %d, %d, %d (node 0: %d faces)\n", x.nodes[0].water, x.nodes[1].water,
+		       x.nodes[2].water, x.nodes[0].faces);
+	Check(packed && r == CGL_OK && nodes == 3 && x.nodes[0].water == 254 && x.nodes[1].water == 255
+	      && x.nodes[2].water == 0 && x.nodes[0].faces == 106 && c.noFaceData == 0 && c.zeroStride == 0,
+	      "live: tile63.28's first section copies water 254, 255 and 0 by area");
+}
 static void CheckThroughStore()
 {
 	CgStoreDestroy();
@@ -537,5 +1045,10 @@ int main()
 	CheckCollectionReads();
 	CheckFaceCluster();
 	CheckThroughStore();
+	CheckSignature();
+	CheckStitchReads();
+	CheckStaleListing();
+	CheckStitchRefresh();
+	CheckShippedTile();
 	return CheckExit("coarse_graph_live_units");
 }

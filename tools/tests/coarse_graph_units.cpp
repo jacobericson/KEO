@@ -21,12 +21,31 @@ namespace coarse_graph_units_detail {
 
 struct PauseRead { int dir; int calls; bool answered; };
 
+// A promotion run inside a builder publish's take: its calls, what it published and what it deferred.
+struct PauseDefer { int calls; int published; long deferred; };
+
 struct Neighbours
 {
 	const CgBlock* block[4];
 	int            uid[4];
 	int            dir[4];
 	int            count;
+};
+
+// A far border of a rule fixture: its faces, its node and its portal's z.
+struct FarBorder { int face; int oppFace; int from; float z; };
+
+// One shape of the cross rule: the near border's faces and portal z, the far block's source and
+// borders, and the class and target node the rule must give.
+struct Shape
+{
+	int       face, oppFace;
+	float     nearZ;
+	int       source;
+	int       farCount;
+	FarBorder farBorders[1];
+	int       cls;
+	int       target;
 };
 
 struct FakeFile
@@ -212,6 +231,73 @@ static void CheckRetireDrain()
 	CgView v;
 	bool current = CgRead(9, &v) && v.block->nodeCount == 2;
 	Check(before == 0 && Stats().retiredFreed == 1 && current, "store: a retired heap block is freed by the drain");
+}
+
+// Two live copies of one section: the newer, acquired second, is posted at the lower slot, so the
+// promotion's slot order publishes it first and meets the older one after it.
+static void CheckLiveOrder()
+{
+	Fresh();
+	CgBlock* older = FilledLive(5);
+	CgBlock* newer = FilledLive(5);
+	if (newer)
+		newer->nodes[0].centre[0] = 99.0f;
+	CgLivePost(3, newer);
+	CgLivePost(5, older);
+	long outranked = Stats().outranked;
+	int promoted = CgPromoteLive(8);
+	CgView v;
+	Check(promoted == 1 && Stats().outranked == outranked + 1 && CgRead(5, &v) && v.block->nodes[0].centre[0] == 99.0f,
+	      "store: an older live copy never replaces a newer one");
+
+	Fresh();
+	CgBlock* early = FilledLive(6);
+	CgStoreNewWorld();
+	CgLivePost(4, early);
+	long stale = Stats().stale;
+	promoted = CgPromoteLive(8);
+	Check(promoted == 0 && Stats().stale == stale + 1 && ReadSource(6) == -1,
+	      "store: a copy acquired before a new world is stale at promotion");
+}
+
+static void PromoteInsideTake(void* ctx)
+{
+	PauseDefer* p = (PauseDefer*)ctx;
+	CgTestPauseAfterTake(NULL, NULL);
+	p->calls++;
+	long before = Stats().deferred;
+	p->published = CgPromoteLive(8);
+	p->deferred = Stats().deferred - before;
+}
+
+// Entry 8 holds a base; a live copy of uid 8 is posted; the promotion runs inside a builder base
+// publish's take of entry 8, so its own publish finds the entry held.
+static PauseDefer DeferOnePromotion()
+{
+	Fresh();
+	CgPublishBase(8, OneSectionBlock(8, CG_BASE, 0, 1));
+	CgLivePost(10, FilledLive(8));
+	PauseDefer p = { 0, -1, 0 };
+	CgTestPauseAfterTake(PromoteInsideTake, &p);
+	CgPublishBase(8, OneSectionBlock(8, CG_BASE, 0, 2));
+	CgTestPauseAfterTake(NULL, NULL);
+	return p;
+}
+
+static void CheckDeferredPublish()
+{
+	PauseDefer p = DeferOnePromotion();
+	Check(p.calls == 1 && p.published == 0 && p.deferred == 1 && ReadSource(8) == CG_BASE,
+	      "store: a main-thread publish that finds its entry held defers it");
+	int landed = CgPromoteLive(8);
+	Check(landed == 1 && ReadSource(8) == CG_LIVE, "store: a deferred publish lands on the next promotion");
+
+	p = DeferOnePromotion();
+	CgStoreNewWorld();
+	long stale = Stats().stale;
+	landed = CgPromoteLive(8);
+	Check(p.deferred == 1 && landed == 0 && Stats().stale == stale + 1 && ReadSource(8) == CG_BASE,
+	      "store: a deferred block of an older generation is retired, not published");
 }
 
 // ---- Uids ----------------------------------------------------------------------------------------
@@ -456,7 +542,9 @@ static void CheckCross()
 	nb.block[1] = B; nb.uid[1] = 0x0001; nb.dir[1] = 1;
 	nb.count = 2;
 	CgResolved out[8];
+	CgStats s0 = Stats();
 	int n = CgCrossArcs(A, 0, FindNeighbour, &nb, out, 8);
+	CgStats s1 = Stats();
 	int toB1 = -1, toB0 = -1;
 	for (int i = 0; i < n; ++i)
 	{
@@ -464,6 +552,9 @@ static void CheckCross()
 		if (out[i].dirIndex == 1 && out[i].node == 0) toB0 = i;
 	}
 	Check(n == 2 && toB1 >= 0 && toB0 >= 0, "cross: the neighbour's border names the target node");
+	Check(n == 2 && toB1 >= 0 && toB0 >= 0 && s1.crossNoBlock == s0.crossNoBlock && s1.crossDropped == s0.crossDropped
+	      && s1.crossOneSided == s0.crossOneSided,
+	      "cross: a mirrored pair resolves as before and counts nothing");
 	Check(n == 2 && toB1 >= 0 && toB1 != toB0, "cross: borders to one node collapse into one arc");
 	Check(toB1 >= 0 && Near(out[toB1].portal, 4608.0f, 2.0f, 120.0f) && Near(out[toB1].edgeA, 4608.0f, 2.0f, 100.0f)
 	      && Near(out[toB1].edgeB, 4608.0f, 2.0f, 140.0f) && toB0 >= 0 && Near(out[toB0].portal, 4608.0f, 0.0f, 305.0f),
@@ -475,9 +566,156 @@ static void CheckCross()
 	Check(toB1 >= 0 && out[toB1].water == 200 && toB0 >= 0 && out[toB0].water == 7,
 	      "cross: a resolved arc carries its target's water");
 	nb.count = 1;
+	long noBlock = Stats().crossNoBlock;
 	Check(CgCrossArcs(A, 0, FindNeighbour, &nb, out, 8) == 0, "cross: a missing neighbour resolves nothing");
+	Check(Stats().crossNoBlock == noBlock + 3, "cross: a missing neighbour counts crossNoBlock");
 	CgPublishBase(0, A);
 	CgPublishBase(1, B);
+}
+
+// The rule's near block: uid 0x0000, one node at (4000, 0, 0), one border toward 0x0001 with the
+// given faces over the edge (4608, 0, z - 5)-(4608, 0, z + 5), so its portal is (4608, 0, z).
+static CgBlock* NearBlock(int face, int oppFace, float z)
+{
+	TileGraph g;
+	g.interiorsDropped = g.bordersSkipped = 0;
+	AddSection(&g, 0x0000, TGS_EXTERIOR, 1, 4000.0f);
+	float a[3], b[3];
+	SetV(a, 4608.0f, 0.0f, z - 5.0f);
+	SetV(b, 4608.0f, 0.0f, z + 5.0f);
+	AddBorder(&g, 0x0001, face, oppFace, 0, a, b);
+	return CgBlockFromTile(g, 0, CG_BASE, 0);
+}
+
+// The rule's far block: uid 0x0001 with node 0 at (4600, 0, 0) and node 1 at (4700, 0, 0), boxes 10
+// either side in x and z, so only node 0's box widened by the slack holds a portal at (4608, 0, 0);
+// each far border lies over (4608, 0, z - 5)-(4608, 0, z + 5).
+static CgBlock* FarBlock(int source, const FarBorder* fb, int count)
+{
+	TileGraph g;
+	g.interiorsDropped = g.bordersSkipped = 0;
+	AddSection(&g, 0x0001, TGS_EXTERIOR, 2, 4600.0f);
+	for (int i = 0; i < count; ++i)
+	{
+		float a[3], b[3];
+		SetV(a, 4608.0f, 0.0f, fb[i].z - 5.0f);
+		SetV(b, 4608.0f, 0.0f, fb[i].z + 5.0f);
+		AddBorder(&g, 0x0000, fb[i].face, fb[i].oppFace, fb[i].from, a, b);
+	}
+	return CgBlockFromTile(g, 0, source, CgStoreGen());
+}
+
+// The near border is faces 10 / 20; each shape's far border names it as its row says.
+static const Shape kMirrored     = { 10, 20, 0.0f,   CG_BASE, 1, { { 20, 10, 1, 0.0f } },   CG_BORDER_MIRRORED,  1 };
+static const Shape kNamesOurFace = { 10, 20, 0.0f,   CG_BASE, 1, { { 21, 10, 1, 0.0f } },   CG_BORDER_ONE_SIDED, 1 };
+static const Shape kAtOppFace    = { 10, 20, 0.0f,   CG_BASE, 1, { { 20, 11, 1, 0.0f } },   CG_BORDER_ONE_SIDED, 1 };
+static const Shape kOtherPortal  = { 10, 20, 0.0f,   CG_SAVE, 1, { { 21, 10, 1, 100.0f } }, CG_BORDER_DROPPED,  -1 };
+static const Shape kSaveNamed    = { 10, 20, 0.0f,   CG_SAVE, 1, { { 21, 10, 1, 0.0f } },   CG_BORDER_ONE_SIDED, 1 };
+static const Shape kNearOnlyBase = { 10, 20, 0.0f,   CG_BASE, 0, { { 0, 0, 0, 0.0f } },     CG_BORDER_ONE_SIDED, 0 };
+static const Shape kNearOnlyLive = { 10, 20, 0.0f,   CG_LIVE, 0, { { 0, 0, 0, 0.0f } },     CG_BORDER_ONE_SIDED, 0 };
+static const Shape kNearOnlySave = { 10, 20, 0.0f,   CG_SAVE, 0, { { 0, 0, 0, 0.0f } },     CG_BORDER_DROPPED,  -1 };
+static const Shape kNoBox        = { 10, 20, 200.0f, CG_BASE, 0, { { 0, 0, 0, 0.0f } },     CG_BORDER_DROPPED,  -1 };
+static const Shape kSlack19      = { 10, 20, 0.0f,   CG_SAVE, 1, { { 21, 10, 1, 19.0f } },  CG_BORDER_ONE_SIDED, 1 };
+static const Shape kSlack21      = { 10, 20, 0.0f,   CG_SAVE, 1, { { 21, 10, 1, 21.0f } },  CG_BORDER_DROPPED,  -1 };
+
+// Resolves the shape's near node and checks the arc against its class and target, and that the
+// call counted exactly its class (one crossOneSided, one crossDropped, or nothing when mirrored).
+static bool ResolvesAs(const Shape& sh)
+{
+	CgBlock* N = NearBlock(sh.face, sh.oppFace, sh.nearZ);
+	CgBlock* F = FarBlock(sh.source, sh.farBorders, sh.farCount);
+	bool ok = N && F;
+	if (ok)
+	{
+		Neighbours nb;
+		memset(&nb, 0, sizeof(nb));
+		nb.block[0] = N; nb.uid[0] = 0x0000; nb.dir[0] = 0;
+		nb.block[1] = F; nb.uid[1] = 0x0001; nb.dir[1] = 1;
+		nb.count = 2;
+		CgResolved out[4];
+		CgStats s0 = Stats();
+		int n = CgCrossArcs(N, 0, FindNeighbour, &nb, out, 4);
+		CgStats s1 = Stats();
+		long one = s1.crossOneSided - s0.crossOneSided, drop = s1.crossDropped - s0.crossDropped;
+		ok = s1.crossNoBlock == s0.crossNoBlock;
+		if (sh.cls == CG_BORDER_DROPPED)
+			ok = ok && n == 0 && drop == 1 && one == 0;
+		else
+			ok = ok && n == 1 && out[0].dirIndex == 1 && out[0].node == sh.target && drop == 0
+			     && one == (sh.cls == CG_BORDER_ONE_SIDED ? 1 : 0);
+	}
+	if (N) CgPublishBase(1000, N);
+	if (F) CgPublishBase(1001, F);
+	return ok;
+}
+
+// A near node with three borders: one named at the portal by a save far block (one-sided), one the
+// far block does not name (dropped), one toward a section with no block; resolved twice.
+static void CheckCrossCountsPerCall()
+{
+	TileGraph g;
+	g.interiorsDropped = g.bordersSkipped = 0;
+	AddSection(&g, 0x0000, TGS_EXTERIOR, 1, 4000.0f);
+	float a[3], b[3], c[3], d[3];
+	SetV(a, 4608.0f, 0.0f, -5.0f);
+	SetV(b, 4608.0f, 0.0f, 5.0f);
+	SetV(c, 4608.0f, 0.0f, 195.0f);
+	SetV(d, 4608.0f, 0.0f, 205.0f);
+	AddBorder(&g, 0x0001, 10, 20, 0, a, b);
+	AddBorder(&g, 0x0001, 12, 22, 0, c, d);
+	AddBorder(&g, 0x0002, 14, 24, 0, a, b);
+	CgBlock* N = CgBlockFromTile(g, 0, CG_BASE, 0);
+	CgBlock* F = FarBlock(CG_SAVE, kSaveNamed.farBorders, 1);
+	Neighbours nb;
+	memset(&nb, 0, sizeof(nb));
+	nb.block[0] = N; nb.uid[0] = 0x0000; nb.dir[0] = 0;
+	nb.block[1] = F; nb.uid[1] = 0x0001; nb.dir[1] = 1;
+	nb.count = 2;
+	CgResolved out[4];
+	CgStats s0 = Stats();
+	int n1 = (N && F) ? CgCrossArcs(N, 0, FindNeighbour, &nb, out, 4) : -1;
+	CgStats s1 = Stats();
+	int n2 = (N && F) ? CgCrossArcs(N, 0, FindNeighbour, &nb, out, 4) : -1;
+	CgStats s2 = Stats();
+	Check(n1 == 1 && n2 == 1
+	      && s1.crossOneSided - s0.crossOneSided == 1 && s1.crossDropped - s0.crossDropped == 1
+	      && s1.crossNoBlock - s0.crossNoBlock == 1
+	      && s2.crossOneSided - s0.crossOneSided == 2 && s2.crossDropped - s0.crossDropped == 2
+	      && s2.crossNoBlock - s0.crossNoBlock == 2,
+	      "cross: drops and one-sided borders are counted once per call");
+	if (N) CgPublishBase(1002, N);
+	if (F) CgPublishBase(1003, F);
+}
+
+static void CheckCrossRule()
+{
+	Fresh();
+	Check(ResolvesAs(kMirrored) && ResolvesAs(kNamesOurFace),
+	      "cross: a far border naming our face at the same portal resolves through it and counts one-sided");
+	Check(ResolvesAs(kAtOppFace), "cross: a far border at the face our border names, at the same portal, resolves through it");
+	Check(ResolvesAs(kOtherPortal), "cross: a far border naming our face at another portal is not taken");
+	Check(ResolvesAs(kSaveNamed), "cross: a far border naming our face at the same portal resolves into a save far block");
+	Check(ResolvesAs(kNearOnlyBase) && ResolvesAs(kNearOnlyLive),
+	      "cross: a near-only border resolves by the portal into a live or base far block and counts one-sided");
+	Check(ResolvesAs(kNearOnlySave), "cross: a near-only border into a save far block is dropped and counted");
+	Check(ResolvesAs(kNoBox), "cross: a portal no widened far box holds is dropped and counted");
+	Check(ResolvesAs(kSlack19) && ResolvesAs(kSlack21),
+	      "cross: the portal slack takes a far portal 19 units away and refuses one 21 units away");
+	CheckCrossCountsPerCall();
+
+	bool agree = true;
+	const Shape* shapes[] = { &kMirrored, &kNamesOurFace, &kAtOppFace, &kOtherPortal, &kSaveNamed, &kNearOnlyBase,
+	                          &kNearOnlyLive, &kNearOnlySave, &kNoBox, &kSlack19, &kSlack21 };
+	for (size_t i = 0; i < sizeof(shapes) / sizeof(shapes[0]); ++i)
+	{
+		CgBlock* N = NearBlock(shapes[i]->face, shapes[i]->oppFace, shapes[i]->nearZ);
+		CgBlock* F = FarBlock(shapes[i]->source, shapes[i]->farBorders, shapes[i]->farCount);
+		agree = agree && N && F && N->borderCount == 1 && CgClassifyBorder(N, N->borders[0], F) == shapes[i]->cls
+		        && CgClassifyBorder(N, N->borders[0], NULL) == CG_BORDER_DROPPED;
+		if (N) CgPublishBase(1004, N);
+		if (F) CgPublishBase(1005, F);
+	}
+	Check(agree, "cross: the classifier agrees with the resolution on every shape above");
 }
 
 // ---- Cache records -------------------------------------------------------------------------------
@@ -697,11 +935,14 @@ int main()
 {
 	CheckTakeRefusesReaders();
 	CheckRanksAndGenerations();
+	CheckLiveOrder();
+	CheckDeferredPublish();
 	CheckRetireDrain();
 	CheckUids();
 	CheckLive();
 	CheckBlocks();
 	CheckCross();
+	CheckCrossRule();
 	CheckCache();
 	CheckReadWhole();
 	CheckCacheVersions();

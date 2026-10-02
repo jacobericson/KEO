@@ -71,6 +71,8 @@ static void ReportOrderPlan(int order, int k, const Located& from, const Located
 	            b.found ? b.legCount : 0, tiles, span, b.cost, b.expanded, b.ms,
 	            to.exact ? "exact" : "footprint", indoors ? 1 : 0, road, b.waterMult, b.waterShare * 100.0f);
 	PlannerReportPlan(line);
+	if (verdict == PV_NO_ROUTE || indoors)
+		PlannerReportBorders(order, to.dir);
 }
 
 // Whether the character's current plan already answers this order: inside its first second and

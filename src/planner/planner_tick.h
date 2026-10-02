@@ -24,5 +24,8 @@ bool PlannerTickArm();
 // Main thread, planner_report.cpp: the capped per-order line and the heartbeat.
 void PlannerReportPlan(const char* line);
 void PlannerReportTick(double now);
+// Main thread, the session build only (empty otherwise): the goal section's borders by opposite
+// section, classified both ways as the cross resolution classifies them; capped per session.
+void PlannerReportBorders(int order, int goalDir);
 
 } // namespace planner

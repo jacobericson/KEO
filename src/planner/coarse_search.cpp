@@ -1,5 +1,7 @@
-// coarse_search.cpp - A* over a coarse graph through its operations struct. Pure; runs on the
-// caller's thread, one search at a time per scratch, and takes no lock.
+// coarse_search.cpp - A* over a coarse graph through its operations struct, and the goal-side probe
+// that answers an unreachable goal without walking the start's whole component. Pure; runs on the
+// caller's thread, one search at a time per scratch, and takes no lock. The probe's refusal count
+// is a plain counter of that thread.
 
 #include <cmath>
 #include <exception>
@@ -22,10 +24,20 @@ struct Search
 
 enum Relaxed { RELAX_OK = 0, RELAX_LIMIT };
 
+// The probe's gathered nodes: an open-addressed table twice the bound, and the breadth-first queue.
+struct ProbeSet
+{
+	unsigned key[COARSE_PROBE_MAX * 2];
+	bool     used[COARSE_PROBE_MAX * 2];
+	unsigned queue[COARSE_PROBE_MAX];
+	int      count;
+};
+
 } // namespace coarse_search_detail
 using namespace coarse_search_detail;
 
 static const int SLOT_NONE = -1;
+static long      s_probeRefusals = 0;
 
 static unsigned MixKey(unsigned x)
 {
@@ -177,6 +189,61 @@ static CoarseResult BuildRoute(const CoarseScratch* s, int goalSlot, CoarseRoute
 	return CS_FOUND;
 }
 
+// The probe table's position holding node, or the empty position where it would go; the table
+// is twice the bound, so an empty position always exists.
+static unsigned ProbeFind(const ProbeSet* p, unsigned node)
+{
+	unsigned mask = (unsigned)(COARSE_PROBE_MAX * 2) - 1u;
+	unsigned i = MixKey(node) & mask;
+	while (p->used[i] && p->key[i] != node)
+		i = (i + 1u) & mask;
+	return i;
+}
+
+static void ProbeAdd(ProbeSet* p, unsigned pos, unsigned node)
+{
+	p->used[pos] = true;
+	p->key[pos] = node;
+	p->queue[p->count++] = node;
+}
+
+CoarseProbeVerdict CoarseProbeGoal(const CoarseGraphOps& ops, unsigned goal, unsigned start, int maxNodes,
+                                   int* expanded)
+{
+	*expanded = 0;
+	if (maxNodes > COARSE_PROBE_MAX) maxNodes = COARSE_PROBE_MAX;
+	if (goal == start) return CPV_MET;
+	if (!ops.arcs || !ops.inboundMirrored || maxNodes < 1) return CPV_OPEN;
+	ProbeSet p;
+	for (int i = 0; i < COARSE_PROBE_MAX * 2; ++i) p.used[i] = false;
+	p.count = 0;
+	ProbeAdd(&p, ProbeFind(&p, goal), goal);
+	CoarseArc arcs[COARSE_ARCS_MAX];
+	for (int head = 0; head < p.count; ++head)
+	{
+		++*expanded;
+		// An arc may enter this node from outside the closure: the closure can no longer be shown closed.
+		if (!ops.inboundMirrored(ops.ctx, p.queue[head])) return CPV_OPEN;
+		int count = ops.arcs(ops.ctx, p.queue[head], arcs, COARSE_ARCS_MAX);
+		if (count > COARSE_ARCS_MAX) count = COARSE_ARCS_MAX;
+		for (int i = 0; i < count; ++i)
+		{
+			if (!(arcs[i].cost >= 0.0f)) continue;   // the search takes no such arc either
+			if (arcs[i].to == start) return CPV_MET;
+			unsigned pos = ProbeFind(&p, arcs[i].to);
+			if (p.used[pos]) continue;
+			if (p.count >= maxNodes) return CPV_OPEN;
+			ProbeAdd(&p, pos, arcs[i].to);
+		}
+	}
+	return CPV_CLOSED;
+}
+
+long CoarseProbeRefusals()
+{
+	return s_probeRefusals;
+}
+
 // A C++ allocation failure answers false; a structured exception is never caught here.
 bool CoarseScratchInit(CoarseScratch* s, int maxNodes)
 {
@@ -212,6 +279,7 @@ CoarseResult CoarseSearch(const CoarseGraphOps& ops, unsigned start, unsigned go
 	out->count    = 0;
 	out->cost     = 0.0f;
 	out->expanded = 0;
+	out->probed   = 0;
 	Search st;
 	float startPos[3];
 	if (!ops.position || !ops.position(ops.ctx, start, startPos) ||
@@ -225,6 +293,16 @@ CoarseResult CoarseSearch(const CoarseGraphOps& ops, unsigned start, unsigned go
 	}
 	if (!ops.arcs) return CS_NO_ROUTE;
 	if (!s || s->node.empty() || s->slotOf.empty()) return CS_NODE_LIMIT;
+	if (ops.inboundMirrored)
+	{
+		CoarseProbeVerdict v = CoarseProbeGoal(ops, goal, start, COARSE_PROBE_MAX, &out->probed);
+		out->expanded = out->probed;
+		if (v == CPV_CLOSED)
+		{
+			++s_probeRefusals;
+			return CS_NO_ROUTE;
+		}
+	}
 
 	ResetTable(s);
 	int size = (int)s->node.size();

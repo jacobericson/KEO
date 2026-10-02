@@ -1,7 +1,8 @@
 // coarse_graph_live.cpp - The live overlay's walk: one registering section's nodes, intra arcs,
 // footprints, water bytes and border connections, read from its graph instance, its mesh instance
-// and the original mesh, written into a live buffer in world units. Pure over the memory it is
-// handed: every index is bounded by its own array's count (a face-data word by the array's count
+// and the original mesh, written into a live buffer in world units; and the comparison of the
+// registered sections a registering mesh names against their last copies. Pure over the memory it
+// is handed: every index is bounded by its own array's count (a face-data word by the array's count
 // and striding) and every pointer NULL-checked before a read; no allocation, no lock, no log. Any
 // thread; the caller keeps the instances stable.
 #ifndef NOMINMAX
@@ -9,6 +10,7 @@
 #endif
 #include "planner/coarse_graph_live.h"
 #include "planner/coarse_graph.h"
+#include "base/hash.h"
 
 #include <float.h>
 #include <math.h>
@@ -50,6 +52,7 @@ static const size_t   GRAPH_EDGE_STRIDE    = 8;
 static const size_t   GRAPH_EDGE_TARGET    = 4;
 static const size_t   POSITION_STRIDE      = 16;
 static const size_t   INSTANCE_INFO_MESH   = 0;
+static const size_t   CONNECTION_COUNT     = LIVE_SET_CONNECTIONS + OFF_HKARRAY_SIZE;
 static const unsigned TARGET_SECTION_SHIFT = 22;
 static const unsigned TARGET_NODE_MASK     = 0x3FFFFFu;
 
@@ -202,9 +205,10 @@ static bool FaceInRange(const MeshView& m, int start, int num)
 // Each original face whose cluster names a node folds vertex a of each edge of its run into that
 // node's box and face count, and its x/z fan area (the vertices as stored, in double) into the
 // node's total and, when its first face-data word is 3, its wet sum; a face with any index out of
-// range counts nowhere. A node left without a vertex takes its centre as its box. Face data the
-// section's faces cannot all index (a NULL array, a striding below 1, or too few words) leaves
-// every node dry and counts noFaceData once.
+// range counts nowhere. A node left without a vertex takes its centre as its box. A striding of 0
+// is a mesh without face data: every node reads dry and zeroStride counts once. Face data the
+// section's faces cannot all index otherwise (a NULL array, a negative striding, or too few words)
+// also leaves every node dry and counts noFaceData once.
 static void CopyFootprints(const MeshView& m, const void* mesh, const float shift[3], CgBlock* buf, CgLiveCounts* counts)
 {
 	const unsigned char* faceData = PtrAt(mesh, LIVE_NM_FACE_DATA);
@@ -212,7 +216,12 @@ static void CopyFootprints(const MeshView& m, const void* mesh, const float shif
 	__int64 striding = IntAt(mesh, LIVE_NM_FACE_DATA_STRIDING);
 	bool haveFaceData = faceData && striding >= 1 && (__int64)(m.faceCount - 1) * striding < faceDataCount;
 	if (m.faceCount > 0 && !haveFaceData)
-		counts->noFaceData = 1;
+	{
+		if (striding == 0)
+			counts->zeroStride = 1;
+		else
+			counts->noFaceData = 1;
+	}
 	double area[CG_LIVE_MAX_NODES];
 	double wetArea[CG_LIVE_MAX_NODES];
 	for (int k = 0; k < buf->nodeCount; ++k)
@@ -417,6 +426,7 @@ CgLiveResult CgLiveCopy(const void* graphInst, const void* coll, const float shi
 		counts = &unused;
 	counts->slot = -1;
 	counts->faces = counts->bordersSkipped = counts->arcsSkipped = counts->waterNodes = counts->noFaceData = 0;
+	counts->zeroStride = 0;
 	if (!graphInst || !coll || !shift || !buf)
 		return CGL_NO_MESH;
 	int slot = IntAt(graphInst, OFF_GI_SECTION);
@@ -507,6 +517,127 @@ int CgInstanceFaceCluster(const void* meshInst, unsigned face)
 			rec = inst + (size_t)mapped * LIVE_FACE_STRIDE;
 	}
 	return rec ? (int)*(const short*)(rec + LIVE_FACE_CLUSTER) : -1;
+}
+
+// ---- The stitch comparison -----------------------------------------------------------------------
+
+unsigned CgLiveSetSignature(const void* mesh, int uid)
+{
+	unsigned h = FNV1A32_OFFSET;
+	const unsigned char* sets = mesh ? PtrAt(mesh, LIVE_NM_STREAMING_SETS) : NULL;
+	int setCount = sets ? IntAt(mesh, LIVE_NM_STREAMING_SETS + OFF_HKARRAY_SIZE) : 0;
+	for (int s = 0; s < setCount; ++s)
+	{
+		const unsigned char* set = sets + (size_t)s * LIVE_SET_STRIDE;
+		if ((unsigned)IntAt(set, LIVE_SET_THIS_UID) != (unsigned)uid)
+			continue;
+		const unsigned char* conns = PtrAt(set, LIVE_SET_CONNECTIONS);
+		int connCount = Count(conns, IntAt(set, CONNECTION_COUNT));
+		h = Fnv1a32Bytes(h, set + LIVE_SET_OPP_UID, 4);
+		h = Fnv1a32Bytes(h, &connCount, 4);
+		if (connCount > 0)
+			h = Fnv1a32Bytes(h, conns, (size_t)connCount * CONNECTION_STRIDE);
+	}
+	return h;
+}
+
+bool CgLiveSlotSignature(const void* coll, int slot, int* uidOut, unsigned* sigOut)
+{
+	const void* meshInst = CgCollectionMeshInstance(coll, slot);
+	const void* mesh = meshInst ? PtrAt(meshInst, OFF_NMI_ORIGINAL_MESH) : NULL;
+	if (!mesh)
+		return false;
+	int uid = CgMeshInstanceUid(meshInst);
+	*uidOut = uid;
+	*sigOut = CgLiveSetSignature(mesh, uid);
+	return true;
+}
+
+const void* CgCollectionGraphInstance(const void* coll, int slot)
+{
+	const unsigned char* infos = coll ? PtrAt(coll, OFF_CCC_INSTANCE_DATA) : NULL;
+	if (!infos || slot < 0 || slot >= CgCollectionCount(coll))
+		return NULL;
+	return PtrAt(infos + (size_t)slot * SIZE_CCC_INSTANCE_INFO, OFF_CCC_INFO_GRAPH);
+}
+
+int CgCollectionSlotOfUid(const void* coll, int uid)
+{
+	int count = CgCollectionCount(coll);
+	for (int slot = 0; slot < count; ++slot)
+	{
+		const void* meshInst = CgCollectionMeshInstance(coll, slot);
+		if (meshInst && CgMeshInstanceUid(meshInst) == uid && CgCollectionGraphInstance(coll, slot))
+			return slot;
+	}
+	return -1;
+}
+
+// Whether set s's opposite uid was already named by an earlier set of the same section.
+static bool NamedBefore(const unsigned char* sets, int s, int uid, int opp)
+{
+	for (int k = 0; k < s; ++k)
+	{
+		const unsigned char* set = sets + (size_t)k * LIVE_SET_STRIDE;
+		if ((unsigned)IntAt(set, LIVE_SET_THIS_UID) == (unsigned)uid && IntAt(set, LIVE_SET_OPP_UID) == opp)
+			return true;
+	}
+	return false;
+}
+
+static bool RecordCurrent(const CgLiveSig* sigs, int sigCount, int slot, int uid, unsigned gen, unsigned sig)
+{
+	if (!sigs || slot >= sigCount)
+		return false;
+	const CgLiveSig& r = sigs[slot];
+	return r.valid && r.uid == uid && r.gen == gen && r.sig == sig;
+}
+
+int CgLiveStaleNeighbours(const void* coll, const void* meshInst, int ownSlot, const CgLiveSig* sigs,
+                          int sigCount, unsigned gen, int* slotsOut, unsigned* sigsOut, int max,
+                          int* checked, int* overflow)
+{
+	int unusedChecked = 0, unusedOverflow = 0;
+	if (!checked)
+		checked = &unusedChecked;
+	if (!overflow)
+		overflow = &unusedOverflow;
+	*checked = *overflow = 0;
+	if (!slotsOut || !sigsOut || max < 0)
+		max = 0;
+	if (!sigs || sigCount < 0)
+		sigCount = 0;
+	const void* mesh = meshInst ? PtrAt(meshInst, OFF_NMI_ORIGINAL_MESH) : NULL;
+	const unsigned char* sets = mesh ? PtrAt(mesh, LIVE_NM_STREAMING_SETS) : NULL;
+	int setCount = sets ? IntAt(mesh, LIVE_NM_STREAMING_SETS + OFF_HKARRAY_SIZE) : 0;
+	int uid = CgMeshInstanceUid(meshInst);
+	int listed = 0;
+	for (int s = 0; s < setCount; ++s)
+	{
+		const unsigned char* set = sets + (size_t)s * LIVE_SET_STRIDE;
+		int opp = IntAt(set, LIVE_SET_OPP_UID);
+		if ((unsigned)IntAt(set, LIVE_SET_THIS_UID) != (unsigned)uid || NamedBefore(sets, s, uid, opp))
+			continue;
+		int slot = CgCollectionSlotOfUid(coll, opp);
+		if (slot < 0 || slot == ownSlot)
+			continue;
+		if (*checked >= max)
+		{
+			++*overflow;
+			continue;
+		}
+		int occupant = 0;
+		unsigned sig = 0;
+		if (!CgLiveSlotSignature(coll, slot, &occupant, &sig))
+			continue;
+		++*checked;
+		if (RecordCurrent(sigs, sigCount, slot, occupant, gen, sig))
+			continue;
+		slotsOut[listed] = slot;
+		sigsOut[listed] = sig;
+		++listed;
+	}
+	return listed;
 }
 
 } // namespace planner
