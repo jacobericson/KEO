@@ -135,7 +135,7 @@ void InstallClusterCrossCost(int* installed, int*)
 	{
 		orig_graphInstanceConnect = NULL;
 		ErrorLog(std::string("Cluster cross cost: not installed (") + why
-		         + "); cross-tile links keep their tile-local cost");
+		         + "); cross-tile links keep their tile-local cost and the planner's live overlay is off");
 	}
 }
 

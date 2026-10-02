@@ -239,10 +239,12 @@ static SectionArrays LookUp(const TfDoc& d, const Group& g)
 }
 
 // Whether face f's first face-data word is 3 (the water plane); a striding below 1 or a word past
-// the array reads dry.
+// the array reads dry. The bound is f * striding >= count rewritten so it cannot overflow: for an
+// in-range f the index f * striding is below the count and fits an int.
 static bool FaceIsWater(const TfDoc& d, const SectionArrays& s, int f)
 {
-	if (s.faceDataStriding < 1 || (__int64)f * s.faceDataStriding >= (__int64)s.faceDataCount)
+	if (s.faceDataStriding < 1 || s.faceDataCount <= 0
+		|| (__int64)f > ((__int64)s.faceDataCount - 1) / s.faceDataStriding)
 		return false;
 	__int64 word = 0;
 	return TfAsInt(d, TfArrayAt(d, s.faceData, (int)((__int64)f * s.faceDataStriding)), &word) && word == 3;
@@ -278,7 +280,7 @@ static SectionResult ReadFaces(const TfDoc& d, const SectionArrays& s, const flo
 		cluster[f] = (int)c;
 		__int64 start = IntField(d, face, "startEdgeIndex");
 		__int64 count = IntField(d, face, "numEdges");
-		if (start < 0 || count < 0 || start + count > s.edgeCount)
+		if (start < 0 || count < 0 || start > s.edgeCount || count > s.edgeCount - start)
 			return SEC_BAD_INDEX;
 		TgNode& n = nodes[(int)c];
 		++n.faces;
@@ -340,7 +342,14 @@ static void AddNodes(const TfDoc& d, const SectionArrays& s, std::vector<TgNode>
 		TgNode& n = nodes[k];
 		int node = TfArrayAt(d, s.nodes, k);
 		__int64 start = IntField(d, node, "startEdgeIndex");
-		__int64 end = start + IntField(d, node, "numEdges");
+		__int64 numEdges = IntField(d, node, "numEdges");
+		__int64 end;
+		if (numEdges <= 0)
+			end = start;
+		else if (start > s.graphEdgeCount - numEdges)
+			end = s.graphEdgeCount;
+		else
+			end = start + numEdges;
 		if (start < 0)
 			start = 0;
 		if (end > s.graphEdgeCount)
@@ -449,7 +458,8 @@ static TgResult Refuse(TileGraph* out, TgResult r)
 
 // Checks run in a fixed order per group: its objects and Info, its positions against its nodes,
 // the node cap, then its faces. The exterior fails the tile at the first failed check; an
-// interior is dropped at any of them but the node cap, which fails the tile.
+// interior is dropped at any of them but the node cap, which fails the tile: the store key carries
+// ten cluster bits, so an over-cap interior cannot be dropped into a colliding key.
 TgResult TgExtract(const TfDoc& doc, int gx, int gy, TileGraph* out)
 {
 	Clear(out);

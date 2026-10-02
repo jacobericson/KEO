@@ -257,6 +257,7 @@ src\planner\coarse_graph_live.cpp
 src\planner\coarse_graph_live_site.cpp
 src\planner\plan_build.cpp
 src\planner\planner_tick.cpp
+src\planner\planner_capture.cpp
 src\planner\planner_report.cpp
 src\planner\planner_hooks.cpp
 src\planner\planner_water.cpp

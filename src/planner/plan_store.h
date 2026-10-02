@@ -73,9 +73,14 @@ int  PlanStoreTakeArrival(int slot);                    // main thread: reads an
 void PlanStoreNoteConsulted(int slot);
 
 // Main thread: the tracker's query. The character's stop at its current portal belongs to the planner
-// (PlanOwnsWait on the slot's current state and the position and waypoint the caller already read).
-// Unarmed: false at once.
+// (PlanOwnsWait on the slot's current state, the position and waypoint the caller already read, and
+// whether the movement destination, read through the installed reader, is the plan's in x-z).
+// Unarmed, or no reader installed: false at once.
 bool PlannerOwnsWait(uintptr_t cm, float posX, float posZ, float wpX, float wpZ);
+// Main thread: the movement's last requested destination (x and z; y zero), installed when the planner
+// arms; NULL until then.
+typedef void (*PlanMoveDestReader)(uintptr_t cm, float out[3]);
+void PlanStoreSetMoveDestReader(PlanMoveDestReader fn);
 
 enum PlanSendKind { PLAN_SEND_RESEND = 1, PLAN_SEND_HOLD = 2 };
 // Main thread, the movement module's send paths, before the order is sent. PLAN_SEND_RESEND: the

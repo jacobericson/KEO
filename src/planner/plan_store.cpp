@@ -41,6 +41,7 @@ static PlanStorePause  s_pauseInRewrite = NULL;
 static void*           s_pauseInRewriteCtx = NULL;
 static PlanStorePause  s_pauseInRead = NULL;
 static void*           s_pauseInReadCtx = NULL;
+static PlanMoveDestReader s_moveDestReader = NULL;
 
 static LONGLONG MakeWord(unsigned epoch, unsigned leg)
 {
@@ -115,6 +116,7 @@ static void ClearSlot(PlanSlot& s)
 	memset(s.destAtPlan, 0, sizeof(s.destAtPlan));
 	memset(s.resend, 0, sizeof(s.resend));
 	s.resendCount = 0;
+	s.waterMult = 0.0f;
 	memset(s.legs, 0, sizeof(s.legs));
 	memset(&s.main, 0, sizeof(s.main));
 	InterlockedExchange(&s.loadedMask, 0);
@@ -348,6 +350,7 @@ static float DistXz(float ax, float az, float bx, float bz)
 bool PlannerOwnsWait(uintptr_t cm, float posX, float posZ, float wpX, float wpZ)
 {
 	if (PlanStoreMode() == PLANNER_OFF) return false;
+	if (!s_moveDestReader) return false;
 	int slot = PlanStoreFind(cm);
 	if (slot < 0) return false;
 	PlanView v;
@@ -357,7 +360,15 @@ bool PlannerOwnsWait(uintptr_t cm, float posX, float posZ, float wpX, float wpZ)
 	float posToPortal = DistXz(posX, posZ, leg.point[0], leg.point[2]);
 	float wpToPortal = DistXz(wpX, wpZ, leg.point[0], leg.point[2]);
 	float posToWp = DistXz(posX, posZ, wpX, wpZ);
-	return PlanOwnsWait(PlanStoreMode(), v.verdict, leg.isDestination, v.waiting, posToPortal, wpToPortal, posToWp);
+	float moveDest[3];
+	s_moveDestReader(cm, moveDest);
+	bool destIsPlans = PlanDestIsPlansXz(moveDest, v.finalDest, v.resend, v.resendCount);
+	return PlanOwnsWait(PlanStoreMode(), v.verdict, leg.isDestination, v.waiting, posToPortal, wpToPortal, posToWp, destIsPlans);
+}
+
+void PlanStoreSetMoveDestReader(PlanMoveDestReader fn)
+{
+	s_moveDestReader = fn;
 }
 
 // Main thread (the slots' one writer).

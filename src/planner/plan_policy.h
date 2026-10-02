@@ -108,6 +108,9 @@ bool PlanDestMatches(const float a[3], const float b[3]);
 // Whether a call's destination is the plan's: within PLAN_DEST_MATCH (three dimensions) of the plan's
 // destination or of one of the first resendCount recorded re-sends (at most PLAN_RESEND_POINTS).
 bool PlanDestIsPlans(const float dest[3], const float finalDest[3], const float resend[][3], int resendCount);
+// The same test in x-z only, for a movement destination read without its height: within
+// PLAN_DEST_MATCH of the plan's destination or of one of the first resendCount recorded re-sends.
+bool PlanDestIsPlansXz(const float dest[3], const float finalDest[3], const float resend[][3], int resendCount);
 // Whether the getZoneEdge detour returns the planner's point: on, a LEGGED plan and a matching
 // destination; observe and off never steer.
 bool PlanEdgeSteers(int mode, int verdict, bool destMatches);
@@ -119,9 +122,10 @@ bool PlanReplacesAhead(int mode, int verdict);
 // on, LEGGED, the current leg not the destination, and either the slot's waiting word set within
 // PLAN_REACH of the portal (a held wait), or the character within PLAN_REACH of its waypoint while
 // that waypoint lies within PLAN_REACH of the portal (it stands at the portal the planner gave,
-// before the engine's next advance). Distances x-z.
+// before the engine's next advance). Distances x-z. Only while the movement destination is the
+// plan's (destIsPlans): a halt or a detour's hold point is never owned.
 bool PlanOwnsWait(int mode, int verdict, int legIsDestination, int waiting, float distToPortal,
-                  float wpToPortal, float posToWp);
+                  float wpToPortal, float posToWp, bool destIsPlans);
 
 const int PLAN_PATH_COMPLETE     = 1;   // HavokCharacter::PathState COMPLETE
 const int PLAN_CHAR_GOAL_REACHED = 1;   // HavokCharacter::CharacterState GOAL_REACHED (IDLE is 0)

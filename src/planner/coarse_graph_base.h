@@ -6,7 +6,8 @@
 namespace planner {
 
 // Main thread, the last startup install step: creates the store and starts the builder when
-// plannerMode is not off (and plannerBaseBuild is set). No hook.
+// plannerMode is not off (and plannerBaseBuild is set); a failed arm clears the mode and starts
+// no builder. No hook.
 void PlannerBaseStartStep(int* installed, int* total);
 // Main thread, every frame from CameraZoneSaveLoad right after PreloadCheckSaveLoad: the ZM+8
 // edge (a new store generation and a save-path snapshot), the paths.count poll, the live

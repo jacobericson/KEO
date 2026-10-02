@@ -1,6 +1,7 @@
-// planner_tick.cpp - The route planner's main-thread half: the order capture, the store adapter the
-// coarse search walks, the locator, the loaded-set snapshot and the tick that validates, drops and
-// re-plans each slot and feeds the route's tiles to the preload queue.
+// planner_tick.cpp - The route planner's main-thread tick: the store adapter the coarse search walks,
+// the locator, the loaded-set snapshot, the search and the plan write it shares with the order
+// capture, and the tick that validates, drops and re-plans each slot and feeds the route's tiles to
+// the preload queue.
 // Main thread only. The one game lock is the section manager's world lock (+0x200), taken
 // try-shared (never blocking) by the locator and the snapshot and released on every path; no mod
 // lock is taken. The search scratch is allocated once, at arm.
@@ -8,6 +9,7 @@
 #define NOMINMAX
 #endif
 #include "planner/planner_tick.h"
+#include "planner/planner_tick_internal.h"
 #include "planner/plan_build.h"
 #include "planner/plan_policy.h"
 #include "planner/plan_store.h"
@@ -40,27 +42,10 @@ const int    SNAP_SLOTS         = 1024;   // a packed face key's 10 collection-s
 const int    MEMO_ENTRIES       = 8;
 const int    NODES_PER_SECTION  = 1 << CG_NODE_BITS;
 const int    PLAYER_SCAN_MAX    = 200;
-const int    LINE_TILES_MAX     = 16;
 const float  FACE_RAY_LENGTH    = 500.0f; // Havok units, both ways along the vertical
 const float  WORLD_TO_HAVOK     = 0.1f;
 
 typedef unsigned int (*getFaceKeyVec4_t)(void* sectionMgr, const float* havokPos, float rayLength);
-
-// A located point: its store node and section, and whether the engine's own face lookup found it.
-struct Located { unsigned key; int dir; int uid; int node; int exact; };
-
-// One search's legs and figures, kept for the other characters of the same order.
-struct Built
-{
-	unsigned __int64 memoKey;
-	int      found;
-	int      legCount, truncated;
-	float    cost;
-	int      expanded;
-	double   ms;
-	float    waterMult, waterShare;   // the search's water multiplier; the route's wet share, 0..1
-	PlanLeg  legs[PLAN_MAX_LEGS];
-};
 
 // A live player character and its movement, for the tick's validation.
 struct PlayerChar { uintptr_t character, cm; };
@@ -91,7 +76,6 @@ static int            s_walkUids[SNAP_SLOTS];
 // The tick's own state. Main thread.
 static double         s_lastTick      = 0.0;
 static unsigned       s_storeGen      = 0;
-static int            s_orderSeq      = 0;
 
 // Per-call scratch of the order capture and the re-plan. Main thread.
 static Built          s_memo[MEMO_ENTRIES];
@@ -100,7 +84,6 @@ static CoarseRoute    s_route;
 static PlanRouteStep  s_steps[COARSE_ROUTE_MAX];
 static PlanNodeBox    s_boxes[NODES_PER_SECTION];
 static PlanWrite      s_write;
-static float          s_orderMult[PLAN_WATER_ORDER_MAX];   // the current order's water multipliers
 static float          s_routeCentres[COARSE_ROUTE_MAX][3];
 static int            s_routeWater[COARSE_ROUTE_MAX];
 
@@ -110,14 +93,14 @@ static float DistXz(const float a[3], const float b[3])
 	return sqrtf(dx * dx + dz * dz);
 }
 
-static void CharPos(uintptr_t character, float out[3])
+void planner_tick_detail::CharPos(uintptr_t character, float out[3])
 {
 	out[0] = GetCharPosX(character);
 	out[1] = *(float*)(KLIB_MEMBER(1, character, RootObjectBase_pos_y, OFF_CHAR_POS_Y));
 	out[2] = GetCharPosZ(character);
 }
 
-static uintptr_t MovementOf(uintptr_t character)
+uintptr_t planner_tick_detail::MovementOf(uintptr_t character)
 {
 	return character ? *(uintptr_t*)(KLIB_MEMBER(3, character, Character_movement, OFF_CHAR_MOVEMENT)) : 0;
 }
@@ -213,7 +196,7 @@ static const void* LiveCollection(uintptr_t sm)
 // The world's instances walked under one try-shared take of the world lock (the uid decode reads
 // mod memory only); a busy lock keeps the last snapshot. Interior uids get their directory indices
 // after the release.
-static void TakeSnapshot()
+void planner_tick_detail::TakeSnapshot()
 {
 	uintptr_t sm = SectionManager();
 	if (!sm || !fn_boostUnlockShared)
@@ -393,7 +376,7 @@ static bool LocateFootprint(const float p[3], Located* out)
 }
 
 // A busy lock or a missed face adds to locFail and falls back to the footprints.
-static bool Locate(const float p[3], Located* out)
+bool planner_tick_detail::Locate(const float p[3], Located* out)
 {
 	if (LocateExact(p, out))
 		return true;
@@ -453,7 +436,7 @@ static void BuildFromRoute(const CoarseRoute& route, const float dest[3], int de
 
 // One coarse search from start to goal at water multiplier m, memoised within an order by the node
 // pair and m.
-static const Built* SearchAndBuild(const Located& start, const Located& goal, const float dest[3], float m)
+const Built* planner_tick_detail::SearchAndBuild(const Located& start, const Located& goal, const float dest[3], float m)
 {
 	unsigned __int64 memoKey = PlanMemoKey(start.key, goal.key);
 	for (int i = 0; i < s_memoCount; ++i)
@@ -478,10 +461,15 @@ static const Built* SearchAndBuild(const Located& start, const Located& goal, co
 	return b;
 }
 
+void planner_tick_detail::ClearMemo()
+{
+	s_memoCount = 0;
+}
+
 // Writes the character's plan, with the water multiplier m its re-plans search at, and feeds its
 // route's next tiles; -1 when the store is full.
-static int WritePlan(uintptr_t cm, const float pos[3], const Located& goal, const float dest[3],
-                     const Built& b, double now, int* verdictOut, int keepSends, float m)
+int planner_tick_detail::WritePlan(uintptr_t cm, const float pos[3], const Located& goal, const float dest[3],
+                                   const Built& b, double now, int* verdictOut, int keepSends, float m)
 {
 	PlanWrite& w = s_write;
 	memset(&w, 0, sizeof(w));
@@ -521,7 +509,7 @@ static int WritePlan(uintptr_t cm, const float pos[3], const Located& goal, cons
 
 // Drops the character's plan, counting it by reason, and a legged plan the edge branch never consulted.
 // Returns the plan's edge-branch consultations, -1 when the character had no plan.
-static int DropPlan(uintptr_t cm, PlanDropWhy why)
+int planner_tick_detail::DropPlan(uintptr_t cm, PlanDropWhy why)
 {
 	PlanView v;
 	int slot = PlanStoreFind(cm);
@@ -535,148 +523,6 @@ static int DropPlan(uintptr_t cm, PlanDropWhy why)
 	if (verdict == PV_LEGGED && consulted == 0)
 		InterlockedIncrement(&PlannerCountersGet()->notConsulted);
 	return consulted;
-}
-
-// ---- The order capture ---------------------------------------------------------------------------
-
-static const char* VerdictName(int v)
-{
-	return v == PV_DIRECT ? "direct" : (v == PV_LEGGED ? "legged" : "noRoute");
-}
-
-// The distinct exterior cells of the legs, in route order, as gx.gy pairs.
-static void FormatTiles(const PlanLeg* legs, int n, char* out, size_t size)
-{
-	out[0] = '\0';
-	size_t len = 0;
-	int shown = 0, lastX = -1, lastY = -1;
-	for (int i = 0; i < n && shown < LINE_TILES_MAX; ++i)
-	{
-		if (legs[i].farSection >= CG_EXTERIOR_SLOTS || (legs[i].cellX == lastX && legs[i].cellY == lastY))
-			continue;
-		lastX = legs[i].cellX;
-		lastY = legs[i].cellY;
-		int w = _snprintf_s(out + len, size - len, _TRUNCATE, "%s%d.%d", shown ? "," : "", lastX, lastY);
-		if (w < 0)
-			break;
-		len += (size_t)w;
-		++shown;
-	}
-}
-
-static void ReportOrderPlan(int order, int k, const Located& from, const Located& to, int verdict,
-                            const Built& b, int span, bool indoors, uintptr_t cm)
-{
-	char tiles[160];
-	FormatTiles(b.legs, b.found ? b.legCount : 0, tiles, sizeof(tiles));
-	float road = *(const float*)(KLIB_MEMBER(3, cm, CharMovement_roadWeight, 0x100));
-	char line[512];
-	_snprintf_s(line, sizeof(line), _TRUNCATE,
-	            "Planner plan: order=%d char=%d from=%x:%d to=%x:%d verdict=%s legs=%d tiles=%s span=%d"
-	            " cost=%.0f expanded=%d ms=%.1f loc=%s indoors=%d road=%.3f m=%.2f water=%.0f%%",
-	            order, k, (unsigned)from.uid, from.node, (unsigned)to.uid, to.node, VerdictName(verdict),
-	            b.found ? b.legCount : 0, tiles, span, b.cost, b.expanded, b.ms,
-	            to.exact ? "exact" : "footprint", indoors ? 1 : 0, road, b.waterMult, b.waterShare * 100.0f);
-	PlannerReportPlan(line);
-}
-
-static void DropOrderPlans(const uintptr_t* chars, int n, volatile LONG* counter)
-{
-	for (int k = 0; k < n; ++k)
-	{
-		uintptr_t cm = MovementOf(chars[k]);
-		if (!cm)
-			continue;
-		if (counter)
-			InterlockedIncrement(counter);
-		DropPlan(cm, PDW_UNLOCATED);
-	}
-}
-
-// Whether the character's current plan already answers this order: inside its first second and
-// toward the same point. Main thread, the store's one writer; reads the slot without a lock.
-static bool IsRepeatOrder(uintptr_t cm, const float dest[3], double now)
-{
-	PlanView v;
-	int slot = PlanStoreFind(cm);
-	if (slot < 0 || !PlanStoreRead(slot, &v) || v.cm != cm)
-		return false;
-	return PlanRepeatDue(v.finalDest, dest, now - PlanStoreMain(slot)->planTime);
-}
-
-// The engine's move branch applies the destination at once whatever the order's two flags carry
-// (a plain click sends the add flag set; the flags matter only to the engine's other orders), so
-// every captured move order is planned.
-void PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void* destIndoors, bool shift, bool addDontClear)
-{
-	if (PlanStoreMode() == PLANNER_OFF) return;
-	(void)shift;
-	(void)addDontClear;
-	if (!location)
-	{
-		InterlockedIncrement(&PlannerCountersGet()->noLocation);
-		return;
-	}
-	if (n <= 0)
-		return;
-	int order = ++s_orderSeq;
-	TakeSnapshot();
-	float dest[3] = { location[0], location[1], location[2] };
-	Located goal;
-	if (!Locate(dest, &goal))
-	{
-		DropOrderPlans(chars, n, &PlannerCountersGet()->goalUnlocated);
-		return;
-	}
-	s_memoCount = 0;
-	PlannerOrderWater(chars, n, s_orderMult);
-	double now = ElapsedSec();
-	for (int k = 0; k < n; ++k)
-	{
-		uintptr_t cm = MovementOf(chars[k]);
-		if (!cm)
-			continue;
-		float m = k < PLAN_WATER_ORDER_MAX ? s_orderMult[k] : 1.0f;
-		if (IsRepeatOrder(cm, dest, now))
-		{
-			InterlockedIncrement(&PlannerCountersGet()->repeats);
-			continue;
-		}
-		float pos[3];
-		CharPos(chars[k], pos);
-		Located start;
-		if (!Locate(pos, &start))
-		{
-			InterlockedIncrement(&PlannerCountersGet()->startUnlocated);
-			DropPlan(cm, PDW_UNLOCATED);
-			continue;
-		}
-		const Built* b = SearchAndBuild(start, goal, dest, m);
-		int verdict = PV_NONE;
-		if (WritePlan(cm, pos, goal, dest, *b, now, &verdict, 0, m) < 0)
-			continue;
-		int sx, sy, gx, gy;
-		PlanCellOf(pos[0], pos[2], &sx, &sy);
-		PlanCellOf(dest[0], dest[2], &gx, &gy);
-		ReportOrderPlan(order, k, start, goal, verdict, *b, PlanCellSpan(sx, sy, gx, gy), destIndoors != NULL, cm);
-	}
-}
-
-void PlannerDrop(uintptr_t character)
-{
-	if (PlanStoreMode() == PLANNER_OFF) return;
-	DropPlan(MovementOf(character), PDW_ORDER);
-}
-
-bool PlannerRouteReplacesAhead(uintptr_t character)
-{
-	if (PlanStoreMode() == PLANNER_OFF) return false;
-	uintptr_t cm = MovementOf(character);
-	int slot = PlanStoreFind(cm);
-	PlanView v;
-	if (slot < 0 || !PlanStoreRead(slot, &v) || v.cm != cm)
-		return false;
-	return PlanReplacesAhead(PlanStoreMode(), v.verdict);
 }
 
 bool PlannerTickArm()
@@ -694,12 +540,26 @@ bool PlannerTickArm()
 	s_aheadTiles = g_plannerCfg.aheadTiles < 0 ? 0 : (g_plannerCfg.aheadTiles > 8 ? 8 : g_plannerCfg.aheadTiles);   // the feed buffers hold 8 cells
 	s_waitSeconds = g_plannerCfg.waitSeconds;
 	PlannerWaterArm(g_plannerCfg.waterCost);
+	PlanStoreSetMoveDestReader(ReadMoveDest);
 	return true;
 }
 
 // ---- The tick ------------------------------------------------------------------------------------
 
-// The live player characters with their movements; at most PLAYER_SCAN_MAX.
+// The session build's one line, the first time the list is longer than the planner scans.
+static void NoteOverCap()
+{
+#ifdef ZONEOPT_DEBUG
+	static bool noted = false;
+	if (noted)
+		return;
+	noted = true;
+	LogMsgDeferrable("Planner: the player list is longer than the planner scans; the tick skips its slots"
+	                 " and the order capture plans nothing while it is");
+#endif
+}
+
+// The live player characters with their movements; -1 when the list is longer than PLAYER_SCAN_MAX.
 static int ReadPlayers(PlayerChar* out)
 {
 	uintptr_t pi = *(uintptr_t*)((uintptr_t)GameAddr(RVA_GLOBAL_PLAYER));
@@ -707,8 +567,13 @@ static int ReadPlayers(PlayerChar* out)
 		return 0;
 	unsigned count = GetPlayerCharCount(pi);
 	uintptr_t* stuff = GetPlayerCharStuff(pi);
-	if (!stuff || count > (unsigned)PLAYER_SCAN_MAX)
+	if (!stuff)
 		return 0;
+	if (count > (unsigned)PLAYER_SCAN_MAX)
+	{
+		NoteOverCap();
+		return -1;
+	}
 	int n = 0;
 	for (unsigned i = 0; i < count; ++i)
 	{
@@ -723,6 +588,12 @@ static int ReadPlayers(PlayerChar* out)
 	return n;
 }
 
+bool planner_tick_detail::PlayersOverCap()
+{
+	PlayerChar players[PLAYER_SCAN_MAX];
+	return ReadPlayers(players) < 0;
+}
+
 // Why the slot's plan ends now, from the character's state, its movement destination against the
 // plan's and the one it held at plan time, and its position; f receives what the rule read.
 static PlanDropWhy SlotDropDue(const PlanView& v, uintptr_t character, const float pos[3], double now, DropFacts* f)
@@ -732,13 +603,13 @@ static PlanDropWhy SlotDropDue(const PlanView& v, uintptr_t character, const flo
 	memset(f, 0, sizeof(*f));
 	f->planAge = planAge;
 	if (!character)
-		return PlanDropDue(false, false, 0.0f, v.finalDest, v.finalDest, v.destAtPlan, planAge, false, false);
+		return PlanDropDue(false, false, 0.0f, v.finalDest, v.finalDest, v.destAtPlan, false, false);
 	float* moveDest = f->moveDest;
 	ReadMoveDest(v.cm, moveDest);
 	bool halted = DistXz(moveDest, pos) <= PLAN_DEST_MATCH;
 	f->halted = halted;
 	return PlanDropDue(true, IslandK7IsUnconcious(character), DistXz(pos, v.finalDest), moveDest, v.finalDest,
-	                   v.destAtPlan, planAge,
+	                   v.destAtPlan,
 	                   PlanIsModSend(moveDest, v.resend, v.resendCount, m->holdDest, m->haveHold, now - m->holdTime),
 	                   halted);
 }
@@ -902,7 +773,9 @@ void PlannerTick(void* zoneMgr, double now)
 	PlayerChar players[PLAYER_SCAN_MAX];
 	int nPlayers = ReadPlayers(players);
 	int replans = 0;
-	for (int slot = 0; slot < PLAN_SLOTS; ++slot)
+	// A list too long to scan skips every slot this tick: an unscanned character would read as no
+	// longer a player and drop.
+	for (int slot = 0; nPlayers >= 0 && slot < PLAN_SLOTS; ++slot)
 	{
 		if (!PlanStoreKey(slot))
 			continue;

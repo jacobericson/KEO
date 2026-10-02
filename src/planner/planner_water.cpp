@@ -11,10 +11,13 @@
 #include "game/game.h"
 #include "base/core.h"
 #include "movement/islands.h"
+#include "movement/formation.h"
 #include <float.h>
 #include <string.h>
 
 namespace planner {
+
+static_assert(PLAN_WATER_ORDER_MAX >= MAX_FORMATION_MEMBERS, "the order hook passes at most MAX_FORMATION_MEMBERS characters");
 
 typedef float (*calculateSwimSpeed_t)(void* stats);
 typedef int   (*getWaterLevel_t)(void* character);
@@ -122,7 +125,7 @@ static bool RunTogether(const uintptr_t* chars, int n)
 // nothing. Calls Character::getWaterLevel and CharStats::calculateSwimSpeed for each member read. In
 // a run-together order an unconscious or carried member is left out of the speeds (its engine value
 // still counts) and is no failure; any other member whose speed read failed counts one waterFail.
-// Off reads nothing and gives every member 1.
+// Engine mode reads no speeds and counts no waterFail. Off reads nothing and gives every member 1.
 int PlannerOrderWater(const uintptr_t* chars, int n, float* mult)
 {
 	if (!chars || !mult || n <= 0)

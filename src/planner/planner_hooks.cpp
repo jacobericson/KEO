@@ -206,7 +206,8 @@ void InstallPlannerHooks(int* installed, int*)
 	LogMsg(std::string("Planner: hooks installed (mode=") + PlannerModeName(s_mode) + ")");
 }
 
-// Main thread, the startup banner.
+// Main thread, the startup banner. The mode is the one captured when the hooks installed; a later
+// start-step clear (a failed arm) leaves it stale, and the arm line's mode= is the truth.
 std::string PlannerBannerToken()
 {
 	int tiles = 0, total = 0;

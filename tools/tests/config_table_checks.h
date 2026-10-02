@@ -296,7 +296,7 @@ void CheckTemplateAndDefaults(const ConfigModule& core, const ConfigModule& rend
 		}
 	}
 
-	// 2. The undocumented rows are exactly the known 29.
+	// 2. The undocumented rows are exactly the known 35.
 	{
 		std::vector<std::string> undoc, want;
 		for (int m = 0; m < kConfigModuleCount; ++m)

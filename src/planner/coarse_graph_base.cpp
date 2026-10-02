@@ -63,6 +63,7 @@ enum TileLoad { TL_OK = 0, TL_OK_TAIL, TL_FAILED, TL_FAILED_TAIL };
 struct PassTotals
 {
 	int tiles, failed, tailStops, clusters, arcs, borders, arcsTrunc, maxNodes, replaced, handedOff, outranked;
+	int interiorsDropped, bordersSkipped;
 	int waterNodes;   // nodes with a non-zero water byte
 };
 
@@ -159,7 +160,8 @@ static std::vector<TileName> ListTiles(const std::wstring& dir, DWORD* findError
 {
 	std::vector<TileName> out;
 	WIN32_FIND_DATAW fd;
-	HANDLE h = FindFirstFileW((dir + L"tile*.hkt").c_str(), &fd);
+	std::wstring pattern = dir + L"tile*.hkt";
+	HANDLE h = FindFirstFileW(pattern.c_str(), &fd);
 	if (findError)
 		*findError = h == INVALID_HANDLE_VALUE ? GetLastError() : 0;
 	if (h == INVALID_HANDLE_VALUE)
@@ -189,6 +191,8 @@ static std::vector<TileName> ListTiles(const std::wstring& dir, DWORD* findError
 static bool PublishTile(const TileGraph& g, int gx, int gy, int source, unsigned gen, PassTotals* t)
 {
 	int dir = CgExteriorIndex(gx, gy);
+	t->interiorsDropped += g.interiorsDropped;
+	t->bordersSkipped += g.bordersSkipped;
 	for (size_t s = 0; s < g.sections.size(); ++s)
 	{
 		CgBlock* b = CgBlockFromTile(g, (int)s, source, gen);
@@ -339,6 +343,11 @@ static void BuildBase()
 {
 	LONGLONG t0 = QpcNow();
 	std::wstring game(s_dataRoot);
+	DWORD findError = 0;
+	std::vector<TileName> names = game.empty() ? std::vector<TileName>()
+	                                           : ListTiles(game + L"data\\newland\\land\\navtiles\\", &findError);
+	InterlockedExchange(&s_tilesFound, (LONG)names.size());
+	LogDataRoot(game, names.size(), findError);
 	std::wstring cacheDir = CacheFolder();
 	std::wstring cachePath = cacheDir + L"coarse_base.bin";
 	if (!cacheDir.empty())
@@ -347,16 +356,11 @@ static void BuildBase()
 	bool valid = !cacheDir.empty() && ReadWholeFile(cachePath.c_str(), CACHE_MAX_BYTES, &old) && !old.empty()
 	          && CgCacheValidate(&old[0], old.size()) == CGC_OK;
 	const CgCacheHeader* oldHead = valid ? (const CgCacheHeader*)&old[0] : NULL;
-	DWORD findError = 0;
-	std::vector<TileName> names = game.empty() ? std::vector<TileName>()
-	                                           : ListTiles(game + L"data\\newland\\land\\navtiles\\", &findError);
-	InterlockedExchange(&s_tilesFound, (LONG)names.size());
-	LogDataRoot(game, names.size(), findError);
 
 	PassTotals t;
 	memset(&t, 0, sizeof(t));
 	int hits = 0;
-	bool changed = !valid || oldHead->tileCount != (unsigned)names.size();
+	bool changed = !valid;
 	std::vector<CgCacheIndexEntry> entries;
 	std::vector<unsigned char> payload;
 	for (size_t i = 0; i < names.size(); ++i)
@@ -367,7 +371,6 @@ static void BuildBase()
 		if (!GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &fa) || fa.nFileSizeHigh != 0)
 		{
 			t.failed++;
-			changed = true;
 			continue;
 		}
 		CgCacheIndexEntry e;
@@ -383,16 +386,18 @@ static void BuildBase()
 		if (hit && CgCacheDecodeTile(rec, hit->payloadBytes, &g))
 		{
 			hits++;
+			if (CgCacheTileFlags(rec, hit->payloadBytes) & 1u)
+				t.tailStops++;
 			payload.insert(payload.end(), rec, rec + hit->payloadBytes);
 		}
 		else
 		{
-			changed = true;
 			int r = LoadTileFile(path.c_str(), tn.gx, tn.gy, &g);
 			CountLoad(r, &t);
 			if (r == TL_FAILED || r == TL_FAILED_TAIL)
 				continue;
-			CgCacheEncodeTile(g, &payload);
+			CgCacheEncodeTile(g, &payload, r == TL_OK_TAIL ? 1u : 0u);
+			changed = true;
 		}
 		e.payloadBytes = (unsigned)payload.size() - e.payloadOffset;
 		e.sectionCount = (unsigned)g.sections.size();
@@ -405,16 +410,20 @@ static void BuildBase()
 		t.tiles++;
 		InterlockedIncrement(&s_tilesPublished);
 	}
+	if (valid && oldHead->tileCount != (unsigned)entries.size())
+		changed = true;
 	const char* write = "skip";   // an empty listing never replaces the cache
 	if (changed && names.size() > 0)
 		write = !cacheDir.empty() && WriteCache(cachePath, entries, payload) ? "ok" : "fail";
 
-	char line[320];
+	char line[448];
 	_snprintf_s(line, sizeof(line), _TRUNCATE,
 	            "Planner base: tiles=%d/%d failed=%d tailStops=%d clusters=%d arcs=%d borders=%d arcsTrunc=%d ms=%d"
-	            " cacheHits=%d cacheWrite=%s maxNodes=%d waterNodes=%d unsearchable=%ld",
+	            " cacheHits=%d cacheWrite=%s maxNodes=%d interiorsDropped=%d bordersSkipped=%d waterNodes=%d"
+	            " unsearchable=%ld",
 	            t.tiles, (int)names.size(), t.failed, t.tailStops, t.clusters, t.arcs, t.borders, t.arcsTrunc,
-	            (int)QpcToMs(QpcNow() - t0), hits, write, t.maxNodes, t.waterNodes, UnsearchableSoFar());
+	            (int)QpcToMs(QpcNow() - t0), hits, write, t.maxNodes, t.interiorsDropped, t.bordersSkipped,
+	            t.waterNodes, UnsearchableSoFar());
 	LogMsgDeferrable(line);
 }
 
@@ -447,12 +456,14 @@ static void ReplaceSaveTiles(const SaveRequest& req)
 				t.failed++;
 		}
 	}
-	char line[320];
+	char line[448];
 	_snprintf_s(line, sizeof(line), _TRUNCATE,
 	            "Planner base: save gen=%u layers=%d layersCut=%d tiles=%d failed=%d replaced=%d handedOff=%d"
-	            " outranked=%d arcsTrunc=%d ms=%d waterNodes=%d unsearchable=%ld",
+	            " outranked=%d arcsTrunc=%d ms=%d tailStops=%d interiorsDropped=%d bordersSkipped=%d waterNodes=%d"
+	            " unsearchable=%ld",
 	            req.storeGen, req.layers, req.layersCut, t.tiles, t.failed, t.replaced, t.handedOff, t.outranked,
-	            t.arcsTrunc, (int)QpcToMs(QpcNow() - t0), t.waterNodes, UnsearchableSoFar());
+	            t.arcsTrunc, (int)QpcToMs(QpcNow() - t0), t.tailStops, t.interiorsDropped, t.bordersSkipped,
+	            t.waterNodes, UnsearchableSoFar());
 	LogMsgDeferrable(line);
 }
 
@@ -532,7 +543,7 @@ void PlannerBaseStartStep(int* installed, int* total)
 	    << " waterBind=" << PlannerWaterBindToken();
 	LogMsg(arm.str());
 	InitializeCriticalSection(&s_requestCS);
-	if (!g_plannerCfg.baseBuild)
+	if (g_plannerCfg.mode == PLANNER_OFF || !g_plannerCfg.baseBuild)
 		return;
 	ResolveDataRoot();
 	s_requestEvent = CreateEventW(NULL, FALSE, FALSE, NULL);

@@ -118,10 +118,9 @@ int PlanPickFootprint(const PlanNodeBox* nodes, int n, const float p[3], bool al
 // still the one it held when the plan was written, and once it does it is the plan's own. An order
 // the engine ends copies the character's position there, which keeps the plan too.
 PlanDropWhy PlanDropDue(bool livePlayer, bool unconscious, float distToDest, const float moveDest[3],
-                        const float planDest[3], const float destAtPlan[3], double planAge,
-                        bool moveDestIsModSend, bool halted)
+                        const float planDest[3], const float destAtPlan[3], bool moveDestIsModSend,
+                        bool halted)
 {
-	(void)planAge;
 	if (!livePlayer)
 		return PDW_NOT_PLAYER;
 	if (unconscious)

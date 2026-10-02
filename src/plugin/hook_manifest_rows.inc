@@ -179,9 +179,9 @@
 
 	// The collection's graph-instance connect (src/fixes/search/cluster_cross_cost.cpp): the
 	// prologue opens with `mov r11,rsp` and `mov [r11+10h],rdx`, so the bytes a detour takes
-	// are two whole register-relative instructions with no branch. Wanted only while
-	// clusterCrossCost is set. diagnostic = true: a mismatch refuses the cost fix alone, and
-	// without it the connect behaves exactly as vanilla does.
+	// are two whole register-relative instructions with no branch. Wanted while clusterCrossCost
+	// or plannerMode is set. diagnostic = true: a mismatch refuses both the cost fix and the
+	// planner's live overlay, and without it the connect behaves as vanilla does.
 	HOOK_ROW(HOOK_GRAPH_INSTANCE_CONNECT, "graphInstanceConnect", RVA_GRAPH_INSTANCE_CONNECT, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_CLUSTER_CROSS_COST, HOOK_CAP_NONE,
 	         0x4C,0x8B,0xDC,0x49,0x89,0x53,0x10,0x49,0x89,0x4B,0x08,0x53,0x55,0x48,0x81,0xEC)
 

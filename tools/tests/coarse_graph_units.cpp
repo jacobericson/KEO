@@ -667,6 +667,32 @@ static void CheckReadWhole()
 	Check(!ok && f.log == "open,size,close," && got.empty(), "read-whole: a file over the cap is refused and closed");
 }
 
+static void CheckCacheVersions()
+{
+	std::vector<unsigned char> file;
+	TwoTileFile(&file);
+	const CgCacheHeader* h = (const CgCacheHeader*)&file[0];
+	bool carries = h->extractVersion == TG_EXTRACT_VERSION && CgCacheValidate(&file[0], file.size()) == CGC_OK;
+	((CgCacheHeader*)&file[0])->extractVersion = TG_EXTRACT_VERSION - 1;
+	Check(CgCacheValidate(&file[0], file.size()) == CGC_EXTRACT,
+	      "cache: a file at an older extractor version is refused");
+	Check(carries, "cache: a rebuilt file carries the extractor version and validates");
+
+	TileGraph in = CacheTile(0.0f), out;
+	std::vector<unsigned char> plain, tail;
+	CgCacheEncodeTile(in, &plain);
+	CgCacheEncodeTile(in, &tail, 1u);
+	Check(CgCacheTileFlags(&plain[0], plain.size()) == 0 && CgCacheTileFlags(&tail[0], tail.size()) == 1
+	      && CgCacheTileFlags(&tail[0], 4) == 0
+	      && CgCacheDecodeTile(&plain[0], plain.size(), &out) && CgCacheDecodeTile(&tail[0], tail.size(), &out),
+	      "cache: a tile's tail bit survives the record");
+
+	std::vector<unsigned char> high(tail);
+	unsigned two = 2u;
+	memcpy(&high[12], &two, sizeof(two));
+	Check(!CgCacheDecodeTile(&high[0], high.size(), &out), "cache: a tile head flag above bit 0 is refused");
+}
+
 int main()
 {
 	CheckTakeRefusesReaders();
@@ -678,6 +704,7 @@ int main()
 	CheckCross();
 	CheckCache();
 	CheckReadWhole();
+	CheckCacheVersions();
 	CgStoreDestroy();
 	return CheckExit("coarse_graph_units");
 }

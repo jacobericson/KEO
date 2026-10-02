@@ -16,13 +16,15 @@ namespace planner {
 
 const unsigned PLANNER_CACHE_MAGIC   = 0x31505A4Bu;   // 'K' 'Z' 'P' '1' in file order
 const unsigned PLANNER_CACHE_VERSION = 2;              // any layout change bumps it
+const unsigned TG_EXTRACT_VERSION    = 1;              // any change to what TgExtract yields bumps it
 
 struct CgCacheHeader        // 64 bytes at offset 0
 {
 	unsigned magic, version, readerVersion, tileCount;
 	unsigned indexOffset, indexBytes, payloadOffset, payloadBytes;
 	unsigned headerCrc;     // CRC32 of bytes [0, 32) followed by the whole index
-	unsigned reserved[7];
+	unsigned extractVersion;    // TG_EXTRACT_VERSION; outside the CRC, so the compare alone refuses
+	unsigned reserved[6];
 };
 struct CgCacheIndexEntry    // 40 bytes, one per cached tile, sorted by (gy, gx)
 {
@@ -37,15 +39,17 @@ struct CgCacheIndexEntry    // 40 bytes, one per cached tile, sorted by (gy, gx)
 	unsigned pad;
 };
 unsigned CgCrc32(const void* data, size_t n);     // reflected 0xEDB88320; "123456789" -> 0xCBF43926
-// A tile's record: a 16-byte head {sectionCount, interiorsDropped, bordersSkipped, 0}, then per
+// A tile's record: a 16-byte head {sectionCount, interiorsDropped, bordersSkipped, flags}, then per
 // section {uid, kind, gx, gy, origin[3], nodeCount, arcCount, borderCount} then its nodes (each with
 // its water byte), arcs and borders as the TileGraph holds them (a node's firstArc counted from the
 // section's first arc).
-void CgCacheEncodeTile(const TileGraph& g, std::vector<unsigned char>* out);
+// flags bit 0 is set when the tile's parse stopped at its tail.
+void CgCacheEncodeTile(const TileGraph& g, std::vector<unsigned char>* out, unsigned flags = 0);
+unsigned CgCacheTileFlags(const unsigned char* p, size_t n);   // 0 on a short record
 bool CgCacheDecodeTile(const unsigned char* p, size_t n, TileGraph* out);   // false on any bound
 // The whole file: header, index, payload. Validate refuses a bad magic, version, reader version,
-// CRC or bound and says which.
-enum CgCacheCheck { CGC_OK = 0, CGC_SHORT, CGC_MAGIC, CGC_VERSION, CGC_READER, CGC_CRC, CGC_BOUNDS };
+// CRC, bound or extractor version and says which.
+enum CgCacheCheck { CGC_OK = 0, CGC_SHORT, CGC_MAGIC, CGC_VERSION, CGC_READER, CGC_CRC, CGC_BOUNDS, CGC_EXTRACT };
 CgCacheCheck CgCacheValidate(const unsigned char* file, size_t n);
 // Finds a tile's record in a validated file: the entry when size, mtime and reader version match
 // and the record's CRC holds, else NULL.

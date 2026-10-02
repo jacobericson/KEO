@@ -185,7 +185,9 @@ static bool PlannerOwnsMember(uintptr_t cm)
 	return planner::PlannerOwnsWait(cm, px, pz, wx, wz);
 }
 
-bool FormationReissueTravel(int slot, const char* why, double now)
+// The re-issue's preconditions: a gathered active group outside its cooldown, and the live player
+// list (at most 200 characters) into *stuffOut and *countOut; false declines the re-issue.
+static bool GatherReissue(int slot, double now, uintptr_t** stuffOut, unsigned int* countOut)
 {
 	if (slot < 0 || slot >= MAX_FORMATION_GROUPS) return false;
 	FormationGroup& grp = formationGroups[slot];
@@ -201,6 +203,37 @@ bool FormationReissueTravel(int slot, const char* why, double now)
 		scStuff = GetPlayerCharStuff(playerIntf);
 	}
 	if (!scStuff || scCount == 0 || scCount > 200) return false;
+	*stuffOut = scStuff;
+	*countOut = scCount;
+	return true;
+}
+
+// Records one member's re-send for the dispatch's post check.
+static void RecordReissueMember(int slot, int m, uintptr_t character, const float destPos[3],
+                                const IslandReissueTrace& trace, double now, int traceDispatch)
+{
+	std::ostringstream label;
+	// The char@<hex low 16 bits> suffix (same form as the solo
+	// label, and PLAYER TASK's char=@) ties a member's result to
+	// that character's PLAYER TASK lines; the "group N member M"
+	// prefix is kept for existing greps.
+	label << "group " << slot << " member " << m
+	      << " char@" << std::hex << (character & 0xFFFF) << std::dec;
+	std::string labelStr = label.str();
+
+	// Record, do not classify. fn_moveOrder is applied
+	// asynchronously, so +0xDC read here still holds the previous
+	// destination; island_reissue.cpp classifies (IslandClassifyReissuePost,
+	// the single owner of post=) and logs 1 s later.
+	IslandRecordReissueCheck(character, labelStr.c_str(), destPos[0], destPos[2],
+	                         trace, now, traceDispatch);
+}
+
+// Sends each eligible member of the group the group's destination, nudged, records the dispatch and
+// stamps the cooldown; false when no member was sent.
+static bool SendReissue(int slot, const char* why, double now, const uintptr_t* scStuff, unsigned int scCount)
+{
+	FormationGroup& grp = formationGroups[slot];
 
 	// Same dispatch as the gather->travel transition in PollFormationGroups.
 	int sent = 0;
@@ -286,23 +319,7 @@ bool FormationReissueTravel(int slot, const char* why, double now)
 		// selfRec instead of k7rec.
 		OrderOutcomeNoteReissueSent(mem.character, why, now);
 
-		{
-			std::ostringstream label;
-			// The char@<hex low 16 bits> suffix (same form as the solo
-			// label, and PLAYER TASK's char=@) ties a member's result to
-			// that character's PLAYER TASK lines; the "group N member M"
-			// prefix is kept for existing greps.
-			label << "group " << slot << " member " << m
-			      << " char@" << std::hex << (mem.character & 0xFFFF) << std::dec;
-			std::string labelStr = label.str();
-
-			// Record, do not classify. fn_moveOrder is applied
-			// asynchronously, so +0xDC read here still holds the previous
-			// destination; island_reissue.cpp classifies (IslandClassifyReissuePost,
-			// the single owner of post=) and logs 1 s later.
-			IslandRecordReissueCheck(mem.character, labelStr.c_str(), destPos[0], destPos[2],
-			                         trace, now, traceDispatch);
-		}
+		RecordReissueMember(slot, m, mem.character, destPos, trace, now, traceDispatch);
 	}
 
 	// Close the dispatch (every Begin needs its End, even with nothing sent:
@@ -319,4 +336,12 @@ bool FormationReissueTravel(int slot, const char* why, double now)
 	   << grp.destX << "," << grp.destZ << ")";
 	LogMsg(ss.str());
 	return true;
+}
+
+bool FormationReissueTravel(int slot, const char* why, double now)
+{
+	uintptr_t* scStuff = NULL;
+	unsigned int scCount = 0;
+	if (!GatherReissue(slot, now, &scStuff, &scCount)) return false;
+	return SendReissue(slot, why, now, scStuff, scCount);
 }

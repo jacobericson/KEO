@@ -343,6 +343,20 @@ static void CheckDestSteerAhead()
 	bool unrecorded = PlanDestIsPlans(probe, finalDest, rec, 0);
 	Check(near && !past && !unrecorded, "dest: a recorded re-send matches within two units only");
 
+	float leg[3];
+	Set3(leg, 300.0f, 0.0f, 40.0f);
+	Set3(probe, 10.5f, 0.0f, 21.0f);   // the final destination in x-z, its height not read
+	bool xzFinal = PlanDestIsPlansXz(probe, finalDest, rec, 1);
+	Set3(probe, 18.5f, 0.0f, 19.0f);
+	bool xzResend = PlanDestIsPlansXz(probe, finalDest, rec, 1);
+	bool xzLeg = PlanDestIsPlansXz(leg, finalDest, rec, 1);
+	Set3(probe, 60.0f, 0.0f, 60.0f);   // a halt at the character's own position, far from all three
+	bool xzHalt = PlanDestIsPlansXz(probe, finalDest, rec, 1);
+	Set3(probe, 18.0f, 0.0f, 20.0f);
+	bool xzUnrecorded = PlanDestIsPlansXz(probe, finalDest, rec, 0);
+	Check(xzFinal && xzResend, "dest: x-z matches the final destination or a re-send whatever the height");
+	Check(!xzLeg && !xzHalt && !xzUnrecorded, "dest: x-z never matches a far point (the leg is not an input), a halt or an unrecorded re-send");
+
 	float raw[3], snapped[3];
 	Set3(raw, 0.0f, 0.0f, 0.0f);
 	Set3(snapped, 3.0f, 9.0f, 4.0f);
@@ -370,39 +384,76 @@ static bool ParkedAtEdge(bool movingToEdge, bool idle, float haltDist, float wpD
 	return wpDist < PARK_REACH;
 }
 
+// The subset rows' movement destinations, as |movement destination - position| (the tracker's halt
+// measure), with the character at the origin and the plan's destination 500 away (the rows' destDist):
+// a halt (under PARK_HALT) or a point 50 away is neither the destination nor a re-send, which lies
+// within PLAN_RESEND_REACH of it; 500 is the destination itself and 492 a recorded re-send.
+static const int HALT_COUNT = 6;
+static const float HALTS[HALT_COUNT] = { 0.0f, 5.0f, 9.99f, 50.0f, 500.0f, 492.0f };
+
+static bool HaltIsPlans(float haltDist)
+{
+	float moveDest[3], finalDest[3];
+	float rec[PLAN_RESEND_POINTS][3];
+	Set3(moveDest, haltDist, 0.0f, 0.0f);
+	Set3(finalDest, 500.0f, 0.0f, 0.0f);
+	Set3(rec[0], 492.0f, 0.0f, 0.0f);
+	Set3(rec[1], 505.0f, 0.0f, 3.0f);
+	return PlanDestIsPlansXz(moveDest, finalDest, rec, 2);
+}
+
 static void CheckOwns()
 {
 	static const float FAR_WP = 1.0e9f;
-	Check(PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 12.0f, FAR_WP, FAR_WP), "owns: on, legged, waiting and within reach owns the wait");
-	Check(!PlanOwnsWait(PLANNER_OBSERVE, PV_LEGGED, 0, 1, 12.0f, FAR_WP, FAR_WP) && !PlanOwnsWait(PLANNER_OFF, PV_LEGGED, 0, 1, 12.0f, FAR_WP, FAR_WP),
+	Check(PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 12.0f, FAR_WP, FAR_WP, true), "owns: on, legged, waiting and within reach owns the wait");
+	Check(!PlanOwnsWait(PLANNER_OBSERVE, PV_LEGGED, 0, 1, 12.0f, FAR_WP, FAR_WP, true) && !PlanOwnsWait(PLANNER_OFF, PV_LEGGED, 0, 1, 12.0f, FAR_WP, FAR_WP, true),
 	      "owns: observe never owns a wait");
-	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 1, 1, 12.0f, FAR_WP, FAR_WP), "owns: the destination leg is never owned");
-	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 20.0f, FAR_WP, FAR_WP) && !PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 35.0f, FAR_WP, FAR_WP),
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 1, 1, 12.0f, FAR_WP, FAR_WP, true), "owns: the destination leg is never owned");
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 20.0f, FAR_WP, FAR_WP, true) && !PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 35.0f, FAR_WP, FAR_WP, true),
 	      "owns: beyond reach is not owned");
-	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 12.0f, FAR_WP, FAR_WP) && !PlanOwnsWait(PLANNER_ON, PV_DIRECT, 0, 1, 12.0f, FAR_WP, FAR_WP),
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 12.0f, FAR_WP, FAR_WP, true) && !PlanOwnsWait(PLANNER_ON, PV_DIRECT, 0, 1, 12.0f, FAR_WP, FAR_WP, true),
 	      "owns: no waiting word or a direct plan is not owned");
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 12.0f, FAR_WP, FAR_WP, false), "owns: a halt at the portal is not owned (held wait)");
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 7.0f, 5.0f, 3.0f, false), "owns: a halt at the portal is not owned (arrival)");
 
 	bool subset = PLAN_REACH <= PARK_REACH && PLAN_POST_ARRIVAL == PARK_FAR_DEST;
+	int ownedWaits = 0;
 	float dists[5] = { 0.0f, 5.0f, 12.0f, 19.0f, 19.99f };
 	for (int i = 0; i < 5; ++i)
-		if (PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, dists[i], FAR_WP, FAR_WP))
-			subset = subset && ParkedAtEdge(true, true, 50.0f, dists[i], 500.0f);
-	Check(subset && PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 19.99f, FAR_WP, FAR_WP), "owns: an owned wait satisfies the parked predicate");
+		for (int h = 0; h < HALT_COUNT; ++h)
+		{
+			bool mine = HaltIsPlans(HALTS[h]);
+			if (PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, dists[i], FAR_WP, FAR_WP, mine))
+			{
+				++ownedWaits;
+				subset = subset && ParkedAtEdge(true, true, HALTS[h], dists[i], 500.0f);
+			}
+		}
+	Check(subset && ownedWaits == 10 && PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 19.99f, FAR_WP, FAR_WP, true),
+	      "owns: an owned wait satisfies the parked predicate");
 
 	// The stop at the planner's own portal, before the engine's next advance: waiting word clear.
-	Check(PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 7.0f, 5.0f, 3.0f), "owns: standing at the planner's waypoint owns the arrival");
-	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 300.0f, 5.0f, 295.0f), "owns: walking toward the planner's waypoint is not owned");
-	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 27.0f, 25.0f, 3.0f), "owns: a waypoint beyond reach of the portal is not owned");
-	Check(!PlanOwnsWait(PLANNER_OBSERVE, PV_LEGGED, 0, 0, 7.0f, 5.0f, 3.0f) && !PlanOwnsWait(PLANNER_OFF, PV_LEGGED, 0, 0, 7.0f, 5.0f, 3.0f),
+	Check(PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 7.0f, 5.0f, 3.0f, true), "owns: standing at the planner's waypoint owns the arrival");
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 300.0f, 5.0f, 295.0f, true), "owns: walking toward the planner's waypoint is not owned");
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 27.0f, 25.0f, 3.0f, true), "owns: a waypoint beyond reach of the portal is not owned");
+	Check(!PlanOwnsWait(PLANNER_OBSERVE, PV_LEGGED, 0, 0, 7.0f, 5.0f, 3.0f, true) && !PlanOwnsWait(PLANNER_OFF, PV_LEGGED, 0, 0, 7.0f, 5.0f, 3.0f, true),
 	      "owns: observe never owns an arrival");
-	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 1, 0, 7.0f, 5.0f, 3.0f), "owns: the destination leg's arrival is never owned");
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 1, 0, 7.0f, 5.0f, 3.0f, true), "owns: the destination leg's arrival is never owned");
 
 	bool arrivalSubset = true;
+	int ownedArrivals = 0;
 	float toWp[5] = { 0.0f, 5.0f, 12.0f, 19.0f, 19.99f };
 	for (int i = 0; i < 5; ++i)
-		if (PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, toWp[i] + 5.0f, 5.0f, toWp[i]))
-			arrivalSubset = arrivalSubset && ParkedAtEdge(true, true, 50.0f, toWp[i], 500.0f);
-	Check(arrivalSubset && PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 24.99f, 5.0f, 19.99f),
+		for (int h = 0; h < HALT_COUNT; ++h)
+		{
+			bool mine = HaltIsPlans(HALTS[h]);
+			if (PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, toWp[i] + 5.0f, 5.0f, toWp[i], mine))
+			{
+				++ownedArrivals;
+				arrivalSubset = arrivalSubset && ParkedAtEdge(true, true, HALTS[h], toWp[i], 500.0f);
+			}
+		}
+	Check(arrivalSubset && ownedArrivals == 10 && PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 24.99f, 5.0f, 19.99f, true),
 	      "owns: an owned arrival satisfies the parked predicate");
 }
 

@@ -9,7 +9,7 @@ namespace planner {
 
 namespace coarse_graph_cache_detail {
 
-struct TileHead    { unsigned sectionCount, interiorsDropped, bordersSkipped, zero; };
+struct TileHead    { unsigned sectionCount, interiorsDropped, bordersSkipped, flags; };
 struct SectionHead { int uid, kind, gx, gy; float origin[3]; int nodeCount, arcCount, borderCount; };
 
 // A bounded cursor over one record.
@@ -63,9 +63,9 @@ static void Append(std::vector<unsigned char>* out, const void* p, size_t n)
 	out->insert(out->end(), b, b + n);
 }
 
-void CgCacheEncodeTile(const TileGraph& g, std::vector<unsigned char>* out)
+void CgCacheEncodeTile(const TileGraph& g, std::vector<unsigned char>* out, unsigned flags)
 {
-	TileHead th = { (unsigned)g.sections.size(), (unsigned)g.interiorsDropped, (unsigned)g.bordersSkipped, 0 };
+	TileHead th = { (unsigned)g.sections.size(), (unsigned)g.interiorsDropped, (unsigned)g.bordersSkipped, flags & 1u };
 	Append(out, &th, sizeof(th));
 	for (size_t s = 0; s < g.sections.size(); ++s)
 	{
@@ -154,6 +154,15 @@ static bool DecodeSection(Reader* r, TileGraph* out)
 	return true;
 }
 
+unsigned CgCacheTileFlags(const unsigned char* p, size_t n)
+{
+	TileHead th;
+	if (!p || n < sizeof(th))
+		return 0;
+	memcpy(&th, p, sizeof(th));
+	return th.flags;
+}
+
 bool CgCacheDecodeTile(const unsigned char* p, size_t n, TileGraph* out)
 {
 	out->sections.clear();
@@ -164,7 +173,7 @@ bool CgCacheDecodeTile(const unsigned char* p, size_t n, TileGraph* out)
 	out->bordersSkipped = 0;
 	Reader r = { p, n, 0 };
 	TileHead th;
-	if (!p || !Take(&r, &th, sizeof(th)) || th.zero != 0)
+	if (!p || !Take(&r, &th, sizeof(th)) || (th.flags & ~1u) != 0)
 		return false;
 	if (th.sectionCount > (n - r.at) / sizeof(SectionHead))
 		return false;
@@ -206,6 +215,8 @@ CgCacheCheck CgCacheValidate(const unsigned char* file, size_t n)
 		return CGC_VERSION;
 	if (h.readerVersion != (unsigned)TAGFILE_READER_VERSION)
 		return CGC_READER;
+	if (h.extractVersion != TG_EXTRACT_VERSION)
+		return CGC_EXTRACT;
 	if (h.indexOffset != sizeof(CgCacheHeader) || h.tileCount > (n - sizeof(CgCacheHeader)) / sizeof(CgCacheIndexEntry)
 	    || h.indexBytes != h.tileCount * sizeof(CgCacheIndexEntry)
 	    || h.payloadOffset != h.indexOffset + h.indexBytes || h.payloadBytes != n - h.payloadOffset)
@@ -275,6 +286,7 @@ void CgCacheBuild(const std::vector<CgCacheIndexEntry>& entries,
 	h.magic = PLANNER_CACHE_MAGIC;
 	h.version = PLANNER_CACHE_VERSION;
 	h.readerVersion = (unsigned)TAGFILE_READER_VERSION;
+	h.extractVersion = TG_EXTRACT_VERSION;
 	h.tileCount = (unsigned)index.size();
 	h.indexOffset = sizeof(CgCacheHeader);
 	h.indexBytes = (unsigned)(index.size() * sizeof(CgCacheIndexEntry));

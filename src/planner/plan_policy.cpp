@@ -182,6 +182,16 @@ bool PlanDestIsPlans(const float dest[3], const float finalDest[3], const float 
 	return false;
 }
 
+bool PlanDestIsPlansXz(const float dest[3], const float finalDest[3], const float resend[][3], int resendCount)
+{
+	if (DistanceXz(dest, finalDest) <= PLAN_DEST_MATCH) return true;
+	if (!resend || resendCount < 0) resendCount = 0;
+	if (resendCount > PLAN_RESEND_POINTS) resendCount = PLAN_RESEND_POINTS;
+	for (int i = 0; i < resendCount; ++i)
+		if (DistanceXz(dest, resend[i]) <= PLAN_DEST_MATCH) return true;
+	return false;
+}
+
 bool PlanEdgeSteers(int mode, int verdict, bool destMatches)
 {
 	return mode == PLANNER_ON && verdict == PV_LEGGED && destMatches;
@@ -193,9 +203,10 @@ bool PlanReplacesAhead(int mode, int verdict)
 }
 
 bool PlanOwnsWait(int mode, int verdict, int legIsDestination, int waiting, float distToPortal,
-                  float wpToPortal, float posToWp)
+                  float wpToPortal, float posToWp, bool destIsPlans)
 {
 	if (mode != PLANNER_ON || verdict != PV_LEGGED || legIsDestination) return false;
+	if (!destIsPlans) return false;
 	if (waiting != 0 && distToPortal < PLAN_REACH) return true;
 	return wpToPortal < PLAN_REACH && posToWp < PLAN_REACH;
 }

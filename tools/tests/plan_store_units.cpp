@@ -276,8 +276,27 @@ static void HeldAtPortal(int mode)
 	PlanStoreArm(mode);
 }
 
+// The movement destination the fake reader returns: the plan's own (x 3000) unless a row moves it.
+static float s_fakeDest[3];
+
+static void FakeMoveDest(uintptr_t cm, float out[3])
+{
+	(void)cm;
+	out[0] = s_fakeDest[0];
+	out[1] = 0.0f;
+	out[2] = s_fakeDest[2];
+}
+
 static void OwnsRows()
 {
+	s_fakeDest[0] = 3000.0f;
+	s_fakeDest[1] = 0.0f;
+	s_fakeDest[2] = 0.0f;
+	HeldAtPortal(PLANNER_ON);
+	PlanStoreSetMoveDestReader(NULL);
+	Check(!PlannerOwnsWait(CM_A, 1005.0f, 5.0f, 9000.0f, 9000.0f), "owns: no movement destination reader owns nothing");
+	PlanStoreSetMoveDestReader(FakeMoveDest);
+
 	HeldAtPortal(PLANNER_OFF);
 	Check(!PlannerOwnsWait(CM_A, 1005.0f, 5.0f, 9000.0f, 9000.0f), "owns: an unarmed store owns nothing");
 
@@ -286,6 +305,11 @@ static void OwnsRows()
 
 	HeldAtPortal(PLANNER_ON);
 	Check(PlannerOwnsWait(CM_A, 1005.0f, 5.0f, 9000.0f, 9000.0f), "owns: on owns a held portal wait within reach");
+	s_fakeDest[0] = 1005.0f;
+	s_fakeDest[2] = 5.0f;
+	Check(!PlannerOwnsWait(CM_A, 1005.0f, 5.0f, 9000.0f, 9000.0f), "owns: a member halted at its own position is not owned");
+	s_fakeDest[0] = 3000.0f;
+	s_fakeDest[2] = 0.0f;
 	Check(!PlannerOwnsWait(CM_A, 1025.0f, 0.0f, 9000.0f, 9000.0f), "owns: a wait beyond reach of the portal is not owned");
 	Check(!PlannerOwnsWait(CM_B, 1005.0f, 5.0f, 9000.0f, 9000.0f), "owns: an unplanned character's wait is not owned");
 
@@ -295,6 +319,9 @@ static void OwnsRows()
 	PlanStoreSetWaiting(slot, v.epoch, 0);
 	Check(!PlannerOwnsWait(CM_A, 1005.0f, 5.0f, 9000.0f, 9000.0f), "owns: a portal without the waiting word set is not owned");
 	Check(PlannerOwnsWait(CM_A, 1003.0f, 2.0f, 1005.0f, 0.0f), "owns: on owns a stop at the planner's waypoint at the portal");
+	s_fakeDest[0] = 1000.0f;
+	Check(!PlannerOwnsWait(CM_A, 1003.0f, 2.0f, 1005.0f, 0.0f), "owns: a halt at the portal is not owned");
+	s_fakeDest[0] = 3000.0f;
 	Check(!PlannerOwnsWait(CM_A, 1503.0f, 2.0f, 1505.0f, 0.0f), "owns: a waypoint away from the portal is not owned");
 
 	// The current leg is the destination (the plan written starting on leg 2), waiting set.
@@ -314,6 +341,7 @@ static void OwnsRows()
 	PlanStoreRead(slot, &v);
 	PlanStoreSetWaiting(slot, v.epoch, 1);
 	Check(!PlannerOwnsWait(CM_A, 1005.0f, 5.0f, 9000.0f, 9000.0f), "owns: a direct plan's wait is not owned");
+	PlanStoreSetMoveDestReader(NULL);
 	Fresh(PLANNER_OFF);
 }
 

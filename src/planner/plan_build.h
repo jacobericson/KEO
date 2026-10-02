@@ -33,13 +33,13 @@ const double PLAN_ORDER_SETTLE = 1.0;
 // PLAN_DEST_MATCH in x-z from both the plan's destination (planDest) and the movement destination the
 // character held when the plan was written, that the mod did not send for this plan
 // (moveDestIsModSend) and that is not a halt onto the character's own position: a new order.
-// planAge (seconds since the plan was written) does not enter the rule. PDW_ORDER (a non-move order or
-// the stop key) and PDW_UNLOCATED (an order whose goal or start could not be located) are the order
+// PDW_ORDER (a non-move order, the stop key, or an order refused while the player list is over the
+// planner's cap) and PDW_UNLOCATED (an order whose goal or start could not be located) are the order
 // capture's drops, counted by reason; PlanDropDue never returns them.
 enum PlanDropWhy { PDW_NONE = 0, PDW_NOT_PLAYER, PDW_KO, PDW_ARRIVED, PDW_NEW_DEST, PDW_ORDER, PDW_UNLOCATED, PDW_COUNT };
 PlanDropWhy PlanDropDue(bool livePlayer, bool unconscious, float distToDest, const float moveDest[3],
-                        const float planDest[3], const float destAtPlan[3], double planAge,
-                        bool moveDestIsModSend, bool halted);
+                        const float planDest[3], const float destAtPlan[3], bool moveDestIsModSend,
+                        bool halted);
 
 // A mod detour (the formation's gather) keeps a plan for this long without steering it.
 const double PLAN_HOLD_SECONDS = 20.0;
