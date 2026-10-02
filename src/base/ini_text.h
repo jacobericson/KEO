@@ -1,4 +1,8 @@
 #pragma once
+// A build line passing the old DEV define name stops here.
+#ifdef ZONEOPT_DEBUG
+#error stale DEV define: the build lines pass /DKEO_DEBUG
+#endif
 #include <string>
 #include <vector>
 

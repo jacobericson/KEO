@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_GUARD_REPORT_H
-#define KENSHI_ZONE_OPT_FIXES_GUARD_REPORT_H
+#ifndef KEO_FIXES_GUARD_REPORT_H
+#define KEO_FIXES_GUARD_REPORT_H
 
 // The guards' shared reporting: a heartbeat line built from a table of named counters, the
 // heartbeat timer and the fire-line cap. Any thread; no lock, no CRT stream, no allocation.
@@ -91,4 +91,4 @@ inline bool GuardFireClaim(volatile LONG* lines, LONG max)
 	}
 }
 
-#endif // KENSHI_ZONE_OPT_FIXES_GUARD_REPORT_H
+#endif // KEO_FIXES_GUARD_REPORT_H

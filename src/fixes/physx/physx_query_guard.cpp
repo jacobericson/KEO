@@ -185,9 +185,9 @@ using namespace physx_query_guard_detail;
 // query (the AI back thread and the main thread both reach it). No
 // allocation, no lock, no logging: counters are Interlocked and a report is a
 // claimed slot the main thread drains.
-extern "C" int __fastcall ZoneOpt_PhysQEntryOk(const void* shape);
+extern "C" int __fastcall KEO_PhysQEntryOk(const void* shape);
 
-extern "C" int __fastcall ZoneOpt_PhysQEntryOk(const void* shape)
+extern "C" int __fastcall KEO_PhysQEntryOk(const void* shape)
 {
 	InterlockedIncrement(&s_entries);
 
@@ -209,7 +209,7 @@ namespace physx_query_guard_detail
 // site is patched, so a build that cannot tell the abstract vtable from a
 // concrete one says so in the log instead of being discovered in a fight.
 // Informational: it never refuses to arm.
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 const unsigned __int64 kAbstractShapeVtableRva = 0x3B3F90;
 const unsigned __int64 kConcreteShapeVtableRva = 0x3B40D0;
 
@@ -340,7 +340,7 @@ static bool TryArmPhysQueryGuard()
 		return true;
 	}
 
-	*(volatile unsigned __int64*)page = (unsigned __int64)(uintptr_t)&ZoneOpt_PhysQEntryOk;
+	*(volatile unsigned __int64*)page = (unsigned __int64)(uintptr_t)&KEO_PhysQEntryOk;
 
 	DWORD oldProtect = 0;
 	if (!VirtualProtect(codePage, kCodePageSize, PAGE_EXECUTE_READ, &oldProtect))
@@ -360,7 +360,7 @@ static bool TryArmPhysQueryGuard()
 	s_page     = page;
 	s_codePage = codePage;
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	SelfTestClassifier();
 #endif
 

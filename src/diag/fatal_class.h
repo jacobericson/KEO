@@ -4,8 +4,8 @@
 // pieces that decide what a crash record says it is. The reads that produce
 // the raw type descriptor name live next door in cpp_exception.cpp.
 
-#ifndef KENSHI_ZONE_OPT_DIAG_FATAL_CLASS_H
-#define KENSHI_ZONE_OPT_DIAG_FATAL_CLASS_H
+#ifndef KEO_DIAG_FATAL_CLASS_H
+#define KEO_DIAG_FATAL_CLASS_H
 
 #include <stddef.h>
 
@@ -70,4 +70,4 @@ extern const long   CPP_RECORD_BURST;
 extern const long   CPP_RECORD_CAP;
 extern const double CPP_RECORD_SPACING_SEC;
 
-#endif // KENSHI_ZONE_OPT_DIAG_FATAL_CLASS_H
+#endif // KEO_DIAG_FATAL_CLASS_H

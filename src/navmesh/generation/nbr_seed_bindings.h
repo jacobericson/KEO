@@ -1,8 +1,8 @@
 // nbr_seed_bindings.h - Neighbour seed addresses, layouts and function bindings.
 // Included through game.h.
 
-#ifndef KENSHI_ZONE_OPT_NBR_SEED_BINDINGS_H
-#define KENSHI_ZONE_OPT_NBR_SEED_BINDINGS_H
+#ifndef KEO_NBR_SEED_BINDINGS_H
+#define KEO_NBR_SEED_BINDINGS_H
 
 #include "base/core.h"
 
@@ -118,4 +118,4 @@ extern const unsigned char g_sortedArrayGrowBytes[16];
 extern const unsigned char g_gameStringReleaseBytes[16];
 // ---- end stand-in neighbour seeds ----
 
-#endif // KENSHI_ZONE_OPT_NBR_SEED_BINDINGS_H
+#endif // KEO_NBR_SEED_BINDINGS_H

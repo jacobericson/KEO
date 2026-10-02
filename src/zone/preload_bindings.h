@@ -1,8 +1,8 @@
 // preload_bindings.h - Preload readiness query binding and activation flag.
 // Included through game.h.
 
-#ifndef KENSHI_ZONE_OPT_PRELOAD_BINDINGS_H
-#define KENSHI_ZONE_OPT_PRELOAD_BINDINGS_H
+#ifndef KEO_PRELOAD_BINDINGS_H
+#define KEO_PRELOAD_BINDINGS_H
 
 #include "game/klib_members.h"
 #include "base/core.h"
@@ -25,4 +25,4 @@ typedef bool (__fastcall *isZoneReady_t)(void* zoneEntry);
 extern isZoneReady_t fn_isZoneReady;
 // ---- end preload pipeline: zone-ready query ----
 
-#endif // KENSHI_ZONE_OPT_PRELOAD_BINDINGS_H
+#endif // KEO_PRELOAD_BINDINGS_H

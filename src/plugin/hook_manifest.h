@@ -1,8 +1,8 @@
 // hook_manifest.h — the runtime side of the hook manifest: one id per row of
 // plugin/hook_manifest_rows.inc, the install call and the row state.
 
-#ifndef KENSHI_ZONE_OPT_HOOK_MANIFEST_H
-#define KENSHI_ZONE_OPT_HOOK_MANIFEST_H
+#ifndef KEO_HOOK_MANIFEST_H
+#define KEO_HOOK_MANIFEST_H
 
 #include "plugin/hook_manifest_policy.h"
 

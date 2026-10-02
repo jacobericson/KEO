@@ -1,8 +1,8 @@
 // bindings.h - Game address helper, build gate and function bindings.
 // Included through game.h.
 
-#ifndef KENSHI_ZONE_OPT_BINDINGS_H
-#define KENSHI_ZONE_OPT_BINDINGS_H
+#ifndef KEO_BINDINGS_H
+#define KEO_BINDINGS_H
 
 #include "game/klib_bindings.h"
 #include "base/core.h"
@@ -318,4 +318,4 @@ extern HookOriginals g_hookOrig;
 
 } // namespace game
 
-#endif // KENSHI_ZONE_OPT_BINDINGS_H
+#endif // KEO_BINDINGS_H

@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_PHYSX_QUERY_GUARD_POLICY_H
-#define KENSHI_ZONE_OPT_FIXES_PHYSX_QUERY_GUARD_POLICY_H
+#ifndef KEO_FIXES_PHYSX_QUERY_GUARD_POLICY_H
+#define KEO_FIXES_PHYSX_QUERY_GUARD_POLICY_H
 
 #include <stddef.h>
 
@@ -140,4 +140,4 @@ extern const double kPhysQueryRetryWindowSec;
 bool PhysQueryRetryDue(double now, double lastAttempt);
 bool PhysQueryRetryExpired(double now, double firstAttempt);
 
-#endif // KENSHI_ZONE_OPT_FIXES_PHYSX_QUERY_GUARD_POLICY_H
+#endif // KEO_FIXES_PHYSX_QUERY_GUARD_POLICY_H

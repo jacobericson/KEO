@@ -311,7 +311,7 @@ static int hook_stitchWithInteriors(void* nmg, void* inst, const void* list)
 		InterlockedExchangeAdd(&nmStitchWalked, walked);
 		if (t_bl == BL_TAIL)
 		{
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 			static const BuildLockLayout lay = { 0x08, 0x3C, 0x40, 0x48, 0x38, 0x04 };
 			if (list && walked > 0)
 			{
@@ -528,7 +528,7 @@ std::string BuildLockStatsSuffix()
 	if (recur) ss << " blRecur=" << recur;
 	LONG fail = InterlockedCompareExchange(&nmBlFail, 0, 0);
 	if (fail) ss << " blFail=" << fail;
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	ss << " stitchAsym=" << InterlockedCompareExchange(&nmStitchAsym, 0, 0);
 #endif
 	ss << " stitch=" << InterlockedCompareExchange(&nmStitchConnected, 0, 0)

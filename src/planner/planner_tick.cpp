@@ -581,7 +581,7 @@ bool PlannerTickArm()
 // The session build's one line, the first time the list is longer than the planner scans.
 static void NoteOverCap()
 {
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	static bool noted = false;
 	if (noted)
 		return;
@@ -653,7 +653,7 @@ static PlanDropWhy SlotDropDue(const PlanView& v, uintptr_t character, const flo
 // plan's age and consultations and the three points the rule compared; nothing in the release build.
 static void ReportDrop(const PlanView& v, uintptr_t character, PlanDropWhy why, int consulted, const DropFacts& f)
 {
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	const int DROP_LINES_MAX = 64;
 	static int lines = 0;
 	static const char* const names[PDW_COUNT] = { "-", "np", "ko", "arr", "nd", "ord", "loc" };

@@ -18,7 +18,7 @@ REM   ZONEHAND_STEP: from the environment, else 3 (as build_opt_step4.bat).
 REM   LLVM_BIN: the LLVM bin folder, else C:\Program Files\LLVM\bin.
 REM   BUILD_MP: clang-cl processes at once, else the logical core count.
 REM
-REM Output: build\KenshiZoneOpt_clang_dev\   (DEV: /DZONEOPT_DEBUG; clang-cl /O2, lld-link without /OPT)
+REM Output: build\KenshiZoneOpt_clang_dev\   (DEV: /DKEO_DEBUG; clang-cl /O2, lld-link without /OPT)
 REM         build\KenshiZoneOpt_clang_prod\  (PROD: clang-cl /O2 /Gy, lld-link /OPT:REF /OPT:ICF)
 REM   each with KenshiZoneOpt.dll, KenshiZoneOpt.pdb, RE_Kenshi.json and the INI.
 REM   Objects and compile.log (every compiler message): build\obj_clang_dev\,
@@ -83,7 +83,7 @@ echo Libraries: %KENSHILIB%
 set "CLANG_DEV_OUT=build\KenshiZoneOpt_clang_dev"
 set "CLANG_PROD_OUT=build\KenshiZoneOpt_clang_prod"
 
-call tools\build\variant_clang.bat "%CLANG_DEV_OUT%" "build\obj_clang_dev" "%CLANG_DEFINES% /DZONEOPT_DEBUG" ""
+call tools\build\variant_clang.bat "%CLANG_DEV_OUT%" "build\obj_clang_dev" "%CLANG_DEFINES% /DKEO_DEBUG" ""
 if errorlevel 1 (
     echo CLANG FAILED at %CLANG_DEV_OUT%
     exit /b 1

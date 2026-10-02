@@ -1,7 +1,7 @@
 // nm_workers_internal.h - private navmesh worker cross-unit contract.
 // Private declarations shared by the navmesh worker units; each names one definition.
-#ifndef KENSHI_ZONE_OPT_NM_WORKERS_INTERNAL_H
-#define KENSHI_ZONE_OPT_NM_WORKERS_INTERNAL_H
+#ifndef KEO_NM_WORKERS_INTERNAL_H
+#define KEO_NM_WORKERS_INTERNAL_H
 #include "navmesh/nm_workers.h"
 #include "navmesh/jobs/nm_claimed_job.h"
 #include "zone/geometry/zone_geometry_epoch.h"
@@ -251,4 +251,4 @@ void ClaimZoneSet(int slot, uintptr_t zone);
 
 void ClaimZoneClear(int slot);
 } // namespace nm_workers_detail
-#endif // KENSHI_ZONE_OPT_NM_WORKERS_INTERNAL_H
+#endif // KEO_NM_WORKERS_INTERNAL_H

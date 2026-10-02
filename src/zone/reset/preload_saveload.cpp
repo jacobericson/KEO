@@ -390,7 +390,7 @@ namespace preload_saveload_detail
 		unsigned            outgoingGen;
 		void**              survivors;      // ZONE_GRID_COUNT slots
 		int*                counts;         // RESET_CLASS_COUNT slots
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 		unsigned char*      survivorClass;
 		unsigned char*      survivorFlags;
 #endif
@@ -472,7 +472,7 @@ namespace preload_saveload_detail
 			if (*(void**)(KLIB_MEMBER(2, (uintptr_t)ze, ZoneMap_mapContent, OFF_ZONE_CONTENT)) == NULL)
 				continue;
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 			c->survivorClass[c->survivorCount] = RESET_UNTRACKED;
 			c->survivorFlags[c->survivorCount] = (unsigned char)((IsZoneLoading(ze) ? 1 : 0)
 			                                                   | (IsZoneAccessible(ze) ? 2 : 0));
@@ -480,7 +480,7 @@ namespace preload_saveload_detail
 			if (c->onMain)
 			{
 				int cls = ClassifyResetSurvivor(ze);
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 				c->survivorClass[c->survivorCount] = (unsigned char)cls;
 #endif
 				c->counts[cls]++;
@@ -565,7 +565,7 @@ void __fastcall hook_resetUnloadZones(void* zoneMgr)
 	// main thread it is neither read nor cleared here.
 	int counts[RESET_CLASS_COUNT] = { 0 };
 	static void* s_survivors[ZONE_GRID_COUNT];
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	// The per-zone lines are written after the fence is released, so what they
 	// report has to be kept: the class, and +176/+177 as they were before the
 	// unload.
@@ -579,7 +579,7 @@ void __fastcall hook_resetUnloadZones(void* zoneMgr)
 	fc.outgoingGen   = outgoingGen;
 	fc.survivors     = s_survivors;
 	fc.counts        = counts;
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	fc.survivorClass = s_survivorClass;
 	fc.survivorFlags = s_survivorFlags;
 #endif
@@ -614,7 +614,7 @@ void __fastcall hook_resetUnloadZones(void* zoneMgr)
 	int    unverified = fc.unverified;
 	int    survivors  = fence.survivors;
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	// The per-zone lines, outside the fence.
 	if (onMain)
 	{

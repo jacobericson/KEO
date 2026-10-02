@@ -1,8 +1,8 @@
 // path_pool_internal.h - private path pass state, histograms and window interfaces.
 // Private to the path_pool*.cpp units and npc_wait_diag.cpp; off-main recorders take no lock.
 
-#ifndef KENSHI_ZONE_OPT_PATH_POOL_INTERNAL_H
-#define KENSHI_ZONE_OPT_PATH_POOL_INTERNAL_H
+#ifndef KEO_PATH_POOL_INTERNAL_H
+#define KEO_PATH_POOL_INTERNAL_H
 
 #include "pathfind/path_pool.h"
 #include "pathfind/gate_pass.h"
@@ -169,4 +169,4 @@ void PrintNpcPathWaitLine(double windowSec);
 
 
 
-#endif // KENSHI_ZONE_OPT_PATH_POOL_INTERNAL_H
+#endif // KEO_PATH_POOL_INTERNAL_H

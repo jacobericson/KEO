@@ -1,8 +1,8 @@
 // formation.h — Group cohesion: scatter patch, formation groups (Layer 3)
 // Depends on: config.h
 
-#ifndef KENSHI_ZONE_OPT_FORMATION_H
-#define KENSHI_ZONE_OPT_FORMATION_H
+#ifndef KEO_FORMATION_H
+#define KEO_FORMATION_H
 
 #include "base/config.h"
 
@@ -102,4 +102,4 @@ void      FormationDetachCharacters(const uintptr_t* chars, int n);
 void      FormationCohesionSample(int* groups, int* liveMembers,
                                   float* worstSpread, int* worstGroupId);
 
-#endif // KENSHI_ZONE_OPT_FORMATION_H
+#endif // KEO_FORMATION_H

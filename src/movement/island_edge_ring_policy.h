@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_ISLAND_EDGE_RING_POLICY_H
-#define KENSHI_ZONE_OPT_ISLAND_EDGE_RING_POLICY_H
+#ifndef KEO_ISLAND_EDGE_RING_POLICY_H
+#define KEO_ISLAND_EDGE_RING_POLICY_H
 
 // NavMesh::getZoneEdge rays from the destination toward the character and
 // keeps the first island face the ray crosses. When the character's own cell
@@ -76,4 +76,4 @@ enum IslandLegLenBucket { LEGLEN_LT1 = 0, LEGLEN_1TO2, LEGLEN_2TO3, LEGLEN_3PLUS
 const int ISLAND_LEGLEN_BUCKETS = 4;
 IslandLegLenBucket IslandClassifyLegLen(float distance, float cellSize);
 
-#endif // KENSHI_ZONE_OPT_ISLAND_EDGE_RING_POLICY_H
+#endif // KEO_ISLAND_EDGE_RING_POLICY_H

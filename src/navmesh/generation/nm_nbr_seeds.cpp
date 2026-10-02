@@ -729,7 +729,7 @@ void NbrSeedJobEnd()
 	if (!t_nbrJob.armed)
 		return;
 	t_nbrJob.armed = 0;
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	static const char* const kDirNames[NBR_DIR_COUNT] = { "W", "E", "S", "N" };
 	char line[DEFERRED_LOG_CHARS];
 	size_t pos = 0;

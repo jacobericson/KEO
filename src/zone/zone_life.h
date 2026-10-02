@@ -2,8 +2,8 @@
 // Lifecycle APIs are in preload.h/preload_internal.h; private records and helpers are in zone_life_internal.h.
 // Implementations cover registration, unload, leak reporting, first-time handoff and eviction.
 // All retention queries below run on the main thread.
-#ifndef KENSHI_ZONE_OPT_ZONE_LIFE_H
-#define KENSHI_ZONE_OPT_ZONE_LIFE_H
+#ifndef KEO_ZONE_LIFE_H
+#define KEO_ZONE_LIFE_H
 
 #include "zone/preload/preload.h"
 
@@ -29,4 +29,4 @@ bool ZlRetentionReadable();
 bool ZlRetentionNear(int cell);
 bool ZlAnchorsNearCell(void* zoneMgr, int gx, int gy, int r);
 
-#endif // KENSHI_ZONE_OPT_ZONE_LIFE_H
+#endif // KEO_ZONE_LIFE_H

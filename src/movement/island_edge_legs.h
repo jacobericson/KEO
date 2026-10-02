@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_ISLAND_EDGE_LEGS_H
-#define KENSHI_ZONE_OPT_ISLAND_EDGE_LEGS_H
+#ifndef KEO_ISLAND_EDGE_LEGS_H
+#define KEO_ISLAND_EDGE_LEGS_H
 
 // What a tracked player order does after the far-span rule sends it down the
 // edge-route branch: whether it enters edge mode, how far each leg gets it,
@@ -29,4 +29,4 @@ void EdgeLegsAppendStuck(int slot, std::ostringstream& ss);   // PLAYER STUCK su
 void EdgeLegsAppendSummary(std::ostringstream& ss);           // IslandSpan: suffix
 
 
-#endif // KENSHI_ZONE_OPT_ISLAND_EDGE_LEGS_H
+#endif // KEO_ISLAND_EDGE_LEGS_H

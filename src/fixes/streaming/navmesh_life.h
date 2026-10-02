@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_NAVMESH_LIFE_H
-#define KENSHI_ZONE_OPT_FIXES_NAVMESH_LIFE_H
+#ifndef KEO_FIXES_NAVMESH_LIFE_H
+#define KEO_FIXES_NAVMESH_LIFE_H
 
 // Section lifecycle rows for the streaming collection.
 //
@@ -24,4 +24,4 @@ void NavMeshLifeOnAdd(void* collection, __int64 instance);
 // The retire half: its own detour, since the removal has no other hook.
 void InstallNavMeshLife(int* installed, int*);
 
-#endif // KENSHI_ZONE_OPT_FIXES_NAVMESH_LIFE_H
+#endif // KEO_FIXES_NAVMESH_LIFE_H

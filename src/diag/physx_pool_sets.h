@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_DIAG_PHYSX_POOL_SETS_H
-#define KENSHI_ZONE_OPT_DIAG_PHYSX_POOL_SETS_H
+#ifndef KEO_DIAG_PHYSX_POOL_SETS_H
+#define KEO_DIAG_PHYSX_POOL_SETS_H
 
 #include <cstddef>
 
@@ -98,4 +98,4 @@ size_t PhysXPoolFormatSet(char* out, size_t cap, const PhysXPoolSet* set);
 // "<value>" when `sampled`, "?" otherwise.
 size_t PhysXPoolFormatCount(char* out, size_t cap, long value, bool sampled);
 
-#endif // KENSHI_ZONE_OPT_DIAG_PHYSX_POOL_SETS_H
+#endif // KEO_DIAG_PHYSX_POOL_SETS_H

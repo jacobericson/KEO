@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_NEST_VALIDATION_POLICY_H
-#define KENSHI_ZONE_OPT_FIXES_NEST_VALIDATION_POLICY_H
+#ifndef KEO_FIXES_NEST_VALIDATION_POLICY_H
+#define KEO_FIXES_NEST_VALIDATION_POLICY_H
 
 // Decision logic behind the nest-validation guard on
 // SectionManager::finalizeZoneResources (nest_validation.h). Pure arithmetic,
@@ -42,4 +42,4 @@ struct NestValidationDecision
 // check. Per-streak counting can.
 NestValidationDecision NestValidationDecide(bool meshReady, bool wasPreviouslySkipped);
 
-#endif // KENSHI_ZONE_OPT_FIXES_NEST_VALIDATION_POLICY_H
+#endif // KEO_FIXES_NEST_VALIDATION_POLICY_H

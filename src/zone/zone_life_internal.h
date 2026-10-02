@@ -1,8 +1,8 @@
 // zone_life_internal.h - Private lifecycle records, outcomes, state and helpers.
 // Main thread only. Each shared group has one definition owner.
 
-#ifndef KENSHI_ZONE_OPT_ZONE_LIFE_INTERNAL_H
-#define KENSHI_ZONE_OPT_ZONE_LIFE_INTERNAL_H
+#ifndef KEO_ZONE_LIFE_INTERNAL_H
+#define KEO_ZONE_LIFE_INTERNAL_H
 
 #include "zone/preload/preload_internal.h"
 
@@ -82,4 +82,4 @@ void ZlCheckReloads(void* zoneMgr, double now);
 
 } // namespace
 
-#endif // KENSHI_ZONE_OPT_ZONE_LIFE_INTERNAL_H
+#endif // KEO_ZONE_LIFE_INTERNAL_H

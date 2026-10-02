@@ -28,8 +28,8 @@
 //       game-initiated clears / appended orders drop tracking instead.
 //       Needs islandDeletedReissue and all three cancel hooks.
 
-#ifndef KENSHI_ZONE_OPT_ISLANDS_H
-#define KENSHI_ZONE_OPT_ISLANDS_H
+#ifndef KEO_ISLANDS_H
+#define KEO_ISLANDS_H
 
 #include "base/config.h"
 
@@ -356,4 +356,4 @@ const char* IslandK7StopSig(uintptr_t character);
 bool IslandReadHc136(uintptr_t character, int* outHc136);
 
 
-#endif // KENSHI_ZONE_OPT_ISLANDS_H
+#endif // KEO_ISLANDS_H

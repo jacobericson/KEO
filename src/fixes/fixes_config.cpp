@@ -34,7 +34,7 @@ const FixesConfig kFixesDefaults =
 	true, // pathExtractGuardEnabled
 	true, // sectionStampEnabled
 	true, // navMeshUpdateGuardEnabled
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	true, // destroyListDiagEnabled
 #else
 	false, // destroyListDiagEnabled

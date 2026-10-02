@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_DIAG_MODULE_BASES_H
-#define KENSHI_ZONE_OPT_DIAG_MODULE_BASES_H
+#ifndef KEO_DIAG_MODULE_BASES_H
+#define KEO_DIAG_MODULE_BASES_H
 
 #include <cstddef>
 
@@ -85,4 +85,4 @@ const ModuleBaseEntry* CapturedModuleBases(int* outCount);
 // plugin/crash_record.cpp, which owns the snapshot.
 const ModuleBaseEntry* FullModuleBases(int* outCount, bool* outValid);
 
-#endif // KENSHI_ZONE_OPT_DIAG_MODULE_BASES_H
+#endif // KEO_DIAG_MODULE_BASES_H

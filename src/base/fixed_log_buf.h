@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_BASE_FIXED_LOG_BUF_H
-#define KENSHI_ZONE_OPT_BASE_FIXED_LOG_BUF_H
+#ifndef KEO_BASE_FIXED_LOG_BUF_H
+#define KEO_BASE_FIXED_LOG_BUF_H
 
 #include <stddef.h>
 
@@ -103,4 +103,4 @@ inline void FlbHexDigits(B* o, unsigned __int64 v, int digits)
 template <class B>
 inline const char* FlbDone(B* o) { FlbChar(o, '\0'); return o->b; }
 
-#endif // KENSHI_ZONE_OPT_BASE_FIXED_LOG_BUF_H
+#endif // KEO_BASE_FIXED_LOG_BUF_H

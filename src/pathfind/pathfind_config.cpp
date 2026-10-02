@@ -63,12 +63,12 @@ namespace pathfind {
 const PathfindConfig kPathfindDefaults =
 {
 	true, // pathfindDiagEnabled
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	true, // npcWaitDiagEnabled
 #else
 	false, // npcWaitDiagEnabled
 #endif
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	true, // gatePassDiagEnabled
 #else
 	false, // gatePassDiagEnabled

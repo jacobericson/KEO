@@ -444,7 +444,7 @@ int RouterList(uintptr_t zm, uintptr_t t, unsigned short* out, int maxOut)
 
 static void DumpComponents()
 {
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	{
 		std::ostringstream ss;
 		ss << "Island snapshot gen=" << g_snapGen

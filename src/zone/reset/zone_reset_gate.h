@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_ZONE_RESET_GATE_H
-#define KENSHI_ZONE_OPT_ZONE_RESET_GATE_H
+#ifndef KEO_ZONE_RESET_GATE_H
+#define KEO_ZONE_RESET_GATE_H
 
 #include <windows.h>
 #include "zone/reset/zone_reset_fence.h"

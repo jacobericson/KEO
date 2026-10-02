@@ -615,7 +615,7 @@ static void (*const kInstallSteps[])(int*, int*) =
 	// is enough to install.
 	InstallNavMeshLife,
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	// Read-only diagnostic, off unless unstitchProbe is set; the entry itself
 	// does not exist in a PROD build.
 	InstallUnstitchProbe,

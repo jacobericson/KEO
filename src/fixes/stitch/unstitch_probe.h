@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_UNSTITCH_PROBE_H
-#define KENSHI_ZONE_OPT_FIXES_UNSTITCH_PROBE_H
+#ifndef KEO_FIXES_UNSTITCH_PROBE_H
+#define KEO_FIXES_UNSTITCH_PROBE_H
 
 // Read-only diagnostic detour on NavMesh::deleteInstance, DEV builds only,
 // off unless unstitchProbe is set.
@@ -23,4 +23,4 @@
 // cannot read is skipped and counted.
 void InstallUnstitchProbe(int* installed, int*);
 
-#endif // KENSHI_ZONE_OPT_FIXES_UNSTITCH_PROBE_H
+#endif // KEO_FIXES_UNSTITCH_PROBE_H

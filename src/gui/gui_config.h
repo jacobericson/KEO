@@ -2,7 +2,7 @@
 #pragma once
 #include "base/config_table.h"
 
-namespace zoneopt_gui {
+namespace keo_gui {
 
 // Starts as a copy of kGuiDefaults, then written by LoadConfig on the main
 // thread before any hook installs; read-only afterwards, on any thread.
@@ -17,4 +17,4 @@ extern GuiConfig g_guiCfg;
 extern const GuiConfig kGuiDefaults;
 extern const ConfigKey g_guiConfigKeys[];
 
-} // namespace zoneopt_gui
+} // namespace keo_gui

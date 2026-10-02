@@ -164,7 +164,7 @@ void PrepareProcess(EntryCtx& ctx)
 	// Not undone at process detach: the module is pinned above, so the code
 	// behind the filter cannot go away, and the game's own shutdown puts the
 	// original filter back on its way out.
-	g_prevUnhandledFilter = SetUnhandledExceptionFilter(ZoneOptUnhandledFilter);
+	g_prevUnhandledFilter = SetUnhandledExceptionFilter(KEOUnhandledFilter);
 }
 
 // Main thread: open the log and load configuration after the crash handlers are
@@ -183,7 +183,7 @@ void InitializeLogAndConfig(const EntryCtx& ctx)
 
 	// DEV only: names who calls TerminateProcess when the game vanishes with
 	// no dialog, no crash_dump.txt and no WER dump. A no-op outside
-	// ZONEOPT_DEBUG. Kernel32 and ntdll are always mapped this early,
+	// KEO_DEBUG. Kernel32 and ntdll are always mapped this early,
 	// so unlike PurecallRecord's PhysXCore64 wait, there is nothing to defer.
 	InstallExitCapture(ctx.dllDir);
 

@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_CRASH_CLAIM_H
-#define KENSHI_ZONE_OPT_FIXES_CRASH_CLAIM_H
+#ifndef KEO_FIXES_CRASH_CLAIM_H
+#define KEO_FIXES_CRASH_CLAIM_H
 
 #include <string>
 
@@ -33,4 +33,4 @@ enum CrashClaimOutcome
 // crashed, or never reached this point, before the line could be written).
 std::string CrashClaimLogLine(CrashClaimOutcome outcome, unsigned long lastError);
 
-#endif // KENSHI_ZONE_OPT_FIXES_CRASH_CLAIM_H
+#endif // KEO_FIXES_CRASH_CLAIM_H

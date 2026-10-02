@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_NM_BUILDLOCK_H
-#define KENSHI_ZONE_OPT_NM_BUILDLOCK_H
+#ifndef KEO_NM_BUILDLOCK_H
+#define KEO_NM_BUILDLOCK_H
 
 #include "base/config.h"
 #include <string>

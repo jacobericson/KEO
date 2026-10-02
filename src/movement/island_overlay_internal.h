@@ -1,6 +1,6 @@
 // island_overlay_internal.h - Private component-overlay state and entry points.
-#ifndef KENSHI_ZONE_OPT_ISLAND_OVERLAY_INTERNAL_H
-#define KENSHI_ZONE_OPT_ISLAND_OVERLAY_INTERNAL_H
+#ifndef KEO_ISLAND_OVERLAY_INTERNAL_H
+#define KEO_ISLAND_OVERLAY_INTERNAL_H
 #include "movement/islands_internal.h"
 
 namespace islands_detail {
@@ -49,4 +49,4 @@ int RouterList(uintptr_t zm, uintptr_t t, unsigned short* out, int maxOut);
 
 } // namespace
 
-#endif // KENSHI_ZONE_OPT_ISLAND_OVERLAY_INTERNAL_H
+#endif // KEO_ISLAND_OVERLAY_INTERNAL_H

@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_PHYSX_QUERY_GUARD_H
-#define KENSHI_ZONE_OPT_FIXES_PHYSX_QUERY_GUARD_H
+#ifndef KEO_FIXES_PHYSX_QUERY_GUARD_H
+#define KEO_FIXES_PHYSX_QUERY_GUARD_H
 
 // Validates every shape GameWorld::getObjectsWithinBox got back from the
 // scene's overlap query, immediately before the walk calls getActor() through
@@ -38,4 +38,4 @@ void PhysQueryGuardTick(double now);
 // is not.
 void NeutralizePhysQueryGuard();
 
-#endif // KENSHI_ZONE_OPT_FIXES_PHYSX_QUERY_GUARD_H
+#endif // KEO_FIXES_PHYSX_QUERY_GUARD_H

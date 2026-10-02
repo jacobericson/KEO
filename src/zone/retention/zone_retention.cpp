@@ -329,7 +329,7 @@ void ZoneRetentionNoteReleased(void* zoneEntry, bool expired, bool fenced)
 		if (cell >= 0)
 			g_heldAt[cell] = -1.0;
 	}
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	// One line per actual release: the pacing rules (spacing, adoption-frame
 	// exclusion) apply across frames, so only a per-release stamp -- not the
 	// 60 s aggregate below -- can show whether they held. `adopt` is a

@@ -1,8 +1,8 @@
 // readiness_bindings.h - Zone readiness layout and shared-lock query bindings.
 // Included through game.h.
 
-#ifndef KENSHI_ZONE_OPT_READINESS_BINDINGS_H
-#define KENSHI_ZONE_OPT_READINESS_BINDINGS_H
+#ifndef KEO_READINESS_BINDINGS_H
+#define KEO_READINESS_BINDINGS_H
 
 #include "game/klib_members.h"
 #include "base/core.h"
@@ -73,4 +73,4 @@ extern boostUnlockShared_t  fn_boostUnlockShared;
 bool BoostTryLockShared(volatile LONG* state);
 // ---- end isContentPending readiness classification ----
 
-#endif // KENSHI_ZONE_OPT_READINESS_BINDINGS_H
+#endif // KEO_READINESS_BINDINGS_H

@@ -240,7 +240,7 @@
 	HOOK_ROW(HOOK_NMG_UPDATE, "nmgUpdate", RVA_NMG_UPDATE, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
 	         0x48,0x8B,0xC4,0x55,0x41,0x54,0x41,0x55,0x41,0x56,0x41,0x57,0x48,0x8D,0xA8,0xD8)
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	// NavMesh::deleteInstance (src/fixes/stitch/unstitch_probe.cpp): five register
 	// pushes then a lea, so the bytes a detour takes are whole instructions and
 	// position-independent. DEV builds only -- a PROD build carries no row here

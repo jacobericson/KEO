@@ -2,8 +2,8 @@
 // Self-contained: no dependency on preload/tracking/worker_pool globals.
 // Depends on: core.h, game.h (for gameBase, RVAs, queue lock fns)
 
-#ifndef KENSHI_ZONE_OPT_NAVMESH_SCHED_H
-#define KENSHI_ZONE_OPT_NAVMESH_SCHED_H
+#ifndef KEO_NAVMESH_SCHED_H
+#define KEO_NAVMESH_SCHED_H
 
 #include "base/config.h"
 
@@ -52,4 +52,4 @@ extern volatile long reprioTimerFires;
 extern volatile long reprioOrderFires;
 
 
-#endif // KENSHI_ZONE_OPT_NAVMESH_SCHED_H
+#endif // KEO_NAVMESH_SCHED_H

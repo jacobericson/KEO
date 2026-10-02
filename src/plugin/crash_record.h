@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_PLUGIN_CRASH_RECORD_H
-#define KENSHI_ZONE_OPT_PLUGIN_CRASH_RECORD_H
+#ifndef KEO_PLUGIN_CRASH_RECORD_H
+#define KEO_PLUGIN_CRASH_RECORD_H
 
 // The crash recorder's entry points and state, as startPlugin uses them: it
 // fills the two paths and the module snapshot and registers both handlers.
@@ -21,7 +21,7 @@ extern int             g_moduleBaseCount;
 extern LPTOP_LEVEL_EXCEPTION_FILTER g_prevUnhandledFilter;
 
 LONG WINAPI NavMeshCrashHandler(PEXCEPTION_POINTERS pExInfo);
-LONG WINAPI ZoneOptUnhandledFilter(PEXCEPTION_POINTERS pExInfo);
+LONG WINAPI KEOUnhandledFilter(PEXCEPTION_POINTERS pExInfo);
 
 void SnapshotModuleBases();
 

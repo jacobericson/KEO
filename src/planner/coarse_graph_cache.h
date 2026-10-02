@@ -1,8 +1,8 @@
 // coarse_graph_cache.h - The whole-map base's disk cache: a header, a per-tile index and one record
 // per tile holding its extracted graph, each checked by CRC32; and a read-whole loader that closes
 // the file before it returns. Pure but for windows.h's integer types; any thread, CRT allocation only.
-#ifndef KENSHI_ZONE_OPT_PLANNER_COARSE_GRAPH_CACHE_H
-#define KENSHI_ZONE_OPT_PLANNER_COARSE_GRAPH_CACHE_H
+#ifndef KEO_PLANNER_COARSE_GRAPH_CACHE_H
+#define KEO_PLANNER_COARSE_GRAPH_CACHE_H
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN

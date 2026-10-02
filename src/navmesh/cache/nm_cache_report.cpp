@@ -163,7 +163,7 @@ static void AppendWorkerCounts(std::ostringstream& ss, const CacheStatsWindowCtx
 
 	ss << " step=" << step;
 	ss << " busy=" << InterlockedCompareExchange(&navmesh::g_nmCache.workerBusyCount, 0, 0);
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	ss << " busyViol=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmBusyBridgeViolCount, 0, 0);
 #endif
 	long cloneOk = InterlockedCompareExchange(&navmesh::g_nmCache.nmCloneConstructCount, 0, 0);
@@ -188,7 +188,7 @@ static void AppendWorkBufferOverrides(std::ostringstream& ss)
 		long slopeBad = InterlockedCompareExchange(&navmesh::g_nmCache.g_wbOverrideSlopeBad, 0, 0);
 		long ovSkip   = InterlockedCompareExchange(&navmesh::g_nmCache.g_wbOverrideSkipped, 0, 0);
 		ss << " wbOv=" << InterlockedCompareExchange(&navmesh::g_nmCache.g_wbOverrideInstalled, 0, 0);
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 		ss << "/" << InterlockedCompareExchange(&navmesh::g_nmCache.g_wbOverrideAfterPop, 0, 0);
 #endif
 		if (slopeBad)
@@ -201,7 +201,7 @@ static void AppendWorkBufferOverrides(std::ostringstream& ss)
 // The DEV work-buffer quality value.
 static void AppendWorkBufferQuality(std::ostringstream& ss)
 {
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	{
 		long bits = InterlockedCompareExchange(&navmesh::g_nmCache.g_wbQualityLast, 0, 0);
 		float q;
@@ -349,7 +349,7 @@ static void AppendHandleCounts(std::ostringstream& ss)
 		ss << " handles=" << handleCount;
 	}
 	ss << " hClosed=" << InterlockedCompareExchange(&navmesh::g_nmCache.nmCloneHandleClosed, 0, 0);
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	ss << " wbFreed=" << InterlockedCompareExchange64(&navmesh::g_nmCache.nmWbFreedBytes, 0, 0);
 #endif
 	{
@@ -720,7 +720,7 @@ void LogNavMeshCacheStats(double now)
 	// flushed from the top of hook_updateCameraZone, before its early returns.
 	if (!navmesh::g_navmeshCfg.cachingEnabled)
 		return;
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	if (now - lastNMLogTime < 10.0)
 #else
 	if (now - lastNMLogTime < 30.0)

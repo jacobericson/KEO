@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_MISSPAR_MATH_H
-#define KENSHI_ZONE_OPT_MISSPAR_MATH_H
+#ifndef KEO_MISSPAR_MATH_H
+#define KEO_MISSPAR_MATH_H
 
 #include <string>
 

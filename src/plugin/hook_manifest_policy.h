@@ -1,8 +1,8 @@
 // hook_manifest_policy.h — the manifest's row columns and the want predicate.
 // Variant-independent and host-safe: no game or Windows header.
 
-#ifndef KENSHI_ZONE_OPT_HOOK_MANIFEST_POLICY_H
-#define KENSHI_ZONE_OPT_HOOK_MANIFEST_POLICY_H
+#ifndef KEO_HOOK_MANIFEST_POLICY_H
+#define KEO_HOOK_MANIFEST_POLICY_H
 
 // A fatal row's mismatch refuses the plugin; a diagnostic row's refuses that
 // site alone.

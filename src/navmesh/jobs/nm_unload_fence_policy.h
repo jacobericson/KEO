@@ -1,6 +1,6 @@
 // nm_unload_fence_policy.h - The mod-unload fence's order over injected operations. No game or platform types.
-#ifndef KENSHI_ZONE_OPT_NM_UNLOAD_FENCE_POLICY_H
-#define KENSHI_ZONE_OPT_NM_UNLOAD_FENCE_POLICY_H
+#ifndef KEO_NM_UNLOAD_FENCE_POLICY_H
+#define KEO_NM_UNLOAD_FENCE_POLICY_H
 
 enum NmFenceBegin { NM_FENCE_BEGIN_REFUSED = 0, NM_FENCE_BEGIN_OK, NM_FENCE_BEGIN_UNAVAILABLE };
 enum NmFencePj { NM_FENCE_PJ_NONE = 0, NM_FENCE_PJ_HELD, NM_FENCE_PJ_TIMEOUT };

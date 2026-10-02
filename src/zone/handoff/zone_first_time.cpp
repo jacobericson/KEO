@@ -119,7 +119,7 @@ void ZlKeepLate(int i)
 	g_ftKeptLateCell[cell] = 1;
 	g_ftLateCell[cell] = 1;
 	g_ftKeptLate++;
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	std::ostringstream ss;
 	ss << "First-time zone (" << gx << "," << gy
 	   << ") caught late, kept (unload protocol unavailable)";
@@ -177,7 +177,7 @@ int ZlPredictFirstTime(int gx, int gy)
 	return ZlZoneFileExists(gx, gy) == 1 ? 0 : 1;
 }
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 // Tests the premise "does a first-time town the mod preloads get its
 // residents and barflies?", DEV only, one line per cell per session: once the
 // mod's own processContent has finalized a zone's content (loaded == 1), log

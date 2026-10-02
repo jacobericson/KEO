@@ -50,7 +50,7 @@ static double        g_sampleTime = -1.0;
 static volatile LONG g_haveSample = 0;
 
 static double g_lastLogTime = -1.0;
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 // Matched to the cache stats line's cadence, so three consecutive rows that
 // reprint one sample cannot read as flat memory.
 const double LOG_INTERVAL_SEC = 10.0;

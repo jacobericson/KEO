@@ -2,8 +2,8 @@
 // original call, its counters and its log line.
 // AstarHierSearch runs on whichever thread calls findPathFull (the path thread for a character's
 // search) and takes no lock and allocates nothing; AstarHierTick is main-thread only.
-#ifndef KENSHI_ZONE_OPT_ASTAR_HIER_H
-#define KENSHI_ZONE_OPT_ASTAR_HIER_H
+#ifndef KEO_ASTAR_HIER_H
+#define KEO_ASTAR_HIER_H
 
 // Replaces the one original findPathFull call. playerByReq is the queue-priority label
 // (-1 unknown), used only as the cross-check labelDisagree counts.

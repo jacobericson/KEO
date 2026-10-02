@@ -3,7 +3,7 @@
 #endif
 #include "fixes/streaming/section_key_scan.h"
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 #include "fixes/streaming/section_key_policy.h"
 #include "fixes/streaming/section_key_ring.h"
 #include "base/core.h"
@@ -174,4 +174,4 @@ void SectionKeyScanCut(const void* collection, unsigned int packedKey)
 // Nothing of this exists outside a DEV build; plugin_entry.cpp does not name it.
 typedef int SectionKeyScanNotInThisBuild;
 
-#endif // ZONEOPT_DEBUG
+#endif // KEO_DEBUG

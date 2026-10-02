@@ -1,8 +1,8 @@
 // tracking.h — Character tracking: watched characters, movement polling (Layer 3)
 // Depends on: config.h
 
-#ifndef KENSHI_ZONE_OPT_TRACKING_H
-#define KENSHI_ZONE_OPT_TRACKING_H
+#ifndef KEO_TRACKING_H
+#define KEO_TRACKING_H
 
 #include "base/config.h"
 
@@ -72,4 +72,4 @@ bool FindNearestPlayerCharacterXZ(float px, float pz, float* outX, float* outZ);
 int CollectMoverRetainZones(int* gx, int* gy, int cap);
 
 
-#endif // KENSHI_ZONE_OPT_TRACKING_H
+#endif // KEO_TRACKING_H

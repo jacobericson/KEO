@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_ZONE_GEOMETRY_EPOCH_H
-#define KENSHI_ZONE_OPT_ZONE_GEOMETRY_EPOCH_H
+#ifndef KEO_ZONE_GEOMETRY_EPOCH_H
+#define KEO_ZONE_GEOMETRY_EPOCH_H
 
 // The conservative global geometry epoch: one atomic word carrying how many
 // geometry mutations have completed and how many are in flight, plus the two
@@ -80,4 +80,4 @@ inline void ZoneGeometryCertReset() {}
 
 #endif // ZONEHAND_STEP >= 1
 
-#endif // KENSHI_ZONE_OPT_ZONE_GEOMETRY_EPOCH_H
+#endif // KEO_ZONE_GEOMETRY_EPOCH_H

@@ -32,7 +32,7 @@ typedef const float* (__fastcall *GetPosFn)(void*);
 static double lastStuckPollTime = 0.0;
 
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 // =========================================================================
 // PLAYER TASK diagnostic (DEV only)
 // =========================================================================
@@ -307,7 +307,7 @@ static void LogPlayerTask(int slot, uintptr_t character, const PlayerTaskSnap& s
 	l.edge    = s.edge;
 	l.hc136   = s.hc136;
 }
-#endif // ZONEOPT_DEBUG
+#endif // KEO_DEBUG
 
 
 void StorePlayerClickDest(uintptr_t character, const float* dest, double now)
@@ -325,7 +325,7 @@ void StorePlayerClickDest(uintptr_t character, const float* dest, double now)
 			// zeroVelocityPolls, active) plus, for a reactivated entry,
 			// the PLAYER TASK last-printed state, so it behaves like a
 			// new one.
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 			if (!pathfind::g_pathDiag.trackedPlayers[i].active)
 				PlayerTaskForget(i);
 #endif
@@ -359,7 +359,7 @@ void StorePlayerClickDest(uintptr_t character, const float* dest, double now)
 		slot = pathfind::g_pathDiag.trackedPlayerCount++;
 	}
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	PlayerTaskForget(slot);   // a new entry has printed nothing yet
 #endif
 	pathfind::g_pathDiag.trackedPlayers[slot].character = character;
@@ -495,7 +495,7 @@ struct PollPlayerCharacterCtx
 	int hc136Val;
 	bool haveHc136;
 	const char* k7Form;
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	PlayerTaskSnap taskSnap;
 	bool taskPrinted;
 #endif
@@ -517,13 +517,13 @@ static bool ReadPlayerCharacter(int i, const PollPlayerFrameCtx& frame, PollPlay
 	if (!found)
 	{
 		tp.active = false;
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 		PlayerTaskForget(i);
 #endif
 		return false;
 	}
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	// PLAYER TASK (DEV): one guarded read per poll, printed on a change of
 	// (t, stopped, edge, hc136) here, or next to the PLAYER STUCK line below.
 	ReadPlayerTaskSnap(tp.character, &c.taskSnap);
@@ -599,7 +599,7 @@ static bool UpdatePlayerMotion(int i, const PollPlayerFrameCtx& frame, PollPlaye
 	if (orderPost)
 	{
 		tp.active = false;
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 		PlayerTaskForget(i);
 #endif
 		return false;
@@ -772,7 +772,7 @@ static void ReportPlayerStuck(int i, const PollPlayerCharacterCtx& c)
 		ss << OrderOutcomeStuckSuffix(tp.orderKoLatched, c.haveHc136, c.hc136Val, false);
 		LogMsg(ss.str());
 	}
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	// Every PLAYER STUCK line gets a PLAYER TASK line (unless this poll's
 	// change already printed one, just above it).
 	if (!c.taskPrinted)

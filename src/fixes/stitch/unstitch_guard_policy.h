@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_UNSTITCH_GUARD_POLICY_H
-#define KENSHI_ZONE_OPT_FIXES_UNSTITCH_GUARD_POLICY_H
+#ifndef KEO_FIXES_UNSTITCH_GUARD_POLICY_H
+#define KEO_FIXES_UNSTITCH_GUARD_POLICY_H
 
 #include "fixes/stitch/unstitch_probe_policy.h"
 
@@ -62,4 +62,4 @@ struct UnstitchGuardTally
 UnstitchGuardTally UnstitchGuardWalkStubs(int ownUid, const UnstitchSetStub* sets, int setCount,
                                           int* processedOut, int processedCap);
 
-#endif // KENSHI_ZONE_OPT_FIXES_UNSTITCH_GUARD_POLICY_H
+#endif // KEO_FIXES_UNSTITCH_GUARD_POLICY_H

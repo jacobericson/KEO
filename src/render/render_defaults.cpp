@@ -3,7 +3,7 @@
 // The compiled-in values and the live copy that starts from them. No Windows
 // or game calls, so the host tests link it directly.
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 #define RENDER_DEV_DEFAULT true
 #else
 #define RENDER_DEV_DEFAULT false

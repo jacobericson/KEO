@@ -1,6 +1,6 @@
 // nm_claimed_job_policy.h - Pure release plan for a claimed NavMesh job. No game or platform types.
-#ifndef KENSHI_ZONE_OPT_NM_CLAIMED_JOB_POLICY_H
-#define KENSHI_ZONE_OPT_NM_CLAIMED_JOB_POLICY_H
+#ifndef KEO_NM_CLAIMED_JOB_POLICY_H
+#define KEO_NM_CLAIMED_JOB_POLICY_H
 
 enum CjReleasePoint
 {

@@ -3,7 +3,7 @@
 Run after tools\\build\\clang_env.bat (tools\\build\\clang_check.bat does): reads CLANG_CL,
 CLANG_COMMON, KENSHILIB_HEADERS and BOOST_ROOT from the environment and refuses to run
 without them; ZONEHAND_STEP comes from the environment, else 3. Configurations:
-  dev   CLANG_COMMON /DZONEHAND_STEP=<n> /DZONEOPT_DEBUG, the optimizer /I set, coresrc.txt
+  dev   CLANG_COMMON /DZONEHAND_STEP=<n> /DKEO_DEBUG, the optimizer /I set, coresrc.txt
   prod  CLANG_COMMON /Gy /DZONEHAND_STEP=<n>, the optimizer /I set, coresrc.txt
   prof  CLANG_COMMON, the profiler /I set, profsrc.txt
 The optimizer /I set is KENSHILIB_HEADERS\\Include, \\Include\\ogre, BOOST_ROOT, then src
@@ -54,7 +54,7 @@ def configurations(env):
     core_sources = read_list(CORESRC)
     prof_sources = read_list(PROFSRC)
 
-    dev_args = common + ['/DZONEHAND_STEP=%s' % step, '/DZONEOPT_DEBUG'] + i_opt + warn
+    dev_args = common + ['/DZONEHAND_STEP=%s' % step, '/DKEO_DEBUG'] + i_opt + warn
     prod_args = common + ['/Gy', '/DZONEHAND_STEP=%s' % step] + i_opt + warn
     prof_args = common + i_prof + warn
 

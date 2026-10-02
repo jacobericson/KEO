@@ -222,7 +222,7 @@ void ProcessPreloadQueue(void* zoneMgr)
 		    && ZlFirstTimeRuleOn() && ZlPredictFirstTime(gx, gy) != 0)
 		{
 			g_ftSkip++;
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 			static unsigned char ftLogged[ZONE_GRID_COUNT] = { 0 };
 			int c = ZoneCell(gx, gy);
 			if (c >= 0 && !ftLogged[c])
@@ -327,7 +327,7 @@ void ProcessPreloadQueue(void* zoneMgr)
 	if (IsZoneLoading(zoneEntry) || IsZoneAccessible(zoneEntry))
 	{
 		preloadSkipLoaded++;
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 		// One line per zone: this runs in the preload queue, which revisits the
 		// same coordinates every transition.
 		static unsigned char skipLogged[(ZONE_GRID_MAX + 1) * (ZONE_GRID_MAX + 1)] = { 0 };

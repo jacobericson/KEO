@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_ZONE_PAUSE_H
-#define KENSHI_ZONE_OPT_ZONE_PAUSE_H
+#ifndef KEO_ZONE_PAUSE_H
+#define KEO_ZONE_PAUSE_H
 
 // Hooks ZoneManager::processLoading so a loader unpause that lands while the
 // escape menu is open does not resume the game behind the menu. Main thread,

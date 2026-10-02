@@ -11,8 +11,8 @@
 // There is no allocation, no CRT stream, no lock and no loader work, so the
 // live read is usable from a vectored exception handler.
 
-#ifndef KENSHI_ZONE_OPT_DIAG_MEM_PROBE_H
-#define KENSHI_ZONE_OPT_DIAG_MEM_PROBE_H
+#ifndef KEO_DIAG_MEM_PROBE_H
+#define KEO_DIAG_MEM_PROBE_H
 
 #include "diag/mem_format.h"
 
@@ -44,4 +44,4 @@ size_t MemProbeShortLast(char* buf, size_t cap);
 // " memSrc=none"), for a line whose own cadence is not the sampler's.
 size_t MemProbeShortLastAged(char* buf, size_t cap, double now);
 
-#endif // KENSHI_ZONE_OPT_DIAG_MEM_PROBE_H
+#endif // KEO_DIAG_MEM_PROBE_H

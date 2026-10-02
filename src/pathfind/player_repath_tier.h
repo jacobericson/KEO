@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_PLAYER_REPATH_TIER_H
-#define KENSHI_ZONE_OPT_PLAYER_REPATH_TIER_H
+#ifndef KEO_PLAYER_REPATH_TIER_H
+#define KEO_PLAYER_REPATH_TIER_H
 
 // The game's mid-walk re-request for a player character (HavokCharacter
 // ::update 0x1480D7, ::moveAlongPath 0x148B86) always calls requestPath with
@@ -45,4 +45,4 @@ void PlayerRepathTierAppendStats(std::ostringstream& ss);
 bool PlayerRepathTierAnyStats();
 
 
-#endif // KENSHI_ZONE_OPT_PLAYER_REPATH_TIER_H
+#endif // KEO_PLAYER_REPATH_TIER_H

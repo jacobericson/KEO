@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_PLAYER_REPATH_TIER_POLICY_H
-#define KENSHI_ZONE_OPT_PLAYER_REPATH_TIER_POLICY_H
+#ifndef KEO_PLAYER_REPATH_TIER_POLICY_H
+#define KEO_PLAYER_REPATH_TIER_POLICY_H
 
 // The tiering decision hook_requestPath makes, pulled out of the hook so it
 // is host-testable and cannot drift from what player_repath_tier.cpp does.
@@ -27,4 +27,4 @@ struct PlayerRepathTierDecision
 // not gate it.
 PlayerRepathTierDecision PlayerRepathTierDecide(int priority, bool matchedPlayerSet, bool enabledKey);
 
-#endif // KENSHI_ZONE_OPT_PLAYER_REPATH_TIER_POLICY_H
+#endif // KEO_PLAYER_REPATH_TIER_POLICY_H

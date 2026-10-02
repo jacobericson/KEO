@@ -2,8 +2,8 @@
 // section per navmesh/graph group, one node per cluster with its world-frame centre and footprint,
 // intra arcs from the section's graph, and the border connections of the mesh's streaming sets.
 // Pure: no Windows, KenshiLib or game header. Any thread; CRT allocation only.
-#ifndef KENSHI_ZONE_OPT_PLANNER_TILE_GRAPH_EXTRACT_H
-#define KENSHI_ZONE_OPT_PLANNER_TILE_GRAPH_EXTRACT_H
+#ifndef KEO_PLANNER_TILE_GRAPH_EXTRACT_H
+#define KEO_PLANNER_TILE_GRAPH_EXTRACT_H
 
 #include "planner/tagfile_reader.h"
 

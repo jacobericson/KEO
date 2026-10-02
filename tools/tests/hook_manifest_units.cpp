@@ -1,7 +1,7 @@
 // The hook manifest's rows per variant, and the want predicate over them.
 // The unit runs as four suite rows: a DEV and a PROD build at the session
 // ZONEHAND_STEP, plus a DEV build at each of the two earlier steps.
-// Each expands the row list twice, with and without ZONEOPT_DEBUG defined,
+// Each expands the row list twice, with and without KEO_DEBUG defined,
 // and checks both variants' row, counted, wanted, startup and module counts
 // at its own ZONEHAND_STEP. Each also compares the want inputs against its
 // own build's compiled config defaults. Stringising leaves the RVA constants
@@ -14,7 +14,7 @@
 
 #include "check.h"
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 #define HOOK_MANIFEST_UNITS_DEV_BUILD 1
 #else
 #define HOOK_MANIFEST_UNITS_DEV_BUILD 0
@@ -36,7 +36,7 @@ struct TestRow
 	{ #id, name, #rva, kind, installer, want, (unsigned)(caps), { b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15 } },
 
 #if !HOOK_MANIFEST_UNITS_DEV_BUILD
-#define ZONEOPT_DEBUG 1
+#define KEO_DEBUG 1
 #endif
 
 static const TestRow kDevRows[] =
@@ -44,7 +44,7 @@ static const TestRow kDevRows[] =
 #include "plugin/hook_manifest_rows.inc"
 };
 
-#undef ZONEOPT_DEBUG
+#undef KEO_DEBUG
 
 static const TestRow kProdRows[] =
 {
@@ -54,7 +54,7 @@ static const TestRow kProdRows[] =
 #undef HOOK_ROW
 
 #if HOOK_MANIFEST_UNITS_DEV_BUILD
-#define ZONEOPT_DEBUG 1
+#define KEO_DEBUG 1
 #endif
 
 static const int kDevCount  = (int)(sizeof(kDevRows) / sizeof(kDevRows[0]));
@@ -104,7 +104,7 @@ static const InputField kFields[] =
 	{ "graphExpandGuard",    &HookWantInputs::graphExpandGuard,    &fixes::g_fixesCfg.graphExpandGuardEnabled },
 	{ "meshFaceGuard",       &HookWantInputs::meshFaceGuard,       &fixes::g_fixesCfg.meshFaceGuardEnabled },
 	{ "navMeshLife",         &HookWantInputs::navMeshLife,         &fixes::g_fixesCfg.navMeshLifeEnabled },
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	{ "unstitchProbe",       &HookWantInputs::unstitchProbe,       &fixes::g_fixesCfg.unstitchProbeEnabled },
 	{ "sectionKeyProbe",     &HookWantInputs::sectionKeyProbe,     &fixes::g_fixesCfg.sectionKeyProbeEnabled },
 #else

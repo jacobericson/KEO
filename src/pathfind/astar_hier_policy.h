@@ -1,8 +1,8 @@
 // astar_hier_policy.h - The player hierarchical search's pure decisions: which search is whose,
 // the call sequence of each mode, the output reset, and the counters' buckets.
 // No game or Windows header; the game side binds the sequence through AstarHierOps.
-#ifndef KENSHI_ZONE_OPT_ASTAR_HIER_POLICY_H
-#define KENSHI_ZONE_OPT_ASTAR_HIER_POLICY_H
+#ifndef KEO_ASTAR_HIER_POLICY_H
+#define KEO_ASTAR_HIER_POLICY_H
 
 #include <stddef.h>
 

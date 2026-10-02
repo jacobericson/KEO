@@ -1,8 +1,8 @@
 // tagfile_reader.h - Reader for Havok binary tagfiles (tagfile versions 3-5), the format of the
 // game's navmesh tile files. Pure: no Windows, KenshiLib or game header. Any thread; allocates
 // through the CRT only, and nothing is shared between calls.
-#ifndef KENSHI_ZONE_OPT_PLANNER_TAGFILE_READER_H
-#define KENSHI_ZONE_OPT_PLANNER_TAGFILE_READER_H
+#ifndef KEO_PLANNER_TAGFILE_READER_H
+#define KEO_PLANNER_TAGFILE_READER_H
 
 #include <stddef.h>
 #include <string>

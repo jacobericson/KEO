@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_ZONE_RESET_FENCE_H
-#define KENSHI_ZONE_OPT_ZONE_RESET_FENCE_H
+#ifndef KEO_ZONE_RESET_FENCE_H
+#define KEO_ZONE_RESET_FENCE_H
 
 // The save-load reset's boundary: the one deadline it runs on, the decision it
 // makes about a zone a generation may still be reading, whether navmesh work
@@ -107,4 +107,4 @@ long ZoneResetFenceOverflow();
 // world reset is exactly the event these records have to survive.
 void ZoneResetFenceReset();
 
-#endif // KENSHI_ZONE_OPT_ZONE_RESET_FENCE_H
+#endif // KEO_ZONE_RESET_FENCE_H

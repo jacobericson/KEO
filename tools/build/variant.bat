@@ -11,7 +11,7 @@ REM     MODE     compile = compile every tools\build\coresrc.txt source into
 REM              OBJDIR; link = link every CORESRC object in OBJDIR, import
 REM              check, RE_Kenshi.json; all = both.
 REM     DEFINES  every define after /DBOOST_SYSTEM_NO_DEPRECATED (gate values,
-REM              ZONEOPT_DEBUG), exactly as the calling script
+REM              KEO_DEBUG), exactly as the calling script
 REM              computed them.
 REM     MPFLAG   "/MP<n>" to compile the sources in n parallel cl processes, or
 REM              "" for one process. /MP only schedules the compile; the DLL is

@@ -1,7 +1,7 @@
 // plugin_entry_internal.h - Private declarations for the plugin entry.
 // Main thread only; logging uses the core log lock.
-#ifndef KENSHI_ZONE_OPT_PLUGIN_ENTRY_INTERNAL_H
-#define KENSHI_ZONE_OPT_PLUGIN_ENTRY_INTERNAL_H
+#ifndef KEO_PLUGIN_ENTRY_INTERNAL_H
+#define KEO_PLUGIN_ENTRY_INTERNAL_H
 
 #include <string>
 

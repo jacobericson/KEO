@@ -80,7 +80,7 @@ static void OpenLogFile()
 
 	logFile.open(logFilePath.c_str(), std::ios::trunc);
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	// LogMsg calls flush() per line, but that only hands the stream buffer to
 	// the OS; making the DEV stream unbuffered removes that buffer entirely, so
 	// each line reaches the OS inside the write that produced it and nothing is
@@ -122,7 +122,7 @@ void LogMsg(const std::string& line)
 	LeaveCriticalSection(&logCS);
 }
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 void LogDebug(const std::string& line)
 {
 	LogMsg(line);

@@ -2,8 +2,8 @@
 // the claim's one raise under the queue lock, then its release checkpoints.
 // Checkpoints preserve the pipeline write, worker clone and final claim order;
 // there is no automatic cleanup when a stack frame unwinds.
-#ifndef KENSHI_ZONE_OPT_NM_CLAIMED_JOB_H
-#define KENSHI_ZONE_OPT_NM_CLAIMED_JOB_H
+#ifndef KEO_NM_CLAIMED_JOB_H
+#define KEO_NM_CLAIMED_JOB_H
 
 #include "navmesh/nm_workers.h"
 #include "navmesh/jobs/nm_claimed_job_policy.h"

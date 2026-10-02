@@ -11,8 +11,8 @@
 // This header is host-testable: no game.h/core.h dependency, no KenshiLib
 // types. tools/tests/camera_focus_units.cpp links this .cpp alone.
 
-#ifndef KENSHI_ZONE_OPT_CAMERA_FOCUS_H
-#define KENSHI_ZONE_OPT_CAMERA_FOCUS_H
+#ifndef KEO_CAMERA_FOCUS_H
+#define KEO_CAMERA_FOCUS_H
 
 // Why the candidate point was (or wasn't) used. CAMFOCUS_HORIZON is unused by
 // the orbit-anchor method below (it never fails that way); it exists so a
@@ -89,4 +89,4 @@ struct CameraFocusAxisResult
 // flip-flopped on. margin <= 0 reproduces a plain single-threshold check.
 CameraFocusAxisResult CameraFocusAxisHysteresis(int prevOffset, float d, float threshold, float margin);
 
-#endif // KENSHI_ZONE_OPT_CAMERA_FOCUS_H
+#endif // KEO_CAMERA_FOCUS_H

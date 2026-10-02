@@ -131,7 +131,7 @@ struct FixesConfig
 	// unstitchProbe: the read-only detour on NavMesh::deleteInstance
 	// (src/fixes/stitch/unstitch_probe.h). Off by default. The flag and key
 	// compile in both builds; PROD reads the key and ignores it. Only the probe
-	// that reads this flag is compiled under ZONEOPT_DEBUG, so a PROD session
+	// that reads this flag is compiled under KEO_DEBUG, so a PROD session
 	// cannot install it. Read when the probe installs and on every teardown; it
 	// decides only whether the probe looks, never what the game does.
 	bool unstitchProbeEnabled;
@@ -140,7 +140,7 @@ struct FixesConfig
 	// world step makes from a packed key (src/fixes/streaming/section_key_probe.h).
 	// On by default. The flag and key compile in both builds; PROD reads the key
 	// and ignores it. Only the probe that reads this flag, both its detours, is
-	// compiled under ZONEOPT_DEBUG. On rather than off because what it records is
+	// compiled under KEO_DEBUG. On rather than off because what it records is
 	// only worth anything if it is already running when a fault arrives, and a
 	// session nobody remembered to arm records nothing. Read when the probe
 	// installs, and never again.

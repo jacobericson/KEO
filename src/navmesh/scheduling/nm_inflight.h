@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_NM_INFLIGHT_H
-#define KENSHI_ZONE_OPT_NM_INFLIGHT_H
+#ifndef KEO_NM_INFLIGHT_H
+#define KEO_NM_INFLIGHT_H
 
 #include <windows.h>
 

@@ -1,7 +1,7 @@
 // nm_workers.h - Public cross-unit compatibility declarations.
 
-#ifndef KENSHI_ZONE_OPT_NM_WORKERS_H
-#define KENSHI_ZONE_OPT_NM_WORKERS_H
+#ifndef KEO_NM_WORKERS_H
+#define KEO_NM_WORKERS_H
 
 #include "navmesh/cache/nm_cache_core.h"
 #include "navmesh/cache/nm_disk_cache.h"
@@ -245,4 +245,4 @@ private:
 };
 
 
-#endif // KENSHI_ZONE_OPT_NM_WORKERS_H
+#endif // KEO_NM_WORKERS_H

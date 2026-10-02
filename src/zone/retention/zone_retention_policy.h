@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_ZONE_RETENTION_POLICY_H
-#define KENSHI_ZONE_OPT_ZONE_RETENTION_POLICY_H
+#ifndef KEO_ZONE_RETENTION_POLICY_H
+#define KEO_ZONE_RETENTION_POLICY_H
 
 // The arithmetic behind holding a Set B cell past its native expiry: the
 // value written into the town countdown, the two-stage keep decision, the
@@ -102,4 +102,4 @@ const double ZONE_RETENTION_DEFER_BACKOFF_SEC     = 0.25;
 const double ZONE_RETENTION_DEFER_BACKOFF_MAX_SEC = 4.0;
 double ZoneRetentionDeferBackoffSeconds(int streak);
 
-#endif // KENSHI_ZONE_OPT_ZONE_RETENTION_POLICY_H
+#endif // KEO_ZONE_RETENTION_POLICY_H

@@ -1,8 +1,8 @@
 // rva.h - Game addresses and generation-settings layout constants.
 // Included through game.h.
 
-#ifndef KENSHI_ZONE_OPT_RVA_H
-#define KENSHI_ZONE_OPT_RVA_H
+#ifndef KEO_RVA_H
+#define KEO_RVA_H
 
 #include "game/klib_members.h"
 #include "base/core.h"
@@ -320,7 +320,7 @@ const size_t RVA_HULL_PUSH_SCYTHE = 0x7DBF20;   // ScythePhysicsT
 const size_t RVA_HULL_PUSH_ROOT   = 0x7DC0B0;
 const size_t RVA_HULL_PUSH_BASE   = 0x7DC110;
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 // NavMesh::deleteInstance. Tears one navmesh instance down and, when the
 // instance is not queued in addList and its runtime id is non-negative, runs
 // the cross-section un-stitch under changeMutex. DEV only: its one caller is
@@ -433,4 +433,4 @@ const size_t RVA_DESTROYLIST_INSERT  = 0x799BE0;
 
 
 
-#endif // KENSHI_ZONE_OPT_RVA_H
+#endif // KEO_RVA_H

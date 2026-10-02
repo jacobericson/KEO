@@ -757,7 +757,7 @@ bool PjCtx::AfterProcessJobAlt(bool pjLockLost, ProcessJobLock& missLock)
 			}
 
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 			// finalizeDeep has run inside processJobAlt and popped the single
 			// entry the job appended. What is left should be exactly the four
 			// material overrides; anything else means the pop loop walked past

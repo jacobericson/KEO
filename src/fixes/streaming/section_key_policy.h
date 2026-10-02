@@ -1,5 +1,5 @@
-#ifndef ZONEOPT_SECTION_KEY_POLICY_H
-#define ZONEOPT_SECTION_KEY_POLICY_H
+#ifndef KEO_SECTION_KEY_POLICY_H
+#define KEO_SECTION_KEY_POLICY_H
 
 // The arithmetic behind a streaming-collection section lookup, kept pure so the
 // decision a record is read against can be tested off the game.

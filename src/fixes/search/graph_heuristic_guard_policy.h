@@ -1,8 +1,8 @@
 // graph_heuristic_guard_policy.h - Layout and classification for the three sites inside the A*
 // search's hierarchical heuristic that read a section's cluster-graph instance unchecked.
 // No Windows header and no game pointer, so a host test can fabricate every object.
-#ifndef KENSHI_ZONE_OPT_FIXES_GRAPH_HEURISTIC_GUARD_POLICY_H
-#define KENSHI_ZONE_OPT_FIXES_GRAPH_HEURISTIC_GUARD_POLICY_H
+#ifndef KEO_FIXES_GRAPH_HEURISTIC_GUARD_POLICY_H
+#define KEO_FIXES_GRAPH_HEURISTIC_GUARD_POLICY_H
 
 #include <stddef.h>
 #include "fixes/search/graph_position_guard_policy.h"  // the collection layout, GraphPositionVec4

@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_HULL_QUEUE_GUARD_H
-#define KENSHI_ZONE_OPT_FIXES_HULL_QUEUE_GUARD_H
+#ifndef KEO_FIXES_HULL_QUEUE_GUARD_H
+#define KEO_FIXES_HULL_QUEUE_GUARD_H
 
 // Detour on PhysicsActual::updateUT, the one place hullsToDestroy's main list
 // is flushed to the physics thread. Before the flush it drops (sets to NULL)
@@ -21,4 +21,4 @@ void InstallHullQueueGuard(int* installed, int*);
 // the site was ever called.
 void HullQueueGuardTick(double now);
 
-#endif // KENSHI_ZONE_OPT_FIXES_HULL_QUEUE_GUARD_H
+#endif // KEO_FIXES_HULL_QUEUE_GUARD_H

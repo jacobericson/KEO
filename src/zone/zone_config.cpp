@@ -29,7 +29,7 @@ const ZoneConfig kZoneDefaults =
 	false, // islandReadinessRuleEnabled
 	true, // readinessOverridesEnabled
 	true, // zoneLifeUnloadEnabled
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	true, // zoneCycleStatsEnabled
 #else
 	false, // zoneCycleStatsEnabled

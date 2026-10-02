@@ -6,8 +6,8 @@
 // not as "nothing happened during this transition". They are also printed
 // unconditionally rather than through a debug-only log, because the paths
 // they describe are on in a stripped build too.
-#ifndef ZONEOPT_COVERAGE_STATS_H
-#define ZONEOPT_COVERAGE_STATS_H
+#ifndef KEO_COVERAGE_STATS_H
+#define KEO_COVERAGE_STATS_H
 
 #include <string>
 

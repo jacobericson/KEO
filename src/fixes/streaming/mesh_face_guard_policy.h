@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_MESH_FACE_GUARD_POLICY_H
-#define KENSHI_ZONE_OPT_FIXES_MESH_FACE_GUARD_POLICY_H
+#ifndef KEO_FIXES_MESH_FACE_GUARD_POLICY_H
+#define KEO_FIXES_MESH_FACE_GUARD_POLICY_H
 
 #include <stddef.h>
 
@@ -91,4 +91,4 @@ MeshFaceArm ClassifyMeshFaceVertex(int vertexIndex, int numOriginalVertices, int
 // and the image carries zeros in its place.
 void MeshFaceEmptyBounds(const float* seed, const float* expand, float* out);
 
-#endif // KENSHI_ZONE_OPT_FIXES_MESH_FACE_GUARD_POLICY_H
+#endif // KEO_FIXES_MESH_FACE_GUARD_POLICY_H

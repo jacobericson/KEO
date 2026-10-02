@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_DIAG_PHYSX_POOL_PROBE_H
-#define KENSHI_ZONE_OPT_DIAG_PHYSX_POOL_PROBE_H
+#ifndef KEO_DIAG_PHYSX_POOL_PROBE_H
+#define KEO_DIAG_PHYSX_POOL_PROBE_H
 
 // Pass-through counter on loadPhysXResource (0x7E4850), DEV builds only.
 //
@@ -35,4 +35,4 @@ void InstallPhysXPoolProbe(int* installed, int*);
 // build without the probe.
 void PhysXPoolTick(double now);
 
-#endif // KENSHI_ZONE_OPT_DIAG_PHYSX_POOL_PROBE_H
+#endif // KEO_DIAG_PHYSX_POOL_PROBE_H

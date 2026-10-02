@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_ISLAND_SPAN_POLICY_H
-#define KENSHI_ZONE_OPT_ISLAND_SPAN_POLICY_H
+#ifndef KEO_ISLAND_SPAN_POLICY_H
+#define KEO_ISLAND_SPAN_POLICY_H
 
 // The far-span routing rule on ZoneMap::isInIsland, and the classification of
 // what an edge-mode character is doing afterwards. Pure arithmetic, so it is
@@ -46,4 +46,4 @@ const int ISLAND_EDGE_PARK_KINDS = 4;
 IslandEdgePark IslandClassifyEdgePark(bool movingToEdge, bool idle, float haltDist,
                                       float wpDist, float destDist);
 
-#endif // KENSHI_ZONE_OPT_ISLAND_SPAN_POLICY_H
+#endif // KEO_ISLAND_SPAN_POLICY_H

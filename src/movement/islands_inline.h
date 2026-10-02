@@ -1,8 +1,8 @@
 // islands_inline.h - Shared inline island field and grid accessors.
 // Any thread, with no locks, allocation or logging; callers own object lifetime.
 
-#ifndef KENSHI_ZONE_OPT_ISLANDS_INLINE_H
-#define KENSHI_ZONE_OPT_ISLANDS_INLINE_H
+#ifndef KEO_ISLANDS_INLINE_H
+#define KEO_ISLANDS_INLINE_H
 
 #include "base/config.h"
 
@@ -36,4 +36,4 @@ inline int IdxGY(int idx) { return idx % 64; }
 
 } // namespace
 
-#endif // KENSHI_ZONE_OPT_ISLANDS_INLINE_H
+#endif // KEO_ISLANDS_INLINE_H

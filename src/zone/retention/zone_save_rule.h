@@ -1,6 +1,6 @@
 // zone_save_rule.h - The mod unload's save rule as a pure decision. No game or platform types.
-#ifndef KENSHI_ZONE_OPT_ZONE_SAVE_RULE_H
-#define KENSHI_ZONE_OPT_ZONE_SAVE_RULE_H
+#ifndef KEO_ZONE_SAVE_RULE_H
+#define KEO_ZONE_SAVE_RULE_H
 
 enum ZlSaveVerdict { ZL_SAVE_DISCARD = 0, ZL_SAVE_SAVE, ZL_SAVE_KEEP };
 

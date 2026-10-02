@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_UNSTITCH_LAYOUT_H
-#define KENSHI_ZONE_OPT_FIXES_UNSTITCH_LAYOUT_H
+#ifndef KEO_FIXES_UNSTITCH_LAYOUT_H
+#define KEO_FIXES_UNSTITCH_LAYOUT_H
 
 #include <stddef.h>
 
@@ -69,4 +69,4 @@ const size_t OFF_COLL_SLOT_GRAPHINST = 16;
 // The dying instance's runtime id is packed into the edge key at this shift.
 const int EDGE_KEY_RUNTIME_SHIFT     = 22;
 
-#endif // KENSHI_ZONE_OPT_FIXES_UNSTITCH_LAYOUT_H
+#endif // KEO_FIXES_UNSTITCH_LAYOUT_H

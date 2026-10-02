@@ -26,7 +26,7 @@
 PipeSampleSet g_pipe;
 static double g_pipeWindowStart = 0.0;
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 static const double PIPE_STATS_INTERVAL = 10.0;  // DEV
 #else
 static const double PIPE_STATS_INTERVAL = 30.0;  // PROD

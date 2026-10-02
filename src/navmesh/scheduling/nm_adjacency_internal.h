@@ -1,6 +1,6 @@
 // nm_adjacency_internal.h - Private adjacency state and helpers shared by the nm_adjacency*.cpp units.
-#ifndef KENSHI_ZONE_OPT_NM_ADJACENCY_INTERNAL_H
-#define KENSHI_ZONE_OPT_NM_ADJACENCY_INTERNAL_H
+#ifndef KEO_NM_ADJACENCY_INTERNAL_H
+#define KEO_NM_ADJACENCY_INTERNAL_H
 #include "navmesh/scheduling/nm_adjacency.h"
 #include "navmesh/scheduling/nm_adjacency_counters.h"
 #include "navmesh/nm_workers.h"
@@ -53,4 +53,4 @@ typedef void (*nmgUpdate_t)(void* nmg);
 extern nmgUpdate_t orig_nmgUpdate;
 void hook_nmgUpdate(void* nmg);
 } // namespace nm_adjacency_detail
-#endif // KENSHI_ZONE_OPT_NM_ADJACENCY_INTERNAL_H
+#endif // KEO_NM_ADJACENCY_INTERNAL_H

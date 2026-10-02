@@ -1,8 +1,8 @@
 // hooks_internal.h - Shared state for the transition, readiness and camera zone hooks.
 // Transition stamps can be published off-main; reporting and priority flags are main-thread work.
 
-#ifndef KENSHI_ZONE_OPT_HOOKS_INTERNAL_H
-#define KENSHI_ZONE_OPT_HOOKS_INTERNAL_H
+#ifndef KEO_HOOKS_INTERNAL_H
+#define KEO_HOOKS_INTERNAL_H
 
 #include "base/core.h"
 
@@ -17,4 +17,4 @@ void ReadinessReportTick(double now);
 } // namespace hooks_detail
 
 
-#endif // KENSHI_ZONE_OPT_HOOKS_INTERNAL_H
+#endif // KEO_HOOKS_INTERNAL_H

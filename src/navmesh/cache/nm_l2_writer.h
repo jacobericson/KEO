@@ -6,8 +6,8 @@
 // outcome list, so one session token accounts for every reason an L2 file was
 // not banked.
 
-#ifndef KENSHI_ZONE_OPT_NM_L2_WRITER_H
-#define KENSHI_ZONE_OPT_NM_L2_WRITER_H
+#ifndef KEO_NM_L2_WRITER_H
+#define KEO_NM_L2_WRITER_H
 
 #include <stddef.h>
 
@@ -71,4 +71,4 @@ bool L2NoBankFirstReport();
 
 void L2WriteStatsResetForTest();
 
-#endif // KENSHI_ZONE_OPT_NM_L2_WRITER_H
+#endif // KEO_NM_L2_WRITER_H

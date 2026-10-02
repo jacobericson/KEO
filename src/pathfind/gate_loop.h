@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_GATE_LOOP_H
-#define KENSHI_ZONE_OPT_GATE_LOOP_H
+#ifndef KEO_GATE_LOOP_H
+#define KEO_GATE_LOOP_H
 
 // The three loops of the gate-code pass, told apart by where Gates__findPath
 // returns to inside Gates__updateCodes.

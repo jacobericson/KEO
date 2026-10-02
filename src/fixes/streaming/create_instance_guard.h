@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_CREATE_INSTANCE_GUARD_H
-#define KENSHI_ZONE_OPT_FIXES_CREATE_INSTANCE_GUARD_H
+#ifndef KEO_FIXES_CREATE_INSTANCE_GUARD_H
+#define KEO_FIXES_CREATE_INSTANCE_GUARD_H
 
 // Detour on NavMesh::createInstance. The guard skips two redundant calls, and
 // in both n keeps the instance it has. One hands over a NavInstance already in
@@ -19,4 +19,4 @@ void InstallCreateInstanceGuard(int* installed, int*);
 // the site was ever called.
 void CreateInstanceGuardTick(double now);
 
-#endif // KENSHI_ZONE_OPT_FIXES_CREATE_INSTANCE_GUARD_H
+#endif // KEO_FIXES_CREATE_INSTANCE_GUARD_H

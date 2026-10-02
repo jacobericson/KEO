@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_NM_KEY_HASH_H
-#define KENSHI_ZONE_OPT_NM_KEY_HASH_H
+#ifndef KEO_NM_KEY_HASH_H
+#define KEO_NM_KEY_HASH_H
 
 #include <stddef.h>
 #include "base/hash.h"

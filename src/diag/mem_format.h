@@ -5,8 +5,8 @@
 // formatters build into a caller-supplied buffer with no CRT streams and no
 // allocation, because one caller is a vectored exception handler.
 
-#ifndef KENSHI_ZONE_OPT_DIAG_MEM_FORMAT_H
-#define KENSHI_ZONE_OPT_DIAG_MEM_FORMAT_H
+#ifndef KEO_DIAG_MEM_FORMAT_H
+#define KEO_DIAG_MEM_FORMAT_H
 
 #include <stddef.h>
 
@@ -40,4 +40,4 @@ size_t MemFormatLong(char* buf, size_t cap, const MemFigures& f);
 // carry a lot of tokens. Same return contract.
 size_t MemFormatShort(char* buf, size_t cap, const MemFigures& f);
 
-#endif // KENSHI_ZONE_OPT_DIAG_MEM_FORMAT_H
+#endif // KEO_DIAG_MEM_FORMAT_H

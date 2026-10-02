@@ -55,7 +55,7 @@ struct ConfigKey
 	ConfigParseFn parse;              // CK_CUSTOM
 	const ConfigChoice* choices;
 	int           choiceCount;
-	bool          debugOnlyReader; // the code that reads this key is compiled only under ZONEOPT_DEBUG
+	bool          debugOnlyReader; // the code that reads this key is compiled only under KEO_DEBUG
 };
 
 // One table of keys and the state its offset rows live in. keys ends with a

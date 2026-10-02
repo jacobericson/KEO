@@ -5,8 +5,8 @@
 // RtlCaptureStackBackTrace, MiniDumpWriteDump) lives in exit_capture.cpp,
 // which is not host-tested.
 
-#ifndef KENSHI_ZONE_OPT_DIAG_EXIT_CAPTURE_POLICY_H
-#define KENSHI_ZONE_OPT_DIAG_EXIT_CAPTURE_POLICY_H
+#ifndef KEO_DIAG_EXIT_CAPTURE_POLICY_H
+#define KEO_DIAG_EXIT_CAPTURE_POLICY_H
 
 #include <stddef.h>
 #include <string>
@@ -107,4 +107,4 @@ enum ExitCaptureClaimOutcome
 // 0 (a caller-observed race, not the syscall's own failure).
 std::string ExitCaptureClaimFailedToken(unsigned long lastError);
 
-#endif // KENSHI_ZONE_OPT_DIAG_EXIT_CAPTURE_POLICY_H
+#endif // KEO_DIAG_EXIT_CAPTURE_POLICY_H

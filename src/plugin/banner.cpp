@@ -57,7 +57,7 @@ void LogInitBanner(int installed, int totalHooks, const std::string& gateTok,
 	    << ", createInstanceGuard=" << (fixes::g_fixesCfg.createInstanceGuardEnabled ? "ON" : "OFF")
 	    << ", hullDoublePushGuard=" << (fixes::g_fixesCfg.hullDoublePushGuardEnabled ? "ON" : "OFF")
 	    << ", stitchByteGuard=" << (fixes::g_fixesCfg.stitchByteGuardEnabled ? "ON" : "OFF")
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	    << ", unstitchProbe=" << (fixes::g_fixesCfg.unstitchProbeEnabled ? "ON" : "OFF")
 #endif
 	    << ", islandFix=" << (movement::g_movementCfg.islandFixEnabled ? "ON" : "OFF")

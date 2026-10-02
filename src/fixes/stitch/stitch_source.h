@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_STITCH_SOURCE_H
-#define KENSHI_ZONE_OPT_FIXES_STITCH_SOURCE_H
+#ifndef KEO_FIXES_STITCH_SOURCE_H
+#define KEO_FIXES_STITCH_SOURCE_H
 
 // Who wrote the stale connection records the un-stitch bounds guard drops.
 //
@@ -41,4 +41,4 @@ void StitchSourceOnSetDrops(const void* graphInstance, int ownUid, int oppUid, i
 // Main thread, every frame: the heartbeat, independent of the guard's key.
 void StitchSourceTick(double now);
 
-#endif // KENSHI_ZONE_OPT_FIXES_STITCH_SOURCE_H
+#endif // KEO_FIXES_STITCH_SOURCE_H

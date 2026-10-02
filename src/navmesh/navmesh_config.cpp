@@ -29,7 +29,7 @@ const NavMeshConfig kNavMeshDefaults =
 	true, // navmeshBuildLockNarrowEnabled
 	true, // navmeshStallThrottleEnabled
 	true, // navmeshAdjExclusionEnabled
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	true, // navmeshMissHashEnabled
 #else
 	false, // navmeshMissHashEnabled

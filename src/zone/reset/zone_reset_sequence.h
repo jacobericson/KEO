@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_ZONE_RESET_SEQUENCE_H
-#define KENSHI_ZONE_OPT_ZONE_RESET_SEQUENCE_H
+#ifndef KEO_ZONE_RESET_SEQUENCE_H
+#define KEO_ZONE_RESET_SEQUENCE_H
 
 #include "zone/reset/zone_reset_fence.h"
 

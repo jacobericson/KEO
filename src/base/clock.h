@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_BASE_CLOCK_H
-#define KENSHI_ZONE_OPT_BASE_CLOCK_H
+#ifndef KEO_BASE_CLOCK_H
+#define KEO_BASE_CLOCK_H
 
 // QueryPerformanceCounter time. startPlugin sets qpcFrequency and
 // pluginStartTime before any hook is installed and nothing changes them after,

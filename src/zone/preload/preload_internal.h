@@ -2,8 +2,8 @@
 // Public declarations live in preload.h; internal preload and zone-lifecycle
 // consumers use this header. Lifecycle-only private state is declared in
 // zone_life_internal.h.
-#ifndef KENSHI_ZONE_OPT_PRELOAD_INTERNAL_H
-#define KENSHI_ZONE_OPT_PRELOAD_INTERNAL_H
+#ifndef KEO_PRELOAD_INTERNAL_H
+#define KEO_PRELOAD_INTERNAL_H
 
 #include "zone/preload/preload.h"
 #include "game/game.h"
@@ -108,8 +108,8 @@ bool ZlLateHandoffPossible();
 int  ZlPredictFirstTime(int gx, int gy);
 bool ZlGiveToGame(void* zoneMgr, int i, void* ze, void* content, const char* why);
 void ZlKeepLate(int i);
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 void ZlLogFirstTimeDiag(int i, void* content);
 #endif
 
-#endif // KENSHI_ZONE_OPT_PRELOAD_INTERNAL_H
+#endif // KEO_PRELOAD_INTERNAL_H

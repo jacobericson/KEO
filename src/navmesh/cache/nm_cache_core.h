@@ -1,8 +1,8 @@
 // nm_cache_core.h — L1 in-memory navmesh cache + stats reporter (Layer 3)
 // Depends on: nm_cache_types.h, nm_cache_slot_policy.h
 
-#ifndef KENSHI_ZONE_OPT_NM_CACHE_CORE_H
-#define KENSHI_ZONE_OPT_NM_CACHE_CORE_H
+#ifndef KEO_NM_CACHE_CORE_H
+#define KEO_NM_CACHE_CORE_H
 
 #include "navmesh/cache/nm_cache_types.h"
 #include "navmesh/cache/nm_cache_slot_policy.h"
@@ -611,4 +611,4 @@ int            SafeZoneThingsCount(uintptr_t jobZone);
 void LogNavMeshCacheStats(double now);
 
 
-#endif // KENSHI_ZONE_OPT_NM_CACHE_CORE_H
+#endif // KEO_NM_CACHE_CORE_H

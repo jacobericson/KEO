@@ -1,7 +1,7 @@
 // path_pool.h — path-thread pass instrumentation
 
-#ifndef KENSHI_ZONE_OPT_PATH_POOL_H
-#define KENSHI_ZONE_OPT_PATH_POOL_H
+#ifndef KEO_PATH_POOL_H
+#define KEO_PATH_POOL_H
 
 #include "base/core.h"
 #include "base/config.h"
@@ -81,4 +81,4 @@ __int64 hook_gatesUpdateCodes(void* gatesObj);
 extern volatile DWORD g_pathThreadId;
 
 
-#endif // KENSHI_ZONE_OPT_PATH_POOL_H
+#endif // KEO_PATH_POOL_H

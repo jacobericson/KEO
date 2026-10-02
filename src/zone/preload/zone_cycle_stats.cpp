@@ -32,7 +32,7 @@ static ZonePercentile g_pctPublish;
 static ZonePercentile g_pctTotal;
 static double g_nextSummary = 0.0;
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 static const double CYCLE_SUMMARY_INTERVAL = 60.0;
 static const double LEASE_SAMPLE_INTERVAL  = 10.0;
 #else

@@ -1,8 +1,8 @@
 // pathfind_diag.h -- Pathfinding diagnostic state, probes, player failure tracking (Layer 3)
 // Depends on: config.h
 
-#ifndef KENSHI_ZONE_OPT_PATHFIND_DIAG_H
-#define KENSHI_ZONE_OPT_PATHFIND_DIAG_H
+#ifndef KEO_PATHFIND_DIAG_H
+#define KEO_PATHFIND_DIAG_H
 
 #include "base/config.h"
 
@@ -266,4 +266,4 @@ long  PlayerFarArrivals();
 float PlayerFarArriveMaxDist();
 
 
-#endif // KENSHI_ZONE_OPT_PATHFIND_DIAG_H
+#endif // KEO_PATHFIND_DIAG_H

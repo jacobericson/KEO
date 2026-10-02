@@ -1,5 +1,5 @@
 // The settings page factory, built twice at /DZONEHAND_STEP=3: with
-// /DZONEOPT_DEBUG (the DEV table, every key) and without it (the PROD table).
+// /DKEO_DEBUG (the DEV table, every key) and without it (the PROD table).
 // In either, devBuild false shows exactly PROD's rows.
 
 #include "gui/settings_factory.h"
@@ -32,7 +32,7 @@ static const char* const MODULE_TITLES[] =
 	"Zone loading", "Navmesh", "Pathfinding", "Movement and orders", "Crash guards and probes", "Settings panel"
 };
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 static const char* const SUITE_NAME = "settings_factory_units";
 #else
 static const char* const SUITE_NAME = "settings_factory_prod_units";

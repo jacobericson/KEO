@@ -1,8 +1,8 @@
 // formation_members.h — Pure formation-member bookkeeping (Layer 0, host-testable)
 // No game or KenshiLib headers: matching and completion logic only.
 
-#ifndef KENSHI_ZONE_OPT_FORMATION_MEMBERS_H
-#define KENSHI_ZONE_OPT_FORMATION_MEMBERS_H
+#ifndef KEO_FORMATION_MEMBERS_H
+#define KEO_FORMATION_MEMBERS_H
 
 #include <stdint.h>
 
@@ -45,4 +45,4 @@ float FormationGatherRadius(int memberCount);
 float FormationMaxPairwiseSpread(const float* xs, const float* zs,
                                   const uintptr_t* characters, int count);
 
-#endif // KENSHI_ZONE_OPT_FORMATION_MEMBERS_H
+#endif // KEO_FORMATION_MEMBERS_H

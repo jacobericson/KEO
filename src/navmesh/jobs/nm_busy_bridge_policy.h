@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_NM_BUSY_BRIDGE_POLICY_H
-#define KENSHI_ZONE_OPT_NM_BUSY_BRIDGE_POLICY_H
+#ifndef KEO_NM_BUSY_BRIDGE_POLICY_H
+#define KEO_NM_BUSY_BRIDGE_POLICY_H
 
 // The generator's busy bridge: a count of jobs a mod thread has claimed and
 // not finished, and the generator byte the game reads as "generating" (+265).

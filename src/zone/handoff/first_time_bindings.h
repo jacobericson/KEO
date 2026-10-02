@@ -1,8 +1,8 @@
 // first_time_bindings.h - First-load prediction bindings and town-list layout.
 // Included through game.h.
 
-#ifndef KENSHI_ZONE_OPT_FIRST_TIME_BINDINGS_H
-#define KENSHI_ZONE_OPT_FIRST_TIME_BINDINGS_H
+#ifndef KEO_FIRST_TIME_BINDINGS_H
+#define KEO_FIRST_TIME_BINDINGS_H
 
 #include "game/klib_members.h"
 #include "base/core.h"
@@ -33,4 +33,4 @@ extern sfsGetSingleton_t fn_sfsGetSingleton;
 extern sfsFileExists_t   fn_sfsFileExists;
 // ---- end first-time prediction ----
 
-#endif // KENSHI_ZONE_OPT_FIRST_TIME_BINDINGS_H
+#endif // KEO_FIRST_TIME_BINDINGS_H

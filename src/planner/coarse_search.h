@@ -1,8 +1,8 @@
 // coarse_search.h - A* over a coarse graph described by an operations struct: world-frame arc
 // costs, a straight-line heuristic, a node budget. Pure: no Windows, KenshiLib or game header.
 // The caller owns the scratch and runs one search at a time on it; main thread in the game.
-#ifndef KENSHI_ZONE_OPT_PLANNER_COARSE_SEARCH_H
-#define KENSHI_ZONE_OPT_PLANNER_COARSE_SEARCH_H
+#ifndef KEO_PLANNER_COARSE_SEARCH_H
+#define KEO_PLANNER_COARSE_SEARCH_H
 
 #include <vector>
 

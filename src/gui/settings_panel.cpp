@@ -31,7 +31,7 @@ static_assert(offsetof(DatapanelGUI, currentCategory) == 0xB0, "DatapanelGUI::cu
 static_assert(offsetof(DataPanelLine, callback) == 0x20, "DataPanelLine::callback");
 static_assert(offsetof(DataPanelLine_Button, button) == 0x140, "DataPanelLine_Button::button");
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 static const bool DEV_BUILD = true;
 #else
 static const bool DEV_BUILD = false;
@@ -337,7 +337,7 @@ static bool HookSite(size_t rva, void* klibAddr, void* detour, void** orig, cons
 
 void InstallSettingsPanel()
 {
-	if (!zoneopt_gui::g_guiCfg.settingsPanelEnabled)
+	if (!keo_gui::g_guiCfg.settingsPanelEnabled)
 	{
 		s_token = "off(ini)";
 		return;
@@ -366,7 +366,7 @@ void InstallSettingsPanel()
 
 const char* SettingsPanelToken()
 {
-	if (!zoneopt_gui::g_guiCfg.settingsPanelEnabled)
+	if (!keo_gui::g_guiCfg.settingsPanelEnabled)
 		return "off(ini)";
 	return s_token;
 }

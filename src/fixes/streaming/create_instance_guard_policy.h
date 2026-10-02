@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_CREATE_INSTANCE_GUARD_POLICY_H
-#define KENSHI_ZONE_OPT_FIXES_CREATE_INSTANCE_GUARD_POLICY_H
+#ifndef KEO_FIXES_CREATE_INSTANCE_GUARD_POLICY_H
+#define KEO_FIXES_CREATE_INSTANCE_GUARD_POLICY_H
 
 #include <stddef.h>
 
@@ -131,4 +131,4 @@ struct CreateInstanceTask
 // finished is done.front, and it is not popped until after the call.
 void InspectCreateInstanceTask(const void* navMesh, const void* n, CreateInstanceTask* out);
 
-#endif // KENSHI_ZONE_OPT_FIXES_CREATE_INSTANCE_GUARD_POLICY_H
+#endif // KEO_FIXES_CREATE_INSTANCE_GUARD_POLICY_H

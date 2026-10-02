@@ -1,8 +1,8 @@
-#ifndef ZONEOPT_TOOLS_TESTS_CONFIG_TABLE_CHECKS_H
-#define ZONEOPT_TOOLS_TESTS_CONFIG_TABLE_CHECKS_H
+#ifndef KEO_TOOLS_TESTS_CONFIG_TABLE_CHECKS_H
+#define KEO_TOOLS_TESTS_CONFIG_TABLE_CHECKS_H
 
 // The config key table's checks, shared by the PROD suite (config_table_units)
-// and the DEV one (config_table_dev_units, ZONEOPT_DEBUG). The working folder
+// and the DEV one (config_table_dev_units, KEO_DEBUG). The working folder
 // is the repository root, so the template and the golden files are read from
 // there.
 
@@ -45,7 +45,7 @@ void DiscardLog(const std::string&)
 
 bool IsDev()
 {
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	return true;
 #else
 	return false;

@@ -1,5 +1,5 @@
-#ifndef ZONEOPT_TOOLS_TESTS_CHECK_H
-#define ZONEOPT_TOOLS_TESTS_CHECK_H
+#ifndef KEO_TOOLS_TESTS_CHECK_H
+#define KEO_TOOLS_TESTS_CHECK_H
 
 // Host-suite assertions. The failure count is a function-local static of an inline
 // function, so every translation unit of one suite shares it.

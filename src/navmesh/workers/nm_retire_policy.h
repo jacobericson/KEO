@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_NM_RETIRE_POLICY_H
-#define KENSHI_ZONE_OPT_NM_RETIRE_POLICY_H
+#ifndef KEO_NM_RETIRE_POLICY_H
+#define KEO_NM_RETIRE_POLICY_H
 
 // The navmesh worker retire at NavMesh::stop: wait in bounded slices, never
 // let the teardown run while a worker is live, and end the process

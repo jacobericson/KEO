@@ -2,8 +2,8 @@
 // Main thread for setup, probe, stats, flush and drop; any thread for inserts.
 // Queue operations take leaf deferCS; original inserts run with it released.
 
-#ifndef KENSHI_ZONE_OPT_DESTROY_LIST_DEFER_H
-#define KENSHI_ZONE_OPT_DESTROY_LIST_DEFER_H
+#ifndef KEO_DESTROY_LIST_DEFER_H
+#define KEO_DESTROY_LIST_DEFER_H
 
 #include "base/core.h"
 
@@ -112,4 +112,4 @@ extern destroyListInsert_t orig_destroyListInsert;
 __int64 __fastcall hook_destroyListInsert(void* gameWorld, void* movable);
 
 
-#endif // KENSHI_ZONE_OPT_DESTROY_LIST_DEFER_H
+#endif // KEO_DESTROY_LIST_DEFER_H

@@ -1,8 +1,8 @@
 // offsets.h - Game structure field offsets and layout assertions.
 // Included through game.h.
 
-#ifndef KENSHI_ZONE_OPT_OFFSETS_H
-#define KENSHI_ZONE_OPT_OFFSETS_H
+#ifndef KEO_OFFSETS_H
+#define KEO_OFFSETS_H
 
 #include "game/klib_members.h"
 #include "base/core.h"
@@ -261,4 +261,4 @@ const size_t RVA_OPTIONS_INSTANCE       = 0x212E080; // OptionsWindow* (getSingl
 const size_t RVA_WEATHER_INSTANCE       = 0x2127180; // WeatherSystem* (getInstance's static)
 
 
-#endif // KENSHI_ZONE_OPT_OFFSETS_H
+#endif // KEO_OFFSETS_H

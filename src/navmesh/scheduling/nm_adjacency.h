@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_NM_ADJACENCY_H
-#define KENSHI_ZONE_OPT_NM_ADJACENCY_H
+#ifndef KEO_NM_ADJACENCY_H
+#define KEO_NM_ADJACENCY_H
 
 // Navmesh adjacency exclusion (nm_adjacency_policy.h has the rule).
 //
@@ -84,4 +84,4 @@ void NmAdjNoteCheckerPresent();
 void InstallNavMeshAdjacency(int* installed, int*);
 void NavMeshAdjTick(double now);
 
-#endif // KENSHI_ZONE_OPT_NM_ADJACENCY_H
+#endif // KEO_NM_ADJACENCY_H

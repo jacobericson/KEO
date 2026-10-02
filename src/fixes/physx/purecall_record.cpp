@@ -50,7 +50,7 @@ static int    g_attemptCount    = 0;
 static double g_firstAttemptSec = -1.0;
 static double g_lastAttemptSec  = -1.0;
 
-static void __cdecl ZoneOpt_OnPurecall(void);
+static void __cdecl KEO_OnPurecall(void);
 
 // --- SEH-guarded reads. Standalone and POD-only, same idiom as
 // ReadGameBytes16 in prologue.cpp: MSVC 2010 rejects __try in a function that
@@ -153,7 +153,7 @@ static void WriteRecord(unsigned __int64 tid, unsigned __int64 qpc,
                   bool chained)
 {
 	LONG seq = InterlockedIncrement(&g_recordSeq);
-#ifndef ZONEOPT_DEBUG
+#ifndef KEO_DEBUG
 	// PROD: one record per process, same rule as crash_dump.txt (plugin/crash_record.cpp) --
 	// a fault storm on a dying thread must not become a write storm.
 	if (seq > 1)
@@ -190,7 +190,7 @@ static void WriteRecord(unsigned __int64 tid, unsigned __int64 qpc,
 // handler at all, which just falls through to abort()). Prototype fixed by
 // the CRT: void (__cdecl *)(void), called with a plain `call rax` -- no
 // arguments, no return value read afterwards.
-static void __cdecl ZoneOpt_OnPurecall(void)
+static void __cdecl KEO_OnPurecall(void)
 {
 	// The address _purecall itself will resume at once this call returns.
 	// Reading it is informational only (it always lands in PhysXCore64); the
@@ -305,7 +305,7 @@ static bool TryArmPurecallRecorder()
 		return true;
 	}
 
-	unsigned __int64 encoded = (unsigned __int64)(uintptr_t)EncodePointer((PVOID)(uintptr_t)&ZoneOpt_OnPurecall);
+	unsigned __int64 encoded = (unsigned __int64)(uintptr_t)EncodePointer((PVOID)(uintptr_t)&KEO_OnPurecall);
 	*(volatile unsigned __int64*)handlerAddr = encoded;
 
 	DWORD ignore = 0;

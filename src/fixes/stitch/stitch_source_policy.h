@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_STITCH_SOURCE_POLICY_H
-#define KENSHI_ZONE_OPT_FIXES_STITCH_SOURCE_POLICY_H
+#ifndef KEO_FIXES_STITCH_SOURCE_POLICY_H
+#define KEO_FIXES_STITCH_SOURCE_POLICY_H
 
 // Write-side record of the cross-section stitch, and the classifier that joins
 // it to a record the un-stitch bounds guard drops. No game headers, no
@@ -294,4 +294,4 @@ struct StitchJoin
 // produced the record -- a mismatch.
 StitchClass StitchClassify(const StitchJoin* j, const StitchDropFacts* d, StitchNoWriteWhy* why);
 
-#endif // KENSHI_ZONE_OPT_FIXES_STITCH_SOURCE_POLICY_H
+#endif // KEO_FIXES_STITCH_SOURCE_POLICY_H

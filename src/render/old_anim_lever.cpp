@@ -18,7 +18,7 @@
 // early-out. When no queued entity would update, the forks would change
 // nothing, so it runs only the tail (tag points, listeners) and returns.
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 static const bool DEV_BUILD = true;
 #else
 static const bool DEV_BUILD = false;

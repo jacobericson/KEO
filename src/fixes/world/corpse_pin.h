@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_CORPSE_PIN_H
-#define KENSHI_ZONE_OPT_FIXES_CORPSE_PIN_H
+#ifndef KEO_FIXES_CORPSE_PIN_H
+#define KEO_FIXES_CORPSE_PIN_H
 
 // Detour on ActivePlatoon::calculateCurrentPos: a squad whose only living
 // content is a carried NPC corpse otherwise reports the pickup spot forever
@@ -22,4 +22,4 @@ long CorpsePinNoCarrierCount();
 // applied, so a session log can tell "never fired" from "never printed".
 void CorpsePinTick(double now);
 
-#endif // KENSHI_ZONE_OPT_FIXES_CORPSE_PIN_H
+#endif // KEO_FIXES_CORPSE_PIN_H

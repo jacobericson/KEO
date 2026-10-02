@@ -1,5 +1,5 @@
-#ifndef ZONEOPT_SECTION_KEY_SCAN_H
-#define ZONEOPT_SECTION_KEY_SCAN_H
+#ifndef KEO_SECTION_KEY_SCAN_H
+#define KEO_SECTION_KEY_SCAN_H
 
 // Classifies the section-table lookups a call is about to make and leaves the
 // result in the ring. Separate from the detours so it can be exercised, and

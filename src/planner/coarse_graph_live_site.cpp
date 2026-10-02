@@ -280,7 +280,7 @@ void CgLiveOnConnect(void* graphInst, void* coll)
 
 void CgLiveReport(double now)
 {
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	const double interval = 30.0;
 #else
 	const double interval = 60.0;

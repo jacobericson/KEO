@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_UNSTITCH_PROBE_POLICY_H
-#define KENSHI_ZONE_OPT_FIXES_UNSTITCH_PROBE_POLICY_H
+#ifndef KEO_FIXES_UNSTITCH_PROBE_POLICY_H
+#define KEO_FIXES_UNSTITCH_PROBE_POLICY_H
 
 // Decision logic for the cross-section un-stitch probe (unstitch_probe.h).
 // Pure arithmetic: no game headers, no KenshiLib, host-testable.
@@ -87,4 +87,4 @@ struct UnstitchWalkTally
 // implausible, which counts the refused array once.
 UnstitchWalkTally UnstitchWalkStubs(int ownUid, const UnstitchSetStub* sets, int setCount);
 
-#endif // KENSHI_ZONE_OPT_FIXES_UNSTITCH_PROBE_POLICY_H
+#endif // KEO_FIXES_UNSTITCH_PROBE_POLICY_H

@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <string.h>
 
-namespace zoneopt_gui {
+namespace keo_gui {
 
 const GuiConfig kGuiDefaults =
 {
@@ -13,14 +13,14 @@ const GuiConfig kGuiDefaults =
 };
 
 GuiConfig g_guiCfg = kGuiDefaults;
-} // namespace zoneopt_gui
+} // namespace keo_gui
 
 namespace gui_config_detail {
-union GuiConfigPodCheck { zoneopt_gui::GuiConfig s; };
+union GuiConfigPodCheck { keo_gui::GuiConfig s; };
 } // namespace gui_config_detail
 using namespace gui_config_detail;
 
-namespace zoneopt_gui {
+namespace keo_gui {
 
 const ConfigKey g_guiConfigKeys[] =
 {
@@ -30,4 +30,4 @@ const ConfigKey g_guiConfigKeys[] =
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }
 };
 
-} // namespace zoneopt_gui
+} // namespace keo_gui

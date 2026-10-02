@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_NEST_VALIDATION_H
-#define KENSHI_ZONE_OPT_FIXES_NEST_VALIDATION_H
+#ifndef KEO_FIXES_NEST_VALIDATION_H
+#define KEO_FIXES_NEST_VALIDATION_H
 
 // Detour on SectionManager::finalizeZoneResources: the native function
 // destroys (destroyPhysical + TownList::destroy, permanent) any nest whose
@@ -52,4 +52,4 @@ long NestValidationDestroyedCount();
 // Main thread only, like everything else here.
 void NestValidationClearOnReset();
 
-#endif // KENSHI_ZONE_OPT_FIXES_NEST_VALIDATION_H
+#endif // KEO_FIXES_NEST_VALIDATION_H

@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_ORDER_OUTCOME_TABLE_H
-#define KENSHI_ZONE_OPT_ORDER_OUTCOME_TABLE_H
+#ifndef KEO_ORDER_OUTCOME_TABLE_H
+#define KEO_ORDER_OUTCOME_TABLE_H
 
 // The player order-outcome record table, pure: no game headers. A
 // character is named by its raw pointer value, passed through as a size_t so
@@ -116,4 +116,4 @@ OotTotals OOT_GetTotals();
 // Open (not yet closed) records, for tests and diagnostics.
 int OOT_OpenRecords();
 
-#endif // KENSHI_ZONE_OPT_ORDER_OUTCOME_TABLE_H
+#endif // KEO_ORDER_OUTCOME_TABLE_H

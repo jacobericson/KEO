@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_GRAPH_POSITION_GUARD_POLICY_H
-#define KENSHI_ZONE_OPT_FIXES_GRAPH_POSITION_GUARD_POLICY_H
+#ifndef KEO_FIXES_GRAPH_POSITION_GUARD_POLICY_H
+#define KEO_FIXES_GRAPH_POSITION_GUARD_POLICY_H
 
 #include <stddef.h>
 
@@ -93,4 +93,4 @@ struct GraphPositionVec4 { float x, y, z, w; };
 // turning "unreadable" into "distance zero" -- the opposite of deprioritized.
 GraphPositionVec4 GraphPositionFarSentinel();
 
-#endif // KENSHI_ZONE_OPT_FIXES_GRAPH_POSITION_GUARD_POLICY_H
+#endif // KEO_FIXES_GRAPH_POSITION_GUARD_POLICY_H

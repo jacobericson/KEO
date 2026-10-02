@@ -1,8 +1,8 @@
 // cluster_cross_cost_policy.h - The cross-tile cluster-graph link cost, rewritten from the two
 // instances' world-frame cluster centres. Pure over the instances' memory: no Windows header
 // and no game pointer type, so a host test fabricates both instances and the collection.
-#ifndef KENSHI_ZONE_OPT_FIXES_CLUSTER_CROSS_COST_POLICY_H
-#define KENSHI_ZONE_OPT_FIXES_CLUSTER_CROSS_COST_POLICY_H
+#ifndef KEO_FIXES_CLUSTER_CROSS_COST_POLICY_H
+#define KEO_FIXES_CLUSTER_CROSS_COST_POLICY_H
 
 #include <stddef.h>
 

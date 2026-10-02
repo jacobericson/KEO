@@ -1,5 +1,5 @@
-#ifndef ZONEOPT_SECTION_KEY_RING_H
-#define ZONEOPT_SECTION_KEY_RING_H
+#ifndef KEO_SECTION_KEY_RING_H
+#define KEO_SECTION_KEY_RING_H
 
 #include <windows.h>
 

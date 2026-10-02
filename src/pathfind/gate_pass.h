@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_GATE_PASS_H
-#define KENSHI_ZONE_OPT_GATE_PASS_H
+#ifndef KEO_GATE_PASS_H
+#define KEO_GATE_PASS_H
 
 #include "base/config.h"
 #include <string>

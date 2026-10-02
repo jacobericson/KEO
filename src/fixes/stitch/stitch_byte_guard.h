@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_STITCH_BYTE_GUARD_H
-#define KENSHI_ZONE_OPT_FIXES_STITCH_BYTE_GUARD_H
+#ifndef KEO_FIXES_STITCH_BYTE_GUARD_H
+#define KEO_FIXES_STITCH_BYTE_GUARD_H
 
 #include <stddef.h>
 
@@ -35,4 +35,4 @@ size_t StitchByteGuardCrashFormat(char* buf, size_t cap, int maxEntries);
 // Call from DLL_PROCESS_DETACH. The patched bytes stay.
 void NeutralizeStitchByteGuard();
 
-#endif // KENSHI_ZONE_OPT_FIXES_STITCH_BYTE_GUARD_H
+#endif // KEO_FIXES_STITCH_BYTE_GUARD_H

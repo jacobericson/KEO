@@ -1,8 +1,12 @@
 // core.h — Platform, logging, timing (Layer 0)
 // No game knowledge. Included by every module.
 
-#ifndef KENSHI_ZONE_OPT_CORE_H
-#define KENSHI_ZONE_OPT_CORE_H
+#ifndef KEO_CORE_H
+#define KEO_CORE_H
+// A build line passing the old DEV define name stops here.
+#ifdef ZONEOPT_DEBUG
+#error stale DEV define: the build lines pass /DKEO_DEBUG
+#endif
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -95,9 +99,9 @@ void FlushDeferredLogLines();
 bool LogMsgBounded(const char* line, unsigned boundMs);
 void LogRetireFallback(const char* line);
 
-// Verbose logging: active in DEV builds (ZONEOPT_DEBUG defined) and compiled
+// Verbose logging: active in DEV builds (KEO_DEBUG defined) and compiled
 // out entirely in PROD.
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 void LogDebug(const std::string& line);
 #else
 inline void LogDebug(const std::string&) {}
@@ -199,4 +203,4 @@ void* HavokTlsAlloc(size_t size);
 void  HavokTlsFree(void* ptr, size_t size);
 
 
-#endif // KENSHI_ZONE_OPT_CORE_H
+#endif // KEO_CORE_H

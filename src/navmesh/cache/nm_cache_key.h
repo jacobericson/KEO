@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_NM_CACHE_KEY_H
-#define KENSHI_ZONE_OPT_NM_CACHE_KEY_H
+#ifndef KEO_NM_CACHE_KEY_H
+#define KEO_NM_CACHE_KEY_H
 
 // The L1 ring's key and entry types, with no game header, so pure policies
 // and their host suites can use them.

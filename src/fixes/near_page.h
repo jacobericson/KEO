@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_NEAR_PAGE_H
-#define KENSHI_ZONE_OPT_FIXES_NEAR_PAGE_H
+#ifndef KEO_FIXES_NEAR_PAGE_H
+#define KEO_FIXES_NEAR_PAGE_H
 
 #include <stddef.h>
 
@@ -10,4 +10,4 @@
 // Returns NULL when nothing within reach is free. The caller owns the block.
 unsigned char* AllocateNearPages(unsigned __int64 nearAddr, size_t bytes);
 
-#endif // KENSHI_ZONE_OPT_FIXES_NEAR_PAGE_H
+#endif // KEO_FIXES_NEAR_PAGE_H

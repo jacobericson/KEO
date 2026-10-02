@@ -1,8 +1,8 @@
 // config.h — Feature flags, tuning parameters, shared structs (Layer 2)
 // Depends on: core.h, game.h
 
-#ifndef KENSHI_ZONE_OPT_CONFIG_H
-#define KENSHI_ZONE_OPT_CONFIG_H
+#ifndef KEO_CONFIG_H
+#define KEO_CONFIG_H
 
 #include "base/core.h"
 #include "game/game.h"
@@ -91,4 +91,4 @@ void LoadConfig(const std::string& dllDir);
 void FinalizeConfig();
 
 
-#endif // KENSHI_ZONE_OPT_CONFIG_H
+#endif // KEO_CONFIG_H

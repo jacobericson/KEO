@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_PURECALL_LAYOUT_H
-#define KENSHI_ZONE_OPT_FIXES_PURECALL_LAYOUT_H
+#ifndef KEO_FIXES_PURECALL_LAYOUT_H
+#define KEO_FIXES_PURECALL_LAYOUT_H
 
 // Pure layout facts about PhysXCore64.dll's statically linked CRT and the
 // address arithmetic the recorder needs. No Windows header, no I/O: kept
@@ -58,4 +58,4 @@ bool PurecallRetryDue(double now, double lastAttempt);
 // no successful install -- the caller logs once and stops retrying.
 bool PurecallRetryExpired(double now, double firstAttempt);
 
-#endif // KENSHI_ZONE_OPT_FIXES_PURECALL_LAYOUT_H
+#endif // KEO_FIXES_PURECALL_LAYOUT_H

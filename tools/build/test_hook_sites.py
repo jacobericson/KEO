@@ -394,7 +394,7 @@ ROWS = '''
 	         0x40,0x53,0x56,0x57,0x48,0x83,0xEC,0x30,0x48,0xC7,0x44,0x24,0x20,0xFE,0xFF,0xFF)
 	HOOK_ROW(HOOK_B, "b", RVA_B, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
 	         0x40,0x53,0x56,0x57,0x48,0x83,0xEC,0x30,0x48,0xC7,0x44,0x24,0x20,0xFE,0xFF,0xFF)
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	HOOK_ROW(HOOK_P1, "p1", RVA_P1, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
 	         0x40,0x53,0x56,0x57,0x48,0x83,0xEC,0x30,0x48,0xC7,0x44,0x24,0x20,0xFE,0xFF,0xFF)
 	HOOK_ROW(HOOK_P2, "p2", RVA_P2, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
@@ -453,7 +453,7 @@ static void (*const kInstallSteps[])(int*, int*) =
 {
 	InstallA,
 	// InstallA in a comment is not an entry
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	InstallB,
 #endif
 	StepC,
@@ -635,7 +635,7 @@ COND_ROWS = '''
 	HOOK_ROW(HOOK_S2, "s2", RVA_S2, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
 	         0x40,0x53,0x56,0x57,0x48,0x83,0xEC,0x30,0x48,0xC7,0x44,0x24,0x20,0xFE,0xFF,0xFF)
 #endif
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	HOOK_ROW(HOOK_D, "d", RVA_D, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
 	         0x40,0x53,0x56,0x57,0x48,0x83,0xEC,0x30,0x48,0xC7,0x44,0x24,0x20,0xFE,0xFF,0xFF)
 #endif
@@ -654,7 +654,7 @@ class ConditionTests(unittest.TestCase):
 
     def test_typed_array_entry_under_its_block_passes(self):
         site = '''static const HookRowId kModRows[] = {
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	HOOK_D,
 #endif
 	HOOK_A };
@@ -667,7 +667,7 @@ void Install(int i) { HookInstall(kModRows[i], h, &o, installed, true); }
         rc = self.row_conds()
         self.assertEqual(rc['HOOK_A'], [])
         self.assertEqual(rc['HOOK_S2'], ['ZONEHAND_STEP>=2'])
-        self.assertEqual(rc['HOOK_D'], ['defined(ZONEOPT_DEBUG)'])
+        self.assertEqual(rc['HOOK_D'], ['defined(KEO_DEBUG)'])
 
     def test_clean_set_passes(self):
         site = '''#if ZONEHAND_STEP >= 2
@@ -676,7 +676,7 @@ void Install(int i) { HookInstall(kModRows[i], h, &o, installed, true); }
 #if ZONEHAND_STEP >= 3
 	HookRowWanted(HOOK_S2);
 #endif
-#if defined(ZONEOPT_DEBUG)
+#if defined(KEO_DEBUG)
 	HookRowWanted(HOOK_D);
 #endif
 HookRowWanted(HOOK_A);
@@ -736,26 +736,26 @@ HookRowWanted(HOOK_S2);
         self.assertEqual(self.check_site(site), [])
 
     def test_use_under_ifndef_passes(self):
-        rows = COND_ROWS + '''#ifndef ZONEOPT_DEBUG
+        rows = COND_ROWS + '''#ifndef KEO_DEBUG
 	HOOK_ROW(HOOK_P, "p", RVA_P, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
 	         0x40,0x53,0x56,0x57,0x48,0x83,0xEC,0x30,0x48,0xC7,0x44,0x24,0x20,0xFE,0xFF,0xFF)
 #endif
 '''
-        site = '''#ifndef ZONEOPT_DEBUG
+        site = '''#ifndef KEO_DEBUG
 HookRowWanted(HOOK_P);
 #endif
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 #else
 HookRowWanted(HOOK_P);
 #endif
-#if !defined(ZONEOPT_DEBUG)
+#if !defined(KEO_DEBUG)
 HookRowWanted(HOOK_P);
 #endif
 '''
         self.assertEqual(check_conditions(row_conditions(rows), self.uses(site)), [])
 
     def test_use_in_else_of_ifndef_passes(self):
-        site = '''#ifndef ZONEOPT_DEBUG
+        site = '''#ifndef KEO_DEBUG
 #else
 HookRowWanted(HOOK_D);
 #endif
@@ -764,7 +764,7 @@ HookRowWanted(HOOK_D);
 
     def test_array_entry_under_its_block_passes(self):
         site = '''static const HookRowId kModRows[] = {
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	HOOK_D,
 #endif
 #if ZONEHAND_STEP >= 3
@@ -781,7 +781,7 @@ void Install(int i) { HookInstallRow(kModRows[i], h, (void**)&o, installed, true
         site = '''#if(ZONEHAND_STEP >= 2)
 HookRowWanted(HOOK_S2);
 #endif
-#if defined(ZONEOPT_DEBUG)
+#if defined(KEO_DEBUG)
 #if(ZONEHAND_STEP >= 1)
 #elif(ZONEHAND_STEP >= 2)
 HookRowWanted(HOOK_S2);
@@ -792,7 +792,7 @@ HookRowWanted(HOOK_D);
         self.assertEqual(self.check_site(site), [])
 
     def test_parenthesised_if_endif_keeps_the_enclosing_frame(self):
-        site = '''#ifdef ZONEOPT_DEBUG
+        site = '''#ifdef KEO_DEBUG
 #if!defined(SOMETHING_ELSE)
 #endif
 HookRowWanted(HOOK_D);

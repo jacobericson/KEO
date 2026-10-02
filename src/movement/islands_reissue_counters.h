@@ -1,7 +1,7 @@
 // islands_reissue_counters.h - main-thread K7 telemetry declarations.
 // The 36 counters have their single definitions in islands_reissue.cpp.
-#ifndef KENSHI_ZONE_OPT_ISLANDS_REISSUE_COUNTERS_H
-#define KENSHI_ZONE_OPT_ISLANDS_REISSUE_COUNTERS_H
+#ifndef KEO_ISLANDS_REISSUE_COUNTERS_H
+#define KEO_ISLANDS_REISSUE_COUNTERS_H
 namespace order_tracker_detail {
 extern long g_k7DelPark;
 extern long g_k7DelReissue;
@@ -40,4 +40,4 @@ extern long g_k7ArrivalExpired;
 extern long g_k7ArrivalLiveSent;
 extern long g_k7ArrivalResumed;
 } // namespace order_tracker_detail
-#endif // KENSHI_ZONE_OPT_ISLANDS_REISSUE_COUNTERS_H
+#endif // KEO_ISLANDS_REISSUE_COUNTERS_H

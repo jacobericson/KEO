@@ -172,7 +172,7 @@ void ConfigApplyLine(const std::string& key, const std::string& val, int lineNo,
 
 	if (matched)
 	{
-#ifndef ZONEOPT_DEBUG
+#ifndef KEO_DEBUG
 		if (k && k->debugOnlyReader)
 		{
 			for (size_t i = 0; i < st->debugIgnored.size(); ++i)
@@ -333,7 +333,7 @@ bool ConfigEntryAppends(const ConfigKey& k, const std::string& value, const void
 {
 	if (k.target)
 	{
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 		const char* def = k.devDefault;
 #else
 		const char* def = k.prodDefault;

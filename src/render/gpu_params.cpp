@@ -19,7 +19,7 @@
 // GpuNamedConstants lives. Every GpuNamedConstants is deleted through one
 // OgreMain function, hooked below to drop its entries first.
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 static const bool DEV_BUILD = true;
 #else
 static const bool DEV_BUILD = false;

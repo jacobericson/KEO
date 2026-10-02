@@ -1,6 +1,6 @@
 // nm_adjacency_counters.h - Adjacency counters, one definition each in nm_adjacency.cpp. Interlocked, any thread.
-#ifndef KENSHI_ZONE_OPT_NM_ADJACENCY_COUNTERS_H
-#define KENSHI_ZONE_OPT_NM_ADJACENCY_COUNTERS_H
+#ifndef KEO_NM_ADJACENCY_COUNTERS_H
+#define KEO_NM_ADJACENCY_COUNTERS_H
 #include <windows.h>
 
 namespace nm_adjacency_detail {
@@ -36,4 +36,4 @@ extern volatile LONG s_unowned;
 extern volatile LONG s_torn;
 extern volatile LONG s_violLines;
 } // namespace nm_adjacency_detail
-#endif // KENSHI_ZONE_OPT_NM_ADJACENCY_COUNTERS_H
+#endif // KEO_NM_ADJACENCY_COUNTERS_H

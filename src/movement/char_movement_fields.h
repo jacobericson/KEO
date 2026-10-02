@@ -1,8 +1,8 @@
 // char_movement_fields.h - Character order-cache and HavokCharacter field offsets.
 // Included through game.h.
 
-#ifndef KENSHI_ZONE_OPT_CHAR_MOVEMENT_FIELDS_H
-#define KENSHI_ZONE_OPT_CHAR_MOVEMENT_FIELDS_H
+#ifndef KEO_CHAR_MOVEMENT_FIELDS_H
+#define KEO_CHAR_MOVEMENT_FIELDS_H
 
 #include "game/klib_members.h"
 #include "base/core.h"
@@ -44,4 +44,4 @@ KLIB_ASSERT_OFFSET(TaskData_key, OFF_ORDER_TYPE);
 const int    ORDER_TYPE_MOVE            = 29;
 // ---- end CharMovement order-cache and HavokCharacter fields ----
 
-#endif // KENSHI_ZONE_OPT_CHAR_MOVEMENT_FIELDS_H
+#endif // KEO_CHAR_MOVEMENT_FIELDS_H

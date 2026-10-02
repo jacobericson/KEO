@@ -1,8 +1,8 @@
 // save_load_bindings.h - Save-load reset bindings and zone handle registry layout.
 // Included through game.h.
 
-#ifndef KENSHI_ZONE_OPT_SAVE_LOAD_BINDINGS_H
-#define KENSHI_ZONE_OPT_SAVE_LOAD_BINDINGS_H
+#ifndef KEO_SAVE_LOAD_BINDINGS_H
+#define KEO_SAVE_LOAD_BINDINGS_H
 
 #include "game/klib_members.h"
 #include "base/core.h"
@@ -77,4 +77,4 @@ const size_t OFF_ZMC_HANDLE_DUMMY     = 0xA0;   // ZoneMapContent::HandleDummy* 
 KLIB_ASSERT_OFFSET(ZoneMapContent_handleDummy, OFF_ZMC_HANDLE_DUMMY);
 // ---- end save-load reset ----
 
-#endif // KENSHI_ZONE_OPT_SAVE_LOAD_BINDINGS_H
+#endif // KEO_SAVE_LOAD_BINDINGS_H

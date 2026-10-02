@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_ZONE_GEOMETRY_CERT_H
-#define KENSHI_ZONE_OPT_ZONE_GEOMETRY_CERT_H
+#ifndef KEO_ZONE_GEOMETRY_CERT_H
+#define KEO_ZONE_GEOMETRY_CERT_H
 
 // The geometry certificate: what a generation captured about the world's
 // geometry before it read any of it, and the rule that decides whether the
@@ -138,4 +138,4 @@ const char* ZoneCertStalenessName(ZoneCertStaleness verdict);
 // the default, so a configuration that asks for it is told so.
 bool ZoneGeometryModeFromName(const char* name, ZoneGeometryMode* out);
 
-#endif // KENSHI_ZONE_OPT_ZONE_GEOMETRY_CERT_H
+#endif // KEO_ZONE_GEOMETRY_CERT_H

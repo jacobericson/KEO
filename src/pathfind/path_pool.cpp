@@ -75,7 +75,7 @@ void PathPoolTickMain(double now)
 		       "(unexpected -- contentStream is documented as its sole caller)");
 	}
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	const double windowInterval = 10.0;
 #else
 	const double windowInterval = 30.0;

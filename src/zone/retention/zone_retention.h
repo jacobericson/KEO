@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_ZONE_RETENTION_H
-#define KENSHI_ZONE_OPT_ZONE_RETENTION_H
+#ifndef KEO_ZONE_RETENTION_H
+#define KEO_ZONE_RETENTION_H
 
 #include "base/config.h"
 
@@ -68,4 +68,4 @@ inline void ZoneRetentionTick(void*, double) {}
 
 #endif // ZONEHAND_STEP >= 3
 
-#endif // KENSHI_ZONE_OPT_ZONE_RETENTION_H
+#endif // KEO_ZONE_RETENTION_H

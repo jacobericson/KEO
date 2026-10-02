@@ -191,7 +191,7 @@ void IslandReissuePollTick(uintptr_t zm, double now)
 
 // Main-thread reissue and K7 diagnostic appenders.
 // Field and line order are the shipped log format for both output variants; do not reorder.
-// IslandTick's ZONEOPT_DEBUG "Islands:" line: the reissue/K7 fields.
+// IslandTick's KEO_DEBUG "Islands:" line: the reissue/K7 fields.
 void IslandReissueAppendDiag(std::ostringstream& ss)
 {
 	ss << " reissue=" << InterlockedCompareExchange(&g_reissues, 0, 0)

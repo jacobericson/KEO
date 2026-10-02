@@ -172,7 +172,7 @@ void TryRegisterPreloadedZones(void* zoneMgr, double now)
 				g_pipe.notReadyAtCall++;
 		}
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 		ZlLogFirstTimeDiag(i, content);   // FirstTime: line, once per cell
 #endif
 		// The handoff rule, after the finalize: every zone the mod registers

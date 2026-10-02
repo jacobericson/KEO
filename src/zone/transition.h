@@ -3,8 +3,8 @@
 // navMeshThreadHandle/savedThreadPriority are file-static in navmesh_sched.cpp.
 // Depends on: config.h (for Windows.h types)
 
-#ifndef KENSHI_ZONE_OPT_TRANSITION_H
-#define KENSHI_ZONE_OPT_TRANSITION_H
+#ifndef KEO_TRANSITION_H
+#define KEO_TRANSITION_H
 
 #include "base/config.h"
 
@@ -38,4 +38,4 @@ void TransitionCompleteIfPending();
 LONG TransitionGeneration();
 
 
-#endif // KENSHI_ZONE_OPT_TRANSITION_H
+#endif // KEO_TRANSITION_H

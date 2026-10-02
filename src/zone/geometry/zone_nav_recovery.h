@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_ZONE_NAV_RECOVERY_H
-#define KENSHI_ZONE_OPT_ZONE_NAV_RECOVERY_H
+#ifndef KEO_ZONE_NAV_RECOVERY_H
+#define KEO_ZONE_NAV_RECOVERY_H
 
 // Recovery from geometry invalidation for a cell whose mesh is already
 // installed: stop claims, let readers finish, discard the stale output,
@@ -93,4 +93,4 @@ bool ZoneNavRecoveryRegistrationHeld(const ZoneNavRecovery* r, int cellX, int ce
 
 const char* ZoneNavRecoveryStepName(int step);
 
-#endif // KENSHI_ZONE_OPT_ZONE_NAV_RECOVERY_H
+#endif // KEO_ZONE_NAV_RECOVERY_H

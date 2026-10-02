@@ -6,7 +6,7 @@
 #endif
 #include "diag/physx_pool_probe.h"
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 
 #include "diag/physx_pool_sets.h"
 #include "game/game.h"
@@ -332,9 +332,9 @@ void PhysXPoolTick(double now)
 	LogMsg(line);
 }
 
-#else  // !ZONEOPT_DEBUG
+#else  // !KEO_DEBUG
 
 void InstallPhysXPoolProbe(int* installed, int*) { (void)installed; }
 void PhysXPoolTick(double now) { (void)now; }
 
-#endif // ZONEOPT_DEBUG
+#endif // KEO_DEBUG

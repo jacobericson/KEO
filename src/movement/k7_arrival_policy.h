@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_K7_ARRIVAL_POLICY_H
-#define KENSHI_ZONE_OPT_K7_ARRIVAL_POLICY_H
+#ifndef KEO_K7_ARRIVAL_POLICY_H
+#define KEO_K7_ARRIVAL_POLICY_H
 
 // Destination-mesh-arrives-late stops: arms a re-issue wait on
 // the rising edge of a tracked order's own end signature, far from its
@@ -106,4 +106,4 @@ K7ArrivalAction K7ArrivalFireGate(bool enabled, bool held, bool stillStopped, bo
                                   bool zonesOk, bool charBlocked, bool cooldown,
                                   int reissueCount, int maxReissues);
 
-#endif // KENSHI_ZONE_OPT_K7_ARRIVAL_POLICY_H
+#endif // KEO_K7_ARRIVAL_POLICY_H

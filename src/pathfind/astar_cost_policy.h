@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_ASTAR_COST_POLICY_H
-#define KENSHI_ZONE_OPT_ASTAR_COST_POLICY_H
+#ifndef KEO_ASTAR_COST_POLICY_H
+#define KEO_ASTAR_COST_POLICY_H
 
 // Pure classification and bucketing for the A* cost instrument. No game or
 // Windows headers, so it is host-testable
@@ -56,4 +56,4 @@ AstarCallerClass AstarClassifyCaller(unsigned returnRva, bool inExe, int playerB
 const int ASTAR_HIST_BUCKETS = 24;
 int AstarLogBucket(long long value, int numBuckets);
 
-#endif // KENSHI_ZONE_OPT_ASTAR_COST_POLICY_H
+#endif // KEO_ASTAR_COST_POLICY_H

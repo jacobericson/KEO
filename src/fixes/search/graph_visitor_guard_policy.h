@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_GRAPH_VISITOR_GUARD_POLICY_H
-#define KENSHI_ZONE_OPT_FIXES_GRAPH_VISITOR_GUARD_POLICY_H
+#ifndef KEO_FIXES_GRAPH_VISITOR_GUARD_POLICY_H
+#define KEO_FIXES_GRAPH_VISITOR_GUARD_POLICY_H
 
 #include <stddef.h>
 
@@ -91,4 +91,4 @@ float GraphVisitorNoEstimate();
 // at a node whose position is exactly what we could not read.
 void ApplyGraphVisitorNoEstimate(const GraphVisitorCall* call, float cost);
 
-#endif // KENSHI_ZONE_OPT_FIXES_GRAPH_VISITOR_GUARD_POLICY_H
+#endif // KEO_FIXES_GRAPH_VISITOR_GUARD_POLICY_H

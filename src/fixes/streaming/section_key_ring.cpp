@@ -3,7 +3,7 @@
 #endif
 #include "fixes/streaming/section_key_ring.h"
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 #include "base/core.h"
 #include "base/fixed_log_buf.h"
 
@@ -266,4 +266,4 @@ void SectionKeyRingHeartbeatLine(char* buf, size_t cap)
 // Nothing of this exists outside a DEV build; plugin_entry.cpp does not name it.
 typedef int SectionKeyRingNotInThisBuild;
 
-#endif // ZONEOPT_DEBUG
+#endif // KEO_DEBUG

@@ -9,7 +9,6 @@
 // Not part of build_tests.bat: it builds against KenshiLib's include path and
 // faults on purpose. tools\tests\run_injections.bat builds and runs it (its row in injections.txt).
 
-#define ZONEOPT_DEBUG 1
 #include "fixes/streaming/section_key_ring.h"
 #include "fixes/streaming/section_key_scan.h"
 

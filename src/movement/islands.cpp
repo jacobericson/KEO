@@ -190,7 +190,7 @@ static void LogIslandSpan(double now)
 	static double lastEmit = -1.0e9;
 	static long   lastCalls = -1;
 	static long   lastIslCalls = -1;
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	const double interval = DIAG_INTERVAL_SEC;
 #else
 	const double interval = 60.0;
@@ -310,7 +310,7 @@ void IslandTick(void* zoneMgr, double now)
 	if (now - lastDiag >= DIAG_INTERVAL_SEC)
 	{
 		lastDiag = now;
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 		std::ostringstream ss;
 		ss << "Islands:";
 		ss << " comps=" << g_curCompCount
@@ -371,7 +371,7 @@ void IslandTick(void* zoneMgr, double now)
 		}
 		AppendReadinessTids(ss);
 		LogDebug(ss.str());
-#endif // ZONEOPT_DEBUG
+#endif // KEO_DEBUG
 	}
 }
 

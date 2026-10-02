@@ -132,7 +132,7 @@ int main()
 	Check(FatalKindForCode(0xC0000409UL) == FATAL_KIND_FASTFAIL, "fail-fast code");
 	// 0xC0000417 (the CRT's invalid-parameter abort) joins the same
 	// CRT-abort family as fail-fast/heap-corruption/app-exit. PROD's own
-	// unhandled filter (crash_record.cpp's ZoneOptUnhandledFilter, registered via
+	// unhandled filter (crash_record.cpp's KEOUnhandledFilter, registered via
 	// SetUnhandledExceptionFilter in every build) calls FatalKindForCode for
 	// every code that reaches it, not only the ones the VEH itself records --
 	// so a *raised* 0xC0000417 that goes unhandled all the way to that filter

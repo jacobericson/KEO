@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_ZONE_ADOPTION_SEAM_H
-#define KENSHI_ZONE_OPT_ZONE_ADOPTION_SEAM_H
+#ifndef KEO_ZONE_ADOPTION_SEAM_H
+#define KEO_ZONE_ADOPTION_SEAM_H
 
 // The decision rules behind zone adoption: the certificate seam, the town
 // guard predicate, and the two admission predicates (proactive cohort
@@ -163,4 +163,4 @@ enum ZoneTakeoverVerdict
 
 ZoneTakeoverVerdict ZoneTakeoverDecide(const ZoneTakeoverInputs& in);
 
-#endif // KENSHI_ZONE_OPT_ZONE_ADOPTION_SEAM_H
+#endif // KEO_ZONE_ADOPTION_SEAM_H

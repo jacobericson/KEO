@@ -33,7 +33,7 @@
 // drops every plan: its address, and its program node's, can come back for
 // a new, uninitialised buffer whose variables differ.
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 static const bool DEV_BUILD = true;
 #else
 static const bool DEV_BUILD = false;

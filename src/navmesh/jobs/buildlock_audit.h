@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_BUILDLOCK_AUDIT_H
-#define KENSHI_ZONE_OPT_BUILDLOCK_AUDIT_H
+#ifndef KEO_BUILDLOCK_AUDIT_H
+#define KEO_BUILDLOCK_AUDIT_H
 
 // Offsets the audit reads: instance -> mesh and uid; mesh -> streaming-set
 // array (data, count); entry stride and the entry's "other uid" field.

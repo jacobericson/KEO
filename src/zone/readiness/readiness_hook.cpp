@@ -313,7 +313,7 @@ void ReadinessReportTick(double now)
 
 	FlushPendingTransitionLines();
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	const double kReadinessLogIntervalSec = 10.0;
 #else
 	const double kReadinessLogIntervalSec = 30.0;

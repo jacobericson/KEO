@@ -1,4 +1,4 @@
-// The config key table, PROD (no ZONEOPT_DEBUG): see config_table_checks.h.
+// The config key table, PROD (no KEO_DEBUG): see config_table_checks.h.
 
 #include "config_table_checks.h"
 

@@ -1,8 +1,8 @@
 // nm_quality.h — NavMesh generation settings the mod installs + probes (Layer 3)
 // Depends on: nm_cache_core.h (for probe buffer externs)
 
-#ifndef KENSHI_ZONE_OPT_NM_QUALITY_H
-#define KENSHI_ZONE_OPT_NM_QUALITY_H
+#ifndef KEO_NM_QUALITY_H
+#define KEO_NM_QUALITY_H
 
 #include "navmesh/cache/nm_cache_core.h"
 #include <string.h>   // memcpy, used by NmMaterialSlope below
@@ -236,4 +236,4 @@ void ProbeWorkBufferSize(uintptr_t nmg);
 // claimed -> 2 done; re-armed while the work buffer is still NULL).
 void CheckGenerationSettingsKey(uintptr_t nmg);
 
-#endif // KENSHI_ZONE_OPT_NM_QUALITY_H
+#endif // KEO_NM_QUALITY_H

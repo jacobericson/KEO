@@ -1,6 +1,6 @@
 #include "diag/exit_capture.h"
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 
 #include "diag/exit_capture_policy.h"
 #include "base/core.h"
@@ -402,7 +402,7 @@ void ExitCaptureNoteStopHookOutcome(bool installed)
 	LogMsgDeferrable(line.c_str());
 }
 
-#else // !ZONEOPT_DEBUG
+#else // !KEO_DEBUG
 
 void InstallExitCapture(const std::string&) {}
 void ExitCaptureNoteStopHookOutcome(bool) {}

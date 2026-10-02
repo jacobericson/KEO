@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_PURECALL_RECORD_H
-#define KENSHI_ZONE_OPT_FIXES_PURECALL_RECORD_H
+#ifndef KEO_FIXES_PURECALL_RECORD_H
+#define KEO_FIXES_PURECALL_RECORD_H
 
 // Installs a forensic recorder on PhysXCore64.dll's own pure-virtual-call
 // handler slot (see purecall_layout.h for the verified addresses). A pure
@@ -38,4 +38,4 @@ void PurecallRecordTick(double now);
 // nothing. No logging, no allocation -- safe under the loader lock.
 void UninstallPurecallRecorder();
 
-#endif // KENSHI_ZONE_OPT_FIXES_PURECALL_RECORD_H
+#endif // KEO_FIXES_PURECALL_RECORD_H

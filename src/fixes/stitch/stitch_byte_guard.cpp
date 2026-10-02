@@ -152,9 +152,9 @@ static void Record(unsigned __int64 output, unsigned int uid, bool readable,
 
 // Called from the stub for every drained task that is not type 3, on the path
 // thread. No allocation, no lock, no logging. Nonzero keeps the store.
-extern "C" int __fastcall ZoneOpt_StitchByteGate(const void* output, int type);
+extern "C" int __fastcall KEO_StitchByteGate(const void* output, int type);
 
-extern "C" int __fastcall ZoneOpt_StitchByteGate(const void* output, int type)
+extern "C" int __fastcall KEO_StitchByteGate(const void* output, int type)
 {
 	InterlockedIncrement(&s_calls);
 
@@ -358,7 +358,7 @@ static const char* TryArm()
 		return "the stub's displacements do not reach from the page found";
 	}
 
-	*(volatile unsigned __int64*)page = (unsigned __int64)(uintptr_t)&ZoneOpt_StitchByteGate;
+	*(volatile unsigned __int64*)page = (unsigned __int64)(uintptr_t)&KEO_StitchByteGate;
 
 	DWORD oldProtect = 0;
 	if (!VirtualProtect(codePage, kCodePageSize, PAGE_EXECUTE_READ, &oldProtect))

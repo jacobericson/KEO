@@ -8,7 +8,7 @@ REM Usage (from the repository root, after vcvarsall amd64,
 REM tools\kenshilib\build_env.bat and tools\build\clang_env.bat):
 REM   tools\build\variant_clang.bat <OUTDIR> <OBJDIR> "<DEFINES>" "<LABEL>"
 REM     DEFINES  every define after the shared set in CLANG_COMMON (gate
-REM              values, ZONEOPT_DEBUG), exactly as the calling script
+REM              values, KEO_DEBUG), exactly as the calling script
 REM              computed them.
 REM     LABEL    name used in the progress lines ("" = OUTDIR).
 REM
@@ -32,7 +32,7 @@ REM holds a __try.
 REM
 REM After the link, tools\build\check_seh_handlers.py confirms that every
 REM __try function carries its exception handler in the DLL. PROD leaves out
-REM the __try functions under #ifdef ZONEOPT_DEBUG, so it names them with
+REM the __try functions under #ifdef KEO_DEBUG, so it names them with
 REM --allow-absent; any other absent one fails the build.
 REM
 REM The source list is tools\build\coresrc.txt, read straight into the compile

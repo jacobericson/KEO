@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_NM_WORKER_GATE_POLICY_H
-#define KENSHI_ZONE_OPT_NM_WORKER_GATE_POLICY_H
+#ifndef KEO_NM_WORKER_GATE_POLICY_H
+#define KEO_NM_WORKER_GATE_POLICY_H
 
 // Whether the navmesh worker pool may start. It needs two hooks the
 // first-dispatch install puts in: NavMesh::stop, whose hook retires the

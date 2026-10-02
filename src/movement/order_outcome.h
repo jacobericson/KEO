@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_ORDER_OUTCOME_H
-#define KENSHI_ZONE_OPT_ORDER_OUTCOME_H
+#ifndef KEO_ORDER_OUTCOME_H
+#define KEO_ORDER_OUTCOME_H
 
 #include "base/config.h"
 #include <sstream>
@@ -74,4 +74,4 @@ void OrderOutcomeNoteStopGuess(uintptr_t character, const char* guess, double no
 // include it.
 bool OrderOutcomeAppendSpanTotals(std::ostringstream& ss);
 
-#endif // KENSHI_ZONE_OPT_ORDER_OUTCOME_H
+#endif // KEO_ORDER_OUTCOME_H

@@ -10,10 +10,10 @@
 // game-exe site, so it never touches the build gate's "gate=" token or the
 // "N/N hooks installed" count -- and arms them only once the game has
 // installed its own NavMesh::stop hook and not yet begun a normal shutdown.
-// Compiled into every variant; a true no-op outside ZONEOPT_DEBUG.
+// Compiled into every variant; a true no-op outside KEO_DEBUG.
 
-#ifndef KENSHI_ZONE_OPT_DIAG_EXIT_CAPTURE_H
-#define KENSHI_ZONE_OPT_DIAG_EXIT_CAPTURE_H
+#ifndef KEO_DIAG_EXIT_CAPTURE_H
+#define KEO_DIAG_EXIT_CAPTURE_H
 
 #include <string>
 
@@ -31,7 +31,7 @@ void InstallExitCapture(const std::string& dllDir);
 // exactly once, with whether that install itself succeeded. Logs whether the
 // instrument can really arm this session (it needs the stop hook's own
 // install to tell a normal quit apart from a silent one) or stays off.
-// A true no-op outside ZONEOPT_DEBUG.
+// A true no-op outside KEO_DEBUG.
 void ExitCaptureNoteStopHookOutcome(bool installed);
 
-#endif // KENSHI_ZONE_OPT_DIAG_EXIT_CAPTURE_H
+#endif // KEO_DIAG_EXIT_CAPTURE_H

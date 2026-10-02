@@ -48,7 +48,7 @@ HookWantInputs HookWantInputsFromConfig()
 	in.graphExpandGuard    = fixes::g_fixesCfg.graphExpandGuardEnabled;
 	in.meshFaceGuard       = fixes::g_fixesCfg.meshFaceGuardEnabled;
 	in.navMeshLife         = fixes::g_fixesCfg.navMeshLifeEnabled;
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	in.unstitchProbe       = fixes::g_fixesCfg.unstitchProbeEnabled;
 	in.sectionKeyProbe     = fixes::g_fixesCfg.sectionKeyProbeEnabled;
 #else

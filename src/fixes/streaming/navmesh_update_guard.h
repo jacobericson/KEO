@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_NAVMESH_UPDATE_GUARD_H
-#define KENSHI_ZONE_OPT_FIXES_NAVMESH_UPDATE_GUARD_H
+#ifndef KEO_FIXES_NAVMESH_UPDATE_GUARD_H
+#define KEO_FIXES_NAVMESH_UPDATE_GUARD_H
 
 #include <string>
 
@@ -41,4 +41,4 @@ char NavMeshUpdateGuardCall(void* sectionMgr, NavMeshUpdateFn orig);
 // reported on the PathQueue: log line.
 bool NavMeshUpdateGuardLatched();
 
-#endif // KENSHI_ZONE_OPT_FIXES_NAVMESH_UPDATE_GUARD_H
+#endif // KEO_FIXES_NAVMESH_UPDATE_GUARD_H

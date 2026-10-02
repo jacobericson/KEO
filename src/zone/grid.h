@@ -1,8 +1,8 @@
 // grid.h — Zone grid calibration and world-to-zone coordinate conversion
 // Depends on: core.h, game.h
 
-#ifndef KENSHI_ZONE_OPT_GRID_H
-#define KENSHI_ZONE_OPT_GRID_H
+#ifndef KEO_GRID_H
+#define KEO_GRID_H
 
 #include "base/core.h"
 #include "game/game.h"
@@ -27,4 +27,4 @@ void CalibrateZoneGrid(void* zoneMgr);
 bool WorldToZoneGrid(float worldX, float worldZ, int* outX, int* outY);
 
 
-#endif // KENSHI_ZONE_OPT_GRID_H
+#endif // KEO_GRID_H

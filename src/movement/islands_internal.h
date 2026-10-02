@@ -8,8 +8,8 @@
 // while the adapters and tracker entry points have global linkage.
 // Thread and lifetime requirements stay with each declaration or definition.
 
-#ifndef KENSHI_ZONE_OPT_ISLANDS_INTERNAL_H
-#define KENSHI_ZONE_OPT_ISLANDS_INTERNAL_H
+#ifndef KEO_ISLANDS_INTERNAL_H
+#define KEO_ISLANDS_INTERNAL_H
 
 #include "base/config.h"
 #include "movement/island_span_policy.h"
@@ -45,4 +45,4 @@ void IslandReissueAppendDiag(std::ostringstream& ss);
 void IslandReissueAppendSpanDiag(std::ostringstream& ss);
 
 
-#endif // KENSHI_ZONE_OPT_ISLANDS_INTERNAL_H
+#endif // KEO_ISLANDS_INTERNAL_H

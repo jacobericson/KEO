@@ -82,11 +82,11 @@ set "STEP4_DEV_OUT=build\KenshiZoneOpt_step4%STEP4_FOLDER_SUFFIX%_dev"
 set "STEP4_PROD_OUT=build\KenshiZoneOpt_step4%STEP4_FOLDER_SUFFIX%_prod"
 
 REM Both variants compile with "%STEP4_DEFINES%" plus their own
-REM extra define (DEV: /DZONEOPT_DEBUG), as before. DEV/PROD flags follow the
+REM extra define (DEV: /DKEO_DEBUG), as before. DEV/PROD flags follow the
 REM "_dev" suffix on the output folder (tools\build\variant.bat). On failure
 REM run_variants.py prints the failing log's tail and "STEP4 FAILED at <folder>".
 python tools\build\run_variants.py --fail-prefix "STEP4 FAILED at" --defines "%STEP4_DEFINES%" ^
-    --variant "%STEP4_DEV_OUT%" "build\obj_step4%STEP4_FOLDER_SUFFIX%_dev" "/DZONEOPT_DEBUG" "" ^
+    --variant "%STEP4_DEV_OUT%" "build\obj_step4%STEP4_FOLDER_SUFFIX%_dev" "/DKEO_DEBUG" "" ^
     --variant "%STEP4_PROD_OUT%" "build\obj_step4%STEP4_FOLDER_SUFFIX%_prod" "" ""
 if errorlevel 1 exit /b 1
 

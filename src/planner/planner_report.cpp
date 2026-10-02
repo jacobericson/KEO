@@ -11,7 +11,7 @@
 namespace planner {
 
 // The per-session cap on plan lines: DEV prints every order's plans of a session, PROD the first few.
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 static const int PLAN_LINES_MAX = 512;
 #else
 static const int PLAN_LINES_MAX = 32;
@@ -46,7 +46,7 @@ static LONG CounterSum(const PlannerCounters& c)
 
 void PlannerReportTick(double now)
 {
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	const double interval = 30.0;
 #else
 	const double interval = 60.0;
@@ -84,7 +84,7 @@ void PlannerReportTick(double now)
 	LogMsg(line);
 }
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 static const int BORDER_LINES_MAX = 32;
 static const int BORDER_OPP_MAX   = 6;
 static int       s_borderLines    = 0;
@@ -117,7 +117,7 @@ static void Append(char* line, size_t size, size_t* len, const char* text)
 // shown: toward it, then from its current block back; "<-" when it has no block.
 void PlannerReportBorders(int order, int goalDir)
 {
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	if (s_borderLines > BORDER_LINES_MAX)
 		return;
 	if (s_borderLines == BORDER_LINES_MAX)

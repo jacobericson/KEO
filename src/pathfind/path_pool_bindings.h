@@ -1,8 +1,8 @@
 // path_pool_bindings.h - Path-thread instrumentation addresses and bindings.
 // Included through game.h.
 
-#ifndef KENSHI_ZONE_OPT_PATH_POOL_BINDINGS_H
-#define KENSHI_ZONE_OPT_PATH_POOL_BINDINGS_H
+#ifndef KEO_PATH_POOL_BINDINGS_H
+#define KEO_PATH_POOL_BINDINGS_H
 
 #include "base/core.h"
 
@@ -62,4 +62,4 @@ extern isPriorityPath_t fn_isPriorityPath;
 
 // ---- end path-worker-pool instrumentation ----
 
-#endif // KENSHI_ZONE_OPT_PATH_POOL_BINDINGS_H
+#endif // KEO_PATH_POOL_BINDINGS_H

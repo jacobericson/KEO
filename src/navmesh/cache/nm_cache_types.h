@@ -1,8 +1,8 @@
 // nm_cache_types.h — Shared types and constants for navmesh cache modules
 // Depends on: config.h
 
-#ifndef KENSHI_ZONE_OPT_NM_CACHE_TYPES_H
-#define KENSHI_ZONE_OPT_NM_CACHE_TYPES_H
+#ifndef KEO_NM_CACHE_TYPES_H
+#define KEO_NM_CACHE_TYPES_H
 
 #include "base/config.h"
 #include "game/klib_members.h"
@@ -83,4 +83,4 @@ const int L2_MAX_EDGEDATA = 2000000;
 const int L2_MAX_STRIDING = 64;
 
 
-#endif // KENSHI_ZONE_OPT_NM_CACHE_TYPES_H
+#endif // KEO_NM_CACHE_TYPES_H

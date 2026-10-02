@@ -1,7 +1,7 @@
 // log_bounded.h — the log's two lock-bounded primitives, with no game header
 
-#ifndef KENSHI_ZONE_OPT_LOG_BOUNDED_H
-#define KENSHI_ZONE_OPT_LOG_BOUNDED_H
+#ifndef KEO_LOG_BOUNDED_H
+#define KEO_LOG_BOUNDED_H
 
 #include <windows.h>
 

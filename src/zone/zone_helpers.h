@@ -3,8 +3,8 @@
 // Accessors take no mod locks; callers provide object lifetime and thread safety.
 // Camera and tracking-set queries run on the main thread.
 
-#ifndef KENSHI_ZONE_OPT_ZONE_HELPERS_H
-#define KENSHI_ZONE_OPT_ZONE_HELPERS_H
+#ifndef KEO_ZONE_HELPERS_H
+#define KEO_ZONE_HELPERS_H
 
 #include "game/klib_members.h"
 #include "base/core.h"
@@ -145,4 +145,4 @@ bool ZoneInSetB(void* zoneMgr, void* zone);
 
 
 
-#endif // KENSHI_ZONE_OPT_ZONE_HELPERS_H
+#endif // KEO_ZONE_HELPERS_H

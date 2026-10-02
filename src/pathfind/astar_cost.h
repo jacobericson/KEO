@@ -6,8 +6,8 @@
 // PathPoolNoteSearch (path_pool.h) -- one sample, two consumers, so the two
 // modules cannot disagree about what a search cost.
 
-#ifndef KENSHI_ZONE_OPT_ASTAR_COST_H
-#define KENSHI_ZONE_OPT_ASTAR_COST_H
+#ifndef KEO_ASTAR_COST_H
+#define KEO_ASTAR_COST_H
 
 #include "base/core.h"
 #include "base/config.h"
@@ -72,4 +72,4 @@ void AstarCostOnTransitionClosed();
 // Every printer here, and PathBusy: in path_pool_report.cpp, uses this answer.
 bool AstarCostHookInstalled();
 
-#endif // KENSHI_ZONE_OPT_ASTAR_COST_H
+#endif // KEO_ASTAR_COST_H

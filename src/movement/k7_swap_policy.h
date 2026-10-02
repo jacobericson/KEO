@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_K7_SWAP_POLICY_H
-#define KENSHI_ZONE_OPT_K7_SWAP_POLICY_H
+#ifndef KEO_K7_SWAP_POLICY_H
+#define KEO_K7_SWAP_POLICY_H
 
 // Classifies a K7 "x" swap (the current task leaves ORDER_TYPE_MOVE with an
 // empty order deque, after task 29 was seen) as a genuine engine drop or a
@@ -63,4 +63,4 @@ double K7SigOnsetStep(double onset, bool sigThisFrame, bool task29Poll, double n
 // maxWaitSec, so a cell that never gets an instance cannot strand the entry.
 bool K7DestReadyAllows(int cls, double waitedSec, double maxWaitSec);
 
-#endif // KENSHI_ZONE_OPT_K7_SWAP_POLICY_H
+#endif // KEO_K7_SWAP_POLICY_H

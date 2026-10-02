@@ -6,7 +6,7 @@
 #endif
 #include "fixes/streaming/section_key_probe.h"
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 #include "fixes/streaming/section_key_ring.h"
 #include "fixes/streaming/section_key_scan.h"
 #include "game/game.h"
@@ -123,4 +123,4 @@ void InstallSectionKeyProbe(int* installed, int*)
 // Nothing of this probe exists outside a DEV build; hook_manifest.cpp does not name it.
 typedef int SectionKeyProbeNotInThisBuild;
 
-#endif // ZONEOPT_DEBUG
+#endif // KEO_DEBUG

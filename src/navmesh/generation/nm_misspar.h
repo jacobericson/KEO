@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_NM_MISSPAR_H
-#define KENSHI_ZONE_OPT_NM_MISSPAR_H
+#ifndef KEO_NM_MISSPAR_H
+#define KEO_NM_MISSPAR_H
 
 #include "base/config.h"
 #include "navmesh/cache/nm_cache_types.h"

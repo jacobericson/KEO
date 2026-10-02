@@ -2,8 +2,8 @@
 // game.h - Umbrella over the game binding headers (rva.h, offsets.h, bindings.h and the module binding headers).
 // Module binding headers keep bare pointers beside their RVAs; only bindings.h's own fn_ and orig_ pointers are tables.
 
-#ifndef KENSHI_ZONE_OPT_GAME_H
-#define KENSHI_ZONE_OPT_GAME_H
+#ifndef KEO_GAME_H
+#define KEO_GAME_H
 
 #include "game/klib_bindings.h"
 
@@ -48,4 +48,4 @@ KLIB_ASSERT_OFFSET(ZoneMap_terrainCollision, OFF_ZONE_TERRAIN_COLLISION);
 
 #include "navmesh/generation/nbr_seed_bindings.h"
 
-#endif // KENSHI_ZONE_OPT_GAME_H
+#endif // KEO_GAME_H

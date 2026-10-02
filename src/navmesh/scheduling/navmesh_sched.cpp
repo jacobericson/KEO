@@ -51,7 +51,7 @@ static int    g_schedLastLoggedMaxQ  = -1;
 static long   g_schedLastLoggedReprio = -1;
 
 // Emits "Sched: drops=<n> spill=<m> maxQ=<k>" at most once per interval
-// (30s prod / 10s under ZONEOPT_DEBUG), and only when a counter changed
+// (30s prod / 10s under KEO_DEBUG), and only when a counter changed
 // since the last emission. Called outside the queue lock (no logging
 // while the lock is held).
 static void MaybeLogSchedStats()
@@ -66,7 +66,7 @@ static void MaybeLogSchedStats()
 	    rpTotal == g_schedLastLoggedReprio)
 		return;  // nothing changed -- nothing to report
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	const double kSchedLogIntervalSec = 10.0;
 #else
 	const double kSchedLogIntervalSec = 30.0;

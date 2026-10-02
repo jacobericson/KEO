@@ -2,8 +2,8 @@
 // writes a slot; any thread reads it without a lock (a sequence word: the slot's epoch and its
 // current leg share one 64-bit word, odd while the main thread rewrites). No KenshiLib or game
 // header.
-#ifndef KENSHI_ZONE_OPT_PLANNER_PLAN_STORE_H
-#define KENSHI_ZONE_OPT_PLANNER_PLAN_STORE_H
+#ifndef KEO_PLANNER_PLAN_STORE_H
+#define KEO_PLANNER_PLAN_STORE_H
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN

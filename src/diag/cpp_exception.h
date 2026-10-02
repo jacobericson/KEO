@@ -11,8 +11,8 @@
 // small number of throws that do get written -- an allocation failure that
 // kills the process throws exactly once and is otherwise invisible.
 
-#ifndef KENSHI_ZONE_OPT_DIAG_CPP_EXCEPTION_H
-#define KENSHI_ZONE_OPT_DIAG_CPP_EXCEPTION_H
+#ifndef KEO_DIAG_CPP_EXCEPTION_H
+#define KEO_DIAG_CPP_EXCEPTION_H
 
 #include <stddef.h>
 
@@ -40,4 +40,4 @@ long CppExceptionClaimRecordSlot(double nowSec);
 // the same text the periodic line does.
 size_t CppExceptionToken(char* out, size_t cap);
 
-#endif // KENSHI_ZONE_OPT_DIAG_CPP_EXCEPTION_H
+#endif // KEO_DIAG_CPP_EXCEPTION_H

@@ -1,7 +1,7 @@
 // camera_zone_hook.h - Main-thread camera hook, focus reset and scheduling context.
 
-#ifndef KENSHI_ZONE_OPT_CAMERA_ZONE_HOOK_H
-#define KENSHI_ZONE_OPT_CAMERA_ZONE_HOOK_H
+#ifndef KEO_CAMERA_ZONE_HOOK_H
+#define KEO_CAMERA_ZONE_HOOK_H
 
 #include "base/config.h"
 #include "navmesh/scheduling/navmesh_sched.h"
@@ -31,4 +31,4 @@ struct SchedContext {
 
 void BuildSchedContext(SchedContext* ctx);
 
-#endif // KENSHI_ZONE_OPT_CAMERA_ZONE_HOOK_H
+#endif // KEO_CAMERA_ZONE_HOOK_H

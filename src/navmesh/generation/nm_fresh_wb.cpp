@@ -138,7 +138,7 @@ static void NoteFreshWbPrune(const char* f)
 	InterlockedExchange(&navmesh::g_nmCache.g_wbPruneSeen, 2);
 }
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 // The one-per-session DEV audit: every scalar field of the first fresh WB
 // against the real WB it was built from, logged as
 //   NavMesh freshWB diff: <n> range(s) [<start>..<end> ...] ov=<fresh>/<real> ...
@@ -350,7 +350,7 @@ static void AuditFreshWorkBuffer(const char* f, const char* o)
 	}
 	LogMsgDeferrable(line);
 }
-#endif // ZONEOPT_DEBUG
+#endif // KEO_DEBUG
 
 namespace nm_workers_detail {
 void* ConstructFreshSettings(uintptr_t origWB)
@@ -520,7 +520,7 @@ void* ConstructFreshSettings(uintptr_t origWB)
 	// Once per session: the prune= stats token, and in DEV the full comparison
 	// against the real WB (the "NavMesh freshWB diff:" line). Both read only.
 	NoteFreshWbPrune(f);
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	AuditFreshWorkBuffer(f, o);
 #endif
 
@@ -626,7 +626,7 @@ void FreeFreshSettings(void* wb)
 	HavokTlsFree(wb, WB_OBJECT_SIZE);
 	freedBytes += WB_OBJECT_SIZE;
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	InterlockedExchangeAdd64(&navmesh::g_nmCache.nmWbFreedBytes, (LONGLONG)freedBytes);
 #else
 	(void)freedBytes;

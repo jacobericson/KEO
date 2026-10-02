@@ -2,8 +2,8 @@
 // the leg state machine at getZoneEdge, the rung slide, the flip and its order against the far-span
 // rule, the ownership of a wait, the re-plan triggers and the preload feed's cells. No Windows,
 // KenshiLib or game header; any thread.
-#ifndef KENSHI_ZONE_OPT_PLANNER_PLAN_POLICY_H
-#define KENSHI_ZONE_OPT_PLANNER_PLAN_POLICY_H
+#ifndef KEO_PLANNER_PLAN_POLICY_H
+#define KEO_PLANNER_PLAN_POLICY_H
 
 namespace planner {
 

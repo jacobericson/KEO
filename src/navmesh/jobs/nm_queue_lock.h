@@ -1,8 +1,8 @@
 // nm_queue_lock.h - The generator's queue lock (+152): one scope type, and the reference the functions needing it take.
 // The NavMesh threads and the main thread. Only the drain observer takes a lock under it (the done mutex +200);
 // nothing else is taken while it is held, and nothing here allocates or logs.
-#ifndef KENSHI_ZONE_OPT_NM_QUEUE_LOCK_H
-#define KENSHI_ZONE_OPT_NM_QUEUE_LOCK_H
+#ifndef KEO_NM_QUEUE_LOCK_H
+#define KEO_NM_QUEUE_LOCK_H
 
 #include "game/game.h"
 

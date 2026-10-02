@@ -1,8 +1,8 @@
 // islands_reissue_internal.h - main-thread private tracker types and helpers.
 // The record table and K7 counters are defined in islands_reissue.cpp; other
 // shared state lives beside its writers. This header declares the private contract.
-#ifndef KENSHI_ZONE_OPT_ISLANDS_REISSUE_INTERNAL_H
-#define KENSHI_ZONE_OPT_ISLANDS_REISSUE_INTERNAL_H
+#ifndef KEO_ISLANDS_REISSUE_INTERNAL_H
+#define KEO_ISLANDS_REISSUE_INTERNAL_H
 #include "movement/islands.h"
 
 namespace order_tracker_detail {
@@ -165,4 +165,4 @@ void PollOrders(uintptr_t zm, double now);
 void ResetReissueChecks();
 void K7RebasePausedClocks(bool paused, double now);
 } // namespace order_tracker_detail
-#endif // KENSHI_ZONE_OPT_ISLANDS_REISSUE_INTERNAL_H
+#endif // KEO_ISLANDS_REISSUE_INTERNAL_H

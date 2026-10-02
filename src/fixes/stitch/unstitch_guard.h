@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_UNSTITCH_GUARD_H
-#define KENSHI_ZONE_OPT_FIXES_UNSTITCH_GUARD_H
+#ifndef KEO_FIXES_UNSTITCH_GUARD_H
+#define KEO_FIXES_UNSTITCH_GUARD_H
 
 // Detour on the cross-section un-stitch a navmesh instance's teardown runs.
 //
@@ -24,4 +24,4 @@ void InstallUnstitchGuard(int* installed, int*);
 // The detour is live this session.
 bool UnstitchGuardInstalled();
 
-#endif // KENSHI_ZONE_OPT_FIXES_UNSTITCH_GUARD_H
+#endif // KEO_FIXES_UNSTITCH_GUARD_H

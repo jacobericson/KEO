@@ -4,8 +4,8 @@
 // the path thread runs them inside NavMesh::update's exclusive world lock, where the instances and
 // their arrays stay put (a stitch on a generator thread may still rewrite a mesh's streaming sets),
 // and they allocate nothing and take no lock.
-#ifndef KENSHI_ZONE_OPT_PLANNER_COARSE_GRAPH_LIVE_H
-#define KENSHI_ZONE_OPT_PLANNER_COARSE_GRAPH_LIVE_H
+#ifndef KEO_PLANNER_COARSE_GRAPH_LIVE_H
+#define KEO_PLANNER_COARSE_GRAPH_LIVE_H
 
 #include <stddef.h>
 #include "fixes/search/cluster_cross_cost_policy.h"    // OFF_GI_*, OFF_CCC_*

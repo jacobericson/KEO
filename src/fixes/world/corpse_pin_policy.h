@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_CORPSE_PIN_POLICY_H
-#define KENSHI_ZONE_OPT_FIXES_CORPSE_PIN_POLICY_H
+#ifndef KEO_FIXES_CORPSE_PIN_POLICY_H
+#define KEO_FIXES_CORPSE_PIN_POLICY_H
 
 // The decision behind the corpse-pin detour on ActivePlatoon::calculateCurrentPos
 // (corpse_pin.h): is this squad the frozen-position case, and if so, which
@@ -34,4 +34,4 @@ struct CorpsePinDecision
 // preference among dead members, so any deterministic pick is equally valid.
 CorpsePinDecision CorpsePinDecide(const CorpsePinMember* members, int count);
 
-#endif // KENSHI_ZONE_OPT_FIXES_CORPSE_PIN_POLICY_H
+#endif // KEO_FIXES_CORPSE_PIN_POLICY_H

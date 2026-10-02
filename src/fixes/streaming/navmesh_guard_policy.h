@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_NAVMESH_GUARD_POLICY_H
-#define KENSHI_ZONE_OPT_FIXES_NAVMESH_GUARD_POLICY_H
+#ifndef KEO_FIXES_NAVMESH_GUARD_POLICY_H
+#define KEO_FIXES_NAVMESH_GUARD_POLICY_H
 
 // The classification behind the NavMesh::update crash guard
 // (navmesh_update_guard.h). Pure, no Windows header and no I/O, so it is
@@ -43,4 +43,4 @@ NavMeshGuardOutcome NavMeshGuardDecide(const NavMeshGuardFacts& facts);
 // the caller writes it from inside an exception filter.
 const char* NavMeshGuardOutcomeName(NavMeshGuardOutcome outcome);
 
-#endif // KENSHI_ZONE_OPT_FIXES_NAVMESH_GUARD_POLICY_H
+#endif // KEO_FIXES_NAVMESH_GUARD_POLICY_H

@@ -437,7 +437,7 @@ static void EmitCrashRecord(const char* kind, LONG seq, PEXCEPTION_POINTERS pExI
 			FlbStr(&o, sbyte);
 	}
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	{
 		// The section-table lookup the navmesh step was about to make. Written
 		// for every fault, not only the ones that already look like that
@@ -601,7 +601,7 @@ LONG WINAPI NavMeshCrashHandler(PEXCEPTION_POINTERS pExInfo)
 	if (code != EXCEPTION_ACCESS_VIOLATION
 	    && code != EXCEPTION_INT_DIVIDE_BY_ZERO
 	    && code != EXCEPTION_STACK_OVERFLOW
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	    // Widened here in DEV so a genuinely *dispatched* heap corruption,
 	    // fail-fast or invalid-parameter exception still gets a record; none
 	    // of the three reaches any handler in a PROD build. The CRT's
@@ -617,7 +617,7 @@ LONG WINAPI NavMeshCrashHandler(PEXCEPTION_POINTERS pExInfo)
 	    )
 		return EXCEPTION_CONTINUE_SEARCH;
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	// One of the three codes above can refault inside the record we are about
 	// to write (CreateFileA/WriteFile can still touch the process heap under
 	// the hood), and a corrupt heap is exactly what 0xC0000374 means. Without
@@ -649,7 +649,7 @@ LONG WINAPI NavMeshCrashHandler(PEXCEPTION_POINTERS pExInfo)
 		return EXCEPTION_CONTINUE_SEARCH;
 
 	LONG seq = InterlockedIncrement(&g_crashSeq);
-#ifndef ZONEOPT_DEBUG
+#ifndef KEO_DEBUG
 	// PROD: one record per process. RE_Kenshi writes its own dumps, and a fault
 	// storm must not turn into a write storm from a faulting thread.
 	if (seq > 1)
@@ -680,7 +680,7 @@ LONG WINAPI NavMeshCrashHandler(PEXCEPTION_POINTERS pExInfo)
 LPTOP_LEVEL_EXCEPTION_FILTER g_prevUnhandledFilter = NULL;
 static volatile LONG g_inUnhandledFilter = 0;
 
-LONG WINAPI ZoneOptUnhandledFilter(PEXCEPTION_POINTERS pExInfo)
+LONG WINAPI KEOUnhandledFilter(PEXCEPTION_POINTERS pExInfo)
 {
 	if (pExInfo && pExInfo->ExceptionRecord && g_crashFilePath[0]
 	    && InterlockedCompareExchange(&g_inUnhandledFilter, 1, 0) == 0)

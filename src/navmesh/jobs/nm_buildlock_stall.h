@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_NM_BUILDLOCK_STALL_H
-#define KENSHI_ZONE_OPT_NM_BUILDLOCK_STALL_H
+#ifndef KEO_NM_BUILDLOCK_STALL_H
+#define KEO_NM_BUILDLOCK_STALL_H
 
 // When a non-blocking acquisition of the navmesh build lock is refused, the
 // engine does not wait: it re-queues the work item and asks again on its next
@@ -86,4 +86,4 @@ struct BuildLockStallDecision
 
 BuildLockStallDecision BuildLockStallEvaluate(const BuildLockStallInputs& in, BuildLockStallSite site);
 
-#endif // KENSHI_ZONE_OPT_NM_BUILDLOCK_STALL_H
+#endif // KEO_NM_BUILDLOCK_STALL_H

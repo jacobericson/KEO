@@ -231,7 +231,7 @@ void EvictStaleZones(void* zoneMgr, double now)
 							g_zlZombieRetryCell = zcell;
 						else if (zcell >= 0 && g_zl[zcell].flags)
 							g_zl[zcell].nextTry = now + 4.0;   // two passes: the others get a turn
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 						static double lastZombieDeferLog = 0.0;
 						if (now - lastZombieDeferLog > 10.0)
 						{

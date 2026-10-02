@@ -1,8 +1,8 @@
 // pathfinding.h -- Pathfinding hook declarations + public function declarations (Layer 3)
 // Depends on: config.h
 
-#ifndef KENSHI_ZONE_OPT_PATHFINDING_H
-#define KENSHI_ZONE_OPT_PATHFINDING_H
+#ifndef KEO_PATHFINDING_H
+#define KEO_PATHFINDING_H
 
 #include "base/config.h"
 
@@ -45,4 +45,4 @@ unsigned __int64 hook_contentStreamCallee0x8869(void* manager,
 // "PathGuard:" counter line, main thread, rate-limited.
 void LogPathGuardStats(double now);
 
-#endif // KENSHI_ZONE_OPT_PATHFINDING_H
+#endif // KEO_PATHFINDING_H

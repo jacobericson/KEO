@@ -5,7 +5,7 @@
 
 RenderStats g_renderStats;
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 static const bool DEV_BUILD = true;
 #else
 static const bool DEV_BUILD = false;

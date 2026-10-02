@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_HULL_QUEUE_GUARD_POLICY_H
-#define KENSHI_ZONE_OPT_FIXES_HULL_QUEUE_GUARD_POLICY_H
+#ifndef KEO_FIXES_HULL_QUEUE_GUARD_POLICY_H
+#define KEO_FIXES_HULL_QUEUE_GUARD_POLICY_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -140,4 +140,4 @@ inline unsigned __int64 HqgPushCallers(unsigned __int64 old, unsigned rva)
 inline unsigned HqgLastCaller(unsigned __int64 w) { return (unsigned)(w >> 32); }
 inline unsigned HqgPrevCaller(unsigned __int64 w) { return (unsigned)(w & 0xFFFFFFFFu); }
 
-#endif // KENSHI_ZONE_OPT_FIXES_HULL_QUEUE_GUARD_POLICY_H
+#endif // KEO_FIXES_HULL_QUEUE_GUARD_POLICY_H

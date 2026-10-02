@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_MESH_FACE_GUARD_H
-#define KENSHI_ZONE_OPT_FIXES_MESH_FACE_GUARD_H
+#ifndef KEO_FIXES_MESH_FACE_GUARD_H
+#define KEO_FIXES_MESH_FACE_GUARD_H
 
 // Detour on the per-face AABB step a navmesh instance's clearance reset runs.
 //
@@ -28,4 +28,4 @@
 // nothing logged except through LogMsgDeferrable.
 void InstallMeshFaceGuard(int* installed, int*);
 
-#endif // KENSHI_ZONE_OPT_FIXES_MESH_FACE_GUARD_H
+#endif // KEO_FIXES_MESH_FACE_GUARD_H

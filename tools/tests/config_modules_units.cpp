@@ -114,7 +114,7 @@ static const Expected kExpected[] =
 	{ "movement", "Movement and orders", sizeof(movement::MovementConfig), &movement::kMovementDefaults },
 	{ "fixes", "Crash guards and probes", sizeof(fixes::FixesConfig), &fixes::kFixesDefaults },
 	{ "planner", "Route planner", sizeof(planner::PlannerConfig), &planner::kPlannerDefaults },
-	{ "gui", "Settings panel", sizeof(zoneopt_gui::GuiConfig), &zoneopt_gui::kGuiDefaults },
+	{ "gui", "Settings panel", sizeof(keo_gui::GuiConfig), &keo_gui::kGuiDefaults },
 	{ "core", "Benchmark and retired keys", 0, NULL }
 };
 

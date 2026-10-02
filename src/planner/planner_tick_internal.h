@@ -2,8 +2,8 @@
 // (planner_capture.cpp) share: the located point, the memoised search, the locator, the snapshot,
 // the search, the plan write and the drop. Main thread only; the locator and the snapshot take the
 // section manager's world lock (+0x200) try-shared and release it on every path.
-#ifndef KENSHI_ZONE_OPT_PLANNER_PLANNER_TICK_INTERNAL_H
-#define KENSHI_ZONE_OPT_PLANNER_PLANNER_TICK_INTERNAL_H
+#ifndef KEO_PLANNER_PLANNER_TICK_INTERNAL_H
+#define KEO_PLANNER_PLANNER_TICK_INTERNAL_H
 
 #include "planner/plan_build.h"
 #include "planner/plan_policy.h"

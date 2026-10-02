@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_GRAPH_EXPAND_GUARD_POLICY_H
-#define KENSHI_ZONE_OPT_FIXES_GRAPH_EXPAND_GUARD_POLICY_H
+#ifndef KEO_FIXES_GRAPH_EXPAND_GUARD_POLICY_H
+#define KEO_FIXES_GRAPH_EXPAND_GUARD_POLICY_H
 
 #include <stddef.h>
 
@@ -87,4 +87,4 @@ struct GraphExpandCall
 void InspectGraphExpandCall(const void* openSet, const void* visitor,
                             GraphExpandCall* out);
 
-#endif // KENSHI_ZONE_OPT_FIXES_GRAPH_EXPAND_GUARD_POLICY_H
+#endif // KEO_FIXES_GRAPH_EXPAND_GUARD_POLICY_H

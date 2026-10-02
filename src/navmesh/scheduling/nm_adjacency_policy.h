@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_NM_ADJACENCY_POLICY_H
-#define KENSHI_ZONE_OPT_NM_ADJACENCY_POLICY_H
+#ifndef KEO_NM_ADJACENCY_POLICY_H
+#define KEO_NM_ADJACENCY_POLICY_H
 
 // Claim-time exclusion of navmesh jobs whose stitches touch each other's
 // objects. The drain (NavMeshGenerator::update) releases a sector's or an
@@ -289,4 +289,4 @@ void NmAdjBgForward(NmAdjRegistry* r, unsigned __int64 head);
 // The oldest reservation `task` holds (its resSeq), 0 when none.
 long NmAdjOwnResSeq(const NmAdjRegistry* r, unsigned __int64 task);
 
-#endif // KENSHI_ZONE_OPT_NM_ADJACENCY_POLICY_H
+#endif // KEO_NM_ADJACENCY_POLICY_H

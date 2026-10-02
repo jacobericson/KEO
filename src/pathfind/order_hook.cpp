@@ -35,7 +35,7 @@
 //   type:     *(int*)(node + 24)    (1 = character handle)
 //   handle:   (void*)(node + 16)    (hand::getCharacter)
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 static void NoteMissingSelectedCharacter(void* character)
 {
 	static bool logged = false;
@@ -71,7 +71,7 @@ static void DropSelectedCharacterOrders(void* thisPI)
 				{
 					void* resolved = KlibSelectedCharacter((const void*)(KLIB_MEMBER(3, (uintptr_t)node, HandSetNode_value_base_, OFF_SEL_NODE_HANDLE)));
 					uintptr_t character = (uintptr_t)resolved;
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 					NoteMissingSelectedCharacter(resolved);
 #endif
 					if (character && (void*)character != sentinel)
@@ -140,7 +140,7 @@ void hook_addOrderSelected(void* thisPI, void* destIndoors, int task,
 					// Resolve handle at node+16 to get Character*
 					void* resolved = KlibSelectedCharacter((const void*)(KLIB_MEMBER(3, (uintptr_t)node, HandSetNode_value_base_, OFF_SEL_NODE_HANDLE)));
 					uintptr_t character = (uintptr_t)resolved;
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 					NoteMissingSelectedCharacter(resolved);
 #endif
 

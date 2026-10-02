@@ -8,8 +8,8 @@
 // in preload_internal.h; lifecycle-only details are in zone_life_internal.h.
 // Depends on: config.h
 
-#ifndef KENSHI_ZONE_OPT_PRELOAD_H
-#define KENSHI_ZONE_OPT_PRELOAD_H
+#ifndef KEO_PRELOAD_H
+#define KEO_PRELOAD_H
 
 #include "base/config.h"
 #include "zone/grid.h"
@@ -170,4 +170,4 @@ void __fastcall hook_resetUnloadZones(void* zoneMgr);
 // detects the dismissal itself; it has no public entry point.
 
 
-#endif // KENSHI_ZONE_OPT_PRELOAD_H
+#endif // KEO_PRELOAD_H

@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_FIXES_STITCH_BYTE_GUARD_POLICY_H
-#define KENSHI_ZONE_OPT_FIXES_STITCH_BYTE_GUARD_POLICY_H
+#ifndef KEO_FIXES_STITCH_BYTE_GUARD_POLICY_H
+#define KEO_FIXES_STITCH_BYTE_GUARD_POLICY_H
 
 #include <stddef.h>
 
@@ -104,4 +104,4 @@ bool BuildStitchByteSitePatch(const unsigned char* current,
                               unsigned __int64 siteAddr, unsigned __int64 stubAddr,
                               unsigned char* out8);
 
-#endif // KENSHI_ZONE_OPT_FIXES_STITCH_BYTE_GUARD_POLICY_H
+#endif // KEO_FIXES_STITCH_BYTE_GUARD_POLICY_H

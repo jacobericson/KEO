@@ -13,7 +13,7 @@ graph_position_injection | /EHa | | | tools\tests\graph_position_injection.cpp s
 graph_visitor_injection | /EHa | | | tools\tests\graph_visitor_injection.cpp src\fixes\search\graph_visitor_guard_policy.cpp | vanilla read: access=0x30
 hull_queue_injection | /EHa | | | tools\tests\hull_queue_injection.cpp src\fixes\physx\hull_queue_guard_policy.cpp | vanilla: second batch faulted
 mesh_face_guard_injection | /EHa | | | tools\tests\mesh_face_guard_injection.cpp src\fixes\streaming\mesh_face_guard_policy.cpp | vanilla read: faulted
-section_key_injection | /EHsc | /DZONEOPT_DEBUG | %KENSHILIB%\Include %KENSHILIB%\Include\ogre | tools\tests\section_key_injection.cpp src\fixes\streaming\section_key_scan.cpp src\fixes\streaming\section_key_ring.cpp src\fixes\streaming\section_key_policy.cpp | fault taken, record
+section_key_injection | /EHsc | /DKEO_DEBUG | %KENSHILIB%\Include %KENSHILIB%\Include\ogre | tools\tests\section_key_injection.cpp src\fixes\streaming\section_key_scan.cpp src\fixes\streaming\section_key_ring.cpp src\fixes\streaming\section_key_policy.cpp | fault taken, record
 reset_drain_injection | /EHa | | | tools\tests\reset_drain_injection.cpp src\zone\reset\zone_reset_sequence.cpp src\zone\reset\zone_reset_gate.cpp src\zone\reset\zone_reset_fence.cpp | t1: drain timed out (drainMs=10000), lock held on a 500 ms budget
 reset_lock_injection | /EHa | | | tools\tests\reset_lock_injection.cpp src\zone\reset\zone_reset_sequence.cpp src\zone\reset\zone_reset_gate.cpp src\zone\reset\zone_reset_fence.cpp | t2: lock timed out (pjWaitMs=10000), native unload ran anyway
 retire_stall_injection | /EHa | | | tools\tests\retire_stall_injection.cpp src\navmesh\workers\nm_retire_policy.cpp src\base\log_bounded.cpp | stall: terminate recorded code=3

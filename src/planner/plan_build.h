@@ -1,7 +1,7 @@
 // plan_build.h - The route planner's plan-building rules, pure: the legs from a coarse route, the
 // footprint pick for an unloaded point, the drop predicate and the per-order search memo key.
-#ifndef KENSHI_ZONE_OPT_PLANNER_PLAN_BUILD_H
-#define KENSHI_ZONE_OPT_PLANNER_PLAN_BUILD_H
+#ifndef KEO_PLANNER_PLAN_BUILD_H
+#define KEO_PLANNER_PLAN_BUILD_H
 
 #include "planner/plan_policy.h"
 

@@ -344,7 +344,7 @@ static void WriteRecord(const char* action, DWORD code, unsigned __int64 addr,
 			SetFilePointer(hFile, 0, NULL, FILE_END);
 		DWORD written = 0;
 		WriteFile(hFile, o.b, (DWORD)o.n, &written, NULL);
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 		// The section-table lookups this thread was about to make, in a second
 		// write with its own buffer: the record above fills a fixed 1 KiB that
 		// a long chain can already come close to, and a ring squeezed into it

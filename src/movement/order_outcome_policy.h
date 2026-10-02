@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_ORDER_OUTCOME_POLICY_H
-#define KENSHI_ZONE_OPT_ORDER_OUTCOME_POLICY_H
+#ifndef KEO_ORDER_OUTCOME_POLICY_H
+#define KEO_ORDER_OUTCOME_POLICY_H
 
 // Pure arithmetic and line formatting behind the player order-outcome
 // metric (order_outcome_table.cpp). No game headers: host-testable, and the
@@ -80,4 +80,4 @@ std::string OrderOutcomeFormatSpanTotals(long orders, long longOrders, long long
 // whose wait the planner owned, counted there instead of as stops.
 std::string OrderOutcomePlannerSuffix(int plannerWait);   // " plannerWait=<n>"
 
-#endif // KENSHI_ZONE_OPT_ORDER_OUTCOME_POLICY_H
+#endif // KEO_ORDER_OUTCOME_POLICY_H

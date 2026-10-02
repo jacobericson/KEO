@@ -1,8 +1,8 @@
 // pathfind_cache.h -- path-request priority tier state (Layer 3)
 // Depends on: config.h
 
-#ifndef KENSHI_ZONE_OPT_PATHFIND_CACHE_H
-#define KENSHI_ZONE_OPT_PATHFIND_CACHE_H
+#ifndef KEO_PATHFIND_CACHE_H
+#define KEO_PATHFIND_CACHE_H
 
 #include "base/config.h"
 
@@ -32,4 +32,4 @@ extern volatile long p12DiagSubmitBoostsState6;  // mid-walk re-request match
 void LogPhase12Stats(double now);
 
 
-#endif // KENSHI_ZONE_OPT_PATHFIND_CACHE_H
+#endif // KEO_PATHFIND_CACHE_H

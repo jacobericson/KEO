@@ -256,7 +256,7 @@ static void ReportPathfindWindow(const PathfindDiagReportCtx& c)
 		prevNPCRequests     = npcReqs;
 		prevPlayerCap       = playerCap;
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 		double interval = 10.0;
 #else
 		double interval = 30.0;
@@ -419,7 +419,7 @@ void LogPathfindDiagStats(double now)
 	if (!pathfind::g_pathfindCfg.pathfindDiagEnabled)
 		return;
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 	if (now - lastPathDiagLogTime < 10.0)
 #else
 	if (now - lastPathDiagLogTime < 30.0)

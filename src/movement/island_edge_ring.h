@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_ISLAND_EDGE_RING_H
-#define KENSHI_ZONE_OPT_ISLAND_EDGE_RING_H
+#ifndef KEO_ISLAND_EDGE_RING_H
+#define KEO_ISLAND_EDGE_RING_H
 
 // The ring filter installed inside hook_getIsland (island_hooks.cpp).
 // It narrows the island list handed back to NavMesh::getZoneEdge --
@@ -44,4 +44,4 @@ void IslandEdgeRingAppendSummary(std::ostringstream& ss);   // IslandSpan: suffi
 // Returns "true"/"false".
 const char* IslandEdgeRingModeStr();
 
-#endif // KENSHI_ZONE_OPT_ISLAND_EDGE_RING_H
+#endif // KEO_ISLAND_EDGE_RING_H

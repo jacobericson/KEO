@@ -1,8 +1,8 @@
 // nm_disk_cache.h — L2 persistent disk cache for navmesh results (Layer 3)
 // Depends on: nm_cache_core.h (for types + shared state)
 
-#ifndef KENSHI_ZONE_OPT_NM_DISK_CACHE_H
-#define KENSHI_ZONE_OPT_NM_DISK_CACHE_H
+#ifndef KEO_NM_DISK_CACHE_H
+#define KEO_NM_DISK_CACHE_H
 
 #include "navmesh/cache/nm_cache_core.h"
 
@@ -68,4 +68,4 @@ void L2StartupScan();
 // L2 is bypassed for the session every call is a plain miss (no file opened).
 bool ReadDiskCache(const NavMeshCacheKey& key, NavMeshCacheEntry& out);
 
-#endif // KENSHI_ZONE_OPT_NM_DISK_CACHE_H
+#endif // KEO_NM_DISK_CACHE_H

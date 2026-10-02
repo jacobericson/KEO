@@ -16,8 +16,8 @@
 // An overrun overwrites the oldest entry rather than dropping the newest: the
 // throw nearest the death is the one worth keeping. What was lost is counted.
 
-#ifndef KENSHI_ZONE_OPT_DIAG_THROW_RING_H
-#define KENSHI_ZONE_OPT_DIAG_THROW_RING_H
+#ifndef KEO_DIAG_THROW_RING_H
+#define KEO_DIAG_THROW_RING_H
 
 #include <stddef.h>
 
@@ -62,4 +62,4 @@ long ThrowRingDrain(ThrowRingSink sink, void* ctx);
 
 void ThrowRingResetForTest();
 
-#endif // KENSHI_ZONE_OPT_DIAG_THROW_RING_H
+#endif // KEO_DIAG_THROW_RING_H

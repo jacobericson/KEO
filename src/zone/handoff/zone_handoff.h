@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_ZONE_HANDOFF_H
-#define KENSHI_ZONE_OPT_ZONE_HANDOFF_H
+#ifndef KEO_ZONE_HANDOFF_H
+#define KEO_ZONE_HANDOFF_H
 
 #include "base/config.h"
 
@@ -101,4 +101,4 @@ inline bool ZoneHandoffPhysicsCountsClear() { return true; }
 
 #endif // ZONEHAND_STEP >= 2
 
-#endif // KENSHI_ZONE_OPT_ZONE_HANDOFF_H
+#endif // KEO_ZONE_HANDOFF_H

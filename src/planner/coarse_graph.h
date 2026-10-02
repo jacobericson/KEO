@@ -3,8 +3,8 @@
 // word; a retire stack only the main thread frees; the interior uid table (main thread only); the
 // live buffer pool and the per-slot live records the path thread posts into; and the cross-section
 // arcs, resolved at read time. No KenshiLib or game header.
-#ifndef KENSHI_ZONE_OPT_PLANNER_COARSE_GRAPH_H
-#define KENSHI_ZONE_OPT_PLANNER_COARSE_GRAPH_H
+#ifndef KEO_PLANNER_COARSE_GRAPH_H
+#define KEO_PLANNER_COARSE_GRAPH_H
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN

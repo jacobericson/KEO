@@ -1,5 +1,5 @@
-#ifndef KENSHI_ZONE_OPT_NM_CACHE_SLOT_POLICY_H
-#define KENSHI_ZONE_OPT_NM_CACHE_SLOT_POLICY_H
+#ifndef KEO_NM_CACHE_SLOT_POLICY_H
+#define KEO_NM_CACHE_SLOT_POLICY_H
 
 #include "navmesh/cache/nm_cache_key.h"
 

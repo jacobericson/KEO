@@ -6,7 +6,7 @@
 #endif
 #include "fixes/stitch/unstitch_probe.h"
 
-#ifdef ZONEOPT_DEBUG
+#ifdef KEO_DEBUG
 
 #include "fixes/stitch/unstitch_probe_policy.h"
 #include "fixes/stitch/unstitch_layout.h"
@@ -524,9 +524,9 @@ void InstallUnstitchProbe(int* installed, int*)
 	}
 }
 
-#else  // ZONEOPT_DEBUG
+#else  // KEO_DEBUG
 
 // Nothing of this probe exists outside a DEV build; hook_manifest.cpp does not name it.
 typedef int UnstitchProbeNotInThisBuild;
 
-#endif // ZONEOPT_DEBUG
+#endif // KEO_DEBUG
