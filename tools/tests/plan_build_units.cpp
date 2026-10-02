@@ -211,6 +211,35 @@ static void CheckDrop()
 	bool old = PlanIsModSend(gather, rec, 0, hold, 1, 21.0);
 	Check(!old && PlanDropDue(true, false, 900.0f, gather, planDest, destAtPlan, old, !halted) == PDW_NEW_DEST,
 	      "drop: the gather point drops the plan once the hold is older than its bound");
+
+	// A gather's members walk to their own slots around the one recorded point.
+	const float spread[4] = { 8.0f, 14.5f, 19.0f, 27.0f };
+	for (int i = 0; i < 4; ++i)
+	{
+		float slot[3];
+		Set3(slot, 4100.0f + spread[i] * 0.6f, 0.0f, -7300.0f + spread[i] * 0.8f);
+		bool held = PlanIsModSend(slot, rec, 0, hold, 1, 5.0);
+		char what[96];
+		sprintf(what, "drop: a slot %.1f units from the gather point keeps the plan", spread[i]);
+		Check(held && PlanDropDue(true, false, 900.0f, slot, planDest, destAtPlan, held, !halted) == PDW_NONE, what);
+	}
+	float beyond[3];
+	Set3(beyond, 4135.0f, 0.0f, -7300.0f);
+	bool notHold = PlanIsModSend(beyond, rec, 0, hold, 1, 5.0);
+	Check(!notHold && PlanDropDue(true, false, 900.0f, beyond, planDest, destAtPlan, notHold, !halted) == PDW_NEW_DEST,
+	      "drop: a destination 35 units from the gather point is not the hold");
+	float slotOld[3];
+	Set3(slotOld, 4108.0f, 0.0f, -7300.0f);
+	Check(!PlanIsModSend(slotOld, rec, 0, hold, 1, 21.0),
+	      "drop: a slot 8 units from the gather point drops once the hold is older than its bound");
+	float resent8[3];
+	Set3(rec[0], 5008.0f, 40.0f, -7000.0f);
+	Set3(resent8, 5016.0f, 0.0f, -7000.0f);
+	Check(!PlanIsModSend(resent8, rec, 1, hold, 0, 0.0),
+	      "drop: a destination 8 units from a recorded re-send is not the re-send");
+	Set3(resent8, 5009.5f, 0.0f, -7000.0f);
+	Check(PlanIsModSend(resent8, rec, 1, hold, 0, 0.0),
+	      "drop: a destination 1.5 units from a recorded re-send is the re-send");
 }
 
 static void CheckRepeat()

@@ -148,7 +148,8 @@ bool PlanIsModSend(const float moveDest[3], const float resend[][3], int resendC
 	if (resendCount > PLAN_RESEND_POINTS) resendCount = PLAN_RESEND_POINTS;
 	for (int i = 0; i < resendCount; ++i)
 		if (DistanceSqXz(moveDest, resend[i]) <= match) return true;
-	return haveHold && holdDest && holdAge < PLAN_HOLD_SECONDS && DistanceSqXz(moveDest, holdDest) <= match;
+	const float holdMatch = PLAN_HOLD_MATCH * PLAN_HOLD_MATCH;
+	return haveHold && holdDest && holdAge < PLAN_HOLD_SECONDS && DistanceSqXz(moveDest, holdDest) <= holdMatch;
 }
 
 bool PlanRepeatDue(const float planDest[3], const float newDest[3], double planAge)
