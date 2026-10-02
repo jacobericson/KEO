@@ -23,6 +23,8 @@
 #include "zone/readiness/readiness_bindings.h"
 #include "zone/preload/preload.h"
 #include "movement/islands.h"
+#include "movement/order_outcome_table.h"
+#include "zone/zone_pause.h"
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -169,9 +171,12 @@ static int AdapterArcs(void* ctx, unsigned key, CoarseArc* out, int max)
 	return count;
 }
 
-// Whether every arc into the node has its reverse among the node's arcs: no list cut at the cap, and
-// each border resolved against a readable far block through a border that block names (read as a
-// save block, the far block's geometry is withheld, so a border it alone resolves reads dropped).
+// Whether every arc into the node that its own borders show has its reverse among the node's arcs: no
+// list cut at the cap, and each of the node's borders resolved against a readable far block through a
+// border that block names (read as a save block, the far block's geometry is withheld, so a border it
+// alone resolves reads dropped). Only the node's own borders are read, so two arcs stay unseen: a cross
+// arc into the node from a block whose borders name nothing toward it, and a one-way arc inside the
+// node's own block.
 static int AdapterInboundMirrored(void* ctx, unsigned key)
 {
 	(void)ctx;
@@ -622,7 +627,8 @@ bool planner_tick_detail::PlayersOverCap()
 }
 
 // Why the slot's plan ends now, from the character's state, its movement destination against the
-// plan's and the one it held at plan time, and its position; f receives what the rule read.
+// plan's and the one it held at plan time, and its position; f receives what the rule read. The gather
+// hold ages in game time, the clock it was stamped on, which stands still while the game is paused.
 static PlanDropWhy SlotDropDue(const PlanView& v, uintptr_t character, const float pos[3], double now, DropFacts* f)
 {
 	const PlanMainState* m = PlanStoreMain(v.slot);
@@ -637,7 +643,8 @@ static PlanDropWhy SlotDropDue(const PlanView& v, uintptr_t character, const flo
 	f->halted = halted;
 	return PlanDropDue(true, IslandK7IsUnconcious(character), DistXz(pos, v.finalDest), moveDest, v.finalDest,
 	                   v.destAtPlan,
-	                   PlanIsModSend(moveDest, v.resend, v.resendCount, m->holdDest, m->haveHold, now - m->holdTime),
+	                   PlanIsModSend(moveDest, v.resend, v.resendCount, m->holdDest, m->haveHold,
+	                                 OOT_ActiveNow(now, ZonePauseIsPaused()) - m->holdTime),
 	                   halted);
 }
 

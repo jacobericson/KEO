@@ -45,8 +45,8 @@ PlanDropWhy PlanDropDue(bool livePlayer, bool unconscious, float distToDest, con
 const double PLAN_HOLD_SECONDS = 20.0;
 // Whether the movement destination is one the mod sent for this plan: within PLAN_DEST_MATCH in x-z of
 // one of the first resendCount re-sends (at most PLAN_RESEND_POINTS), or within the gather's slot
-// spread of the hold point while haveHold and holdAge (seconds since the hold was sent) is under
-// PLAN_HOLD_SECONDS.
+// spread of the hold point while haveHold and holdAge (seconds of game time since the hold was sent,
+// frozen while the game is paused) is under PLAN_HOLD_SECONDS.
 bool PlanIsModSend(const float moveDest[3], const float resend[][3], int resendCount,
                    const float holdDest[3], int haveHold, double holdAge);
 

@@ -22,11 +22,13 @@ struct CoarseGraphOps
 	int  (*arcs)(void* ctx, unsigned node, CoarseArc* out, int max);
 	// The node's world position; false when unknown.
 	bool (*position)(void* ctx, unsigned node, float out[3]);
-	// Non-zero when every arc into node has its reverse among node's own reported arcs (its cost
-	// may differ); zero when that is not known, or the node is unknown. NULL: no goal-side probe.
-	// The store adapter answers zero for a node whose border was dropped, resolved only by the far
-	// block's geometry, or aimed at a far block it could not read, and for a node whose intra arcs
-	// plus borders pass COARSE_ARCS_MAX.
+	// Non-zero when every arc into node that the answer can see has its reverse among node's own
+	// reported arcs (its cost may differ); zero when that is not known, or the node is unknown. NULL:
+	// no goal-side probe. The store adapter reads only the node's own borders, so it cannot see a
+	// cross arc into the node from a block whose borders name nothing toward it, or a one-way arc
+	// inside the node's own block. It answers zero for a node whose border was dropped, resolved only
+	// by the far block's geometry, or aimed at a far block it could not read, and for a node whose
+	// intra arcs plus borders pass COARSE_ARCS_MAX.
 	int  (*inboundMirrored)(void* ctx, unsigned node);
 };
 
@@ -65,8 +67,9 @@ CoarseProbeVerdict CoarseProbeGoal(const CoarseGraphOps& ops, unsigned goal, uns
                                    int* expanded);
 
 // With ops.inboundMirrored set, a goal the probe finds CPV_CLOSED answers CS_NO_ROUTE at once: no
-// arc enters a closure whose every node mirrors its inbound arcs, so the start outside it cannot
-// reach the goal. Otherwise the A* runs from start.
+// arc inboundMirrored can see enters a closure whose every node mirrors its inbound arcs, so the start
+// outside it cannot reach the goal over those arcs (an arc it cannot see, as with the store adapter's
+// two, can still enter). Otherwise the A* runs from start.
 CoarseResult CoarseSearch(const CoarseGraphOps& ops, unsigned start, unsigned goal, int maxNodes,
                           CoarseScratch* s, CoarseRoute* out);
 // Searches the probe answered CS_NO_ROUTE, since the process started; the caller's thread.

@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstring>
 #include "planner/plan_build.h"
+#include "movement/order_outcome_table.h"
 
 #include "check.h"
 
@@ -242,6 +243,55 @@ static void CheckDrop()
 	      "drop: a destination 1.5 units from a recorded re-send is the re-send");
 }
 
+// The gather hold's age on the game-time clock the tick and the formation share: fed in raw-time order,
+// it stands still while the game is paused.
+static void CheckHoldClock()
+{
+	float rec[PLAN_RESEND_POINTS][3];
+	memset(rec, 0, sizeof(rec));
+	float planDest[3], destAtPlan[3], hold[3], gather[3];
+	Set3(planDest, 5000.0f, 40.0f, -7000.0f);
+	Set3(destAtPlan, 2000.0f, 0.0f, -7000.0f);
+	Set3(hold, 4100.0f, 0.0f, -7300.0f);
+	Set3(gather, 4100.5f, 0.0f, -7300.0f);
+	const bool halted = true;
+
+	// Stamped at 0; running to 5, paused from 5 to 40, running again at 41.
+	OOT_ResetForTest();
+	double stamp = OOT_ActiveNow(0.0, false);
+	OOT_ActiveNow(5.0, false);
+	for (int raw = 6; raw <= 40; ++raw)
+		OOT_ActiveNow((double)raw, true);
+	double age = OOT_ActiveNow(41.0, false) - stamp;
+	bool held = PlanIsModSend(gather, rec, 0, hold, 1, age);
+	Check(stamp == 0.0 && age == 6.0 && held
+	      && PlanDropDue(true, false, 900.0f, gather, planDest, destAtPlan, held, !halted) == PDW_NONE,
+	      "hold clock: a 35 s pause inside the hold leaves it 6 s old and the plan kept");
+
+	// The same 41 s with no pause.
+	OOT_ResetForTest();
+	stamp = OOT_ActiveNow(0.0, false);
+	for (int raw = 1; raw <= 40; ++raw)
+		OOT_ActiveNow((double)raw, false);
+	age = OOT_ActiveNow(41.0, false) - stamp;
+	held = PlanIsModSend(gather, rec, 0, hold, 1, age);
+	Check(age == 41.0 && !held
+	      && PlanDropDue(true, false, 900.0f, gather, planDest, destAtPlan, held, !halted) == PDW_NEW_DEST,
+	      "hold clock: 41 s of running game ends the hold and the gather point drops the plan");
+
+	// Running to 10, paused from 10 to 30 with the stamp at 20, running again at 31.
+	OOT_ResetForTest();
+	OOT_ActiveNow(10.0, false);
+	OOT_ActiveNow(15.0, true);
+	stamp = OOT_ActiveNow(20.0, true);
+	OOT_ActiveNow(25.0, true);
+	double atUnpause = OOT_ActiveNow(30.0, true);
+	age = OOT_ActiveNow(31.0, false) - stamp;
+	Check(stamp == 10.0 && atUnpause == 10.0 && age == 1.0 && PlanIsModSend(gather, rec, 0, hold, 1, age),
+	      "hold clock: a hold stamped inside a pause starts at the game time of the unpause");
+	OOT_ResetForTest();
+}
+
 static void CheckRepeat()
 {
 	float planDest[3], same[3], apart[3], apart12[3];
@@ -273,6 +323,7 @@ int main()
 	CheckLegs();
 	CheckFootprint();
 	CheckDrop();
+	CheckHoldClock();
 	CheckRepeat();
 	CheckMemo();
 	return CheckExit("plan_build_units");

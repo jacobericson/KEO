@@ -94,7 +94,12 @@ void OOT_NoteStopGuess(size_t c, const char* guess, double now);
 // recovery class, not stall time.
 void OOT_NotePlannerWait(size_t c, double now, bool paused = false);
 
-// Whether the closed-record lines carry the planner column (" plannerWait=<n>"); off by default.
+// The active-time clock itself: rawNow less every second spent paused so far, through the same
+// running total every call above reads. Main thread, in non-decreasing raw-time order.
+double OOT_ActiveNow(double rawNow, bool paused);
+
+// Whether the closed-record lines carry the planner column (" plannerWait=<n>"); off until the planner
+// arms (on at the defaults).
 void OOT_SetPlannerColumn(bool on);
 
 struct OotTotals

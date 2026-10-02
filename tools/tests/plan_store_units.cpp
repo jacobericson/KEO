@@ -117,14 +117,14 @@ static void StoreRows()
 	      && v.legs[0].point[1] == 2.0f && v.legs[2].point[0] == 0.0f && v.epoch == firstEpoch + 2u,
 	      "store: a rewrite replaces the character's plan in place");
 
-	// The movement destination held at plan time is written with every plan, a re-plan included.
+	// The movement destination held at plan time is written with an order's plan (a re-plan that keeps
+	// the sends keeps it: SendRows).
 	MakeWrite(&w, CM_A, 3.0f);
 	w.destAtPlan[0] = 1500.0f;
 	w.destAtPlan[2] = -250.0f;
-	w.keepSends = 1;
 	Check(PlanStoreWrite(w) == slot && PlanStoreRead(slot, &v) && v.destAtPlan[0] == 1500.0f
 	      && v.destAtPlan[1] == 0.0f && v.destAtPlan[2] == -250.0f,
-	      "store: the destination held at plan time is in the view, a re-plan included");
+	      "store: the destination held at plan time is in the view");
 
 	// The water multiplier the plan was searched at is in the view, and a rewrite replaces it.
 	MakeWrite(&w, CM_A, 4.0f);
@@ -313,6 +313,18 @@ static void OwnsRows()
 	Check(!PlannerOwnsWait(CM_A, 1025.0f, 0.0f, 9000.0f, 9000.0f), "owns: a wait beyond reach of the portal is not owned");
 	Check(!PlannerOwnsWait(CM_B, 1005.0f, 5.0f, 9000.0f, 9000.0f), "owns: an unplanned character's wait is not owned");
 
+	// A member sent to the gather point and held there, its movement destination that point.
+	HeldAtPortal(PLANNER_ON);
+	float gatherPoint[3] = { 1010.0f, 0.0f, 20.0f };
+	int heldSent = PlannerNoteModSend(CM_A, gatherPoint, PLAN_SEND_HOLD, 10.0);
+	s_fakeDest[0] = gatherPoint[0];
+	s_fakeDest[2] = gatherPoint[2];
+	Check(heldSent == 1 && !PlannerOwnsWait(CM_A, 1005.0f, 5.0f, 9000.0f, 9000.0f),
+	      "owns: a gather-held member at a portal is not owned");
+	s_fakeDest[0] = 3000.0f;
+	s_fakeDest[2] = 0.0f;
+	HeldAtPortal(PLANNER_ON);
+
 	PlanView v;
 	int slot = PlanStoreFind(CM_A);
 	PlanStoreRead(slot, &v);
@@ -410,6 +422,22 @@ static void SendRows()
 	w.keepSends = 0;
 	PlanStoreWrite(w);
 	Check(PlanStoreRead(slot, &v) && v.resendCount == 0, "store: a new order clears the recorded re-sends");
+
+	// The movement destination held when the order's plan was written, then a re-plan while the
+	// engine holds a gather point, then a new order.
+	MakeWrite(&w, CM_A, 1.0f);
+	Set3(w.destAtPlan, 2500.0f, 0.0f, 0.0f);
+	PlanStoreWrite(w);
+	MakeWrite(&w, CM_A, 1.0f);
+	w.keepSends = 1;
+	Set3(w.destAtPlan, 500.0f, 0.0f, 40.0f);
+	PlanStoreWrite(w);
+	bool snapKept = PlanStoreRead(slot, &v) && v.destAtPlan[0] == 2500.0f && v.destAtPlan[2] == 0.0f;
+	MakeWrite(&w, CM_A, 1.0f);
+	Set3(w.destAtPlan, 500.0f, 0.0f, 40.0f);
+	PlanStoreWrite(w);
+	Check(snapKept && PlanStoreRead(slot, &v) && v.destAtPlan[0] == 500.0f && v.destAtPlan[2] == 40.0f,
+	      "store: a re-plan keeps the order's movement destination snapshot and a new order takes its own");
 
 	Set3(p, 3008.0f, 1.0f, 0.0f);
 	PlannerNoteModSend(CM_A, p, PLAN_SEND_RESEND, 30.0);

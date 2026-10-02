@@ -543,6 +543,11 @@ void OOT_NotePlannerWait(size_t c, double now, bool paused)
 	m->stallPlannerWait = true;
 }
 
+double OOT_ActiveNow(double rawNow, bool paused)
+{
+	return ActiveTime(rawNow, paused);
+}
+
 void OOT_SetPlannerColumn(bool on)
 {
 	g_plannerColumn = on;

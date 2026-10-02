@@ -27,9 +27,10 @@ struct PlanWrite
 	int       goalByFootprint;
 	unsigned  loadedMask;
 	float     finalDest[3];
-	float     destAtPlan[3];    // the character's movement destination as the plan is written (x, 0, z)
+	float     destAtPlan[3];    // the character's movement destination as the order's plan is written (x, 0, z)
 	double    now;
-	int       keepSends;        // 1: a re-plan of the same character keeps the mod's recorded sends
+	int       keepSends;        // 1: a re-plan of the same character keeps the mod's recorded sends and
+	                            //   the slot's destAtPlan
 	float     waterMult;        // the water multiplier the plan was searched at; its re-plans reuse it
 	PlanLeg   legs[PLAN_MAX_LEGS];
 };
@@ -86,7 +87,8 @@ enum PlanSendKind { PLAN_SEND_RESEND = 1, PLAN_SEND_HOLD = 2 };
 // Main thread, the movement module's send paths, before the order is sent. PLAN_SEND_RESEND: the
 // order's destination re-sent (nudged past the engine's two-unit drop); it joins the slot's record of
 // the two newest distinct re-sends unless the plan already accepts it, and a call carrying it is the
-// plan's. PLAN_SEND_HOLD: a detour that keeps the plan for PLAN_HOLD_SECONDS without steering it.
+// plan's. PLAN_SEND_HOLD: a detour that keeps the plan for PLAN_HOLD_SECONDS of game time without
+// steering it; its `now` is game time, the clock the tick ages the hold on.
 // 1: the character holds a plan (the send is counted); 0: no plan, or unarmed; -1: a re-send farther
 // than PLAN_RESEND_REACH from the plan's destination (refused and counted; the plan then drops).
 int PlannerNoteModSend(uintptr_t cm, const float sent[3], int kind, double now);

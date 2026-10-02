@@ -116,7 +116,8 @@ int PlanPickFootprint(const PlanNodeBox* nodes, int n, const float p[3], bool al
 // zero in both is no destination, and the match is measured in x-z. The rule needs no clock: the
 // engine applies a move order only while the game runs, so until it does the movement destination is
 // still the one it held when the plan was written, and once it does it is the plan's own. An order
-// the engine ends copies the character's position there, which keeps the plan too.
+// the engine ends copies the character's position there, which keeps the plan too. The one age the
+// caller passes, the gather hold's, is game time, not wall time: it stands still while the game is paused.
 PlanDropWhy PlanDropDue(bool livePlayer, bool unconscious, float distToDest, const float moveDest[3],
                         const float planDest[3], const float destAtPlan[3], bool moveDestIsModSend,
                         bool halted)

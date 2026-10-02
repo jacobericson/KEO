@@ -170,10 +170,10 @@ int PlanStoreWrite(const PlanWrite& w)
 	s.legCount = legCount;
 	s.routeTruncated = w.routeTruncated;
 	memcpy(s.finalDest, w.finalDest, sizeof(s.finalDest));
-	memcpy(s.destAtPlan, w.destAtPlan, sizeof(s.destAtPlan));
 	s.waterMult = w.waterMult;
 	if (!keep)
 	{
+		memcpy(s.destAtPlan, w.destAtPlan, sizeof(s.destAtPlan));
 		memset(s.resend, 0, sizeof(s.resend));
 		s.resendCount = 0;
 		s.main.haveHold = 0;
