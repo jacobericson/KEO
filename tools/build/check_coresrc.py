@@ -73,7 +73,7 @@ SHARED_PROFILER_SOURCES = ('src/base/ini_text.cpp', 'src/base/legacy_ini_import.
 
 def profiler_sources():
     """Every *.cpp directly under profiler/ when that folder exists, else every *.cpp at the
-    repository root (the rule survey.profiler_files uses), plus every src/**/klib_*.cpp, plus
+    repository root (the profiler's own file rule), plus every src/**/klib_*.cpp, plus
     each path of SHARED_PROFILER_SOURCES that exists."""
     if os.path.isdir("profiler"):
         roots = glob.glob("profiler/*.cpp")

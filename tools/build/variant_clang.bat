@@ -117,6 +117,7 @@ if errorlevel 1 goto :seh_failed
 
 REM RE_Kenshi.json lists exactly the DLL this folder holds. A json that differs (one naming
 REM another DLL, or two DLLs) is kept as RE_Kenshi.json.old and rewritten.
+REM A failed backup is named in the WARNING.
 set "B_JSON=%B_OUTDIR%\RE_Kenshi.json"
 set "B_JSON_WANT=%B_OBJDIR%\RE_Kenshi.json.want"
 echo {"Plugins": ["KEO.dll"]} > "%B_JSON_WANT%"
@@ -127,8 +128,13 @@ if not exist "%B_JSON%" (
 fc /b "%B_JSON_WANT%" "%B_JSON%" >nul 2>&1
 if errorlevel 1 (
     copy /y "%B_JSON%" "%B_JSON%.old" >nul
-    copy /y "%B_JSON_WANT%" "%B_JSON%" >nul
-    echo %B_LABEL% WARNING: RE_Kenshi.json did not list exactly KEO.dll; rewritten, previous copy saved as RE_Kenshi.json.old
+    if errorlevel 1 (
+        copy /y "%B_JSON_WANT%" "%B_JSON%" >nul
+        echo %B_LABEL% WARNING: RE_Kenshi.json did not list exactly KEO.dll; rewritten, but the previous copy could NOT be saved: RE_Kenshi.json.old could not be written
+    ) else (
+        copy /y "%B_JSON_WANT%" "%B_JSON%" >nul
+        echo %B_LABEL% WARNING: RE_Kenshi.json did not list exactly KEO.dll; rewritten, previous copy saved as RE_Kenshi.json.old
+    )
 )
 :json_check
 fc /b "%B_JSON_WANT%" "%B_JSON%" >nul 2>&1

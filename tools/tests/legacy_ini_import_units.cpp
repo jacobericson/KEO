@@ -2,6 +2,7 @@
 // and the file steps against a real folder, one fresh folder per case. Each failure path is forced
 // in the folder itself: a handle held with no sharing or with read sharing only, or a folder
 // taking the .replaced name.
+// The call sites are read as text from the repo root, the suites' working directory.
 
 #include <cstdio>
 #include <string>
@@ -324,6 +325,102 @@ static void FailureRows()
 	Wipe(d);
 }
 
+// An empty folder string: nothing is deleted, read, renamed or written, even with the working
+// directory holding every file the import would act on, and one line says why.
+static void EmptyFolderRows()
+{
+	const std::string oldBytes   = "a=1\n";
+	const std::string newBytes   = "a=2\n";
+	const std::string staleBytes = "stale\n";
+	std::string d = NewFolder();
+	Put(d + "old.ini", oldBytes);
+	Put(d + "new.ini", newBytes);
+	Put(d + "stale.txt", staleBytes);
+
+	char saved[MAX_PATH];
+	DWORD savedLen = GetCurrentDirectoryA(sizeof(saved), saved);
+	bool moved = savedLen > 0 && savedLen < sizeof(saved) && SetCurrentDirectoryA(d.c_str());
+	LegacyIniOutcome r = LEGACY_INI_FAILED;
+	if (moved)
+	{
+		r = LegacyIniImport("", "old.ini", "new.ini", "stale.txt", true, &RecordLine);
+		SetCurrentDirectoryA(saved);
+	}
+	Check(moved && r == LEGACY_INI_NONE
+	      && OneLine("LegacyIni: old.ini import skipped (DLL folder unknown)")
+	      && Holds(d + "old.ini", oldBytes) && Holds(d + "new.ini", newBytes) && Holds(d + "stale.txt", staleBytes)
+	      && !Exists(d + "old.ini.imported") && !Exists(d + "new.ini.replaced"),
+	      "empty folder: the import does nothing in the working directory and logs one line");
+	Wipe(d);
+}
+
+// The whole file as text; false when it cannot be opened.
+static bool ReadText(const char* path, std::string* out)
+{
+	out->clear();
+	FILE* f = NULL;
+	if (fopen_s(&f, path, "rb") != 0 || !f)
+		return false;
+	char buf[4096];
+	size_t n;
+	while ((n = fread(buf, 1, sizeof(buf), f)) > 0)
+		out->append(buf, n);
+	fclose(f);
+	return true;
+}
+
+static size_t CountOf(const std::string& text, const std::string& what)
+{
+	size_t count = 0;
+	for (size_t at = text.find(what); at != std::string::npos; at = text.find(what, at + 1))
+		++count;
+	return count;
+}
+
+// True when text holds exactly one call, after begin and before the first end that follows
+// begin, and the call's line passes args.
+static bool OneCallBetween(const std::string& text, const std::string& begin, const std::string& end,
+                           const std::string& args)
+{
+	const std::string call = "LegacyIniImport(";
+	size_t b = text.find(begin);
+	if (b == std::string::npos || CountOf(text, call) != 1)
+		return false;
+	size_t c = text.find(call, b);
+	size_t e = text.find(end, b);
+	if (c == std::string::npos || e == std::string::npos || c > e)
+		return false;
+	size_t lineEnd = text.find('\n', c);
+	std::string line = text.substr(c, lineEnd == std::string::npos ? std::string::npos : lineEnd - c);
+	return line.find(args) != std::string::npos;
+}
+
+// The two call sites, read from the sources at the repo root (the suites' working directory):
+// the optimizer imports after its log is open and before its settings file is read, the
+// profiler inside its audit start-up before its own settings read.
+static void CallSiteRows()
+{
+	std::string entry, config, audit;
+	bool entryRead  = ReadText("src/plugin/plugin_entry.cpp", &entry);
+	bool configRead = ReadText("src/base/config.cpp", &config);
+	bool auditRead  = ReadText("profiler/KenshiFrameAudit.cpp", &audit);
+	Check(entryRead && configRead && auditRead, "call sites: the three sources are readable from the repo root");
+
+	size_t logAt  = entry.find("InitLogFile();");
+	size_t loadAt = entry.find("LoadConfig(ctx.dllDir);");
+	Check(entryRead && logAt != std::string::npos && loadAt != std::string::npos && logAt < loadAt,
+	      "call sites: the plugin opens its log before LoadConfig");
+
+	Check(configRead && OneCallBetween(config, "void LoadConfig(const std::string& dllDir)",
+	                                   "fopen_s(&f, iniPath.c_str(), \"r\");",
+	                                   "LEGACY_OPTIMIZER_INI_NAME, OPTIMIZER_INI_NAME"),
+	      "call sites: LoadConfig imports the optimizer's file once, before the settings file is opened");
+
+	Check(auditRead && OneCallBetween(audit, "void Audit_Init(", "LoadConfig();",
+	                                  "LEGACY_PROFILER_INI_NAME, PROFILER_INI_NAME"),
+	      "call sites: Audit_Init imports the profiler's file once, before its LoadConfig");
+}
+
 static void NameRows()
 {
 	const std::string optNew(OPTIMIZER_INI_NAME);
@@ -345,5 +442,7 @@ int main()
 	MarkerAndLogRows();
 	FailureRows();
 	NameRows();
+	CallSiteRows();
+	EmptyFolderRows();
 	return CheckExit("legacy_ini_import_units");
 }

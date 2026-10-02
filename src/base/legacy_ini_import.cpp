@@ -107,6 +107,12 @@ static void LogFailure(LegacyIniLogFn log, const char* oldName, const char* step
 LegacyIniOutcome LegacyIniImport(const std::string& dir, const char* oldName, const char* newName,
                                  const char* staleName, bool refuseWhenNewHasLiveLine, LegacyIniLogFn log)
 {
+	if (dir.empty())
+	{
+		log("LegacyIni: " + std::string(oldName) + " import skipped (DLL folder unknown)");
+		return LEGACY_INI_NONE;
+	}
+
 	if (staleName && *staleName)
 		DeleteFileA((dir + staleName).c_str());
 

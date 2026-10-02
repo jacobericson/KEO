@@ -1,7 +1,7 @@
 @echo off
 REM Build KEOProfiler.dll using VS 2010 x64 compiler directly
 REM Run this from any command prompt - it sets up the environment itself.
-REM Output: build\KEOProfiler\  (ready to copy into Kenshi's mods folder)
+REM Output: build\KEOProfiler\  (copy its contents, RE_Kenshi.json included, over mods\KenshiZoneProfiler\; never into a second mod folder)
 
 setlocal
 
@@ -85,6 +85,7 @@ if errorlevel 1 exit /b 1
 
 REM RE_Kenshi.json lists exactly the DLL this folder holds. A json that differs (one naming
 REM another DLL, or two DLLs) is kept as RE_Kenshi.json.old and rewritten.
+REM A failed backup is named in the WARNING.
 set "JSON=%OUTDIR%\RE_Kenshi.json"
 set "JSON_WANT=%OBJDIR%\RE_Kenshi.json.want"
 echo {"Plugins": ["KEOProfiler.dll"]} > "%JSON_WANT%"
@@ -95,8 +96,13 @@ if not exist "%JSON%" (
 fc /b "%JSON_WANT%" "%JSON%" >nul 2>&1
 if errorlevel 1 (
     copy /y "%JSON%" "%JSON%.old" >nul
-    copy /y "%JSON_WANT%" "%JSON%" >nul
-    echo PROFILER WARNING: RE_Kenshi.json did not list exactly KEOProfiler.dll; rewritten, previous copy saved as RE_Kenshi.json.old
+    if errorlevel 1 (
+        copy /y "%JSON_WANT%" "%JSON%" >nul
+        echo PROFILER WARNING: RE_Kenshi.json did not list exactly KEOProfiler.dll; rewritten, but the previous copy could NOT be saved: RE_Kenshi.json.old could not be written
+    ) else (
+        copy /y "%JSON_WANT%" "%JSON%" >nul
+        echo PROFILER WARNING: RE_Kenshi.json did not list exactly KEOProfiler.dll; rewritten, previous copy saved as RE_Kenshi.json.old
+    )
 )
 :json_check
 fc /b "%JSON_WANT%" "%JSON%" >nul 2>&1
@@ -117,6 +123,6 @@ if not exist "%OUTDIR%\KEOProfiler.ini" (
 echo.
 echo BUILD SUCCEEDED
 echo Output: %OUTDIR%\
-echo Copy that folder into Kenshi's mods\ directory to install.
+echo Copy its contents, RE_Kenshi.json included, over mods\KenshiZoneProfiler\ to install; never into a second mod folder.
 
 endlocal
