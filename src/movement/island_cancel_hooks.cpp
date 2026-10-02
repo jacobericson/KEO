@@ -16,6 +16,8 @@
 #include <cstring>
 #include "movement/islands_reissue_internal.h"
 #include "movement/islands_reissue_counters.h"
+#include "planner/plan_store.h"
+#include "planner/planner_tick.h"
 using namespace order_tracker_detail;
 namespace island_cancel_hooks_detail {
 // addTaskNearestSelectedCharacter orders one selected character, unknown in
@@ -152,10 +154,44 @@ void IslandNoteCancelNearestTask(void* playerInterface)
 	g_k7NearSnapCount = 0;
 }
 
+// Main thread, from the stop-key detour after the original: drops the route plan of every selected
+// character, walking the selection as the order hook's non-move branch does. No lock; returns at
+// once while the route planner is unarmed.
+static void DropSelectedPlans(void* thisPI)
+{
+	if (planner::PlanStoreMode() == planner::PLANNER_OFF) return;
+	uintptr_t pi = (uintptr_t)thisPI;
+	if (!pi) return;
+	uintptr_t count = *(uintptr_t*)(KLIB_MEMBER(3, pi, PlayerInterface_selected_count, OFF_PI_SEL_COUNT));
+	if (count == 0) return;
+	uintptr_t arrayPtr = *(uintptr_t*)(KLIB_MEMBER(3, pi, PlayerInterface_selected_buckets, OFF_PI_SEL_ARRAY));
+	uintptr_t index    = *(uintptr_t*)(KLIB_MEMBER(3, pi, PlayerInterface_selected_bucketCount, OFF_PI_SEL_INDEX));
+	if (!arrayPtr || index >= 1024) return;
+
+	uintptr_t* node = *(uintptr_t**)(arrayPtr + 8 * index);
+	void* sentinel = *(void**)((uintptr_t)GameAddr(RVA_HANDLE_SENTINEL));
+	int maxIter = (int)count + 16;
+	int iter = 0;
+	while (node)
+	{
+		if (++iter > maxIter) break;
+		int nodeType = *(int*)(KLIB_MEMBER(3, (uintptr_t)node, HandSetNode_handle_type, OFF_SEL_NODE_TYPE));
+		if (nodeType == 1)
+		{
+			void* resolved = KlibSelectedCharacter((const void*)(KLIB_MEMBER(3, (uintptr_t)node, HandSetNode_value_base_, OFF_SEL_NODE_HANDLE)));
+			uintptr_t character = (uintptr_t)resolved;
+			if (character && resolved != sentinel)
+				planner::PlannerDrop(character);
+		}
+		node = *(uintptr_t**)KLIB_MEMBER(3, node, HandSetNode_next_, 0);
+	}
+}
+
 void hook_stopCharactersMovement(void* thisPI)
 {
 	game::g_hookOrig.orig_stopCharactersMovement(thisPI);
 	IslandNoteCancelStop(thisPI);
+	DropSelectedPlans(thisPI);
 }
 
 void hook_addJobSelected(void* thisPI, int task, void* subject, bool shift,

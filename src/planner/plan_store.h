@@ -27,6 +27,7 @@ struct PlanWrite
 	int       goalByFootprint;
 	unsigned  loadedMask;
 	float     finalDest[3];
+	float     destAtPlan[3];    // the character's movement destination as the plan is written (x, 0, z)
 	double    now;
 	int       keepSends;        // 1: a re-plan of the same character keeps the mod's recorded sends
 	PlanLeg   legs[PLAN_MAX_LEGS];
@@ -40,6 +41,7 @@ struct PlanView
 	int       verdict, legIndex, legCount, waiting, rungs, routeTruncated;
 	unsigned  loadedMask;
 	float     finalDest[3];
+	float     destAtPlan[3];
 	float     resend[PLAN_RESEND_POINTS][3]; int resendCount;
 	PlanLeg   legs[PLAN_MAX_LEGS];
 };

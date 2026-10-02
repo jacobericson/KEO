@@ -11,7 +11,8 @@ namespace planner {
 // of the character's plan inside its first second is counted and skipped.
 void PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void* destIndoors,
                       bool shift, bool addDontClear);
-// Main thread: drop a character's plan (a non-move order from the player).
+// Main thread, from a non-move order (order_hook.cpp) or the stop key (island_cancel_hooks.cpp):
+// drop a character's plan.
 void PlannerDrop(uintptr_t character);
 // Main thread, every frame after IslandTick (never during a save load).
 void PlannerTick(void* zoneMgr, double now);

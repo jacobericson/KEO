@@ -117,6 +117,15 @@ static void StoreRows()
 	      && v.legs[0].point[1] == 2.0f && v.legs[2].point[0] == 0.0f && v.epoch == firstEpoch + 2u,
 	      "store: a rewrite replaces the character's plan in place");
 
+	// The movement destination held at plan time is written with every plan, a re-plan included.
+	MakeWrite(&w, CM_A, 3.0f);
+	w.destAtPlan[0] = 1500.0f;
+	w.destAtPlan[2] = -250.0f;
+	w.keepSends = 1;
+	Check(PlanStoreWrite(w) == slot && PlanStoreRead(slot, &v) && v.destAtPlan[0] == 1500.0f
+	      && v.destAtPlan[1] == 0.0f && v.destAtPlan[2] == -250.0f,
+	      "store: the destination held at plan time is in the view, a re-plan included");
+
 	// Every slot taken by a distinct character: the next is refused and counted, and a rewrite of a
 	// planned character still lands in its own slot.
 	Fresh(PLANNER_ON);

@@ -24,21 +24,22 @@ struct PlanNodeBox { float boxMin[3], boxMax[3], centre[3]; };
 // with none and allowFallback, the nearest centre within 200 units in x-z; else -1.
 int PlanPickFootprint(const PlanNodeBox* nodes, int n, const float p[3], bool allowFallback);
 
-// The engine applies a move order asynchronously, so for this long after an order the character's
-// movement destination can still be the previous one; the mod's re-issue path waits the same second
-// before reading an order's result.
+// One click reaches the order capture as a burst of identical move orders within this many seconds;
+// only the repeat test below reads it.
 const double PLAN_ORDER_SETTLE = 1.0;
 
 // Why the tick drops a plan, in this order: not a live player character, unconscious, within
-// PLAN_POST_ARRIVAL of the destination, or, once the plan is PLAN_ORDER_SETTLE seconds old
-// (planAge, seconds since the plan was written), a non-zero movement destination more than
-// PLAN_DEST_MATCH from the plan's that the mod did not send for this plan (moveDestIsModSend): a new
-// order or the stop key's halt. PDW_ORDER (a non-move order) and PDW_UNLOCATED (an order whose goal
-// or start could not be located) are the order capture's drops, counted by reason; PlanDropDue never
-// returns them.
+// PLAN_POST_ARRIVAL of the destination, or a non-zero movement destination (moveDest) more than
+// PLAN_DEST_MATCH in x-z from both the plan's destination (planDest) and the movement destination the
+// character held when the plan was written, that the mod did not send for this plan
+// (moveDestIsModSend) and that is not a halt onto the character's own position: a new order.
+// planAge (seconds since the plan was written) does not enter the rule. PDW_ORDER (a non-move order or
+// the stop key) and PDW_UNLOCATED (an order whose goal or start could not be located) are the order
+// capture's drops, counted by reason; PlanDropDue never returns them.
 enum PlanDropWhy { PDW_NONE = 0, PDW_NOT_PLAYER, PDW_KO, PDW_ARRIVED, PDW_NEW_DEST, PDW_ORDER, PDW_UNLOCATED, PDW_COUNT };
-PlanDropWhy PlanDropDue(bool livePlayer, bool unconscious, float distToDest,
-                        const float moveDest[3], const float planDest[3], double planAge, bool moveDestIsModSend);
+PlanDropWhy PlanDropDue(bool livePlayer, bool unconscious, float distToDest, const float moveDest[3],
+                        const float planDest[3], const float destAtPlan[3], double planAge,
+                        bool moveDestIsModSend, bool halted);
 
 // A mod detour (the formation's gather) keeps a plan for this long without steering it.
 const double PLAN_HOLD_SECONDS = 20.0;

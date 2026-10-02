@@ -22,6 +22,7 @@ struct PlanSlot
 	uintptr_t         cm;          // 0 free; written only under an odd epoch
 	int               verdict, legCount, routeTruncated;
 	float             finalDest[3];
+	float             destAtPlan[3];                                    // written only under an odd epoch
 	float             resend[PLAN_RESEND_POINTS][3]; int resendCount;   // written only under an odd epoch
 	PlanLeg           legs[PLAN_MAX_LEGS];
 	PlanMainState     main;
@@ -110,6 +111,7 @@ static void ClearSlot(PlanSlot& s)
 	s.legCount = 0;
 	s.routeTruncated = 0;
 	memset(s.finalDest, 0, sizeof(s.finalDest));
+	memset(s.destAtPlan, 0, sizeof(s.destAtPlan));
 	memset(s.resend, 0, sizeof(s.resend));
 	s.resendCount = 0;
 	memset(s.legs, 0, sizeof(s.legs));
@@ -165,6 +167,7 @@ int PlanStoreWrite(const PlanWrite& w)
 	s.legCount = legCount;
 	s.routeTruncated = w.routeTruncated;
 	memcpy(s.finalDest, w.finalDest, sizeof(s.finalDest));
+	memcpy(s.destAtPlan, w.destAtPlan, sizeof(s.destAtPlan));
 	if (!keep)
 	{
 		memset(s.resend, 0, sizeof(s.resend));
@@ -258,6 +261,7 @@ bool PlanStoreRead(int slot, PlanView* out)
 		out->waiting = (int)s.waiting;
 		out->rungs = (int)s.rungs;
 		memcpy(out->finalDest, s.finalDest, sizeof(out->finalDest));
+		memcpy(out->destAtPlan, s.destAtPlan, sizeof(out->destAtPlan));
 		memcpy(out->resend, s.resend, sizeof(out->resend));
 		out->resendCount = s.resendCount;
 		memcpy(out->legs, s.legs, sizeof(out->legs));

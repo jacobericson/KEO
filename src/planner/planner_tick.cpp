@@ -63,6 +63,10 @@ struct Built
 // A live player character and its movement, for the tick's validation.
 struct PlayerChar { uintptr_t character, cm; };
 
+// What the tick's drop rule read for one slot: the movement destination (x, 0, z), the plan's age and
+// whether that destination is the character's own position.
+struct DropFacts { float moveDest[3]; double planAge; bool halted; };
+
 } // namespace planner_tick_detail
 using namespace planner_tick_detail;
 
@@ -111,6 +115,14 @@ static void CharPos(uintptr_t character, float out[3])
 static uintptr_t MovementOf(uintptr_t character)
 {
 	return character ? *(uintptr_t*)(KLIB_MEMBER(3, character, Character_movement, OFF_CHAR_MOVEMENT)) : 0;
+}
+
+// The movement's last requested destination, x and z (y zero); zero in both when it has none.
+static void ReadMoveDest(uintptr_t cm, float out[3])
+{
+	out[0] = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_destination_x, OFF_CMOV_LAST_DEST));
+	out[1] = 0.0f;
+	out[2] = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_destination_z, OFF_CMOV_LAST_DEST + 8));
 }
 
 // ---- The store adapter ---------------------------------------------------------------------------
@@ -472,6 +484,7 @@ static int WritePlan(uintptr_t cm, const float pos[3], const Located& goal, cons
 	int first = PlanLegTarget(w.legs, w.legCount, w.loadedMask, 0, sx, sy, s_legSpan);
 	w.firstLeg = first < 0 ? 0 : first;
 	memcpy(w.finalDest, dest, sizeof(w.finalDest));
+	ReadMoveDest(cm, w.destAtPlan);
 	w.now = now;
 	*verdictOut = w.verdict;
 	int slot = PlanStoreWrite(w);
@@ -490,19 +503,21 @@ static int WritePlan(uintptr_t cm, const float pos[3], const Located& goal, cons
 }
 
 // Drops the character's plan, counting it by reason, and a legged plan the edge branch never consulted.
-static void DropPlan(uintptr_t cm, PlanDropWhy why)
+// Returns the plan's edge-branch consultations, -1 when the character had no plan.
+static int DropPlan(uintptr_t cm, PlanDropWhy why)
 {
 	PlanView v;
 	int slot = PlanStoreFind(cm);
 	int verdict = (slot >= 0 && PlanStoreRead(slot, &v)) ? v.verdict : PV_NONE;
 	int consulted = PlanStoreDrop(cm);
 	if (consulted < 0)
-		return;
+		return -1;
 	InterlockedIncrement(&PlannerCountersGet()->drops);
 	if (why > PDW_NONE && why < PDW_COUNT)
 		InterlockedIncrement(&PlannerCountersGet()->dropsBy[why]);
 	if (verdict == PV_LEGGED && consulted == 0)
 		InterlockedIncrement(&PlannerCountersGet()->notConsulted);
+	return consulted;
 }
 
 // ---- The order capture ---------------------------------------------------------------------------
@@ -688,19 +703,53 @@ static int ReadPlayers(PlayerChar* out)
 	return n;
 }
 
-// Why the slot's plan ends now, from the character's state and the plan's age.
-static PlanDropWhy SlotDropDue(const PlanView& v, uintptr_t character, const float pos[3], double now)
+// Why the slot's plan ends now, from the character's state, its movement destination against the
+// plan's and the one it held at plan time, and its position; f receives what the rule read.
+static PlanDropWhy SlotDropDue(const PlanView& v, uintptr_t character, const float pos[3], double now, DropFacts* f)
 {
 	const PlanMainState* m = PlanStoreMain(v.slot);
 	double planAge = now - m->planTime;
+	memset(f, 0, sizeof(*f));
+	f->planAge = planAge;
 	if (!character)
-		return PlanDropDue(false, false, 0.0f, v.finalDest, v.finalDest, planAge, false);
-	float moveDest[3];
-	moveDest[0] = *(float*)(KLIB_MEMBER(3, v.cm, AbstractMovementBase_destination_x, OFF_CMOV_LAST_DEST));
-	moveDest[1] = 0.0f;
-	moveDest[2] = *(float*)(KLIB_MEMBER(3, v.cm, AbstractMovementBase_destination_z, OFF_CMOV_LAST_DEST + 8));
-	return PlanDropDue(true, IslandK7IsUnconcious(character), DistXz(pos, v.finalDest), moveDest, v.finalDest, planAge,
-	                   PlanIsModSend(moveDest, v.resend, v.resendCount, m->holdDest, m->haveHold, now - m->holdTime));
+		return PlanDropDue(false, false, 0.0f, v.finalDest, v.finalDest, v.destAtPlan, planAge, false, false);
+	float* moveDest = f->moveDest;
+	ReadMoveDest(v.cm, moveDest);
+	bool halted = DistXz(moveDest, pos) <= PLAN_DEST_MATCH;
+	f->halted = halted;
+	return PlanDropDue(true, IslandK7IsUnconcious(character), DistXz(pos, v.finalDest), moveDest, v.finalDest,
+	                   v.destAtPlan, planAge,
+	                   PlanIsModSend(moveDest, v.resend, v.resendCount, m->holdDest, m->haveHold, now - m->holdTime),
+	                   halted);
+}
+
+// Main thread, from the tick at a drop it decided, after the drop: in the session build one line
+// per drop other than an arrival, capped per session on the printed lines, naming the reason, the
+// plan's age and consultations and the three points the rule compared; nothing in the release build.
+static void ReportDrop(const PlanView& v, uintptr_t character, PlanDropWhy why, int consulted, const DropFacts& f)
+{
+#ifdef ZONEOPT_DEBUG
+	const int DROP_LINES_MAX = 64;
+	static int lines = 0;
+	static const char* const names[PDW_COUNT] = { "-", "np", "ko", "arr", "nd", "ord", "loc" };
+	if (why == PDW_ARRIVED)
+		return;
+	if (lines > DROP_LINES_MAX)
+		return;
+	if (lines++ == DROP_LINES_MAX)
+	{
+		LogMsgDeferrable("Planner drop: further drops counted, not printed");
+		return;
+	}
+	char line[320];
+	_snprintf_s(line, sizeof(line), _TRUNCATE,
+	            "Planner drop: char=%x why=%s age=%.1f consulted=%d move=(%.0f,%.0f) plan=(%.0f,%.0f)"
+	            " atPlan=(%.0f,%.0f) halted=%d sent=%d",
+	            (unsigned)(character & 0xFFFF), (why > PDW_NONE && why < PDW_COUNT) ? names[why] : "-", f.planAge,
+	            consulted, f.moveDest[0], f.moveDest[2], v.finalDest[0], v.finalDest[2], v.destAtPlan[0],
+	            v.destAtPlan[2], f.halted ? 1 : 0, v.resendCount);
+	LogMsgDeferrable(line);
+#endif
 }
 
 // The slot's wait and completion clocks: a wait begins when the waiting word rises; a portal leg
@@ -781,10 +830,12 @@ static bool TickSlot(int slot, const PlayerChar* players, int nPlayers, double n
 	float pos[3] = { 0.0f, 0.0f, 0.0f };
 	if (character)
 		CharPos(character, pos);
-	PlanDropWhy dropWhy = SlotDropDue(v, character, pos, now);
+	DropFacts facts;
+	PlanDropWhy dropWhy = SlotDropDue(v, character, pos, now, &facts);
 	if (dropWhy != PDW_NONE)
 	{
-		DropPlan(v.cm, dropWhy);
+		int consulted = DropPlan(v.cm, dropWhy);
+		ReportDrop(v, character, dropWhy, consulted, facts);
 		return false;
 	}
 	unsigned mask = LoadedMaskOf(v.legs, v.legCount);

@@ -113,22 +113,32 @@ int PlanPickFootprint(const PlanNodeBox* nodes, int n, const float p[3], bool al
 }
 
 // The movement destination is the engine's last requested point, of which the tick reads x and z:
-// zero in both is no destination, and the match is measured in x-z.
-PlanDropWhy PlanDropDue(bool livePlayer, bool unconscious, float distToDest,
-                        const float moveDest[3], const float planDest[3], double planAge, bool moveDestIsModSend)
+// zero in both is no destination, and the match is measured in x-z. The rule needs no clock: the
+// engine applies a move order only while the game runs, so until it does the movement destination is
+// still the one it held when the plan was written, and once it does it is the plan's own. An order
+// the engine ends copies the character's position there, which keeps the plan too.
+PlanDropWhy PlanDropDue(bool livePlayer, bool unconscious, float distToDest, const float moveDest[3],
+                        const float planDest[3], const float destAtPlan[3], double planAge,
+                        bool moveDestIsModSend, bool halted)
 {
+	(void)planAge;
 	if (!livePlayer)
 		return PDW_NOT_PLAYER;
 	if (unconscious)
 		return PDW_KO;
 	if (distToDest <= PLAN_POST_ARRIVAL)
 		return PDW_ARRIVED;
-	if (planAge < PLAN_ORDER_SETTLE)
-		return PDW_NONE;   // the previous destination may still be in place
+	if (halted)
+		return PDW_NONE;
 	bool haveDest = moveDest[0] != 0.0f || moveDest[2] != 0.0f;
-	if (haveDest && !moveDestIsModSend && DistanceSqXz(moveDest, planDest) > PLAN_DEST_MATCH * PLAN_DEST_MATCH)
-		return PDW_NEW_DEST;
-	return PDW_NONE;
+	if (!haveDest || moveDestIsModSend)
+		return PDW_NONE;
+	const float match = PLAN_DEST_MATCH * PLAN_DEST_MATCH;
+	if (DistanceSqXz(moveDest, planDest) <= match)
+		return PDW_NONE;
+	if (DistanceSqXz(moveDest, destAtPlan) <= match)
+		return PDW_NONE;
+	return PDW_NEW_DEST;
 }
 
 bool PlanIsModSend(const float moveDest[3], const float resend[][3], int resendCount,
