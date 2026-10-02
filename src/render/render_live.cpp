@@ -2,6 +2,7 @@
 #include "render/render_keys.h"
 #include "render/render_levers.h"
 #include "base/core.h"
+#include "base/ini_names.h"
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
@@ -65,8 +66,6 @@ bool ApplyRenderConfig(const RenderConfig& next)
 	return applied;
 }
 
-static const char* const INI_NAME = "KenshiZoneOpt.ini";
-
 // The whole file; false when it exists but cannot be read. A missing file
 // reads as empty text, so the first save creates it.
 static bool ReadWholeFile(const std::string& path, std::string* text)
@@ -107,7 +106,7 @@ static DWORD WriteReplacing(const std::string& path, const std::string& text)
 
 static std::string IniPath()
 {
-	return GetDLLDirectory() + INI_NAME;
+	return GetDLLDirectory() + OPTIMIZER_INI_NAME;
 }
 
 // Reads the INI at path; false (and a log line) when it exists but cannot be
@@ -116,7 +115,7 @@ static bool ReadIni(const std::string& path, std::string* text, const char* logP
 {
 	if (!ReadWholeFile(path, text))
 	{
-		LogMsg(std::string(logPrefix) + ": " + INI_NAME + " could not be read, not saved");
+		LogMsg(std::string(logPrefix) + ": " + OPTIMIZER_INI_NAME + " could not be read, not saved");
 		return false;
 	}
 	return true;
@@ -134,11 +133,11 @@ static bool WriteIniIfChanged(const std::string& path, const std::string& text, 
 	if (err)
 	{
 		std::ostringstream ss;
-		ss << logPrefix << ": " << INI_NAME << " could not be replaced (error " << err << "), not saved";
+		ss << logPrefix << ": " << OPTIMIZER_INI_NAME << " could not be replaced (error " << err << "), not saved";
 		LogMsg(ss.str());
 		return false;
 	}
-	LogMsg(std::string(logPrefix) + ": saved to " + INI_NAME);
+	LogMsg(std::string(logPrefix) + ": saved to " + OPTIMIZER_INI_NAME);
 	return true;
 }
 

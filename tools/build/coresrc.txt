@@ -181,6 +181,7 @@ src\plugin\hook_manifest.cpp
 src\plugin\hook_manifest_policy.cpp
 src\gui\settings_factory.cpp
 src\plugin\banner.cpp
+src\plugin\profiler_image.cpp
 src\base\log.cpp
 src\base\prologue.cpp
 src\base\havok_alloc.cpp

@@ -64,6 +64,11 @@ static void cbReg(CrashBuf* o, const char* name, unsigned __int64 v)
 
 static volatile LONG g_crashSkipProfiler = 0;
 
+LONG CrashSkipProfilerCount()
+{
+	return InterlockedCompareExchange(&g_crashSkipProfiler, 0, 0);
+}
+
 // Records written to each of the mod's record files this process. The first
 // one truncates its file, later ones append. Counted per file, so a C++ throw
 // recorded in its own file never makes the next real fault look like a

@@ -37,7 +37,7 @@ const RenderKey g_renderKeys[] =
 	  "Counts shader constant lookups per frame, on the Render: log line.", true, 0.0f, 0),
 	RK_ROW("renderDiag",               RK_BOOL,  RK_FIELD(renderDiag),               0, 0.0f, 0.0f, true,
 	  "Render stats in the log",
-	  "Writes the Render: line to KenshiZoneOpt.log every 30 seconds.", false, 0.0f, 0),
+	  "Writes the Render: line to KEO.log every 30 seconds.", false, 0.0f, 0),
 	RK_ROW("particleStepCapSpeed",     RK_FLOAT, RK_FIELD(particleStepCapSpeed),     0, 1.5f, 20.0f, true,
 	  "Particle step cap from game speed",
 	  "The game speed above which the particle step cap applies.", false, 1.5f, 1),

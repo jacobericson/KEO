@@ -22,6 +22,8 @@ extern LPTOP_LEVEL_EXCEPTION_FILTER g_prevUnhandledFilter;
 
 LONG WINAPI NavMeshCrashHandler(PEXCEPTION_POINTERS pExInfo);
 LONG WINAPI KEOUnhandledFilter(PEXCEPTION_POINTERS pExInfo);
+// Profiler access violations the first-chance handler has skipped; an interlocked read.
+LONG CrashSkipProfilerCount();
 
 void SnapshotModuleBases();
 

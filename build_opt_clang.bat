@@ -1,5 +1,5 @@
 @echo off
-REM Build the KenshiZoneOpt.dll DEV+PROD pair with clang-cl and lld-link
+REM Build the KEO.dll DEV+PROD pair with clang-cl and lld-link
 REM against the VS 2010 contract (VS 2010 headers, msvcr100/msvcp100, Windows
 REM SDK 7.0A, all from vcvarsall amd64). Additive: the shipped pair is still
 REM build_opt_step4.bat's MSVC build, and nothing here writes its folders.
@@ -18,16 +18,16 @@ REM   ZONEHAND_STEP: from the environment, else 3 (as build_opt_step4.bat).
 REM   LLVM_BIN: the LLVM bin folder, else C:\Program Files\LLVM\bin.
 REM   BUILD_MP: clang-cl processes at once, else the logical core count.
 REM
-REM Output: build\KenshiZoneOpt_clang_dev\   (DEV: /DKEO_DEBUG; clang-cl /O2, lld-link without /OPT)
-REM         build\KenshiZoneOpt_clang_prod\  (PROD: clang-cl /O2 /Gy, lld-link /OPT:REF /OPT:ICF)
-REM   each with KenshiZoneOpt.dll, KenshiZoneOpt.pdb, RE_Kenshi.json and the INI.
+REM Output: build\KEO_clang_dev\   (DEV: /DKEO_DEBUG; clang-cl /O2, lld-link without /OPT)
+REM         build\KEO_clang_prod\  (PROD: clang-cl /O2 /Gy, lld-link /OPT:REF /OPT:ICF)
+REM   each with KEO.dll, KEO.pdb, RE_Kenshi.json and the INI.
 REM   Objects and compile.log (every compiler message): build\obj_clang_dev\,
 REM   build\obj_clang_prod\. Flags and the reasons for them: tools\build\clang_env.bat.
 REM
 REM Success prints, as its last lines:
 REM   CLANG build OK: ZONEHAND_STEP=<n> headers=<KENSHILIB_HEADERS>
-REM     DEV:  build\KenshiZoneOpt_clang_dev\
-REM     PROD: build\KenshiZoneOpt_clang_prod\
+REM     DEV:  build\KEO_clang_dev\
+REM     PROD: build\KEO_clang_prod\
 REM A failure prints the failing step, then "CLANG FAILED at <folder>", and exits 1.
 
 setlocal enabledelayedexpansion
@@ -80,8 +80,8 @@ set "CLANG_DEFINES=/DZONEHAND_STEP=%ZONEHAND_STEP%"
 echo Headers: %KENSHILIB_HEADERS%
 echo Libraries: %KENSHILIB%
 
-set "CLANG_DEV_OUT=build\KenshiZoneOpt_clang_dev"
-set "CLANG_PROD_OUT=build\KenshiZoneOpt_clang_prod"
+set "CLANG_DEV_OUT=build\KEO_clang_dev"
+set "CLANG_PROD_OUT=build\KEO_clang_prod"
 
 call tools\build\variant_clang.bat "%CLANG_DEV_OUT%" "build\obj_clang_dev" "%CLANG_DEFINES% /DKEO_DEBUG" ""
 if errorlevel 1 (

@@ -462,7 +462,7 @@ inline bool IsNan(float f) { return f != f; }
 
 
 // =========================================================================
-// Configuration ([Audit] in KenshiZoneProfiler.ini)
+// Configuration ([Audit] in KEOProfiler.ini)
 // =========================================================================
 
 inline bool IsMain()

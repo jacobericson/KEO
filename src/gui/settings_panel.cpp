@@ -44,7 +44,7 @@ static OptionsFn_t     s_origSave   = NULL;
 static bool            s_active     = false;   // both hooks installed
 static bool            s_staged     = false;   // a tab was built since the last close
 static SettingsStaging s_staging;              // what the rows write
-static SettingsStaging s_saved;                // what KenshiZoneOpt.ini holds
+static SettingsStaging s_saved;                // what KEO.ini holds
 static const char*     s_token      = "off(gate)";   // until InstallSettingsPanel runs
 static bool            s_buttonsOk  = false;   // the button calls' addresses match KenshiLib's
 
@@ -219,8 +219,8 @@ static void BuildTab(OptionsWindow* win)
 		std::vector<SettingsRow> rows;
 		BuildSettingsRows(&s_staging, DEV_BUILD, &bench, &rows);
 		int cat = PickCategory(tabs, count);
-		tab = tabs->insertItemAt(count - 1, "ZoneOpt");
-		DatapanelGUI* panel = gui->createDatapanel("kzo_options", tab, true);
+		tab = tabs->insertItemAt(count - 1, "KEO");
+		DatapanelGUI* panel = gui->createDatapanel("keo_options", tab, true);
 		if (!panel)
 		{
 			tabs->removeItem(tab);

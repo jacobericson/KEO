@@ -498,7 +498,7 @@ void Audit_Install()
 	AuditLine(summary);
 	DebugLog(summary);
 
-	// The bench tool aligns "Bench ..." qpc= values (KenshiZoneOpt.log, a
+	// The bench tool aligns "Bench ..." qpc= values (KEO.log, a
 	// different plugin, same process clock) to the audit's own seconds.
 	std::string qpcLine = Fmt("[Audit] qpcStart=%lld qpcFreq=%lld", g_qpcStart, g_qpcFreq);
 	AuditLine(qpcLine);

@@ -47,14 +47,14 @@ void LogRenderConfig();
 // anything was applied.
 bool ApplyRenderConfig(const RenderConfig& next);
 // Main thread: writes desired's render keys (clamped) plus extra (any other
-// keys, e.g. startup-only ones) into KenshiZoneOpt.ini next to the DLL in
+// keys, e.g. startup-only ones) into KEO.ini next to the DLL in
 // one atomic replace; every other line stays as it is. A render key the file
 // lacks is added only when it differs from the compiled-in default. False
 // (and a log line) when the file could not be read or replaced.
 bool SaveRenderConfig(const RenderConfig& desired,
                       const std::vector<IniEntry>& extra = std::vector<IniEntry>());
 
-// Main thread: writes entries into KenshiZoneOpt.ini in one atomic replace.
+// Main thread: writes entries into KEO.ini in one atomic replace.
 // section is a bracketed header ("[Bench]") that append entries with no
 // existing line land inside, added first if the file lacks it; NULL keeps
 // RewriteIniKeys' default placement (before the first section header).

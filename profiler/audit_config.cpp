@@ -2,6 +2,7 @@
 // Startup thread; reads the INI without taking a probe lock.
 
 #include "audit_detail.h"
+#include "base/ini_names.h"
 #include <stdlib.h>
 
 namespace kenshiframeaudit_detail {
@@ -12,7 +13,7 @@ namespace kenshiframeaudit_detail {
 
 std::string IniPath()
 {
-	return g_dllDir + "KenshiZoneProfiler.ini";
+	return g_dllDir + PROFILER_INI_NAME;
 }
 
 int IniInt(const char* key, int def)

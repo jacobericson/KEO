@@ -3,6 +3,7 @@
 // QueueLine and DrainLines take g_lineCS alone; the main thread publishes the frame ring.
 
 #include "audit_detail.h"
+#include "base/ini_names.h"
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -42,7 +43,7 @@ volatile LONG   g_ringLost = 0;
 
 std::string ProfilerLogPath()
 {
-	return g_dllDir + "KenshiZoneProfiler.log";
+	return g_dllDir + PROFILER_LOG_NAME;
 }
 
 // Fallback when the reporter thread is not running (before Audit_Init, or if

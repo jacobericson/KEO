@@ -2,6 +2,7 @@
 #include "base/config_table.h"
 #include "base/worker_count.h"
 #include "base/hash.h"
+#include "base/ini_names.h"
 #include "render/render_config.h"
 #include <cstdio>
 #include <cstring>
@@ -86,7 +87,7 @@ static unsigned int ComputeModSetHash(std::string& usedPath)
 
 
 // =========================================================================
-// LoadConfig — reads KenshiZoneOpt.ini, applies values with validation
+// LoadConfig — reads KEO.ini, applies values with validation
 // =========================================================================
 
 void LoadConfig(const std::string& dllDir)
@@ -103,7 +104,7 @@ void LoadConfig(const std::string& dllDir)
 		LogMsg(ss.str());
 	}
 
-	std::string iniPath = dllDir + "KenshiZoneOpt.ini";
+	std::string iniPath = dllDir + OPTIMIZER_INI_NAME;
 	FILE* f = NULL;
 	fopen_s(&f, iniPath.c_str(), "r");
 	if (!f)

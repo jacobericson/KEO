@@ -3,7 +3,7 @@ src\game\klib_globals.cpp
 src\game\klib_layout.cpp
 src\game\klib_layout_combat.cpp
 src\game\klib_layout_ogre.cpp
-profiler\KenshiZoneProfiler.cpp
+profiler\KEOProfiler.cpp
 profiler\KenshiFrameAudit.cpp
 profiler\CallSiteProbe.cpp
 profiler\AuditListeners.cpp

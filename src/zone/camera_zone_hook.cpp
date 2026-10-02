@@ -38,6 +38,7 @@
 #include "zone/preload/camera_focus.h"
 #include "planner/coarse_graph_base.h"
 #include "planner/planner_tick.h"
+#include "plugin/profiler_image.h"
 
 // =========================================================================
 // NavMesh scheduling helpers (builds context from preload/tracking state)
@@ -255,7 +256,7 @@ static bool CameraZoneTicks(void* zoneMgr, bool saveLoading)
 	RenderLeversMainThreadTick(saveLoading);
 	BenchMainThreadTick(saveLoading);
 	BenchSweepMainThreadTick(tickNow);
-	ProfilerImageResolveTick(tickNow);
+	ProfilerImageTickMain(tickNow);
 	PurecallRecordTick(tickNow);
 	PhysQueryGuardTick(tickNow);
 	CreateInstanceGuardTick(tickNow);

@@ -838,7 +838,7 @@ static void RenderKeysTests()
 		cfg.renderDiag = false;
 		cfg.particleOffscreenMinAge = 20.0f;
 		const std::string text =
-			"# KenshiZoneOpt settings\r\n"
+			"# KEO settings\r\n"
 			"# particleStepCap=false\r\n"
 			"deferral=true\r\n"
 			"  particleStepCap = off   \r\n"
@@ -852,7 +852,7 @@ static void RenderKeysTests()
 			"[Other]\r\n"
 			"preload=true";
 		const std::string expected =
-			"# KenshiZoneOpt settings\r\n"
+			"# KEO settings\r\n"
 			"# particleStepCap=false\r\n"
 			"deferral=true\r\n"
 			"  particleStepCap = true   \r\n"
@@ -920,7 +920,7 @@ static void RenderKeysTests()
 	}
 }
 
-// The KenshiZoneOpt.ini template at repo root, which build_tests.bat cd's
+// The KEO.ini template at repo root, which build_tests.bat cd's
 // into before running this binary: every line must be inert (a comment, a
 // section header or blank) so LoadConfig's parse path leaves the compiled
 // defaults untouched, and every documented "# key=value" default must
@@ -1311,8 +1311,8 @@ static void GpuParamCacheTests()
 
 static void IniTemplateTests()
 {
-	std::ifstream f("KenshiZoneOpt.ini", std::ios::binary);
-	Check(f.is_open(), "KenshiZoneOpt.ini found at repo root (build_tests.bat's cwd)");
+	std::ifstream f("KEO.ini", std::ios::binary);
+	Check(f.is_open(), "KEO.ini found at repo root (build_tests.bat's cwd)");
 	if (!f.is_open())
 		return;
 	std::string text((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
@@ -1728,7 +1728,7 @@ static void SettingsRowsTests()
 		if (defSteps != floor(defSteps) || hiSteps != floor(hiSteps))
 			printf("  slider grid: %s\n", k.name);
 	}
-	Check(prod[0].kind == SR_HEADER, "a header comes first");
+	Check(prod[0].kind == SR_HEADER && prod[0].label == "Kenshi Engine Optimizations", "the long-name header comes first");
 
 	const SettingsRow* wp = FindRow(prod, "Navmesh worker threads");
 	Check(wp != NULL, "the worker drop box is shown");

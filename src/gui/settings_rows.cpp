@@ -89,13 +89,13 @@ static void AddBenchRows(SettingsStaging* staging, const SettingsBench& bench, s
 			" that run instead."));
 		out->push_back(Button(name + " benchmark", i == bench.activeSlot ? "Stop" : "Run", BENCH_BUTTON_RUN + i,
 			("Runs the benchmark at this spot once Options and the menu are closed and the game is unpaused" +
-			 runTime + "; the result goes to KenshiZoneOpt.log. Pressing it, or another spot's Run,"
+			 runTime + "; the result goes to KEO.log. Pressing it, or another spot's Run,"
 			 " while a run is armed or running stops that run.").c_str()));
 	}
 	out->push_back(Button("Sweep", SweepCaption(bench.sweepLeg, bench.sweepLegs).c_str(), BENCH_BUTTON_SWEEP,
 		("Runs the benchmark at each leg of bench.sweep in turn (by default Swamp, City and Sand, each at 1x"
 		 " then 20x); every spot must be recorded, with a player character within reach." + sweepTime +
-		 " Each leg writes its own result to KenshiZoneOpt.log. Pressing any benchmark button while it runs"
+		 " Each leg writes its own result to KEO.log. Pressing any benchmark button while it runs"
 		 " stops it.").c_str()));
 }
 
@@ -128,6 +128,7 @@ RenderConfig& StagedRender(SettingsStaging* s)
 void BuildSettingsRows(SettingsStaging* staging, bool devBuild, const SettingsBench* bench,
                        std::vector<SettingsRow>* out)
 {
+	out->push_back(Row(SR_HEADER, "Kenshi Engine Optimizations", NULL));
 	for (int m = 0; m < kConfigModuleCount && m < CONFIG_MODULE_MAX; ++m)
 		AddModuleRows(kConfigModules[m], &staging->module[m], devBuild, out);
 

@@ -22,7 +22,7 @@ int main()
 	ModuleBaseEntry mods[3];
 	mods[0] = MakeEntry("exe", 0x140000000ULL, 0x2000000ULL);
 	mods[1] = MakeEntry("RE_Kenshi.dll", 0x180000000ULL, 0x100000ULL);
-	mods[2] = MakeEntry("KenshiZoneOpt.dll", 0x7FF700000000ULL, 0x50000ULL);
+	mods[2] = MakeEntry("KEO.dll", 0x7FF700000000ULL, 0x50000ULL);
 
 	char buf[512];
 	int truncated = -1;
@@ -93,7 +93,7 @@ int main()
 		all[0] = MakeEntry("a.dll", 0x1000ULL, 0x10ULL);
 		all[1] = MakeEntry("RE_Kenshi.dll", 0x2000ULL, 0x10ULL);
 		all[2] = MakeEntry("b.dll", 0x3000ULL, 0x10ULL);
-		all[3] = MakeEntry("KenshiZoneOpt.dll", 0x4000ULL, 0x10ULL);
+		all[3] = MakeEntry("KEO.dll", 0x4000ULL, 0x10ULL);
 		all[4] = MakeEntry("c.dll", 0x5000ULL, 0x10ULL);
 
 		unsigned __int64 priority[2] = { 0x4000ULL, 0x2000ULL }; // self, then RE_Kenshi

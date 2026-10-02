@@ -95,7 +95,7 @@ void FlushDeferredLogLines();
 // free within boundMs (false, nothing written, when it is not), then, under it,
 // writes the deferred lines first (pendingLogCS taken under logCS, a leaf) and
 // the line. LogRetireFallback appends the line, timestamped as in the log, to
-// KenshiZoneOpt.retire.txt beside the log: no lock and no CRT stream.
+// KEO.retire.txt beside the log: no lock and no CRT stream.
 bool LogMsgBounded(const char* line, unsigned boundMs);
 void LogRetireFallback(const char* line);
 
@@ -128,7 +128,7 @@ inline void GuardEnter() { ++g_inOurGuard; }
 inline void GuardLeave() { --g_inOurGuard; }
 inline bool InOurGuard() { return g_inOurGuard != 0; }
 
-// KenshiZoneProfiler.dll's image, so the crash recorder can skip the access
+// KEOProfiler.dll's image, so the crash recorder can skip the access
 // violations the profiler's own __try reads raise and handle. Size is stored
 // before base (volatile stores are release stores under MSVC), so a nonzero
 // base means both are set; zero means not known, and nothing is skipped.
@@ -144,9 +144,12 @@ inline bool InProfilerImage(uintptr_t addr)
 
 // Main thread: looks the profiler up once; true once the range is known.
 bool ProfilerImageResolve();
-// Main thread, every frame: while the range is unknown, retries once per
-// second for the first 60 s of ticks, then stops.
-void ProfilerImageResolveTick(double now);
+// Main thread, every frame: while the range is unknown, retries once per second; returns true
+// exactly once, on the first tick 60 s after its first, when the lookup's window closes.
+bool ProfilerImageResolveTick(double now);
+// Seconds since plugin start at the tick that found the profiler (0 when it was known at the
+// first tick), or a negative value while it is unknown.
+double ProfilerImageFoundSec();
 
 
 // =========================================================================

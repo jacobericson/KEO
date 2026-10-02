@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-// KenshiZoneOpt.ini line rules, shared by the loader and the writer so both
+// KEO.ini line rules, shared by the loader and the writer so both
 // recognise exactly the same lines. No Windows calls.
 
 std::string IniTrim(const std::string& s);

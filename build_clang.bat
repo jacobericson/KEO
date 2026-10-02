@@ -1,5 +1,5 @@
 @echo off
-REM Build KenshiZoneProfiler.dll with clang-cl and lld-link against the VS 2010
+REM Build KEOProfiler.dll with clang-cl and lld-link against the VS 2010
 REM contract. The clang counterpart of build.bat: same sources, defines and
 REM link options, plus the clang flags from tools\build\clang_env.bat. Additive:
 REM build.bat's MSVC profiler is untouched.
@@ -13,7 +13,7 @@ REM       always come from KENSHILIB.
 REM
 REM   LLVM_BIN and BUILD_MP as in build_opt_clang.bat.
 REM
-REM Output: build\KenshiZoneProfiler_clang\ (KenshiZoneProfiler.dll and .pdb,
+REM Output: build\KEOProfiler_clang\ (KEOProfiler.dll and .pdb,
 REM RE_Kenshi.json, the frame-audit INI); objects and compile.log in
 REM build\obj_clang_profiler\.
 REM
@@ -46,7 +46,7 @@ if errorlevel 1 (
 call tools\build\clang_env.bat
 if errorlevel 1 exit /b 1
 
-set "OUTDIR=build\KenshiZoneProfiler_clang"
+set "OUTDIR=build\KEOProfiler_clang"
 set "OBJDIR=build\obj_clang_profiler"
 if not exist "%OBJDIR%" mkdir "%OBJDIR%"
 if not exist "%OUTDIR%" mkdir "%OUTDIR%"
@@ -82,44 +82,62 @@ if errorlevel 1 (
 
 REM /OPT:NOICF keeps the per-probe wrapper templates (CallSiteProbe.cpp) and the
 REM per-class listener thunks (AuditListeners.cpp) distinct.
-set "PDB=%OUTDIR%\KenshiZoneProfiler.pdb"
+set "PDB=%OUTDIR%\KEOProfiler.pdb"
 if exist "%PDB%" del /q "%PDB%"
 "%LLD_LINK%" /nologo /DLL /OPT:REF /OPT:NOICF /MACHINE:X64 /SUBSYSTEM:CONSOLE /DEBUG /PDB:"%PDB%" ^
      /LIBPATH:"%KENSHILIB%\Libraries\KenshiLib" ^
      KenshiLib.lib user32.lib @"%OBJS_RSP%" ^
-     /OUT:"%OUTDIR%\KenshiZoneProfiler.dll" ^
-     /IMPLIB:"%OBJDIR%\KenshiZoneProfiler.lib"
+     /OUT:"%OUTDIR%\KEOProfiler.dll" ^
+     /IMPLIB:"%OBJDIR%\KEOProfiler.lib"
 if errorlevel 1 goto :link_failed
 if not exist "%PDB%" goto :link_failed
 
-python tools\kenshilib\check_imports.py "%OUTDIR%\KenshiZoneProfiler.dll"
+python tools\kenshilib\check_imports.py "%OUTDIR%\KEOProfiler.dll"
 if errorlevel 1 (
     echo.
     echo CLANG PROFILER IMPORT CHECK FAILED
     exit /b 1
 )
-python tools\build\check_crt_imports.py "%OUTDIR%\KenshiZoneProfiler.dll"
+python tools\build\check_crt_imports.py "%OUTDIR%\KEOProfiler.dll"
 if errorlevel 1 (
     echo.
     echo CLANG PROFILER CRT IMPORT CHECK FAILED
     exit /b 1
 )
-python tools\build\check_seh_handlers.py "%OUTDIR%\KenshiZoneProfiler.dll" --sources "%SRC_LIST%"
+python tools\build\check_seh_handlers.py "%OUTDIR%\KEOProfiler.dll" --sources "%SRC_LIST%"
 if errorlevel 1 (
     echo.
     echo CLANG PROFILER SEH HANDLER CHECK FAILED
     exit /b 1
 )
 
-if not exist "%OUTDIR%\RE_Kenshi.json" (
-    echo {"Plugins": ["KenshiZoneProfiler.dll"]} > "%OUTDIR%\RE_Kenshi.json"
+REM RE_Kenshi.json lists exactly the DLL this folder holds. A json that differs (one naming
+REM another DLL, or two DLLs) is kept as RE_Kenshi.json.old and rewritten.
+set "JSON=%OUTDIR%\RE_Kenshi.json"
+set "JSON_WANT=%OBJDIR%\RE_Kenshi.json.want"
+echo {"Plugins": ["KEOProfiler.dll"]} > "%JSON_WANT%"
+if not exist "%JSON%" (
+    copy /y "%JSON_WANT%" "%JSON%" >nul
+    goto :json_check
+)
+fc /b "%JSON_WANT%" "%JSON%" >nul 2>&1
+if errorlevel 1 (
+    copy /y "%JSON%" "%JSON%.old" >nul
+    copy /y "%JSON_WANT%" "%JSON%" >nul
+    echo CLANG PROFILER WARNING: RE_Kenshi.json did not list exactly KEOProfiler.dll; rewritten, previous copy saved as RE_Kenshi.json.old
+)
+:json_check
+fc /b "%JSON_WANT%" "%JSON%" >nul 2>&1
+if errorlevel 1 (
+    echo CLANG PROFILER RE_Kenshi.json WRITE FAILED
+    exit /b 1
 )
 
 REM Copy the default frame-audit INI if missing (never overwrite local edits).
-if not exist "%OUTDIR%\KenshiZoneProfiler.ini" (
-    copy /y profiler\KenshiZoneProfiler.ini "%OUTDIR%\KenshiZoneProfiler.ini" >nul
+if not exist "%OUTDIR%\KEOProfiler.ini" (
+    copy /y profiler\KEOProfiler.ini "%OUTDIR%\KEOProfiler.ini" >nul
     if errorlevel 1 (
-        echo CLANG PROFILER INI COPY FAILED: profiler\KenshiZoneProfiler.ini
+        echo CLANG PROFILER INI COPY FAILED: profiler\KEOProfiler.ini
         exit /b 1
     )
 )

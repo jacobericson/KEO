@@ -240,7 +240,7 @@ static bool WorkerInitHavok(int workerId, char (&ctx128)[128], char (&buf8)[8], 
 	typedef void* (*havokRegister_t)(void*, void*, const char*, char);
 	havokRegister_t fn_reg = (havokRegister_t)(*(uintptr_t*)(mgrVtable + 24));
 
-	sprintf_s(name, sizeof(name), "ZoneOpt_W%d", workerId);
+	sprintf_s(name, sizeof(name), "KEO_W%d", workerId);
 	fn_reg(mgr, ctx128, name, 3);
 
 	memset(buf8, 0, sizeof(buf8));

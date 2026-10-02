@@ -8,7 +8,7 @@ namespace keo_gui {
 // thread before any hook installs; read-only afterwards, on any thread.
 struct GuiConfig
 {
-	// settingsPanel: the ZoneOpt tab in the game's Options window (src/gui/).
+	// settingsPanel: the KEO tab in the game's Options window (src/gui/).
 	// On by default; read at startup only.
 	bool settingsPanelEnabled;
 };

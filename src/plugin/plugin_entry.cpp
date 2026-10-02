@@ -198,12 +198,12 @@ void InitializeLogAndConfig(const EntryCtx& ctx)
 		char line[160];
 		if (reKenshi)
 			_snprintf_s(line, sizeof(line), _TRUNCATE,
-				"Module bases: exe=0x%llX RE_Kenshi.dll=0x%llX KenshiZoneOpt.dll=0x%llX",
+				"Module bases: exe=0x%llX RE_Kenshi.dll=0x%llX KEO.dll=0x%llX",
 				(unsigned long long)gameBase, (unsigned long long)(uintptr_t)reKenshi,
 				(unsigned long long)(uintptr_t)self);
 		else
 			_snprintf_s(line, sizeof(line), _TRUNCATE,
-				"Module bases: exe=0x%llX RE_Kenshi.dll=not-loaded KenshiZoneOpt.dll=0x%llX",
+				"Module bases: exe=0x%llX RE_Kenshi.dll=not-loaded KEO.dll=0x%llX",
 				(unsigned long long)gameBase, (unsigned long long)(uintptr_t)self);
 		LogMsg(line);
 	}

@@ -1,5 +1,5 @@
 @echo off
-REM Builds ONE KenshiZoneOpt.dll variant: compile, link, KenshiLib import check,
+REM Builds ONE KEO.dll variant: compile, link, KenshiLib import check,
 REM RE_Kenshi.json. Called by tools\build\run_variants.py (build_opt_step4.bat,
 REM and so build_opt.bat) as two processes per variant,
 REM "compile" then "link", with the output going to <OBJDIR>\build.log.
@@ -102,9 +102,9 @@ set "B_SRC_RSP=%B_OBJDIR%\sources.rsp"
 
 REM The command lines are built once and echoed before they run, so the log
 REM shows exactly what was executed.
-REM The link also writes KenshiZoneOpt.map beside the objects, for tools\build\verify_layout.py.
+REM The link also writes KEO.map beside the objects, for tools\build\verify_layout.py.
 set "B_CL=cl /nologo /EHsc /O2 %B_GL% %B_OPTFLAGS% /MD /W3 /DNDEBUG /DWIN32_LEAN_AND_MEAN /DBOOST_ALL_NO_LIB /DBOOST_ERROR_CODE_HEADER_ONLY /DBOOST_SYSTEM_NO_DEPRECATED %B_DEFINES% %B_MP% /I"%KENSHILIB%\Include" /I"%KENSHILIB%\Include\ogre" /I"%BOOST_ROOT%" /Isrc /c @"%B_SRC_RSP%" /Fo%B_OBJDIR%\"
-set "B_LINK=link /nologo /DLL %B_LTCG% %B_LINKOPT% /MACHINE:X64 /SUBSYSTEM:CONSOLE /LIBPATH:"%KENSHILIB%\Libraries\KenshiLib" /LIBPATH:"%KENSHILIB%\Libraries\mygui" KenshiLib.lib MyGUIEngine_x64.lib user32.lib @"%B_OBJS_RSP%" /OUT:"%B_OUTDIR%\KenshiZoneOpt.dll" /IMPLIB:"%B_OBJDIR%\KenshiZoneOpt.lib" /MAP:"%B_OBJDIR%\KenshiZoneOpt.map""
+set "B_LINK=link /nologo /DLL %B_LTCG% %B_LINKOPT% /MACHINE:X64 /SUBSYSTEM:CONSOLE /LIBPATH:"%KENSHILIB%\Libraries\KenshiLib" /LIBPATH:"%KENSHILIB%\Libraries\mygui" KenshiLib.lib MyGUIEngine_x64.lib user32.lib @"%B_OBJS_RSP%" /OUT:"%B_OUTDIR%\KEO.dll" /IMPLIB:"%B_OBJDIR%\KEO.lib" /MAP:"%B_OBJDIR%\KEO.map""
 
 REM TEST_NOOP_CL=1 replaces the real compile with a command that exits 0 and
 REM produces no objects, for exercising run_variants.py's own guard against a
@@ -135,58 +135,76 @@ if errorlevel 1 (
     exit /b 1
 )
 
-python tools\kenshilib\check_imports.py "%B_OUTDIR%\KenshiZoneOpt.dll"
+python tools\kenshilib\check_imports.py "%B_OUTDIR%\KEO.dll"
 if errorlevel 1 (
     echo.
     echo %B_LABEL% IMPORT CHECK FAILED
     exit /b 1
 )
 
-if not exist "%B_OUTDIR%\RE_Kenshi.json" (
-    echo {"Plugins": ["KenshiZoneOpt.dll"]} > "%B_OUTDIR%\RE_Kenshi.json"
+REM RE_Kenshi.json lists exactly the DLL this folder holds. A json that differs (one naming
+REM another DLL, or two DLLs) is kept as RE_Kenshi.json.old and rewritten.
+set "B_JSON=%B_OUTDIR%\RE_Kenshi.json"
+set "B_JSON_WANT=%B_OBJDIR%\RE_Kenshi.json.want"
+echo {"Plugins": ["KEO.dll"]} > "%B_JSON_WANT%"
+if not exist "%B_JSON%" (
+    copy /y "%B_JSON_WANT%" "%B_JSON%" >nul
+    goto :json_check
+)
+fc /b "%B_JSON_WANT%" "%B_JSON%" >nul 2>&1
+if errorlevel 1 (
+    copy /y "%B_JSON%" "%B_JSON%.old" >nul
+    copy /y "%B_JSON_WANT%" "%B_JSON%" >nul
+    echo %B_LABEL% WARNING: RE_Kenshi.json did not list exactly KEO.dll; rewritten, previous copy saved as RE_Kenshi.json.old
+)
+:json_check
+fc /b "%B_JSON_WANT%" "%B_JSON%" >nul 2>&1
+if errorlevel 1 (
+    echo %B_LABEL% RE_Kenshi.json WRITE FAILED
+    exit /b 1
 )
 
 REM Copy the default settings INI, without clobbering a user's edited copy.
-REM KenshiZoneOpt.ini.template records the exact template last copied into
+REM KEO.ini.template records the exact template last copied into
 REM this output folder. On a rebuild the output is refreshed only when it
 REM still matches that record (i.e. untouched since) and the template itself
 REM has moved on; an edited output, or a legacy folder with no record, is
 REM left alone and the newer template is saved beside it as
-REM KenshiZoneOpt.ini.new instead, so nothing is silently lost either way.
-set "B_INI_OUT=%B_OUTDIR%\KenshiZoneOpt.ini"
-set "B_INI_STAMP=%B_OUTDIR%\KenshiZoneOpt.ini.template"
+REM KEO.ini.new instead, so nothing is silently lost either way.
+set "B_INI_OUT=%B_OUTDIR%\KEO.ini"
+set "B_INI_STAMP=%B_OUTDIR%\KEO.ini.template"
 
 if not exist "%B_INI_OUT%" (
-    copy /y KenshiZoneOpt.ini "%B_INI_OUT%" >nul
-    copy /y KenshiZoneOpt.ini "%B_INI_STAMP%" >nul
+    copy /y KEO.ini "%B_INI_OUT%" >nul
+    copy /y KEO.ini "%B_INI_STAMP%" >nul
     goto :ini_done
 )
 
 if not exist "%B_INI_STAMP%" (
-    fc /b KenshiZoneOpt.ini "%B_INI_OUT%" >nul 2>&1
+    fc /b KEO.ini "%B_INI_OUT%" >nul 2>&1
     if not errorlevel 1 (
-        copy /y KenshiZoneOpt.ini "%B_INI_STAMP%" >nul
+        copy /y KEO.ini "%B_INI_STAMP%" >nul
         goto :ini_done
     )
-    copy /y KenshiZoneOpt.ini "%B_OUTDIR%\KenshiZoneOpt.ini.new" >nul
-    echo %B_LABEL% WARNING: KenshiZoneOpt.ini differs from the template and this folder has no template record ^(legacy folder^); new template saved as KenshiZoneOpt.ini.new
+    copy /y KEO.ini "%B_OUTDIR%\KEO.ini.new" >nul
+    echo %B_LABEL% WARNING: KEO.ini differs from the template and this folder has no template record ^(legacy folder^); new template saved as KEO.ini.new
     goto :ini_done
 )
 
 fc /b "%B_INI_OUT%" "%B_INI_STAMP%" >nul 2>&1
 if errorlevel 1 (
-    fc /b KenshiZoneOpt.ini "%B_INI_STAMP%" >nul 2>&1
+    fc /b KEO.ini "%B_INI_STAMP%" >nul 2>&1
     if errorlevel 1 (
-        copy /y KenshiZoneOpt.ini "%B_OUTDIR%\KenshiZoneOpt.ini.new" >nul
-        echo %B_LABEL% WARNING: KenshiZoneOpt.ini was edited and the template changed; new template saved as KenshiZoneOpt.ini.new
+        copy /y KEO.ini "%B_OUTDIR%\KEO.ini.new" >nul
+        echo %B_LABEL% WARNING: KEO.ini was edited and the template changed; new template saved as KEO.ini.new
     )
     goto :ini_done
 )
 
-fc /b KenshiZoneOpt.ini "%B_INI_STAMP%" >nul 2>&1
+fc /b KEO.ini "%B_INI_STAMP%" >nul 2>&1
 if errorlevel 1 (
-    copy /y KenshiZoneOpt.ini "%B_INI_OUT%" >nul
-    copy /y KenshiZoneOpt.ini "%B_INI_STAMP%" >nul
+    copy /y KEO.ini "%B_INI_OUT%" >nul
+    copy /y KEO.ini "%B_INI_STAMP%" >nul
 )
 
 :ini_done

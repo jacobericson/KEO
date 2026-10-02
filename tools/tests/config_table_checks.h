@@ -261,8 +261,8 @@ bool CustomParsesToInitial(const ConfigModule& core, int i, const std::string& t
 void CheckTemplateAndDefaults(const ConfigModule& core, const ConfigModule& render)
 {
 	bool ok = false;
-	std::string text = ReadFile("KenshiZoneOpt.ini", &ok);
-	Check(ok, "KenshiZoneOpt.ini found at the repository root");
+	std::string text = ReadFile("KEO.ini", &ok);
+	Check(ok, "KEO.ini found at the repository root");
 	std::vector<KeyValue> tmpl = TemplateKeys(text);
 	Check(tmpl.size() == 73, "template has 73 documented key lines");
 

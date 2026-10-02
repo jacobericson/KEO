@@ -49,7 +49,7 @@ bool ProfilerImageResolve()
 {
 	if (g_profilerImageBase)
 		return true;
-	uintptr_t base = (uintptr_t)GetModuleHandleA("KenshiZoneProfiler.dll");
+	uintptr_t base = (uintptr_t)GetModuleHandleA("KEOProfiler.dll");
 	if (!base)
 		return false;
 	const IMAGE_DOS_HEADER* dos = (const IMAGE_DOS_HEADER*)base;
@@ -63,18 +63,38 @@ bool ProfilerImageResolve()
 	return true;
 }
 
-void ProfilerImageResolveTick(double now)
+static double s_resolveFirst = -1.0;
+static double s_resolveLastTry = -1.0;
+static double s_profilerFoundSec = -1.0;
+static bool s_resolveWindowClosed = false;
+
+bool ProfilerImageResolveTick(double now)
 {
-	static double first = -1.0;
-	static double lastTry = -1.0;
-	if (g_profilerImageBase)
-		return;
-	if (first < 0.0)
-		first = now;
-	if (now - first > 60.0 || (lastTry >= 0.0 && now - lastTry < 1.0))
-		return;
-	lastTry = now;
-	ProfilerImageResolve();
+	if (s_resolveWindowClosed)
+		return false;
+	if (s_resolveFirst < 0.0)
+	{
+		s_resolveFirst = now;
+		if (g_profilerImageBase)
+			s_profilerFoundSec = 0.0;
+	}
+	if (now - s_resolveFirst >= 60.0)
+	{
+		s_resolveWindowClosed = true;
+		return true;
+	}
+	if (!g_profilerImageBase && (s_resolveLastTry < 0.0 || now - s_resolveLastTry >= 1.0))
+	{
+		s_resolveLastTry = now;
+		if (ProfilerImageResolve())
+			s_profilerFoundSec = now;
+	}
+	return false;
+}
+
+double ProfilerImageFoundSec()
+{
+	return s_profilerFoundSec;
 }
 
 

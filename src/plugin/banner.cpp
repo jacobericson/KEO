@@ -3,6 +3,7 @@
 // installs, or records a build-gate refusal. Logging uses the core log lock.
 
 #include "plugin/plugin_entry_internal.h"
+#include "base/core.h"
 #include "base/config.h"
 #include "movement/island_edge_ring.h"
 #include "render/render_config.h"
@@ -32,7 +33,7 @@ void LogInitBanner(int installed, int totalHooks, const std::string& gateTok,
 		renderTok << "off";
 
 	std::ostringstream msg;
-	msg << "Initialized - " << installed << "/" << totalHooks << " hooks installed"
+	msg << "Initialized - " << installed << "/" << totalHooks << " hooks installed (Kenshi Engine Optimizations)"
 	    << ", deferral=" << (zone::g_zoneCfg.deferralEnabled ? "ON" : "OFF")
 	    << ", priorityBoost=" << (navmesh::g_navmeshCfg.priorityBoostEnabled ? "ON" : "OFF")
 	    << ", preload=" << (zone::g_zoneCfg.preloadEnabled ? "ON" : "OFF")
@@ -88,9 +89,10 @@ void LogInitBanner(int installed, int totalHooks, const std::string& gateTok,
 	    << ", klibMembers=" << 5
 	;
 	msg << ", gate=" << gateTok;
-	// The only knob a folded build still varies. Appended last so grepping
-	// for an earlier token's fixed prefix is unaffected.
+	// The only knob a folded build still varies, then the profiler lookup's state; both
+	// appended last so grepping for an earlier token's fixed prefix is unaffected.
 	msg << ", zonehand=" << ZONEHAND_STEP;
+	msg << ", profiler=" << (g_profilerImageBase ? "found" : "pending");
 	BenchRunnerSetBanner("render=" + renderTok.str() + " gate=" + gateTok + " bench=" + benchTok);
 	DebugLog(msg.str());
 	LogMsg(msg.str());

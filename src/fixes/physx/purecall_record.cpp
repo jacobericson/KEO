@@ -91,7 +91,7 @@ static bool SafeReadQword(uintptr_t addr, unsigned __int64* out)
 }
 
 // Reads a module's own PE header to get its image size (ProfilerImageResolve
-// in core.cpp does the same thing for KenshiZoneProfiler.dll; duplicated here
+// in core.cpp does the same thing for KEOProfiler.dll; duplicated here
 // rather than shared, since this file is meant to stand alone -- see the
 // design note in the header).
 static bool ResolveModuleRange(uintptr_t base, uintptr_t* outSize)

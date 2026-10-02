@@ -9,14 +9,14 @@ REM   adopting them, which blocks the game's own lease. (Per-cycle, Set B and
 REM   private-lease measurement; config.h's compiled-in default is 0).
 REM   STEP4_SUFFIX: optional, from the environment. Appended to the output and
 REM   object folder names before _dev/_prod, so a second pair can sit beside
-REM   the first (STEP4_SUFFIX=_base -> build\KenshiZoneOpt_step4_base_dev\).
+REM   the first (STEP4_SUFFIX=_base -> build\KEO_step4_base_dev\).
 REM   It must not contain "_dev" or "_prod" (the _dev suffix selects DEV flags).
 REM   The success line below always prints every effective gate value (never
 REM   empty), so a log proves what was built.
 REM
-REM Output: build\KenshiZoneOpt_step4<SUFFIX>_dev\   (DEV: verbose logging;
+REM Output: build\KEO_step4<SUFFIX>_dev\   (DEV: verbose logging;
 REM                                                  /O2 /GL + /LTCG, no /Gy /OPT)
-REM         build\KenshiZoneOpt_step4<SUFFIX>_prod\  (PROD: reduced logging;
+REM         build\KEO_step4<SUFFIX>_prod\  (PROD: reduced logging;
 REM                                                  /GL /Gy + /LTCG /OPT:REF /OPT:ICF)
 REM   where <SUFFIX> is STEP4_SUFFIX.
 REM
@@ -78,8 +78,8 @@ if not "%ZONEHAND_STEP%"=="0" if not "%ZONEHAND_STEP%"=="1" if not "%ZONEHAND_ST
 set "STEP4_DEFINES=/DZONEHAND_STEP=%ZONEHAND_STEP%"
 
 set "STEP4_FOLDER_SUFFIX=%STEP4_SUFFIX%"
-set "STEP4_DEV_OUT=build\KenshiZoneOpt_step4%STEP4_FOLDER_SUFFIX%_dev"
-set "STEP4_PROD_OUT=build\KenshiZoneOpt_step4%STEP4_FOLDER_SUFFIX%_prod"
+set "STEP4_DEV_OUT=build\KEO_step4%STEP4_FOLDER_SUFFIX%_dev"
+set "STEP4_PROD_OUT=build\KEO_step4%STEP4_FOLDER_SUFFIX%_prod"
 
 REM Both variants compile with "%STEP4_DEFINES%" plus their own
 REM extra define (DEV: /DKEO_DEBUG), as before. DEV/PROD flags follow the

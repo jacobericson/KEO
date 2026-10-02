@@ -1,7 +1,7 @@
 @echo off
-REM Build KenshiZoneProfiler.dll using VS 2010 x64 compiler directly
+REM Build KEOProfiler.dll using VS 2010 x64 compiler directly
 REM Run this from any command prompt - it sets up the environment itself.
-REM Output: build\KenshiZoneProfiler\  (ready to copy into Kenshi's mods folder)
+REM Output: build\KEOProfiler\  (ready to copy into Kenshi's mods folder)
 
 setlocal
 
@@ -19,7 +19,7 @@ REM --- Paths ---
 REM Allow an already-set KENSHILIB (e.g. a worktree elsewhere) to override the default.
 call tools\kenshilib\build_env.bat
 if errorlevel 1 exit /b 1
-set OUTDIR=build\KenshiZoneProfiler
+set OUTDIR=build\KEOProfiler
 set OBJDIR=build\obj
 
 REM --- Create output directories ---
@@ -64,14 +64,14 @@ if errorlevel 1 (
 REM --- Link ---
 REM /OPT:NOICF keeps the per-probe wrapper templates (CallSiteProbe.cpp) and the
 REM per-class listener thunks (AuditListeners.cpp) distinct.
-REM /MAP writes build\obj\KenshiZoneProfiler.map, for tools\build\verify_layout.py.
+REM /MAP writes build\obj\KEOProfiler.map, for tools\build\verify_layout.py.
 link /nologo /DLL /LTCG /OPT:REF /OPT:NOICF /MACHINE:X64 /SUBSYSTEM:CONSOLE ^
      /LIBPATH:"%KENSHILIB%\Libraries\KenshiLib" ^
      KenshiLib.lib user32.lib ^
      @"%OBJS_RSP%" ^
-     /OUT:"%OUTDIR%\KenshiZoneProfiler.dll" ^
-     /IMPLIB:"%OBJDIR%\KenshiZoneProfiler.lib" ^
-     /MAP:"%OBJDIR%\KenshiZoneProfiler.map"
+     /OUT:"%OUTDIR%\KEOProfiler.dll" ^
+     /IMPLIB:"%OBJDIR%\KEOProfiler.lib" ^
+     /MAP:"%OBJDIR%\KEOProfiler.map"
 
 if errorlevel 1 (
     echo.
@@ -79,19 +79,37 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM --- Create RE_Kenshi.json if missing ---
-python tools\kenshilib\check_imports.py "%OUTDIR%\KenshiZoneProfiler.dll"
+REM --- KenshiLib import check, then RE_Kenshi.json ---
+python tools\kenshilib\check_imports.py "%OUTDIR%\KEOProfiler.dll"
 if errorlevel 1 exit /b 1
 
-if not exist "%OUTDIR%\RE_Kenshi.json" (
-    echo {"Plugins": ["KenshiZoneProfiler.dll"]} > "%OUTDIR%\RE_Kenshi.json"
+REM RE_Kenshi.json lists exactly the DLL this folder holds. A json that differs (one naming
+REM another DLL, or two DLLs) is kept as RE_Kenshi.json.old and rewritten.
+set "JSON=%OUTDIR%\RE_Kenshi.json"
+set "JSON_WANT=%OBJDIR%\RE_Kenshi.json.want"
+echo {"Plugins": ["KEOProfiler.dll"]} > "%JSON_WANT%"
+if not exist "%JSON%" (
+    copy /y "%JSON_WANT%" "%JSON%" >nul
+    goto :json_check
+)
+fc /b "%JSON_WANT%" "%JSON%" >nul 2>&1
+if errorlevel 1 (
+    copy /y "%JSON%" "%JSON%.old" >nul
+    copy /y "%JSON_WANT%" "%JSON%" >nul
+    echo PROFILER WARNING: RE_Kenshi.json did not list exactly KEOProfiler.dll; rewritten, previous copy saved as RE_Kenshi.json.old
+)
+:json_check
+fc /b "%JSON_WANT%" "%JSON%" >nul 2>&1
+if errorlevel 1 (
+    echo PROFILER RE_Kenshi.json WRITE FAILED
+    exit /b 1
 )
 
 REM --- Copy the default frame-audit INI if missing (never overwrite local edits) ---
-if not exist "%OUTDIR%\KenshiZoneProfiler.ini" (
-    copy /y profiler\KenshiZoneProfiler.ini "%OUTDIR%\KenshiZoneProfiler.ini" >nul
+if not exist "%OUTDIR%\KEOProfiler.ini" (
+    copy /y profiler\KEOProfiler.ini "%OUTDIR%\KEOProfiler.ini" >nul
     if errorlevel 1 (
-        echo INI COPY FAILED: profiler\KenshiZoneProfiler.ini
+        echo INI COPY FAILED: profiler\KEOProfiler.ini
         exit /b 1
     )
 )

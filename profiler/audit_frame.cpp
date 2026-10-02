@@ -514,7 +514,7 @@ std::string SystemString()
 {
 	char path[MAX_PATH];
 	strcpy_s(path, "none");
-	HMODULE opt = GetModuleHandleA("KenshiZoneOpt.dll");
+	HMODULE opt = GetModuleHandleA("KEO.dll");
 	if (opt)
 		GetModuleFileNameA(opt, path, MAX_PATH);
 	SYSTEM_INFO si;

@@ -1,5 +1,5 @@
 #include "game/klib_members.h"
-// KenshiZoneProfiler - Standalone zone loading performance profiler
+// KEOProfiler - Standalone zone loading performance profiler
 // Loaded as RE_Kenshi sub-plugin via RE_Kenshi.json manifest.
 // Hooks 10 functions in the zone streaming pipeline, logs timing per zone transition.
 // The frame audit (KenshiFrameAudit.cpp, CallSiteProbe.cpp) adds per-frame
@@ -106,9 +106,7 @@ static LARGE_INTEGER       pluginStartTime;
 static ZoneTransitionStats currentStats;
 
 
-// --- Log file path (next to DLL, like KenshiAddressLogger) ---
-
-static std::string logFilePath;
+// --- The DLL's folder (the profiler's files sit beside it) ---
 
 static std::string GetDLLDirectory()
 {
@@ -685,7 +683,6 @@ __declspec(dllexport) void startPlugin()
 	gameBase = (uintptr_t)GetModuleHandleA(NULL);
 	QueryPerformanceFrequency(&qpcFrequency);
 	QueryPerformanceCounter(&pluginStartTime);
-	logFilePath = GetDLLDirectory() + "KenshiZoneProfiler.log";
 
 	// Shared parity gate precedes all reporter work and hook installation.
 	if (!InitKlibBindings(gameBase, static_cast<void (*)(const char*)>(&DebugLog)))

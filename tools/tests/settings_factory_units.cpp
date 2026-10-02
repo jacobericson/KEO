@@ -200,9 +200,12 @@ static void CheckSections()
 		if (rows[i].kind == SR_HEADER)
 			headers.push_back(rows[i].label);
 	}
-	bool sections = headers.size() == 8 && headers[0] == RENDER_TITLE && headers[7] == "Benchmark";
-	for (int i = 0; sections && i < 6; ++i) sections = headers[i + 1] == MODULE_TITLES[i];
+	bool sections = headers.size() == 9 && headers[0] == "Kenshi Engine Optimizations"
+	                && headers[1] == RENDER_TITLE && headers[8] == "Benchmark";
+	for (int i = 0; sections && i < 6; ++i) sections = headers[i + 2] == MODULE_TITLES[i];
 	Check(sections, "Sections");
+	Check(!rows.empty() && rows[0].kind == SR_HEADER && rows[0].label == "Kenshi Engine Optimizations",
+	      "the page opens with the long-name header");
 
 	// The render section is today's, label for label and kind for kind.
 	std::vector<const SettingsRow*> render = Section(rows, RENDER_TITLE);

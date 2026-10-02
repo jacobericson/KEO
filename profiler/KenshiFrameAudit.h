@@ -1,11 +1,11 @@
-// KenshiFrameAudit - per-frame time attribution for KenshiZoneProfiler.
+// KenshiFrameAudit - per-frame time attribution for KEOProfiler.
 //
 // Splits every frame into named sections that sum to the frame time (Ogre
 // render window, the frame listeners, each call inside GameWorld::mainLoop),
 // measures the wake/run/join of the AI, birds and physics worker threads,
 // samples the world state that drives cost, and writes percentile summaries,
 // [SLOW] lines and a per-second CSV under <dll dir>\audit\. All file I/O runs
-// on a reporter thread. Steam 1.0.65 only; configured by KenshiZoneProfiler.ini.
+// on a reporter thread. Steam 1.0.65 only; configured by KEOProfiler.ini.
 
 #pragma once
 
@@ -13,7 +13,7 @@
 #include <stdint.h>
 
 // First thing in startPlugin: records the main thread, reads the INI, starts
-// the reporter thread (which also writes KenshiZoneProfiler.log).
+// the reporter thread (which also writes KEOProfiler.log).
 void Audit_Init(uintptr_t gameBase, const std::string& dllDir);
 
 // Last thing in startPlugin: installs the audit hooks and call-site probes
@@ -23,7 +23,7 @@ void Audit_Install();
 bool Audit_IsMainThread();
 bool Audit_LegacyFpsEnabled();
 
-// Queues one finished line for KenshiZoneProfiler.log. Safe on any thread.
+// Queues one finished line for KEOProfiler.log. Safe on any thread.
 void Audit_LogProfiler(const std::string& line);
 
 // The profiler wrote (and DebugLogged) its own lines during this frame: the

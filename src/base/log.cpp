@@ -6,6 +6,7 @@
 
 #include "base/core.h"
 #include "base/core_internal.h"
+#include "base/ini_names.h"
 #include "base/log_bounded.h"
 #include "fixes/world/destroy_list_defer.h"
 
@@ -46,9 +47,9 @@ std::string GetDLLDirectory()
 
 void InitLogFile()
 {
-	logFilePath = GetDLLDirectory() + "KenshiZoneOpt.log";
+	logFilePath = GetDLLDirectory() + OPTIMIZER_LOG_NAME;
 	// Shares the log's lifetime: present only if this session wrote it.
-	const std::string retirePath = GetDLLDirectory() + "KenshiZoneOpt.retire.txt";
+	const std::string retirePath = GetDLLDirectory() + OPTIMIZER_RETIRE_NAME;
 	if (retirePath.size() < sizeof(s_retireFallbackPath))
 	{
 		memcpy(s_retireFallbackPath, retirePath.c_str(), retirePath.size() + 1);

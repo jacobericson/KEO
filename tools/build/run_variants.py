@@ -1,4 +1,4 @@
-"""Build KenshiZoneOpt variants as concurrent processes (Python 3, stdlib only).
+"""Build KEO variants as concurrent processes (Python 3, stdlib only).
 
 Called by build_opt_step4.bat (and so build_opt.bat) after
 they have set up the VS 2010 x64 environment and run build_env.bat; every child
