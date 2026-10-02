@@ -3,6 +3,7 @@
 #include "base/worker_count.h"
 #include "base/hash.h"
 #include "base/ini_names.h"
+#include "base/legacy_ini_import.h"
 #include "render/render_config.h"
 #include <cstdio>
 #include <cstring>
@@ -103,6 +104,8 @@ void LoadConfig(const std::string& dllDir)
 			ss << " (from " << modsCfgPath << ")";
 		LogMsg(ss.str());
 	}
+
+	LegacyIniImport(dllDir, LEGACY_OPTIMIZER_INI_NAME, OPTIMIZER_INI_NAME, LEGACY_OPTIMIZER_RETIRE_NAME, true, &LogMsg);
 
 	std::string iniPath = dllDir + OPTIMIZER_INI_NAME;
 	FILE* f = NULL;

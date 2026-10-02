@@ -9,4 +9,9 @@ const char OPTIMIZER_RETIRE_NAME[] = "KEO.retire.txt";
 const char PROFILER_INI_NAME[]     = "KEOProfiler.ini";
 const char PROFILER_LOG_NAME[]     = "KEOProfiler.log";
 
+// The previous names, read only by the one-time settings import (legacy_ini_import.h).
+const char LEGACY_OPTIMIZER_INI_NAME[]    = "KenshiZoneOpt.ini";
+const char LEGACY_OPTIMIZER_RETIRE_NAME[] = "KenshiZoneOpt.retire.txt";
+const char LEGACY_PROFILER_INI_NAME[]     = "KenshiZoneProfiler.ini";
+
 #endif

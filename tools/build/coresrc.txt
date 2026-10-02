@@ -263,3 +263,4 @@ src\planner\planner_capture.cpp
 src\planner\planner_report.cpp
 src\planner\planner_hooks.cpp
 src\planner\planner_water.cpp
+src\base\legacy_ini_import.cpp

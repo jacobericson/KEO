@@ -67,15 +67,21 @@ def on_disk():
     return set(to_slash(p) for p in glob.glob(CPP_GLOB, recursive=True))
 
 
+# Optimizer sources the profiler links too: the INI line rules and the one-time settings import.
+SHARED_PROFILER_SOURCES = ('src/base/ini_text.cpp', 'src/base/legacy_ini_import.cpp')
+
+
 def profiler_sources():
     """Every *.cpp directly under profiler/ when that folder exists, else every *.cpp at the
-    repository root (the rule survey.profiler_files uses), plus every src/**/klib_*.cpp."""
+    repository root (the rule survey.profiler_files uses), plus every src/**/klib_*.cpp, plus
+    each path of SHARED_PROFILER_SOURCES that exists."""
     if os.path.isdir("profiler"):
         roots = glob.glob("profiler/*.cpp")
     else:
         roots = glob.glob("*.cpp")
     klib = glob.glob("src/**/klib_*.cpp", recursive=True)
-    return set(to_slash(p) for p in roots) | set(to_slash(p) for p in klib)
+    shared = [p for p in SHARED_PROFILER_SOURCES if os.path.isfile(p)]
+    return set(to_slash(p) for p in roots) | set(to_slash(p) for p in klib) | set(shared)
 
 
 def _run_checks(list_path, expected, list_name, distinguish_not_source=False, empty_msg=None):

@@ -82,3 +82,4 @@ plan_store_units | tools\tests\plan_store_units.cpp | src\planner\plan_store.cpp
 coarse_graph_units | tools\tests\coarse_graph_units.cpp | src\planner\coarse_graph.cpp src\planner\coarse_graph_cross.cpp src\planner\coarse_graph_cache.cpp src\planner\tile_graph_extract.cpp src\planner\tagfile_reader.cpp |
 coarse_graph_live_units | tools\tests\coarse_graph_live_units.cpp | src\planner\coarse_graph_live.cpp src\planner\coarse_graph.cpp src\planner\coarse_graph_cross.cpp src\planner\tagfile_reader.cpp |
 plan_build_units | tools\tests\plan_build_units.cpp | src\planner\plan_build.cpp src\planner\plan_policy.cpp src\movement\order_outcome_table.cpp src\movement\order_outcome_policy.cpp |
+legacy_ini_import_units | tools\tests\legacy_ini_import_units.cpp | src\base\legacy_ini_import.cpp src\base\ini_text.cpp | 

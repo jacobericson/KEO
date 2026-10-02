@@ -32,6 +32,8 @@
 #include "KenshiFrameAudit.h"
 #include "KenshiFrameAudit_internal.h"
 #include "game/klib_bindings.h"
+#include "base/ini_names.h"
+#include "base/legacy_ini_import.h"
 #include "audit_detail.h"
 
 namespace audit {
@@ -390,6 +392,15 @@ namespace kenshiframeaudit_detail {
 } // kenshiframeaudit_detail
 using namespace kenshiframeaudit_detail;
 
+// Main thread, startup: the settings import's log writer. Profiler-log lines carry the
+// "seconds: " stamp; before the reporter starts, the queue writes them directly.
+static void LegacyIniProfilerLog(const std::string& line)
+{
+	char prefix[32];
+	_snprintf_s(prefix, sizeof(prefix), _TRUNCATE, "%.3f: ", SinceStart(Now()));
+	Audit_LogProfiler(std::string(prefix) + line);
+}
+
 
 // =========================================================================
 // Public API
@@ -410,6 +421,7 @@ void Audit_Init(uintptr_t gameBase, const std::string& dllDir)
 	g_qpcFreq  = f.QuadPart ? f.QuadPart : 1;
 	g_qpcStart = Now();
 
+	LegacyIniImport(g_dllDir, LEGACY_PROFILER_INI_NAME, PROFILER_INI_NAME, NULL, false, &LegacyIniProfilerLog);
 	LoadConfig();
 	InitNameTables();
 	memset(g_haveTag, 0, sizeof(g_haveTag));
