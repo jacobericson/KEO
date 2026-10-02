@@ -76,7 +76,7 @@ zone_save_rule_units | tools\tests\zone_save_rule_units.cpp | src\zone\retention
 graph_heuristic_guard_units | tools\tests\graph_heuristic_guard_units.cpp | src\fixes\search\graph_heuristic_guard_policy.cpp src\fixes\search\graph_position_guard_policy.cpp |
 astar_hier_policy_units | tools\tests\astar_hier_policy_units.cpp | src\pathfind\astar_hier_policy.cpp src\pathfind\astar_cost_policy.cpp |
 cluster_cross_cost_units | tools\tests\cluster_cross_cost_units.cpp | src\fixes\search\cluster_cross_cost_policy.cpp |
-coarse_search_units | tools\tests\coarse_search_units.cpp | src\planner\coarse_search.cpp |
+coarse_search_units | tools\tests\coarse_search_units.cpp | src\planner\coarse_search.cpp src\planner\plan_policy.cpp |
 plan_policy_units | tools\tests\plan_policy_units.cpp | src\planner\plan_policy.cpp |
 plan_store_units | tools\tests\plan_store_units.cpp | src\planner\plan_store.cpp src\planner\plan_policy.cpp |
 coarse_graph_units | tools\tests\coarse_graph_units.cpp | src\planner\coarse_graph.cpp src\planner\coarse_graph_cache.cpp src\planner\tile_graph_extract.cpp src\planner\tagfile_reader.cpp |

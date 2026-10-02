@@ -162,4 +162,9 @@ unsigned __int64 PlanMemoKey(unsigned startNode, unsigned goalNode)
 	return ((unsigned __int64)startNode << 32) | (unsigned __int64)goalNode;
 }
 
+bool PlanMemoSame(unsigned __int64 keyA, float multA, unsigned __int64 keyB, float multB)
+{
+	return keyA == keyB && multA == multB;
+}
+
 } // namespace planner

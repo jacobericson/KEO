@@ -103,6 +103,7 @@ static const Owner kOwners[] =
 	{ "plannerBaseBuild", "planner" },
 	{ "plannerAheadTiles", "planner" },
 	{ "plannerWaitSeconds", "planner" },
+	{ "plannerWaterCost", "planner" },
 };
 static const Expected kExpected[] =
 {
@@ -180,7 +181,7 @@ int main()
 		}
 		if (i == CONFIG_STAGE_MAX) Fail(mod.name, "no table end within stage capacity");
 	}
-	Check(moduleKeys == 83 && activeCore == 2 && retiredCore == 22 && debug == 2, "module and core row counts");
+	Check(moduleKeys == 84 && activeCore == 2 && retiredCore == 22 && debug == 2, "module and core row counts");
 	for (size_t i = 0; i < sizeof(kOwners) / sizeof(kOwners[0]); ++i)
 	{
 		const ConfigModule* mod = NULL;

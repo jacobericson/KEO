@@ -71,6 +71,7 @@ plannerBaseBuild=1
 plannerLegSpan=2
 plannerMode=0
 plannerWaitSeconds=10
+plannerWaterCost=1
 playerCharRegistry=true
 playerHierOnCap=0
 playerHierarchical=0

@@ -15,6 +15,7 @@
 #include "planner/coarse_graph_live.h"
 #include "planner/coarse_search.h"
 #include "planner/planner_config.h"
+#include "planner/planner_water.h"
 #include "game/game.h"
 #include "base/core.h"
 #include "zone/readiness/readiness_bindings.h"
@@ -57,6 +58,7 @@ struct Built
 	float    cost;
 	int      expanded;
 	double   ms;
+	float    waterMult, waterShare;   // the search's water multiplier; the route's wet share, 0..1
 	PlanLeg  legs[PLAN_MAX_LEGS];
 };
 
@@ -98,6 +100,9 @@ static CoarseRoute    s_route;
 static PlanRouteStep  s_steps[COARSE_ROUTE_MAX];
 static PlanNodeBox    s_boxes[NODES_PER_SECTION];
 static PlanWrite      s_write;
+static float          s_orderMult[PLAN_WATER_ORDER_MAX];   // the current order's water multipliers
+static float          s_routeCentres[COARSE_ROUTE_MAX][3];
+static int            s_routeWater[COARSE_ROUTE_MAX];
 
 static float DistXz(const float a[3], const float b[3])
 {
@@ -148,10 +153,11 @@ static const CgBlock* BlockOfKey(unsigned key, int* idx)
 	return (*idx >= 0 && *idx < v.block->nodeCount) ? v.block : NULL;
 }
 
-// The node's intra arcs, then its resolved cross arcs, the first max of them.
+// The node's intra arcs, then its resolved cross arcs, the first max of them, each weighted by the
+// water under its two nodes at the search's multiplier (ctx points at it; NULL reads 1).
 static int AdapterArcs(void* ctx, unsigned key, CoarseArc* out, int max)
 {
-	(void)ctx;
+	float m = ctx ? *(const float*)ctx : 1.0f;
 	int idx;
 	const CgBlock* b = BlockOfKey(key, &idx);
 	if (!b)
@@ -163,7 +169,7 @@ static int AdapterArcs(void* ctx, unsigned key, CoarseArc* out, int max)
 	{
 		const CgArc& a = b->arcs[n.firstArc + i];
 		out[count].to = CgNodeKey(dir, a.to);
-		out[count].cost = a.cost;
+		out[count].cost = PlanWaterArcCost(a.cost, m, n.water, b->nodes[a.to].water);
 		++count;
 	}
 	if (count < max)
@@ -173,7 +179,7 @@ static int AdapterArcs(void* ctx, unsigned key, CoarseArc* out, int max)
 		for (int i = 0; i < r; ++i)
 		{
 			out[count].to = CgNodeKey(res[i].dirIndex, res[i].node);
-			out[count].cost = res[i].cost;
+			out[count].cost = PlanWaterArcCost(res[i].cost, m, n.water, res[i].water);
 			++count;
 		}
 	}
@@ -422,11 +428,17 @@ static void ResolveCrossing(unsigned from, unsigned to, PlanRouteStep* step)
 	memcpy(step->edgeB, step->portal, sizeof(step->edgeB));
 }
 
+// The legs of a found route, and its wet share from each node's centre and water byte.
 static void BuildFromRoute(const CoarseRoute& route, const float dest[3], int destSection, Built* out)
 {
 	int n = route.count;
 	for (int i = 0; i < n; ++i)
 	{
+		int idx;
+		const CgBlock* nb = BlockOfKey(route.nodes[i], &idx);
+		if (!AdapterPosition(NULL, route.nodes[i], s_routeCentres[i]))
+			memset(s_routeCentres[i], 0, sizeof(s_routeCentres[i]));
+		s_routeWater[i] = nb ? nb->nodes[idx].water : 0;
 		PlanRouteStep& s = s_steps[i];
 		memset(&s, 0, sizeof(s));
 		s.dirIndex = CgNodeDir(route.nodes[i]);
@@ -436,20 +448,23 @@ static void BuildFromRoute(const CoarseRoute& route, const float dest[3], int de
 			ResolveCrossing(route.nodes[i], route.nodes[i + 1], &s);
 	}
 	out->legCount = PlanBuildLegs(s_steps, n, dest, destSection, out->legs, &out->truncated);
+	out->waterShare = PlanRouteWaterShare(s_routeCentres, s_routeWater, n);
 }
 
-// One coarse search from start to goal, memoised within an order by the node pair.
-static const Built* SearchAndBuild(const Located& start, const Located& goal, const float dest[3])
+// One coarse search from start to goal at water multiplier m, memoised within an order by the node
+// pair and m.
+static const Built* SearchAndBuild(const Located& start, const Located& goal, const float dest[3], float m)
 {
 	unsigned __int64 memoKey = PlanMemoKey(start.key, goal.key);
 	for (int i = 0; i < s_memoCount; ++i)
-		if (s_memo[i].memoKey == memoKey)
+		if (PlanMemoSame(s_memo[i].memoKey, s_memo[i].waterMult, memoKey, m))
 			return &s_memo[i];
 	Built* b = &s_memo[s_memoCount < MEMO_ENTRIES ? s_memoCount++ : MEMO_ENTRIES - 1];
 	memset(b, 0, sizeof(*b));
 	b->memoKey = memoKey;
+	b->waterMult = m;
 	CoarseGraphOps ops;
-	ops.ctx = NULL;
+	ops.ctx = &m;
 	ops.arcs = AdapterArcs;
 	ops.position = AdapterPosition;
 	LONGLONG t0 = QpcNow();
@@ -463,14 +478,16 @@ static const Built* SearchAndBuild(const Located& start, const Located& goal, co
 	return b;
 }
 
-// Writes the character's plan and feeds its route's next tiles; -1 when the store is full.
+// Writes the character's plan, with the water multiplier m its re-plans search at, and feeds its
+// route's next tiles; -1 when the store is full.
 static int WritePlan(uintptr_t cm, const float pos[3], const Located& goal, const float dest[3],
-                     const Built& b, double now, int* verdictOut, int keepSends)
+                     const Built& b, double now, int* verdictOut, int keepSends, float m)
 {
 	PlanWrite& w = s_write;
 	memset(&w, 0, sizeof(w));
 	w.cm = cm;
 	w.keepSends = keepSends;
+	w.waterMult = m;
 	w.legCount = b.found ? b.legCount : 0;
 	memcpy(w.legs, b.legs, sizeof(PlanLeg) * w.legCount);
 	w.routeTruncated = b.truncated;
@@ -556,10 +573,10 @@ static void ReportOrderPlan(int order, int k, const Located& from, const Located
 	char line[512];
 	_snprintf_s(line, sizeof(line), _TRUNCATE,
 	            "Planner plan: order=%d char=%d from=%x:%d to=%x:%d verdict=%s legs=%d tiles=%s span=%d"
-	            " cost=%.0f expanded=%d ms=%.1f loc=%s indoors=%d road=%.3f",
+	            " cost=%.0f expanded=%d ms=%.1f loc=%s indoors=%d road=%.3f m=%.2f water=%.0f%%",
 	            order, k, (unsigned)from.uid, from.node, (unsigned)to.uid, to.node, VerdictName(verdict),
 	            b.found ? b.legCount : 0, tiles, span, b.cost, b.expanded, b.ms,
-	            to.exact ? "exact" : "footprint", indoors ? 1 : 0, road);
+	            to.exact ? "exact" : "footprint", indoors ? 1 : 0, road, b.waterMult, b.waterShare * 100.0f);
 	PlannerReportPlan(line);
 }
 
@@ -612,12 +629,14 @@ void PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void
 		return;
 	}
 	s_memoCount = 0;
+	PlannerOrderWater(chars, n, s_orderMult);
 	double now = ElapsedSec();
 	for (int k = 0; k < n; ++k)
 	{
 		uintptr_t cm = MovementOf(chars[k]);
 		if (!cm)
 			continue;
+		float m = k < PLAN_WATER_ORDER_MAX ? s_orderMult[k] : 1.0f;
 		if (IsRepeatOrder(cm, dest, now))
 		{
 			InterlockedIncrement(&PlannerCountersGet()->repeats);
@@ -632,9 +651,9 @@ void PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void
 			DropPlan(cm, PDW_UNLOCATED);
 			continue;
 		}
-		const Built* b = SearchAndBuild(start, goal, dest);
+		const Built* b = SearchAndBuild(start, goal, dest, m);
 		int verdict = PV_NONE;
-		if (WritePlan(cm, pos, goal, dest, *b, now, &verdict, 0) < 0)
+		if (WritePlan(cm, pos, goal, dest, *b, now, &verdict, 0, m) < 0)
 			continue;
 		int sx, sy, gx, gy;
 		PlanCellOf(pos[0], pos[2], &sx, &sy);
@@ -674,6 +693,7 @@ bool PlannerTickArm()
 	s_legSpan = g_plannerCfg.legSpan;
 	s_aheadTiles = g_plannerCfg.aheadTiles < 0 ? 0 : (g_plannerCfg.aheadTiles > 8 ? 8 : g_plannerCfg.aheadTiles);   // the feed buffers hold 8 cells
 	s_waitSeconds = g_plannerCfg.waitSeconds;
+	PlannerWaterArm(g_plannerCfg.waterCost);
 	return true;
 }
 
@@ -785,9 +805,9 @@ static bool Replan(const PlanView& v, uintptr_t character, double now, PlanRepla
 	if (!Locate(v.finalDest, &goal) || !Locate(pos, &start))
 		return false;
 	s_memoCount = 0;
-	const Built* b = SearchAndBuild(start, goal, v.finalDest);
+	const Built* b = SearchAndBuild(start, goal, v.finalDest, v.waterMult);
 	int verdict = PV_NONE;
-	int slot = WritePlan(v.cm, pos, goal, v.finalDest, *b, now, &verdict, 1);
+	int slot = WritePlan(v.cm, pos, goal, v.finalDest, *b, now, &verdict, 1, v.waterMult);
 	if (slot < 0)
 		return false;
 	if (why == PRW_GOAL_LOADED && !goal.exact)

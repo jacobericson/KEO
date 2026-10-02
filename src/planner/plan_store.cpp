@@ -24,6 +24,7 @@ struct PlanSlot
 	float             finalDest[3];
 	float             destAtPlan[3];                                    // written only under an odd epoch
 	float             resend[PLAN_RESEND_POINTS][3]; int resendCount;   // written only under an odd epoch
+	float             waterMult;                                        // written only under an odd epoch
 	PlanLeg           legs[PLAN_MAX_LEGS];
 	PlanMainState     main;
 };
@@ -168,6 +169,7 @@ int PlanStoreWrite(const PlanWrite& w)
 	s.routeTruncated = w.routeTruncated;
 	memcpy(s.finalDest, w.finalDest, sizeof(s.finalDest));
 	memcpy(s.destAtPlan, w.destAtPlan, sizeof(s.destAtPlan));
+	s.waterMult = w.waterMult;
 	if (!keep)
 	{
 		memset(s.resend, 0, sizeof(s.resend));
@@ -264,6 +266,7 @@ bool PlanStoreRead(int slot, PlanView* out)
 		memcpy(out->destAtPlan, s.destAtPlan, sizeof(out->destAtPlan));
 		memcpy(out->resend, s.resend, sizeof(out->resend));
 		out->resendCount = s.resendCount;
+		out->waterMult = s.waterMult;
 		memcpy(out->legs, s.legs, sizeof(out->legs));
 		LONGLONG w2 = LoadWord(s);
 		if (EpochOf(w2) != e) continue;

@@ -259,3 +259,4 @@ src\planner\plan_build.cpp
 src\planner\planner_tick.cpp
 src\planner\planner_report.cpp
 src\planner\planner_hooks.cpp
+src\planner\planner_water.cpp

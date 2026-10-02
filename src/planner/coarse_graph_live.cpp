@@ -1,8 +1,9 @@
 // coarse_graph_live.cpp - The live overlay's walk: one registering section's nodes, intra arcs,
-// footprints and border connections, read from its graph instance, its mesh instance and the
-// original mesh, written into a live buffer in world units. Pure over the memory it is handed:
-// every index is bounded by its own array's count and every pointer NULL-checked before a read;
-// no allocation, no lock, no log. Any thread; the caller keeps the instances stable.
+// footprints, water bytes and border connections, read from its graph instance, its mesh instance
+// and the original mesh, written into a live buffer in world units. Pure over the memory it is
+// handed: every index is bounded by its own array's count (a face-data word by the array's count
+// and striding) and every pointer NULL-checked before a read; no allocation, no lock, no log. Any
+// thread; the caller keeps the instances stable.
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -10,6 +11,7 @@
 #include "planner/coarse_graph.h"
 
 #include <float.h>
+#include <math.h>
 #include <string.h>
 
 namespace planner {
@@ -141,6 +143,7 @@ static void CopyCentres(const GraphView& g, const float shift[3], CgBlock* buf)
 			node.boxMax[ax] = -FLT_MAX;
 		}
 		node.faces = 0;
+		node.water = 0;
 		node.firstArc = node.arcCount = 0;
 		node.firstBorder = node.borderCount = 0;
 	}
@@ -197,10 +200,23 @@ static bool FaceInRange(const MeshView& m, int start, int num)
 }
 
 // Each original face whose cluster names a node folds vertex a of each edge of its run into that
-// node's box and face count; a face with any index out of range counts nowhere. A node left
-// without a vertex takes its centre as its box.
-static void CopyFootprints(const MeshView& m, const float shift[3], CgBlock* buf, CgLiveCounts* counts)
+// node's box and face count, and its x/z fan area (the vertices as stored, in double) into the
+// node's total and, when its first face-data word is 3, its wet sum; a face with any index out of
+// range counts nowhere. A node left without a vertex takes its centre as its box. Face data the
+// section's faces cannot all index (a NULL array, a striding below 1, or too few words) leaves
+// every node dry and counts noFaceData once.
+static void CopyFootprints(const MeshView& m, const void* mesh, const float shift[3], CgBlock* buf, CgLiveCounts* counts)
 {
+	const unsigned char* faceData = PtrAt(mesh, LIVE_NM_FACE_DATA);
+	__int64 faceDataCount = faceData ? IntAt(mesh, LIVE_NM_FACE_DATA + OFF_HKARRAY_SIZE) : 0;
+	__int64 striding = IntAt(mesh, LIVE_NM_FACE_DATA_STRIDING);
+	bool haveFaceData = faceData && striding >= 1 && (__int64)(m.faceCount - 1) * striding < faceDataCount;
+	if (m.faceCount > 0 && !haveFaceData)
+		counts->noFaceData = 1;
+	double area[CG_LIVE_MAX_NODES];
+	double wetArea[CG_LIVE_MAX_NODES];
+	for (int k = 0; k < buf->nodeCount; ++k)
+		area[k] = wetArea[k] = 0.0;
 	for (int f = 0; f < m.faceCount; ++f)
 	{
 		const unsigned char* face = m.faces + (size_t)f * LIVE_FACE_STRIDE;
@@ -212,9 +228,20 @@ static void CopyFootprints(const MeshView& m, const float shift[3], CgBlock* buf
 		CgNode& node = buf->nodes[c];
 		++node.faces;
 		++counts->faces;
+		double x0 = 0.0, z0 = 0.0, xp = 0.0, zp = 0.0, fan = 0.0;
 		for (int i = 0; i < num; ++i)
 		{
 			const float* v = VertexAt(m, IntAt(m.edges + (size_t)(start + i) * LIVE_EDGE_STRIDE, OFF_EDGE_VERTEX_INDEX));
+			double xk = (double)v[0], zk = (double)v[2];
+			if (i == 0)
+			{
+				x0 = xk;
+				z0 = zk;
+			}
+			else if (i >= 2)
+				fan += (xp - x0) * (zk - z0) - (xk - x0) * (zp - z0);
+			xp = xk;
+			zp = zk;
 			float h[3];
 			HavokPoint(m.frame, v, h);
 			for (int ax = 0; ax < 3; ++ax)
@@ -224,10 +251,19 @@ static void CopyFootprints(const MeshView& m, const float shift[3], CgBlock* buf
 				if (w > node.boxMax[ax]) node.boxMax[ax] = w;
 			}
 		}
+		double faceArea = fabs(fan) * 0.5;
+		area[c] += faceArea;
+		if (haveFaceData && (__int64)f * striding < faceDataCount
+		    && *(const int*)(faceData + (size_t)((__int64)f * striding) * 4) == 3)
+			wetArea[c] += faceArea;
 	}
 	for (int k = 0; k < buf->nodeCount; ++k)
 	{
 		CgNode& node = buf->nodes[k];
+		double total = area[k];
+		node.water = total > 0 ? (int)(wetArea[k] / total * 255.0 + 0.5) : 0;
+		if (node.water != 0)
+			++counts->waterNodes;
 		if (node.boxMin[0] <= node.boxMax[0])
 			continue;
 		for (int ax = 0; ax < 3; ++ax)
@@ -380,7 +416,7 @@ CgLiveResult CgLiveCopy(const void* graphInst, const void* coll, const float shi
 	if (!counts)
 		counts = &unused;
 	counts->slot = -1;
-	counts->faces = counts->bordersSkipped = counts->arcsSkipped = 0;
+	counts->faces = counts->bordersSkipped = counts->arcsSkipped = counts->waterNodes = counts->noFaceData = 0;
 	if (!graphInst || !coll || !shift || !buf)
 		return CGL_NO_MESH;
 	int slot = IntAt(graphInst, OFF_GI_SECTION);
@@ -408,7 +444,7 @@ CgLiveResult CgLiveCopy(const void* graphInst, const void* coll, const float shi
 	CgLiveResult r = CopyArcs(g, buf, counts);
 	if (r != CGL_OK)
 		return r;
-	CopyFootprints(m, shift, buf, counts);
+	CopyFootprints(m, mesh, shift, buf, counts);
 	r = CopyBorders(m, mesh, uid, shift, buf, counts);
 	if (r != CGL_OK)
 		return r;

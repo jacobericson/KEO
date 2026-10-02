@@ -56,6 +56,8 @@ bool PlanRepeatDue(const float planDest[3], const float newDest[3], double planA
 
 // The memo key of one order's searches: characters whose start and goal nodes match share one.
 unsigned __int64 PlanMemoKey(unsigned startNode, unsigned goalNode);
+// Whether a memoised search answers another: the same node pair and the same water multiplier.
+bool PlanMemoSame(unsigned __int64 keyA, float multA, unsigned __int64 keyB, float multB);
 
 } // namespace planner
 

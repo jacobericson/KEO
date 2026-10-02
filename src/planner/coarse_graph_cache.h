@@ -15,7 +15,7 @@
 namespace planner {
 
 const unsigned PLANNER_CACHE_MAGIC   = 0x31505A4Bu;   // 'K' 'Z' 'P' '1' in file order
-const unsigned PLANNER_CACHE_VERSION = 1;              // any layout change bumps it
+const unsigned PLANNER_CACHE_VERSION = 2;              // any layout change bumps it
 
 struct CgCacheHeader        // 64 bytes at offset 0
 {
@@ -38,8 +38,9 @@ struct CgCacheIndexEntry    // 40 bytes, one per cached tile, sorted by (gy, gx)
 };
 unsigned CgCrc32(const void* data, size_t n);     // reflected 0xEDB88320; "123456789" -> 0xCBF43926
 // A tile's record: a 16-byte head {sectionCount, interiorsDropped, bordersSkipped, 0}, then per
-// section {uid, kind, gx, gy, origin[3], nodeCount, arcCount, borderCount} then its nodes, arcs and
-// borders as the TileGraph holds them (a node's firstArc counted from the section's first arc).
+// section {uid, kind, gx, gy, origin[3], nodeCount, arcCount, borderCount} then its nodes (each with
+// its water byte), arcs and borders as the TileGraph holds them (a node's firstArc counted from the
+// section's first arc).
 void CgCacheEncodeTile(const TileGraph& g, std::vector<unsigned char>* out);
 bool CgCacheDecodeTile(const unsigned char* p, size_t n, TileGraph* out);   // false on any bound
 // The whole file: header, index, payload. Validate refuses a bad magic, version, reader version,

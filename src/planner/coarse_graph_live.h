@@ -20,6 +20,8 @@ const size_t LIVE_NMI_FRAME_COL1        = 0x80;
 const size_t LIVE_NMI_FRAME_COL2        = 0x90;
 const size_t LIVE_NMI_FRAME_TRANSLATION = 0xA0;
 const size_t LIVE_NM_STREAMING_SETS     = 0x40;   // hkaiNavMesh::m_streamingSets (hkArray)
+const size_t LIVE_NM_FACE_DATA          = 0x50;   // hkaiNavMesh::m_faceData (hkArray of int)
+const size_t LIVE_NM_FACE_DATA_STRIDING = 0x70;   // hkaiNavMesh::m_faceDataStriding
 const size_t LIVE_SET_STRIDE            = 56;
 const size_t LIVE_SET_THIS_UID          = 0;
 const size_t LIVE_SET_OPP_UID           = 4;
@@ -38,7 +40,7 @@ enum CgLiveResult
 	CGL_OVER_ARCS,
 	CGL_OVER_BORDERS
 };
-struct CgLiveCounts { int slot; long faces; long bordersSkipped; long arcsSkipped; };
+struct CgLiveCounts { int slot; long faces; long bordersSkipped; long arcsSkipped; long waterNodes; long noFaceData; };
 
 // Fills buf (a live buffer from CgLiveAcquire) from the registering graph instance and its mesh
 // instance, and reports the graph instance's collection slot in counts->slot. shift is

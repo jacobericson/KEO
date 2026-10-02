@@ -20,7 +20,7 @@ using namespace coarse_graph_cache_detail;
 
 static_assert(sizeof(CgCacheHeader) == 64, "cache header size");
 static_assert(sizeof(CgCacheIndexEntry) == 40, "cache index entry size");
-static_assert(sizeof(TgNode) == 48 && sizeof(TgArc) == 8 && sizeof(TgBorder) == 48, "record element sizes");
+static_assert(sizeof(TgNode) == 52 && sizeof(TgArc) == 8 && sizeof(TgBorder) == 48, "record element sizes");
 static_assert(sizeof(TileHead) == 16 && sizeof(SectionHead) == 40, "record head sizes");
 
 static bool Take(Reader* r, void* out, size_t k)
@@ -128,7 +128,8 @@ static bool DecodeSection(Reader* r, TileGraph* out)
 	{
 		TgNode n;
 		Take(r, &n, sizeof(n));
-		if (n.arcCount < 0 || n.firstArc < 0 || n.firstArc > sh.arcCount || n.arcCount > sh.arcCount - n.firstArc)
+		if (n.arcCount < 0 || n.firstArc < 0 || n.firstArc > sh.arcCount || n.arcCount > sh.arcCount - n.firstArc
+		    || n.water < 0 || n.water > 255)
 			return false;
 		n.firstArc += arcBase;
 		out->nodes.push_back(n);

@@ -19,6 +19,7 @@
 #include "planner/planner_config.h"
 #include "planner/plan_store.h"
 #include "planner/planner_tick.h"
+#include "planner/planner_water.h"
 #include "game/game.h"
 #include "base/core.h"
 #include "zone/readiness/readiness_bindings.h"
@@ -62,6 +63,7 @@ enum TileLoad { TL_OK = 0, TL_OK_TAIL, TL_FAILED, TL_FAILED_TAIL };
 struct PassTotals
 {
 	int tiles, failed, tailStops, clusters, arcs, borders, arcsTrunc, maxNodes, replaced, handedOff, outranked;
+	int waterNodes;   // nodes with a non-zero water byte
 };
 
 } // namespace coarse_graph_base_detail
@@ -193,6 +195,8 @@ static bool PublishTile(const TileGraph& g, int gx, int gy, int source, unsigned
 		if (!b)
 			return false;
 		t->clusters += b->nodeCount;
+		for (int k = 0; k < b->nodeCount; ++k)
+			t->waterNodes += b->nodes[k].water != 0 ? 1 : 0;
 		t->arcs += b->arcCount;
 		t->borders += b->borderCount;
 		t->arcsTrunc += b->arcsTrunc;
@@ -408,9 +412,9 @@ static void BuildBase()
 	char line[320];
 	_snprintf_s(line, sizeof(line), _TRUNCATE,
 	            "Planner base: tiles=%d/%d failed=%d tailStops=%d clusters=%d arcs=%d borders=%d arcsTrunc=%d ms=%d"
-	            " cacheHits=%d cacheWrite=%s maxNodes=%d unsearchable=%ld",
+	            " cacheHits=%d cacheWrite=%s maxNodes=%d waterNodes=%d unsearchable=%ld",
 	            t.tiles, (int)names.size(), t.failed, t.tailStops, t.clusters, t.arcs, t.borders, t.arcsTrunc,
-	            (int)QpcToMs(QpcNow() - t0), hits, write, t.maxNodes, UnsearchableSoFar());
+	            (int)QpcToMs(QpcNow() - t0), hits, write, t.maxNodes, t.waterNodes, UnsearchableSoFar());
 	LogMsgDeferrable(line);
 }
 
@@ -446,9 +450,9 @@ static void ReplaceSaveTiles(const SaveRequest& req)
 	char line[320];
 	_snprintf_s(line, sizeof(line), _TRUNCATE,
 	            "Planner base: save gen=%u layers=%d layersCut=%d tiles=%d failed=%d replaced=%d handedOff=%d"
-	            " outranked=%d arcsTrunc=%d ms=%d unsearchable=%ld",
+	            " outranked=%d arcsTrunc=%d ms=%d waterNodes=%d unsearchable=%ld",
 	            req.storeGen, req.layers, req.layersCut, t.tiles, t.failed, t.replaced, t.handedOff, t.outranked,
-	            t.arcsTrunc, (int)QpcToMs(QpcNow() - t0), UnsearchableSoFar());
+	            t.arcsTrunc, (int)QpcToMs(QpcNow() - t0), t.waterNodes, UnsearchableSoFar());
 	LogMsgDeferrable(line);
 }
 
@@ -524,7 +528,8 @@ void PlannerBaseStartStep(int* installed, int* total)
 	std::ostringstream arm;
 	arm << "Planner arm: mode=" << PlannerModeName(g_plannerCfg.mode) << " legSpan=" << g_plannerCfg.legSpan
 	    << " aheadTiles=" << g_plannerCfg.aheadTiles << " waitSeconds=" << g_plannerCfg.waitSeconds
-	    << " baseBuild=" << g_plannerCfg.baseBuild;
+	    << " baseBuild=" << g_plannerCfg.baseBuild << " water=" << PlanWaterModeName(g_plannerCfg.waterCost)
+	    << " waterBind=" << PlannerWaterBindToken();
 	LogMsg(arm.str());
 	InitializeCriticalSection(&s_requestCS);
 	if (!g_plannerCfg.baseBuild)

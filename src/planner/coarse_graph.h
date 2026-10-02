@@ -28,7 +28,7 @@ const int CG_INTERIOR_PROBES   = 64;
 
 enum CgSource { CG_BASE = 0, CG_SAVE = 1, CG_LIVE = 2 };
 
-struct CgNode   { float centre[3]; float boxMin[3]; float boxMax[3]; int faces; int firstArc; int arcCount; int firstBorder; int borderCount; };
+struct CgNode   { float centre[3]; float boxMin[3]; float boxMax[3]; int faces; int water; int firstArc; int arcCount; int firstBorder; int borderCount; };
 struct CgArc    { int to; float cost; };                          // intra, world units
 struct CgBorder { int oppUid; int face; int oppFace; int from; float portal[3]; float a[3]; float b[3]; };
 
@@ -118,9 +118,10 @@ CgBlock* CgBlockFromTile(const TileGraph& g, int section, int source, unsigned s
 // Cross resolution at read time (pure over blocks). For node `node` of `a`, every border resolved
 // against its neighbour's block (neighbourOf returns it or NULL): the neighbour's border with
 // oppUid == a->uid and face == oppFace names the target node; borders to one (neighbour, node)
-// collapse into one arc whose portal is the longest border edge's midpoint and whose cost is the
-// world distance between the two centres. Returns the arcs written, at most max.
-struct CgResolved { int dirIndex; int node; float cost; float portal[3]; float edgeA[3]; float edgeB[3]; };
+// collapse into one arc whose portal is the longest border edge's midpoint, whose cost is the
+// world distance between the two centres and whose water is the target node's byte. Returns the arcs
+// written, at most max.
+struct CgResolved { int dirIndex; int node; float cost; int water; float portal[3]; float edgeA[3]; float edgeB[3]; };
 typedef const CgBlock* (*CgNeighbourFn)(void* ctx, int uid, int* dirIndexOut);
 int CgCrossArcs(const CgBlock* a, int node, CgNeighbourFn neighbourOf, void* ctx, CgResolved* out, int max);
 

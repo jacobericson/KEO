@@ -21,6 +21,16 @@ struct HavokCharacterMessage;
 #include <kenshi/NavInstance.h>
 #include <kenshi/Character.h>
 #include <kenshi/CharStats.h>
+// The race header brings in the library's item header, whose ContainerItem::canEquip hides
+// RaceLimiter's two overloads; that header is not the mod's to change.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Woverloaded-virtual"
+#endif
+#include <kenshi/RaceData.h>
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 #include <kenshi/CharMovement.h>
 #include <kenshi/CharBody.h>
 #include <kenshi/HavokCharacter.h>

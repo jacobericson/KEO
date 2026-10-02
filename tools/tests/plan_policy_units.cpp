@@ -536,6 +536,112 @@ static void CheckArm()
 	Check(PlanArmDecide(PLANNER_ON, false) == PLAN_ARM_REFUSE_PREREQ, "arm: on without playerHierarchical=on refuses");
 }
 
+// ---- The water cost ----
+
+static PlanWaterInputs Water(int mode, float land, float water, float engine)
+{
+	PlanWaterInputs in;
+	memset(&in, 0, sizeof(in));
+	in.mode = mode;
+	in.readOk = 1;
+	in.landSpeed = land;
+	in.waterSpeed = water;
+	in.raceWalkSpeed = 15.0f;
+	in.swims = 1;
+	in.engineValue = engine;
+	return in;
+}
+
+static bool Near(float a, float b, float tol)
+{
+	return std::fabs(a - b) <= tol;
+}
+
+static void CheckWaterModes()
+{
+	PlanWaterInputs off = Water(PWC_OFF, 95.0f, 1.0f, 5.0f);
+	PlanWaterInputs offUnread = off;
+	offUnread.readOk = 0;
+	CHECK(PlanWaterMultiplier(off) == 1.0f && PlanWaterMultiplier(offUnread) == 1.0f,
+	      "water: off is 1 whatever the inputs");
+
+	PlanWaterInputs eng = Water(PWC_ENGINE, 95.0f, 1.0f, 5.0f);
+	PlanWaterInputs engLow = Water(PWC_ENGINE, 95.0f, 1.0f, 0.5f);
+	PlanWaterInputs engZero = Water(PWC_ENGINE, 95.0f, 1.0f, 0.0f);
+	CHECK(PlanWaterMultiplier(eng) == 5.0f && PlanWaterMultiplier(engLow) == 1.0f && PlanWaterMultiplier(engZero) == 1.0f,
+	      "water: engine mode is the engine value floored at 1");
+
+	CHECK(Near(PlanWaterMultiplier(Water(PWC_FLOOR, 80.0f, 7.9f, 5.0f)), 10.13f, 0.01f),
+	      "water: floor takes the ratio when it exceeds the engine value");
+	CHECK(PlanWaterMultiplier(Water(PWC_FLOOR, 95.0f, 25.0f, 5.0f)) == 5.0f,
+	      "water: floor takes the engine value when it exceeds the ratio");
+	CHECK(Near(PlanWaterMultiplier(Water(PWC_DYNAMIC, 95.0f, 25.0f, 5.0f)), 3.8f, 1e-4f),
+	      "water: dynamic is the ratio alone");
+
+	// A race that does not swim: W' = 2 * 15 = 30 whatever its swim speed reads; 95 / 30 = 3.1667.
+	PlanWaterInputs robotDyn = Water(PWC_DYNAMIC, 95.0f, 999.0f, 5.0f);
+	robotDyn.swims = 0;
+	PlanWaterInputs robotFloor = robotDyn;
+	robotFloor.mode = PWC_FLOOR;
+	CHECK(Near(PlanWaterMultiplier(robotDyn), 3.1667f, 1e-3f) && PlanWaterMultiplier(robotFloor) == 5.0f,
+	      "water: a race that does not swim walks the bottom at twice its walk speed");
+
+	CHECK(PlanWaterMultiplier(Water(PWC_FLOOR, 95.0f, 1.0f, 5.0f)) == PLAN_WATER_CAP
+	      && PlanWaterMultiplier(Water(PWC_DYNAMIC, 95.0f, 1.0f, 5.0f)) == 20.0f,
+	      "water: the multiplier is capped at 20");
+
+	bool floored = true;
+	for (int mode = PWC_OFF; mode <= PWC_ENGINE; ++mode)
+		floored = floored && PlanWaterMultiplier(Water(mode, 11.0f, 25.0f, 0.5f)) == 1.0f;
+	CHECK(floored, "water: the multiplier is never below 1");
+
+	PlanWaterInputs unreadFloor = Water(PWC_FLOOR, 95.0f, 1.0f, 5.0f);
+	unreadFloor.readOk = 0;
+	PlanWaterInputs unreadDyn = unreadFloor;
+	unreadDyn.mode = PWC_DYNAMIC;
+	CHECK(PlanWaterMultiplier(unreadFloor) == 5.0f && PlanWaterMultiplier(unreadDyn) == 5.0f,
+	      "water: a failed read falls back to the engine value");
+
+	// WALK: both speeds bounded by the walk speed 15; 15 / 13.6 = 1.1029.
+	PlanWaterInputs walk = Water(PWC_DYNAMIC, 95.0f, 13.6f, 1.0f);
+	walk.speedCap = 15.0f;
+	CHECK(Near(PlanWaterMultiplier(walk), 1.1029f, 1e-3f), "water: the walk cap bounds both speeds");
+}
+
+static void CheckWaterGroup()
+{
+	// A runs slowly and swims well, B runs fast and swims badly: the squad runs at 70 and swims at 6.
+	PlanWaterInputs pair[2] = { Water(PWC_DYNAMIC, 70.0f, 44.0f, 1.0f), Water(PWC_DYNAMIC, 120.0f, 6.0f, 1.0f) };
+	float group = PlanWaterGroupMultiplier(pair, 2);
+	float larger = PlanWaterMultiplier(pair[0]) > PlanWaterMultiplier(pair[1]) ? PlanWaterMultiplier(pair[0])
+	                                                                          : PlanWaterMultiplier(pair[1]);
+	CHECK(Near(group, 11.667f, 1e-3f) && larger == 20.0f,
+	      "water: a run-together order plans on its slowest runner and slowest swimmer");
+
+	PlanWaterInputs races[2] = { Water(PWC_FLOOR, 60.0f, 30.0f, 3.5f), Water(PWC_FLOOR, 60.0f, 30.0f, 5.5f) };
+	CHECK(PlanWaterGroupMultiplier(races, 2) == 5.5f, "water: the group's engine floor is the largest member's");
+
+	PlanWaterInputs failed[2] = { Water(PWC_DYNAMIC, 70.0f, 44.0f, 1.0f), Water(PWC_DYNAMIC, 10.0f, 2.0f, 1.0f) };
+	failed[1].readOk = 0;
+	CHECK(Near(PlanWaterGroupMultiplier(failed, 2), 1.5909f, 1e-3f),
+	      "water: a member whose read failed is left out of the group's speeds");
+}
+
+static void CheckWaterArcs()
+{
+	CHECK(PlanWaterArcCost(123.4f, 1.0f, 255, 255) == 123.4f && PlanWaterArcCost(123.4f, 0.5f, 255, 0) == 123.4f,
+	      "water: an arc costs its length at m 1");
+	CHECK(Near(PlanWaterArcCost(100.0f, 5.0f, 255, 255), 500.0f, 1e-3f), "water: an all-water arc costs m times its length");
+	CHECK(Near(PlanWaterArcCost(100.0f, 5.0f, 0, 255), 300.0f, 1e-3f),
+	      "water: a half-wet arc costs its length times 1 + (m - 1) / 2");
+
+	// Steps of 100 (bytes 0, 255: half wet) and 200 (255, 255: all wet): (50 + 200) / 300.
+	const float centres[3][3] = { { 0.0f, 0.0f, 0.0f }, { 100.0f, 0.0f, 0.0f }, { 300.0f, 0.0f, 0.0f } };
+	const int water[3] = { 0, 255, 255 };
+	CHECK(Near(PlanRouteWaterShare(centres, water, 3), 0.8333f, 1e-3f) && PlanRouteWaterShare(centres, water, 1) == 0.0f,
+	      "water: the route share weights each step by its two nodes");
+}
+
 int main()
 {
 	CheckCellsAndMode();
@@ -550,5 +656,8 @@ int main()
 	CheckComplete();
 	CheckFeed();
 	CheckArm();
+	CheckWaterModes();
+	CheckWaterGroup();
+	CheckWaterArcs();
 	return CheckExit("plan_policy_units");
 }

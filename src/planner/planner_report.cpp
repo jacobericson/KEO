@@ -37,7 +37,8 @@ static LONG CounterSum(const PlannerCounters& c)
 	     + c.roadPreempt + c.notConsulted + c.staleRerequest + c.snapFail + c.flips + c.waits
 	     + c.slotFull + c.repeats + c.locFail + c.goalUnlocated + c.startUnlocated + c.notSite + c.staleAdvance + c.rung17
 	     + c.ownedSkips + c.noLocation
-	     + c.reissuedPlanned + c.heldPlanned + c.reissueRefused + c.snapFar + c.snapMax;
+	     + c.reissuedPlanned + c.heldPlanned + c.reissueRefused + c.snapFar + c.snapMax
+	     + c.waterFail + c.waterGroups;
 }
 
 void PlannerReportTick(double now)
@@ -63,7 +64,8 @@ void PlannerReportTick(double now)
 	            " roadPreempt=%ld notConsulted=%ld staleRerequest=%ld snapFail=%ld flips=%ld waits=%ld"
 	            " slotFull=%ld repeats=%ld locFail=%ld goalUnlocated=%ld startUnlocated=%ld notSite=%ld staleAdvance=%ld"
 	            " rung17=%ld ownedSkips=%ld noLocation=%ld"
-	            " reissuedPlanned=%ld heldPlanned=%ld reissueRefused=%ld snapFar=%ld snapMax=%ld",
+	            " reissuedPlanned=%ld heldPlanned=%ld reissueRefused=%ld snapFar=%ld snapMax=%ld"
+	            " waterFail=%ld waterGroups=%ld",
 	            (long)c.plans, (long)c.direct, (long)c.legged, (long)c.noRoute, (long)c.legs, (long)c.arrivals,
 	            (long)c.rungs,
 	            (long)c.replans, (long)c.replansBy[1], (long)c.replansBy[2], (long)c.replansBy[3], (long)c.replansBy[4],
@@ -74,7 +76,8 @@ void PlannerReportTick(double now)
 	            (long)c.staleRerequest, (long)c.snapFail, (long)c.flips, (long)c.waits, (long)c.slotFull,
 	            (long)c.repeats, (long)c.locFail, (long)c.goalUnlocated, (long)c.startUnlocated, (long)c.notSite,
 	            (long)c.staleAdvance, (long)c.rung17, (long)c.ownedSkips, (long)c.noLocation,
-	            (long)c.reissuedPlanned, (long)c.heldPlanned, (long)c.reissueRefused, (long)c.snapFar, (long)c.snapMax);
+	            (long)c.reissuedPlanned, (long)c.heldPlanned, (long)c.reissueRefused, (long)c.snapFar, (long)c.snapMax,
+	            (long)c.waterFail, (long)c.waterGroups);
 	LogMsg(line);
 }
 

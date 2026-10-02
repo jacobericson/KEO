@@ -355,6 +355,18 @@ static void CheckBlocks()
 	Check(ok, "store: a hand-made tile's block carries its nodes, arcs and borders");
 	if (blk) CgPublishBase(CgInsertInterior(blk->uid), blk);
 
+	TileGraph w;
+	w.interiorsDropped = 0;
+	w.bordersSkipped = 0;
+	AddSection(&w, 0x0406, TGS_EXTERIOR, 3, 0.0f);
+	w.nodes[0].water = 0;
+	w.nodes[1].water = 128;
+	w.nodes[2].water = 255;
+	CgBlock* wet = CgBlockFromTile(w, 0, CG_BASE, 0);
+	Check(wet && wet->nodes[0].water == 0 && wet->nodes[1].water == 128 && wet->nodes[2].water == 255,
+	      "store: a block keeps its nodes' water");
+	if (wet) CgPublishBase(CgIndexOfUid(wet->uid), wet);
+
 	TileGraph t;
 	t.interiorsDropped = 0;
 	t.bordersSkipped = 0;
@@ -430,6 +442,9 @@ static void CheckCross()
 	AddBorder(&ga, 0x0001, 12, 22, 0, c0, c1);
 	AddSection(&gb, 0x0001, TGS_EXTERIOR, 2, 5000.0f);
 	gb.nodes[1].centre[2] = 300.0f;
+	ga.nodes[0].water = 50;
+	gb.nodes[0].water = 7;
+	gb.nodes[1].water = 200;
 	AddBorder(&gb, 0x0000, 20, 10, 1, a0, a1);
 	AddBorder(&gb, 0x0000, 21, 11, 1, b0, b1);
 	AddBorder(&gb, 0x0000, 22, 12, 0, c0, c1);
@@ -457,6 +472,8 @@ static void CheckCross()
 	Check(toB1 >= 0 && std::fabs(out[toB1].cost - (float)std::sqrt(1100.0 * 1100.0 + 300.0 * 300.0)) < 1e-2f
 	      && toB0 >= 0 && std::fabs(out[toB0].cost - 1000.0f) < 1e-2f,
 	      "cross: the cost is the world distance between the centres");
+	Check(toB1 >= 0 && out[toB1].water == 200 && toB0 >= 0 && out[toB0].water == 7,
+	      "cross: a resolved arc carries its target's water");
 	nb.count = 1;
 	Check(CgCrossArcs(A, 0, FindNeighbour, &nb, out, 8) == 0, "cross: a missing neighbour resolves nothing");
 	CgPublishBase(0, A);
@@ -471,6 +488,8 @@ static TileGraph CacheTile(float shift)
 	g.interiorsDropped = 2;
 	g.bordersSkipped = 1;
 	AddSection(&g, 0x0507, TGS_EXTERIOR, 3, shift);
+	g.nodes[1].water = 254;
+	g.nodes[2].water = 255;
 	float a[3], b[3];
 	SetV(a, 1.0f, 2.0f, 3.0f);
 	SetV(b, 4.0f, 5.0f, 6.0f);
@@ -534,6 +553,21 @@ static void CheckCache()
 	CgCacheDecodeTile(&rec[0], rec.size(), &out);
 	Check(decoded && shortRefused && SameTile(in, out) && out.sections[1].uid == (int)0x8040086e,
 	      "cache: a tile record round-trips");
+	Check(decoded && out.nodes.size() == 5 && out.nodes[0].water == 0 && out.nodes[1].water == 254
+	      && out.nodes[2].water == 255 && out.nodes[3].water == 0,
+	      "cache: a tile record keeps its water bytes");
+
+	TileGraph high = CacheTile(0.0f), low = CacheTile(0.0f), edge = CacheTile(0.0f);
+	high.nodes[0].water = 256;
+	low.nodes[4].water = -1;
+	edge.nodes[0].water = 255;
+	std::vector<unsigned char> highRec, lowRec, edgeRec;
+	CgCacheEncodeTile(high, &highRec);
+	CgCacheEncodeTile(low, &lowRec);
+	CgCacheEncodeTile(edge, &edgeRec);
+	Check(!CgCacheDecodeTile(&highRec[0], highRec.size(), &out) && !CgCacheDecodeTile(&lowRec[0], lowRec.size(), &out)
+	      && CgCacheDecodeTile(&edgeRec[0], edgeRec.size(), &out) && out.nodes[0].water == 255,
+	      "cache: a node water byte outside 0..255 is refused");
 
 	std::vector<unsigned char> file;
 	TwoTileFile(&file);
@@ -568,6 +602,15 @@ static void CheckCache()
 	Check(CgCacheValidate(&badMagic[0], badMagic.size()) == CGC_MAGIC
 	      && CgCacheValidate(&badVersion[0], badVersion.size()) == CGC_VERSION,
 	      "cache: a bad magic or version is refused");
+
+	// A version-1 file with its header CRC recomputed, so only the version can refuse it.
+	std::vector<unsigned char> v1(file);
+	CgCacheHeader* v1h = (CgCacheHeader*)&v1[0];
+	v1h->version = 1;
+	std::vector<unsigned char> crcInput(v1.begin(), v1.begin() + 32);
+	crcInput.insert(crcInput.end(), v1.begin() + v1h->indexOffset, v1.begin() + v1h->indexOffset + v1h->indexBytes);
+	v1h->headerCrc = CgCrc32(&crcInput[0], crcInput.size());
+	Check(CgCacheValidate(&v1[0], v1.size()) == CGC_VERSION, "cache: a version-1 file is refused");
 }
 
 // ---- Read whole ----------------------------------------------------------------------------------

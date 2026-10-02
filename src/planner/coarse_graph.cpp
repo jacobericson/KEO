@@ -686,6 +686,7 @@ CgBlock* CgBlockFromTile(const TileGraph& g, int section, int source, unsigned s
 		memcpy(n.boxMin, tn.boxMin, sizeof(n.boxMin));
 		memcpy(n.boxMax, tn.boxMax, sizeof(n.boxMax));
 		n.faces = tn.faces;
+		n.water = tn.water;
 		n.firstArc = arc;
 		for (int k = 0; k < tn.arcCount; ++k)
 		{
@@ -776,6 +777,7 @@ int CgCrossArcs(const CgBlock* a, int node, CgNeighbourFn neighbourOf, void* ctx
 			out[j].dirIndex = dir;
 			out[j].node = target;
 			out[j].cost = sqrtf(Dist2(from.centre, nb->nodes[target].centre));
+			out[j].water = nb->nodes[target].water;
 			best[j] = -1.0f;
 			++written;
 		}

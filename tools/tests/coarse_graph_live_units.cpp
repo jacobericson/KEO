@@ -307,6 +307,52 @@ static void CheckBaseWorld()
 	      "live: each node lists its borders in border order");
 }
 
+// Face data on the original mesh, striding 1: faces 0, 1 and 3 are water (word 3), face 2 dry. Face 2
+// is moved to node 1 and the owned vertex to (6, 1, 6), so node 1 holds face 1 (vertices (2,2),
+// (0,2), (6,6) in x/z: area 4) and face 2 (vertices (0,0), (2,0), (2,2): area 2). Node 0's one face
+// is water: 255. Node 1: 4 of 6 by area, 4 / 6 * 255 + 0.5 = 170.5 -> 170 (by count it would be
+// 128). Node 2 has no face: 0.
+static void CheckWater()
+{
+	World w;
+	Build(w, 3);
+	SetFace(w.faces, 2, 0, 3, 1);
+	PutVec(w.owned, 0, 6.0f, 1.0f, 6.0f);
+	Bytes faceData(4 * 4, 0);
+	PutInt(faceData, 0, 3);
+	PutInt(faceData, 4, 3);
+	PutInt(faceData, 8, 0);
+	PutInt(faceData, 12, 3);
+	PutArray(w.mesh, LIVE_NM_FACE_DATA, faceData, 4);
+	PutInt(w.mesh, LIVE_NM_FACE_DATA_STRIDING, 1);
+	Buffer x;
+	MakeBuffer(x, 8, 8, 8);
+	CgLiveCounts c;
+	CgLiveResult r = Copy(w, x, &c);
+	Check(r == CGL_OK && x.nodes[0].water == 255 && x.nodes[1].faces == 2 && x.nodes[1].water == 170
+	      && x.nodes[2].water == 0 && c.waterNodes == 2 && c.noFaceData == 0,
+	      "live: a node's water is the area share of its FaceData-3 faces");
+
+	// No array (the base world), a striding of 0, and an array two words short of the four faces.
+	World none;
+	Build(none, 3);
+	Buffer y;
+	MakeBuffer(y, 8, 8, 8);
+	CgLiveCounts cn;
+	bool noArray = Copy(none, y, &cn) == CGL_OK && y.nodes[0].water == 0 && y.nodes[1].water == 0
+	            && cn.noFaceData == 1 && cn.waterNodes == 0;
+	PutInt(w.mesh, LIVE_NM_FACE_DATA_STRIDING, 0);
+	CgLiveCounts cz;
+	bool zeroStride = Copy(w, x, &cz) == CGL_OK && x.nodes[0].water == 0 && x.nodes[1].water == 0
+	               && cz.noFaceData == 1 && cz.waterNodes == 0;
+	PutInt(w.mesh, LIVE_NM_FACE_DATA_STRIDING, 1);
+	PutArray(w.mesh, LIVE_NM_FACE_DATA, faceData, 2);
+	CgLiveCounts cs;
+	bool shortArray = Copy(w, x, &cs) == CGL_OK && x.nodes[0].water == 0 && x.nodes[1].water == 0
+	               && cs.noFaceData == 1 && cs.waterNodes == 0;
+	Check(noArray && zeroStride && shortArray, "live: a mesh without face data reads dry and counts noFaceData");
+}
+
 static void CheckRefusals()
 {
 	World w;
@@ -481,6 +527,7 @@ static void CheckThroughStore()
 int main()
 {
 	CheckBaseWorld();
+	CheckWater();
 	CheckRefusals();
 	CheckOverNodes();
 	CheckOverBorders();

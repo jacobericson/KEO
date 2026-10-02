@@ -2,6 +2,7 @@
 // lock, no allocation, any thread.
 
 #include <cmath>
+#include <float.h>
 #include "planner/plan_policy.h"
 
 namespace planner {
@@ -251,6 +252,102 @@ PlanArm PlanArmDecide(int mode, bool playerHierarchicalOn)
 	if (mode == PLANNER_OBSERVE) return PLAN_ARM_GO;
 	if (mode == PLANNER_ON) return playerHierarchicalOn ? PLAN_ARM_GO : PLAN_ARM_REFUSE_PREREQ;
 	return PLAN_ARM_OFF;
+}
+
+static bool PositiveFinite(float v)
+{
+	return _finite(v) != 0 && v > 0.0f;
+}
+
+static float EngineTerm(float engineValue)
+{
+	return PositiveFinite(engineValue) ? engineValue : 1.0f;
+}
+
+static float WaterSpeedOf(const PlanWaterInputs& in)
+{
+	return in.swims ? in.waterSpeed : PLAN_BOTTOM_WALK * in.raceWalkSpeed;
+}
+
+// The mode formula over a ratio r (0: unknown) and an engine term e, at least 1 and at most the cap.
+static float WaterModeValue(int mode, float r, float e)
+{
+	float m = 1.0f;
+	if (mode == PWC_OFF)
+		return 1.0f;
+	if (mode == PWC_ENGINE)
+		m = e;
+	else if (mode == PWC_DYNAMIC)
+		m = r > 0.0f ? r : e;
+	else
+		m = r > e ? r : e;
+	if (!(m > 1.0f))
+		m = 1.0f;
+	return m < PLAN_WATER_CAP ? m : PLAN_WATER_CAP;
+}
+
+float PlanWaterRatio(const PlanWaterInputs& in)
+{
+	float land = in.landSpeed;
+	float water = WaterSpeedOf(in);
+	if (!in.readOk || !PositiveFinite(land) || !PositiveFinite(water))
+		return 0.0f;
+	if (in.speedCap > 0.0f)
+	{
+		land = land < in.speedCap ? land : in.speedCap;
+		water = water < in.speedCap ? water : in.speedCap;
+	}
+	return land / water;
+}
+
+float PlanWaterMultiplier(const PlanWaterInputs& in)
+{
+	return WaterModeValue(in.mode, PlanWaterRatio(in), EngineTerm(in.engineValue));
+}
+
+float PlanWaterGroupMultiplier(const PlanWaterInputs* members, int n)
+{
+	if (!members || n <= 0)
+		return 1.0f;
+	float land = 0.0f, water = 0.0f, e = 1.0f;
+	bool read = false;
+	for (int k = 0; k < n; ++k)
+	{
+		const PlanWaterInputs& in = members[k];
+		float ek = EngineTerm(in.engineValue);
+		e = ek > e ? ek : e;
+		float wk = WaterSpeedOf(in);
+		if (!in.readOk || !PositiveFinite(in.landSpeed) || !PositiveFinite(wk))
+			continue;
+		land = !read || in.landSpeed < land ? in.landSpeed : land;
+		water = !read || wk < water ? wk : water;
+		read = true;
+	}
+	return WaterModeValue(members[0].mode, read ? land / water : 0.0f, e);
+}
+
+float PlanWaterArcCost(float cost, float m, int wFrom, int wTo)
+{
+	if (m <= 1.0f)
+		return cost;
+	return cost * (1.0f + (m - 1.0f) * (float)(wFrom + wTo) / 510.0f);
+}
+
+float PlanRouteWaterShare(const float (*centres)[3], const int* water, int n)
+{
+	if (!centres || !water || n < 2)
+		return 0.0f;
+	double length = 0.0, wet = 0.0;
+	for (int i = 0; i + 1 < n; ++i)
+	{
+		double dx = centres[i + 1][0] - centres[i][0];
+		double dy = centres[i + 1][1] - centres[i][1];
+		double dz = centres[i + 1][2] - centres[i][2];
+		double step = std::sqrt(dx * dx + dy * dy + dz * dz);
+		length += step;
+		wet += step * (double)(water[i] + water[i + 1]) / 510.0;
+	}
+	return length > 0.0 ? (float)(wet / length) : 0.0f;
 }
 
 } // namespace planner

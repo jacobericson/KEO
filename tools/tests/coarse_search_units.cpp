@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <vector>
 #include "planner/coarse_search.h"
+#include "planner/plan_policy.h"
 
 #include "check.h"
 
@@ -261,6 +262,66 @@ static void CheckEndpoints(CoarseScratch* s)
 	      "search: an endpoint without a position is refused");
 }
 
+// A lake: node 1 is all water; the route through it is 200 long, the one round it by node 2 is 300.
+// The arc callback weighs each arc by its two nodes' water bytes at the context's multiplier.
+namespace coarse_search_units_detail {
+
+struct WaterGraph
+{
+	Graph g;
+	int   water[4];
+	float m;
+};
+
+} // namespace coarse_search_units_detail
+using namespace coarse_search_units_detail;
+
+static int WaterArcs(void* ctx, unsigned node, CoarseArc* out, int max)
+{
+	WaterGraph* w = (WaterGraph*)ctx;
+	int n = GraphArcs(&w->g, node, out, max);
+	for (int i = 0; i < n; ++i)
+		out[i].cost = PlanWaterArcCost(out[i].cost, w->m, w->water[node], w->water[out[i].to]);
+	return n;
+}
+
+static bool WaterPosition(void* ctx, unsigned node, float out[3])
+{
+	return GraphPosition(&((WaterGraph*)ctx)->g, node, out);
+}
+
+static void CheckLake(CoarseScratch* s)
+{
+	WaterGraph w;
+	Reset(&w.g, 4);
+	At(&w.g, 0, 0.0f, 0.0f, 0.0f);
+	At(&w.g, 1, 100.0f, 0.0f, 0.0f);
+	At(&w.g, 2, 100.0f, 0.0f, 111.8f);
+	At(&w.g, 3, 200.0f, 0.0f, 0.0f);
+	Arc(&w.g, 0, 1, 100.0f);
+	Arc(&w.g, 1, 3, 100.0f);
+	Arc(&w.g, 0, 2, 150.0f);
+	Arc(&w.g, 2, 3, 150.0f);
+	w.water[0] = 0;
+	w.water[1] = 255;
+	w.water[2] = 0;
+	w.water[3] = 0;
+	CoarseGraphOps ops;
+	ops.ctx = &w;
+	ops.arcs = WaterArcs;
+	ops.position = WaterPosition;
+	CoarseRoute* r = new CoarseRoute;
+	const unsigned across[3] = { 0, 1, 3 };
+	const unsigned round[3] = { 0, 2, 3 };
+	w.m = 1.0f;
+	CoarseResult r1 = CoarseSearch(ops, 0, 3, COARSE_SCRATCH_MAX, s, r);
+	Check(r1 == CS_FOUND && RouteIs(*r, across, 3) && Near(r->cost, 200.0f), "search: at m 1 the route crosses the lake");
+	w.m = 5.0f;
+	CoarseResult r5 = CoarseSearch(ops, 0, 3, COARSE_SCRATCH_MAX, s, r);
+	Check(r5 == CS_FOUND && RouteIs(*r, round, 3) && Near(r->cost, 300.0f), "search: at m 5 the route goes round the lake");
+	delete r;
+}
+
 int main()
 {
 	CoarseScratch* s = new CoarseScratch;
@@ -273,6 +334,7 @@ int main()
 	CheckReopen(s);
 	CheckBudget(s);
 	CheckEndpoints(s);
+	CheckLake(s);
 	delete s;
 	return CheckExit("coarse_search_units");
 }

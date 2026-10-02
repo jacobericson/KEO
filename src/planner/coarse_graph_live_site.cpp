@@ -27,7 +27,9 @@ static volatile LONG s_noMesh         = 0;   // no mesh instance, original mesh 
 static volatile LONG s_badSlot        = 0;   // the graph instance's slot is past the collection
 static volatile LONG s_noShift        = 0;   // no section manager, or its world shift pointer is NULL
 static volatile LONG s_bordersSkipped = 0;
+static volatile LONG s_noFaceData     = 0;   // copies whose section's face data could not be read
 static volatile LONG s_arcsTrunc      = 0;   // summed over the copied buffers
+static volatile LONG s_waterNodes     = 0;   // nodes with a non-zero water byte, summed over the copied buffers
 static volatile LONG s_maxNodes       = 0;
 static volatile LONG s_maxBorders     = 0;
 
@@ -85,6 +87,7 @@ void CgLiveOnConnect(void* graphInst, void* coll)
 	CgLiveCounts counts;
 	CgLiveResult r = CgLiveCopy(graphInst, coll, shift, buf, &counts);
 	InterlockedExchangeAdd(&s_bordersSkipped, counts.bordersSkipped);
+	InterlockedExchangeAdd(&s_noFaceData, counts.noFaceData);
 	if (r != CGL_OK)
 	{
 		CountRefusal(r);
@@ -95,6 +98,7 @@ void CgLiveOnConnect(void* graphInst, void* coll)
 	RaiseMax(&s_maxNodes, buf->nodeCount);
 	RaiseMax(&s_maxBorders, buf->borderCount);
 	InterlockedExchangeAdd(&s_arcsTrunc, buf->arcsTrunc);
+	InterlockedExchangeAdd(&s_waterNodes, counts.waterNodes);
 	CgLivePost(counts.slot, buf);
 	InterlockedIncrement(&s_copies);
 }
@@ -120,10 +124,11 @@ void CgLiveReport(double now)
 	_snprintf_s(line, sizeof(line), _TRUNCATE,
 	            "PlannerLive: copies=%ld skipped=%ld overCap=%ld noBuffer=%ld noMesh=%ld badSlot=%ld noShift=%ld"
 	            " slotCap=%ld superseded=%ld stale=%ld promoted=%ld noSlot=%ld uidClash=%ld busy=%ld"
-	            " bordersSkipped=%ld arcsTrunc=%ld maxNodes=%ld maxBorders=%ld",
+	            " bordersSkipped=%ld arcsTrunc=%ld maxNodes=%ld maxBorders=%ld waterNodes=%ld noFaceData=%ld",
 	            (long)copies, (long)skipped, (long)s_overCap, (long)s_noBuffer, (long)s_noMesh, (long)s_badSlot,
 	            (long)s_noShift, st.slotCap, st.superseded, st.stale, st.promoted, st.noSlot, st.uidClash, st.busy,
-	            (long)s_bordersSkipped, (long)s_arcsTrunc, (long)s_maxNodes, (long)s_maxBorders);
+	            (long)s_bordersSkipped, (long)s_arcsTrunc, (long)s_maxNodes, (long)s_maxBorders, (long)s_waterNodes,
+	            (long)s_noFaceData);
 	LogMsg(line);
 }
 

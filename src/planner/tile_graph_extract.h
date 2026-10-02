@@ -24,6 +24,7 @@ struct TgNode
 	float boxMin[3];    // the footprint: the bounding box of the node's faces' vertices, world
 	float boxMax[3];    //   units; the centre alone when the node has no face
 	int   faces;        // faces whose clusterIndex names this node
+	int   water;        // 0..255: the x/z area share of the node's faces whose first face-data word is 3
 	int   firstArc;     // into TileGraph::arcs
 	int   arcCount;
 };

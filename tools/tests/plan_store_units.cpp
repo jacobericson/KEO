@@ -126,6 +126,14 @@ static void StoreRows()
 	      && v.destAtPlan[1] == 0.0f && v.destAtPlan[2] == -250.0f,
 	      "store: the destination held at plan time is in the view, a re-plan included");
 
+	// The water multiplier the plan was searched at is in the view, and a rewrite replaces it.
+	MakeWrite(&w, CM_A, 4.0f);
+	w.waterMult = 10.13f;
+	bool first = PlanStoreWrite(w) == slot && PlanStoreRead(slot, &v) && v.waterMult == 10.13f;
+	w.waterMult = 5.0f;
+	Check(first && PlanStoreWrite(w) == slot && PlanStoreRead(slot, &v) && v.waterMult == 5.0f,
+	      "store: a plan's water multiplier reads back");
+
 	// Every slot taken by a distinct character: the next is refused and counted, and a rewrite of a
 	// planned character still lands in its own slot.
 	Fresh(PLANNER_ON);

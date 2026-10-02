@@ -77,6 +77,24 @@ static bool ParsePlannerWaitSeconds(const std::string& val, ConfigLogFn log)
 	return StoreField(&planner::PlannerConfig::waitSeconds, v);
 }
 
+// plannerWaterCost: off, floor, dynamic or engine; anything else is refused.
+static bool ParsePlannerWaterCost(const std::string& val, ConfigLogFn log)
+{
+	(void)log;
+	int mode;
+	if (_stricmp(val.c_str(), "off") == 0)
+		mode = planner::PWC_OFF;
+	else if (_stricmp(val.c_str(), "floor") == 0)
+		mode = planner::PWC_FLOOR;
+	else if (_stricmp(val.c_str(), "dynamic") == 0)
+		mode = planner::PWC_DYNAMIC;
+	else if (_stricmp(val.c_str(), "engine") == 0)
+		mode = planner::PWC_ENGINE;
+	else
+		return false;
+	return StoreField(&planner::PlannerConfig::waterCost, mode);
+}
+
 namespace planner {
 
 const PlannerConfig kPlannerDefaults =
@@ -86,6 +104,7 @@ const PlannerConfig kPlannerDefaults =
 	1, // baseBuild
 	3, // aheadTiles
 	10, // waitSeconds
+	PWC_FLOOR, // waterCost
 };
 
 PlannerConfig g_plannerCfg = kPlannerDefaults;
@@ -95,6 +114,14 @@ const char* PlannerModeName(int mode)
 	if (mode == PLANNER_OBSERVE) return "observe";
 	if (mode == PLANNER_ON) return "on";
 	return "off";
+}
+
+const char* PlanWaterModeName(int mode)
+{
+	if (mode == PWC_OFF) return "off";
+	if (mode == PWC_DYNAMIC) return "dynamic";
+	if (mode == PWC_ENGINE) return "engine";
+	return "floor";
 }
 
 } // namespace planner
@@ -113,6 +140,7 @@ const ConfigKey g_plannerConfigKeys[] =
 	CFG_OCUSTOM("plannerBaseBuild", PlannerConfig, baseBuild, ParsePlannerBaseBuild, NDOC),
 	CFG_OCUSTOM("plannerAheadTiles", PlannerConfig, aheadTiles, ParsePlannerAheadTiles, NDOC),
 	CFG_OCUSTOM("plannerWaitSeconds", PlannerConfig, waitSeconds, ParsePlannerWaitSeconds, NDOC),
+	CFG_OCUSTOM("plannerWaterCost", PlannerConfig, waterCost, ParsePlannerWaterCost, NDOC),
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }
 };
 

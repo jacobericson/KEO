@@ -27,6 +27,16 @@ KLIB_ASSERT_OFFSET(Character_stats, OFF_CHAR_STATS);
 const size_t OFF_STATS_HOLD      = 0x12B;  // CharStats::_holdPositionMode (bool): what
                                             // Character::getStandingOrder(M_SET_ORDER_HOLD) 0x5C8C30 returns
 KLIB_ASSERT_OFFSET(CharStats__holdPositionMode, OFF_STATS_HOLD);
+const size_t OFF_CHAR_RACE       = 0x2E0;  // Character::myRace (RaceData*)
+KLIB_ASSERT_OFFSET(Character_myRace, OFF_CHAR_RACE);
+const size_t OFF_STATS_MOVE_SPEED = 0x17C; // CharStats::moveSpeed: the land speed with every body factor
+KLIB_ASSERT_OFFSET(CharStats_moveSpeed, OFF_STATS_MOVE_SPEED);
+
+// RaceData
+const size_t OFF_RACE_WALK_SPEED = 0x64;   // RaceData::walkSpeed (float)
+KLIB_ASSERT_OFFSET(RaceData_walkSpeed, OFF_RACE_WALK_SPEED);
+const size_t OFF_RACE_SWIMS      = 0x79;   // RaceData::swims (bool)
+KLIB_ASSERT_OFFSET(RaceData_swims, OFF_RACE_SWIMS);
 
 // CharMovement
 const size_t OFF_CMOV_SPEED_MODE = 0x20;   // MoveSpeed enum: 0=WALK,1=JOG,2=RUN,3=GROUPED,4=NO_CHANGE
@@ -41,6 +51,10 @@ const size_t OFF_CMOV_LAST_DEST      = 0xDC;   // last requested destination (ed
 KLIB_ASSERT_OFFSET(AbstractMovementBase_destination, OFF_CMOV_LAST_DEST);
 const size_t OFF_CMOV_PATH_DEST      = 0xE8;   // pathDestination handed to HavokCharacter::requestPath
 KLIB_ASSERT_OFFSET(AbstractMovementBase_pathDestination, OFF_CMOV_PATH_DEST);
+const size_t OFF_CMOV_WALK_SPEED     = 0xC0;   // float: the WALK order's desired speed
+KLIB_ASSERT_OFFSET(AbstractMovementBase_walkSpeed, OFF_CMOV_WALK_SPEED);
+const size_t OFF_HC_WATER_MODIFIER   = 0x74;   // HavokCharacter::waterModifier: the engine's water cost multiplier
+KLIB_ASSERT_OFFSET(HavokCharacter_waterModifier, OFF_HC_WATER_MODIFIER);
 const size_t OFF_CMOV_EDGE_COUNTER   = 0x368;  // edge-target retry counter (0..17)
 KLIB_ASSERT_OFFSET(CharMovement_edgeTarget, OFF_CMOV_EDGE_COUNTER);
 const size_t OFF_CMOV_MOVING_TO_EDGE = 0x370;  // BYTE: 1 while routing to an island edge

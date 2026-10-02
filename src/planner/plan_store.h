@@ -30,6 +30,7 @@ struct PlanWrite
 	float     destAtPlan[3];    // the character's movement destination as the plan is written (x, 0, z)
 	double    now;
 	int       keepSends;        // 1: a re-plan of the same character keeps the mod's recorded sends
+	float     waterMult;        // the water multiplier the plan was searched at; its re-plans reuse it
 	PlanLeg   legs[PLAN_MAX_LEGS];
 };
 // A consistent copy for any thread.
@@ -43,6 +44,7 @@ struct PlanView
 	float     finalDest[3];
 	float     destAtPlan[3];
 	float     resend[PLAN_RESEND_POINTS][3]; int resendCount;
+	float     waterMult;
 	PlanLeg   legs[PLAN_MAX_LEGS];
 };
 // The main thread's own fields for one slot (never read off the main thread).
@@ -99,6 +101,7 @@ struct PlannerCounters
 	volatile LONG roadPreempt, notConsulted, staleRerequest, snapFail, flips, waits;
 	volatile LONG slotFull, repeats, locFail, goalUnlocated, startUnlocated, notSite, staleAdvance, rung17, ownedSkips, noLocation;
 	volatile LONG reissuedPlanned, heldPlanned, reissueRefused, snapFar, snapMax;
+	volatile LONG waterFail, waterGroups;   // members whose speed read failed; orders planned run-together
 	volatile LONG dropsBy[PLAN_DROP_REASONS], replansBy[PLAN_REPLAN_REASONS];   // by PlanDropWhy / PlanReplanWhy
 };
 PlannerCounters* PlannerCountersGet();   // any thread; the fields are interlocked

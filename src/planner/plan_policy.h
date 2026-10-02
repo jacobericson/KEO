@@ -161,6 +161,43 @@ int PlanFeedCells(const PlanLeg* legs, int n, int from, int ahead, int exteriorS
 enum PlanArm { PLAN_ARM_OFF = 0, PLAN_ARM_GO, PLAN_ARM_REFUSE_PREREQ };
 PlanArm PlanArmDecide(int mode, bool playerHierarchicalOn);
 
+// The water cost. A coarse arc's cost rises with the water under its two nodes by a per-character
+// multiplier m >= 1: OFF plans as if water were land; FLOOR (the default) takes the larger of the
+// land-to-water speed ratio and the engine's own water value; DYNAMIC the ratio alone; ENGINE the
+// engine value alone.
+enum PlanWaterMode { PWC_OFF = 0, PWC_FLOOR, PWC_DYNAMIC, PWC_ENGINE };
+const float PLAN_WATER_CAP   = 20.0f;   // the largest multiplier a plan uses
+const float PLAN_JOG_SPEED   = 55.0f;   // the engine's JOG desired speed
+const float PLAN_BOTTOM_WALK = 2.0f;    // a race that does not swim crosses water at this times its walk speed
+struct PlanWaterInputs
+{
+	int   mode;            // PlanWaterMode
+	int   readOk;          // 1: the speed fields were read; 0: only engineValue is known
+	float landSpeed;       // L: the character's land speed while dry
+	float waterSpeed;      // W: its swim speed, for a race that swims
+	float raceWalkSpeed;   // its race's walk speed
+	int   swims;           // its race swims
+	float speedCap;        // the order's speed bound: the walk speed (WALK), PLAN_JOG_SPEED (JOG), 0 none
+	float engineValue;     // the engine's water multiplier for the character; 1 when it has none
+};
+// L / W', where W' is waterSpeed for a race that swims and PLAN_BOTTOM_WALK * raceWalkSpeed for one
+// that does not, both bounded by speedCap when it is positive; 0 (unknown) when !readOk or either
+// speed as read is not finite and positive.
+float PlanWaterRatio(const PlanWaterInputs& in);
+// One character's m. With e the engine value (1 unless finite and positive) and r the ratio: OFF 1;
+// ENGINE max(1, e); FLOOR max(1, r, e); DYNAMIC max(1, r); FLOOR and DYNAMIC with r unknown max(1, e);
+// an unknown mode reads as FLOOR. Every result is at most PLAN_WATER_CAP.
+float PlanWaterMultiplier(const PlanWaterInputs& in);
+// A run-together order's one m: the mode formula over the slowest land speed and the slowest W' of
+// the members whose read succeeded (no speed bound), and the largest engine value of all n members.
+float PlanWaterGroupMultiplier(const PlanWaterInputs* members, int n);
+// An arc's weighted cost: cost * (1 + (m - 1) * (wFrom + wTo) / 510), the mean water byte of its two
+// nodes as a share; cost itself when m <= 1.
+float PlanWaterArcCost(float cost, float m, int wFrom, int wTo);
+// A route's water share: each step's 3D length weighted by its two nodes' mean water byte, over the
+// route's length; 0 for fewer than two nodes or a zero length.
+float PlanRouteWaterShare(const float (*centres)[3], const int* water, int n);
+
 } // namespace planner
 
 #endif

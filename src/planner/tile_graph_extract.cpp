@@ -26,8 +26,9 @@ struct Group
 // A section's arrays, looked up once.
 struct SectionArrays
 {
-	int faces, edges, vertices, nodes, graphEdges, positions;
-	int faceCount, edgeCount, vertexCount, nodeCount, graphEdgeCount, positionCount;
+	int faces, edges, vertices, nodes, graphEdges, positions, faceData;
+	int faceCount, edgeCount, vertexCount, nodeCount, graphEdgeCount, positionCount, faceDataCount;
+	__int64 faceDataStriding;
 };
 
 struct BorderLess
@@ -232,23 +233,39 @@ static SectionArrays LookUp(const TfDoc& d, const Group& g)
 	s.nodes = ArrayField(d, g.graph, "nodes", &s.nodeCount);
 	s.graphEdges = ArrayField(d, g.graph, "edges", &s.graphEdgeCount);
 	s.positions = ArrayField(d, g.graph, "positions", &s.positionCount);
+	s.faceData = ArrayField(d, g.mesh, "faceData", &s.faceDataCount);
+	s.faceDataStriding = IntField(d, g.mesh, "faceDataStriding");
 	return s;
 }
 
-// Each node's centre, face count and footprint, and each face's node (-1 when its clusterIndex
-// names none). A counted face (one whose clusterIndex names a node) with its edge run or a vertex
-// index out of range answers SEC_BAD_INDEX. A node whose faces give no vertex keeps its centre as
-// its box.
+// Whether face f's first face-data word is 3 (the water plane); a striding below 1 or a word past
+// the array reads dry.
+static bool FaceIsWater(const TfDoc& d, const SectionArrays& s, int f)
+{
+	if (s.faceDataStriding < 1 || (__int64)f * s.faceDataStriding >= (__int64)s.faceDataCount)
+		return false;
+	__int64 word = 0;
+	return TfAsInt(d, TfArrayAt(d, s.faceData, (int)((__int64)f * s.faceDataStriding)), &word) && word == 3;
+}
+
+// Each node's centre, face count, footprint and water byte, and each face's node (-1 when its
+// clusterIndex names none). A counted face (one whose clusterIndex names a node) with its edge run
+// or a vertex index out of range answers SEC_BAD_INDEX. A node whose faces give no vertex keeps its
+// centre as its box. The water byte is the x/z fan area of the node's water faces over that of all
+// its faces, in the section's local frame, in double, rounded to 0..255.
 static SectionResult ReadFaces(const TfDoc& d, const SectionArrays& s, const float origin[3],
 	std::vector<TgNode>& nodes, std::vector<int>& cluster)
 {
 	std::vector<bool> boxed(s.nodeCount, false);
+	std::vector<double> area(s.nodeCount, 0.0);
+	std::vector<double> wetArea(s.nodeCount, 0.0);
 	for (int k = 0; k < s.nodeCount; ++k)
 	{
 		float local[3];
 		VecAt(d, s.positions, k, local);
 		ToWorld(origin, local, nodes[k].centre);
 		nodes[k].faces = 0;
+		nodes[k].water = 0;
 		nodes[k].firstArc = 0;
 		nodes[k].arcCount = 0;
 	}
@@ -265,6 +282,7 @@ static SectionResult ReadFaces(const TfDoc& d, const SectionArrays& s, const flo
 			return SEC_BAD_INDEX;
 		TgNode& n = nodes[(int)c];
 		++n.faces;
+		double x0 = 0.0, z0 = 0.0, xp = 0.0, zp = 0.0, fan = 0.0;
 		for (__int64 e = start; e < start + count; ++e)
 		{
 			__int64 a = IntField(d, TfArrayAt(d, s.edges, (int)e), "a");
@@ -272,6 +290,16 @@ static SectionResult ReadFaces(const TfDoc& d, const SectionArrays& s, const flo
 				return SEC_BAD_INDEX;
 			float local[3], w[3];
 			VecAt(d, s.vertices, (int)a, local);
+			double xk = (double)local[0], zk = (double)local[2];
+			if (e == start)
+			{
+				x0 = xk;
+				z0 = zk;
+			}
+			else if (e >= start + 2)
+				fan += (xp - x0) * (zk - z0) - (xk - x0) * (zp - z0);
+			xp = xk;
+			zp = zk;
 			ToWorld(origin, local, w);
 			for (int ax = 0; ax < 3; ++ax)
 			{
@@ -282,9 +310,15 @@ static SectionResult ReadFaces(const TfDoc& d, const SectionArrays& s, const flo
 			}
 			boxed[(int)c] = true;
 		}
+		double faceArea = fabs(fan) * 0.5;
+		area[(int)c] += faceArea;
+		if (FaceIsWater(d, s, f))
+			wetArea[(int)c] += faceArea;
 	}
 	for (int k = 0; k < s.nodeCount; ++k)
 	{
+		double total = area[k];
+		nodes[k].water = total > 0 ? (int)(wetArea[k] / total * 255.0 + 0.5) : 0;
 		if (boxed[k])
 			continue;
 		for (int ax = 0; ax < 3; ++ax)
