@@ -2,7 +2,7 @@
 
 ## THIS MOD IS STILL IN BETA
 
-> **Beta.** This mod is still in testing. Stability is not guaranteed. The mod's files still use its earlier name, `KenshiZoneOpt` (`KenshiZoneOpt.dll`, `KenshiZoneOpt.ini`, `KenshiZoneOpt.log`).
+> **Beta.** This mod is still in testing. Stability is not guaranteed.
 
 A performance and stability mod for Kenshi, built as an RE_Kenshi plugin.
 
@@ -18,7 +18,7 @@ KEO makes moving between areas of the map smoother. It loads areas before your s
 - **Better squad movement.** Long move orders the game drops partway are re-issued, and squads keep together while travelling.
 - **Higher frame rate.** Render and particle optimizations. Any change that causes a noticeable drop in quality is off by default.
 - **Stability fixes** for several of the vanilla bugs and crashes.
-- **ZoneOpt tab** in the game's Options window, with an **in-game benchmark** that measures the frame-rate optimizations on your own machine.
+- **KEO tab** in the game's Options window, with an **in-game benchmark** that measures the frame-rate optimizations on your own machine.
 
 ## Requirements
 
@@ -34,8 +34,10 @@ KEO makes moving between areas of the map smoother. It loads areas before your s
 
 Every setting is optional and has a default. There are two ways to change one:
 
-- the **Options → ZoneOpt** tab in game;
-- `KenshiZoneOpt.ini` in the mod folder, where each setting is explained above its line. Some settings take effect only after a restart; the file says which.
+- the **Options → KEO** tab in game;
+- `KEO.ini` in the mod folder, where each setting is explained above its line. Some settings take effect only after a restart; the file says which.
+
+If you used an earlier version, your settings in `KenshiZoneOpt.ini` are carried into `KEO.ini` once, on the first launch, and the old file is kept as `KenshiZoneOpt.ini.imported`.
 
 ## Known defects
 
@@ -45,7 +47,7 @@ Every setting is optional and has a default. There are two ways to change one:
 
 If you run into a problem, [open an issue](../../issues/new) and include:
 
-- `KenshiZoneOpt.log` and, if present, `crash_dump.txt`, both from the mod's folder;
+- `KEO.log` and, if present, `crash_dump.txt`, both from the mod's folder;
 - `RE_Kenshi_log.txt`, from the Kenshi game directory;
 - the list of other mods you have enabled;
 - what you were doing when it happened (crossing into a new area, a long move order, loading a save, …).
@@ -60,7 +62,7 @@ set BOOST_ROOT=C:\path\to\boost_1_60_0
 build_opt_step4.bat
 ```
 
-The mod is built into `build\KenshiZoneOpt_step4_prod\`. To install it, copy that folder into Kenshi's `mods\` directory. `build.bat` builds the optional `KenshiZoneProfiler` diagnostics plugin, and `tools\tests\build_tests.bat` runs the unit tests.
+The mod is built into `build\KEO_step4_prod\`. To install it, copy that folder into Kenshi's `mods\` directory. `build.bat` builds the optional `KEOProfiler` diagnostics plugin into `build\KEOProfiler\`, and `tools\tests\build_tests.bat` runs the unit tests.
 
 ## License
 
