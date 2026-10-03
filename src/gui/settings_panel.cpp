@@ -356,11 +356,12 @@ void InstallSettingsPanel()
 	if (!ok)
 		LogMsg("Settings panel: off, the Options window keeps its own tabs only");
 
-	// The Benchmark buttons call setLineTextButton and rely on pressCallback
-	// invoking the line's callback; a mismatch leaves only their section out.
+	// The Benchmark buttons (DEV only) call setLineTextButton and rely on
+	// pressCallback invoking the line's callback; a mismatch leaves only their
+	// section out.
 	s_buttonsOk = (void*)KlibRealAddress(&DatapanelGUI::setLineTextButton) == GameAddr(RVA_DP_SET_LINE_TEXT_BUTTON)
 	           && (void*)KlibRealAddress(&DataPanelLine_Button::pressCallback) == GameAddr(RVA_DP_BUTTON_PRESS);
-	if (ok && !s_buttonsOk)
+	if (ok && !s_buttonsOk && DEV_BUILD)
 		LogMsg("Bench: button call addresses differ from KenshiLib's, Benchmark section left out");
 }
 

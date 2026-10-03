@@ -68,7 +68,7 @@ const RenderKey g_renderKeys[] =
 	  "Fog fades keep their usual speed.", true, 0.0f, 0),
 	RK_ROW("foliagePageBudgetMs",      RK_FLOAT, RK_FIELD(foliagePageBudgetMs),      0, 0.0f, 50.0f, true,
 	  "Foliage build budget at speed (ms, 0 = off)",
-	  "Above a game speed set by foliageBudgetSpeed in KEO.ini (3x by default), foliage stops building pages for the rest of a frame once this many milliseconds are spent; trees fill in later.", false, 0.0f, 1),
+	  "Above a game speed set by foliageBudgetSpeed in KEO.ini (3x by default), foliage stops building pages for the rest of a frame once this many milliseconds are spent; trees and grass fill in a few frames later.", false, 0.0f, 1),
 	RK_ROW("foliageBudgetSpeed",       RK_FLOAT, RK_FIELD(foliageBudgetSpeed),       0, 1.5f, 20.0f, true,
 	  "Foliage budget from game speed",
 	  "The game speed above which the foliage build budget applies.", true, 1.5f, 1),
