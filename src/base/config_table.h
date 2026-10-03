@@ -37,7 +37,7 @@ struct ConfigKey
 	// The settings panel's row. A NULL label keeps the key INI-only.
 	const char*   label;
 	const char*   tooltip;
-	bool          devOnly;  // a diagnostic: shown in DEV builds only
+	bool          devOnly;  // a developer row: shown on the DEV build's page only
 	// CK_FLOAT: the slider drags over sliderLo + k / 2^stepExp up to hi (the
 	// game's setPrecision takes a power-of-two exponent, not decimal digits).
 	// sliderLo is chosen so the default and hi lie on that grid; the clamp

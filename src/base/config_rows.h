@@ -6,9 +6,10 @@
 
 #define DOC true
 #define NDOC false
-// Diagnostic rows show in DEV builds only.
+// SHOW: a row on every build's settings page. DEVROW: a developer row
+// (diagnostic, internal, guard or tuning constant), on the DEV page only.
 #define SHOW false
-#define DIAG true
+#define DEVROW true
 #define CFG_COUNT(a) ((int)(sizeof(a) / sizeof((a)[0])))
 #define CFG_OROW(n, kind, T, field, lo, hi, minI, posOnly, doc, fn, label, tip, diag, sLo, sExp, ch, chN, dbg) \
 	{ n, kind, offsetof(T, field), sizeof(((T*)0)->field), lo, hi, false, label, tip, diag, sLo, sExp, \
@@ -28,5 +29,5 @@
 // A custom row without choices stays INI-only.
 #define CFG_OCUSTOM(n, T, field, fn, doc) \
 	CFG_OROW(n, CK_CUSTOM, T, field, 1.0f, 0.0f, INT_MIN, false, doc, fn, NULL, NULL, false, 0.0f, 0, NULL, 0, false)
-#define CFG_OCUSTOM_CHOICES(n, T, field, fn, doc, label, tip, ch) \
-	CFG_OROW(n, CK_CUSTOM, T, field, 1.0f, 0.0f, INT_MIN, false, doc, fn, label, tip, false, 0.0f, 0, ch, CFG_COUNT(ch), false)
+#define CFG_OCUSTOM_CHOICES(n, T, field, fn, doc, diag, label, tip, ch) \
+	CFG_OROW(n, CK_CUSTOM, T, field, 1.0f, 0.0f, INT_MIN, false, doc, fn, label, tip, diag, 0.0f, 0, ch, CFG_COUNT(ch), false)

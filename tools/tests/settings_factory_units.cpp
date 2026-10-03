@@ -38,8 +38,15 @@ static const char* const SUITE_NAME = "settings_factory_units";
 static const char* const SUITE_NAME = "settings_factory_prod_units";
 #endif
 static const size_t CORE_ROWS_DEV = 72;
-static const int DEV_ONLY_ROWS = 17;
-static const int DEV_ONLY_CORE = 14;
+static const int DEV_ONLY_ROWS = 84;
+
+// The PROD page's rows, by key: the settings an end user changes in game.
+static const char* const kProdPage[] =
+{
+	"renderLevers", "particleStepCap", "foliagePageBudgetMs", "preload", "zoneLifeRetainRadius",
+	"navmeshWorkerCount", "navmeshDiskCacheMaxMB", "groupCohesion", "k7PostDeathHold", NULL
+};
+static const int PROD_PAGE_ROWS = 9;
 
 static void CheckNamed(bool ok, const std::string& what)
 {
@@ -185,6 +192,17 @@ static bool OneEntry(const std::vector<IniEntry>& e, int count, const char* key,
 
 // ---- Sections --------------------------------------------------------------
 
+static std::vector<std::string> Headers(const std::vector<SettingsRow>& rows)
+{
+	std::vector<std::string> headers;
+	for (size_t i = 0; i < rows.size(); ++i)
+	{
+		if (rows[i].kind == SR_HEADER)
+			headers.push_back(rows[i].label);
+	}
+	return headers;
+}
+
 static void CheckSections()
 {
 	SettingsStaging st;
@@ -192,18 +210,21 @@ static void CheckSections()
 	SettingsBench bench;
 	bench.available = false;
 	bench.reason = "test";
-	std::vector<SettingsRow> rows = Rows(&st, false, &bench);
 
-	std::vector<std::string> headers;
-	for (size_t i = 0; i < rows.size(); ++i)
-	{
-		if (rows[i].kind == SR_HEADER)
-			headers.push_back(rows[i].label);
-	}
-	bool sections = headers.size() == 9 && headers[0] == "Kenshi Engine Optimizations"
-	                && headers[1] == RENDER_TITLE && headers[8] == "Benchmark";
-	for (int i = 0; sections && i < 6; ++i) sections = headers[i + 2] == MODULE_TITLES[i];
-	Check(sections, "Sections");
+	// DEV: every module section, then the Benchmark section.
+	std::vector<std::string> dev = Headers(Rows(&st, true, &bench));
+	bool sections = dev.size() == 9 && dev[0] == "Kenshi Engine Optimizations" && dev[1] == RENDER_TITLE
+	                && dev[8] == "Benchmark";
+	for (int i = 0; sections && i < 6; ++i) sections = dev[i + 2] == MODULE_TITLES[i];
+	Check(sections, "Sections: DEV");
+
+	// PROD: only the sections that keep a row, and no Benchmark.
+	std::vector<SettingsRow> rows = Rows(&st, false, &bench);
+	std::vector<std::string> prod = Headers(rows);
+	const char* const want[] = { "Kenshi Engine Optimizations", RENDER_TITLE, "Zone loading", "Navmesh", "Movement and orders" };
+	sections = prod.size() == 5;
+	for (int i = 0; sections && i < 5; ++i) sections = prod[i] == want[i];
+	Check(sections, "Sections: PROD");
 	Check(!rows.empty() && rows[0].kind == SR_HEADER && rows[0].label == "Kenshi Engine Optimizations",
 	      "the page opens with the long-name header");
 
@@ -223,9 +244,9 @@ static void CheckSections()
 	for (size_t i = 0; same && i < render.size(); ++i)
 		same = render[i]->label == wantLabel[i] && render[i]->kind == wantKind[i];
 	Check(same, "Sections");
-	Check(render.size() >= 3 && render[0]->label == "Render and particle levers (restart)"
-	      && render[1]->label == "Water reflection at half rate" && render[2]->label == "Pause off-screen particle effects",
-	      "Sections");
+	Check(render.size() == 3 && render[0]->label == "Render and particle levers (restart)"
+	      && render[1]->label == "Cap particle steps at high game speed"
+	      && render[2]->label == "Foliage build budget at speed (ms, 0 = off)", "Sections");
 }
 
 // ---- Every shown key once; labels; counts ---------------------------------
@@ -283,9 +304,9 @@ static void CheckRowCounts()
 	StageAll(&st);
 	std::vector<SettingsRow> dev = Rows(&st, true, NULL), prod = Rows(&st, false, NULL);
 	Check(ModuleSections(dev).size() == CORE_ROWS_DEV, "core rows dev");
-	Check(ModuleSections(prod).size() == 59, "core rows prod");
+	Check(ModuleSections(prod).size() == 6, "core rows prod");
 	Check(Section(dev, RENDER_TITLE).size() == 21, "render rows dev");
-	Check(Section(prod, RENDER_TITLE).size() == 17, "render rows prod");
+	Check(Section(prod, RENDER_TITLE).size() == 3, "render rows prod");
 }
 
 // ---- Restart and devOnly ---------------------------------------------------
@@ -312,18 +333,11 @@ static void CheckRestart()
 	Check(ok && live > 0, "Restart");
 }
 
-static const char* const kDevOnlyCore[] =
+static bool OnProdPage(const char* name)
 {
-	"destroyListDiag", "npcWaitDiag", "gatePassDiag", "camLogInterval", "pathCostLines", "stitchSourceLines",
-	"navMeshLife", "unstitchProbe", "sectionKeyProbe", "navmeshMissHash", "zoneCycleStats", "zoneWedgeGuard",
-	"sectionStamp", "physPurecallRecord", NULL
-};
-
-static bool InDevOnlySet(const char* name)
-{
-	for (int i = 0; kDevOnlyCore[i]; ++i)
+	for (int i = 0; kProdPage[i]; ++i)
 	{
-		if (strcmp(kDevOnlyCore[i], name) == 0)
+		if (strcmp(kProdPage[i], name) == 0)
 			return true;
 	}
 	return false;
@@ -355,17 +369,25 @@ static void CheckDevOnly()
 	}
 	Check(ok && devRows == DEV_ONLY_ROWS, "devOnly");
 
+	// Every row with a widget is a developer row unless it is on the PROD page.
 	int n = 0;
-	for (int m = 1; m < 7; ++m)
+	for (int m = 0; m < kConfigModuleCount; ++m)
 	{
-		const ConfigModule& core = kConfigModules[m];
-		for (int i = 0; core.keys[i].name; ++i)
+		const ConfigModule& mod = kConfigModules[m];
+		for (int i = 0; mod.keys[i].name; ++i)
 		{
-			CheckNamed(core.keys[i].devOnly == InDevOnlySet(core.keys[i].name), std::string("devOnly set ") + core.keys[i].name);
-			n += core.keys[i].devOnly ? 1 : 0;
+			const ConfigKey& k = mod.keys[i];
+			if (!ShouldHaveLabel(k))
+				continue;
+			bool page = OnProdPage(k.name);
+			CheckNamed(k.devOnly != page && Shown(k, false) == page, std::string("PROD page ") + k.name);
+			n += page ? 1 : 0;
 		}
 	}
-	Check(n == DEV_ONLY_CORE, "devOnly set: the table's devOnly core keys");
+	Check(n == PROD_PAGE_ROWS, "PROD page: every listed key has a row");
+	for (size_t i = 0; i < prod.size(); ++i)
+		n -= prod[i].kind == SR_HEADER ? 0 : 1;
+	Check(n == 0, "PROD page: the listed keys are its only rows");
 }
 
 // ---- Numeric rows ----------------------------------------------------------
@@ -380,7 +402,7 @@ static void CheckNumericRows()
 	std::vector<SettingsRow> dev = Rows(&st, true, NULL), prod = Rows(&st, false, NULL);
 
 	int far = KeyIndex(core, "islandFarSpan");
-	const SettingsRow* r = far >= 0 && core.keys[far].label ? FindLabel(prod, RowLabel(core.keys[far])) : NULL;
+	const SettingsRow* r = far >= 0 && core.keys[far].label ? FindLabel(dev, RowLabel(core.keys[far])) : NULL;
 	Check(r && r->kind == SR_SLIDER && r->lo == 0.0f && r->hi == 8.0f && r->stepExp == 0
 	      && r->floatPtr == &st.module[c].slots[far].f, "islandFarSpan: an integer slider, 0 to 8 in whole steps");
 	if (r)
@@ -590,7 +612,7 @@ static void CheckOneKey()
 		n += ModuleStageEntries(kConfigModules[m], st.module[m], saved.module[m], &e);
 	Check(n == 0 && e.empty() && diff.applied == 0 && diff.saved == 0, "one key: no change gives no entry");
 
-	std::vector<SettingsRow> rows = Rows(&st, false, NULL);
+	std::vector<SettingsRow> rows = Rows(&st, true, NULL);
 	const SettingsRow* r = d >= 0 && core.keys[d].label ? FindLabel(rows, RowLabel(core.keys[d])) : NULL;
 	Check(r && r->boolPtr && *r->boolPtr, "one key: deferral saved true");
 	if (!r)

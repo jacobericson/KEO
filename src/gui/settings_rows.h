@@ -72,9 +72,9 @@ std::string SweepCaption(int leg, int legs);
 
 // The rows in display order: each module's section in kConfigModules[] order,
 // bound into its own staged copy (DEV-only keys only when devBuild;
-// startup-only ones say "(restart)"), then the Benchmark section when bench
-// is set: four rows per slot, then the sweep button. Every row's label is
-// unique: the panel keys its lines by label.
+// startup-only ones say "(restart)"), then, when devBuild holds and bench is
+// set, the Benchmark section: four rows per slot, then the sweep button.
+// Every row's label is unique: the panel keys its lines by label.
 void BuildSettingsRows(SettingsStaging* staging, bool devBuild, const SettingsBench* bench,
                        std::vector<SettingsRow>* out);
 

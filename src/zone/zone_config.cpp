@@ -59,70 +59,70 @@ static_assert(__alignof(ZoneConfig) >= 8, "ZoneConfig must be 8-byte aligned");
 
 const ConfigKey g_zoneConfigKeys[] =
 {
-	CFG_OBOOL("deferral", ZoneConfig, deferralEnabled,              NDOC, SHOW,
+	CFG_OBOOL("deferral", ZoneConfig, deferralEnabled,              NDOC, DEVROW,
 	  "Navmesh readiness deferral",
 	  "Lets a zone count as ready while its navmesh work is still pending, once its content sections"
 	  " have drained."),
 	CFG_OBOOL("preload", ZoneConfig, preloadEnabled,               NDOC, SHOW,
 	  "Zone preloading",
 	  "Loads the zones around the camera and the player's characters before they are needed."),
-	CFG_OBOOL("movementAware", ZoneConfig, movementAwareEnabled,         NDOC, SHOW,
+	CFG_OBOOL("movementAware", ZoneConfig, movementAwareEnabled,         NDOC, DEVROW,
 	  "Movement-aware preloading",
 	  "Watches player move orders and preloads the zones toward each destination."),
-	CFG_OBOOL("saveLoadUnload", ZoneConfig, saveLoadUnloadEnabled,        NDOC, SHOW,
+	CFG_OBOOL("saveLoadUnload", ZoneConfig, saveLoadUnloadEnabled,        NDOC, DEVROW,
 	  "Unload mod zones at save load",
 	  "At a save load's reset, unloads every zone the mod still holds and clears its state. Off only"
 	  " counts them."),
-	CFG_OBOOL("escapePauseGuard", ZoneConfig, escapePauseGuardEnabled,      DOC, SHOW,
+	CFG_OBOOL("escapePauseGuard", ZoneConfig, escapePauseGuardEnabled,      DOC, DEVROW,
 	  "Keep the escape menu's pause",
 	  "Keeps the escape menu's pause when a zone load finishes behind it. Off also turns off the zone"
 	  " cycle measurement and the wedge report."),
-	CFG_OBOOL("townGuard", ZoneConfig, townGuardEnabled,             DOC, SHOW,
+	CFG_OBOOL("townGuard", ZoneConfig, townGuardEnabled,             DOC, DEVROW,
 	  "Town coverage guard",
 	  "Refuses a town's coverage refresh that carries a nonpositive timer, the engine's own signal that"
 	  " nothing in that coverage is leased."),
-	CFG_OBOOL("zoneRetention", ZoneConfig, zoneRetentionEnabled,         DOC, SHOW,
+	CFG_OBOOL("zoneRetention", ZoneConfig, zoneRetentionEnabled,         DOC, DEVROW,
 	  "Zone retention",
 	  "Holds a cell the game has taken over from the mod past its countdowns, for as long as the"
 	  " retention policy says."),
-	CFG_OBOOL("islandReadinessRule", ZoneConfig, islandReadinessRuleEnabled,   NDOC, SHOW,
+	CFG_OBOOL("islandReadinessRule", ZoneConfig, islandReadinessRuleEnabled,   NDOC, DEVROW,
 	  "Per-caller readiness rule",
 	  "Answers the content readiness check by the caller's class instead of one answer for every"
 	  " caller."),
-	CFG_OBOOL("readinessOverrides", ZoneConfig, readinessOverridesEnabled,    NDOC, SHOW,
+	CFG_OBOOL("readinessOverrides", ZoneConfig, readinessOverridesEnabled,    NDOC, DEVROW,
 	  "Readiness deferral override",
 	  "Lets the readiness deferral override the game's answer. Off leaves the game's own answer."),
-	CFG_OBOOL("zoneLifeUnload", ZoneConfig, zoneLifeUnloadEnabled,        NDOC, SHOW,
+	CFG_OBOOL("zoneLifeUnload", ZoneConfig, zoneLifeUnloadEnabled,        NDOC, DEVROW,
 	  "Unload idle mod zones",
 	  "Unloads the zones the mod loaded once they are idle and outside the retain radius."),
-	CFG_OBOOL("zoneCycleStats", ZoneConfig, zoneCycleStatsEnabled,        DOC, DIAG,
+	CFG_OBOOL("zoneCycleStats", ZoneConfig, zoneCycleStatsEnabled,        DOC, DEVROW,
 	  "Zone cycle measurement",
 	  "Measures each zone manager loading cycle, the player characters in cells the mod holds and Set"
 	  " B's size, for the log. Reading only."),
-	CFG_OBOOL("zoneWedgeGuard", ZoneConfig, zoneWedgeGuardEnabled,        DOC, DIAG,
+	CFG_OBOOL("zoneWedgeGuard", ZoneConfig, zoneWedgeGuardEnabled,        DOC, DEVROW,
 	  "Zone cycle wedge report",
 	  "Reports once if a loading cycle stays in one phase for more than 10 seconds. Reading only; never"
 	  " forces the phase forward."),
 	CFG_OCUSTOM("zoneGeometryMode", ZoneConfig, zoneGeometryMode, ParseZoneGeometryMode, DOC),
-	CFG_OBOOL("camFocus", ZoneConfig, cfg_camFocusEnabled,          DOC, SHOW,
+	CFG_OBOOL("camFocus", ZoneConfig, cfg_camFocusEnabled,          DOC, DEVROW,
 	  "Camera focus prediction",
 	  "Predicts the camera's zone from where it points instead of where it sits, so a zoomed-out camera"
 	  " still preloads the zone the squad walks into."),
-	CFG_OFLOAT("preloadKeepAliveSeconds", ZoneConfig, cfg_preloadKeepAliveSeconds, 0.0f, 86400.0f, false, NDOC, SHOW,
+	CFG_OFLOAT("preloadKeepAliveSeconds", ZoneConfig, cfg_preloadKeepAliveSeconds, 0.0f, 86400.0f, false, NDOC, DEVROW,
 	  "Preloaded zone keep-alive seconds",
 	  "How long a zone the mod preloads stays loaded before it may unload. 0 takes the game's own"
 	  " default.", 0.0f, 0),
-	CFG_ODOUBLE("camLogInterval", ZoneConfig, cfg_camLogInterval, 1.0f, 300.0f, NDOC, DIAG,
+	CFG_ODOUBLE("camLogInterval", ZoneConfig, cfg_camLogInterval, 1.0f, 300.0f, NDOC, DEVROW,
 	  "Camera log interval seconds",
 	  "Seconds between debug camera log lines.", 1.0f, 0),
-	CFG_OFLOAT("camFocusMaxDist", ZoneConfig, cfg_camFocusMaxDist, 500.0f, 50000.0f, true, DOC, SHOW,
+	CFG_OFLOAT("camFocusMaxDist", ZoneConfig, cfg_camFocusMaxDist, 500.0f, 50000.0f, true, DOC, DEVROW,
 	  "Camera focus distance cap",
 	  "World units from the nearest squad member past which the focus point is pulled back toward them."
 	  " 0 is one zone width.", 0.0f, 0),
-	CFG_OFLOAT("camFocusHardMult", ZoneConfig, cfg_camFocusHardMult, 1.0f, 10.0f, false, DOC, SHOW,
+	CFG_OFLOAT("camFocusHardMult", ZoneConfig, cfg_camFocusHardMult, 1.0f, 10.0f, false, DOC, DEVROW,
 	  "Camera focus hard cutoff multiple",
 	  "Multiple of the distance cap past which the focus point is ignored outright.", 1.0f, 1),
-	CFG_OFLOAT("camFocusHysteresis", ZoneConfig, cfg_camFocusHysteresis, 0.0f, 2000.0f, false, DOC, SHOW,
+	CFG_OFLOAT("camFocusHysteresis", ZoneConfig, cfg_camFocusHysteresis, 0.0f, 2000.0f, false, DOC, DEVROW,
 	  "Camera focus hysteresis",
 	  "World units past the preload threshold a neighbouring zone's prediction must move to take over"
 	  " or be released, so a point near a border does not thrash.", 0.0f, 0),
@@ -130,7 +130,7 @@ const ConfigKey g_zoneConfigKeys[] =
 	  "Zone retain radius in cells",
 	  "Radius, in cells around the camera and the player's characters, inside which a zone the mod"
 	  " loaded is never unloaded."),
-	CFG_ODOUBLE("zoneLifeIdleSeconds", ZoneConfig, cfg_zoneLifeIdleSeconds, 5.0f, 600.0f, NDOC, SHOW,
+	CFG_ODOUBLE("zoneLifeIdleSeconds", ZoneConfig, cfg_zoneLifeIdleSeconds, 5.0f, 600.0f, NDOC, DEVROW,
 	  "Idle zone unload delay seconds",
 	  "Seconds a zone the mod loaded must sit outside the retain radius before it is unloaded.", 5.0f, 0),
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }

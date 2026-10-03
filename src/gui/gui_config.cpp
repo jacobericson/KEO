@@ -24,7 +24,7 @@ namespace keo_gui {
 
 const ConfigKey g_guiConfigKeys[] =
 {
-	CFG_OBOOL("settingsPanel", GuiConfig, settingsPanelEnabled,         DOC, SHOW,
+	CFG_OBOOL("settingsPanel", GuiConfig, settingsPanelEnabled,         DOC, DEVROW,
 	  "KEO settings tab",
 	  "This tab in the game's Options window."),
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }

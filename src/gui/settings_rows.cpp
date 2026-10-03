@@ -132,7 +132,7 @@ void BuildSettingsRows(SettingsStaging* staging, bool devBuild, const SettingsBe
 	for (int m = 0; m < kConfigModuleCount && m < CONFIG_MODULE_MAX; ++m)
 		AddModuleRows(kConfigModules[m], &staging->module[m], devBuild, out);
 
-	if (bench)
+	if (bench && devBuild)
 		AddBenchRows(staging, *bench, out);
 }
 

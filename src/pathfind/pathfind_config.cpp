@@ -92,27 +92,27 @@ namespace pathfind {
 
 const ConfigKey g_pathfindConfigKeys[] =
 {
-	CFG_OBOOL("pathfindDiag", PathfindConfig, pathfindDiagEnabled,          NDOC, SHOW,
+	CFG_OBOOL("pathfindDiag", PathfindConfig, pathfindDiagEnabled,          NDOC, DEVROW,
 	  "Pathfinding hooks",
 	  "Installs the mod's pathfinding hooks. The cluster graph bypass, the path request priority tiers,"
 	  " the longer A* search for player orders, the path extraction guard and the path log lines all run"
 	  " through them; off turns every one of them off."),
-	CFG_OBOOL("npcWaitDiag", PathfindConfig, npcWaitDiagEnabled,           NDOC, DIAG,
+	CFG_OBOOL("npcWaitDiag", PathfindConfig, npcWaitDiagEnabled,           NDOC, DEVROW,
 	  "NPC path wait diagnostic",
 	  "Measures how long NPC path requests wait, for the log."),
-	CFG_OBOOL("gatePassDiag", PathfindConfig, gatePassDiagEnabled,          NDOC, DIAG,
+	CFG_OBOOL("gatePassDiag", PathfindConfig, gatePassDiagEnabled,          NDOC, DEVROW,
 	  "Gate code pass timing",
 	  "Times each gate-code pass for the GateRate: log line."),
-	CFG_OBOOL("pathCostLines", PathfindConfig, pathCostLinesEnabled,         DOC, DIAG,
+	CFG_OBOOL("pathCostLines", PathfindConfig, pathCostLinesEnabled,         DOC, DEVROW,
 	  "Path search class lines",
 	  "Prints the heartbeat's per-class AstarClass: detail lines; the compact AstarCap: and PathBusy:"
 	  " lines print either way."),
-	CFG_OCUSTOM_CHOICES("clusterGraphBypass", PathfindConfig, clusterGraphBypassMode, ParseClusterGraphBypass, DOC,
+	CFG_OCUSTOM_CHOICES("clusterGraphBypass", PathfindConfig, clusterGraphBypassMode, ParseClusterGraphBypass, DOC, DEVROW,
 	  "Cluster graph pre-check",
 	  "true answers the engine's connectivity pre-check as connected without reading the stale cluster"
 	  " graph; false hands the check back to the game. measure and player ask the graph, then wave every"
 	  " pair, or a player's pairs, through.", kClusterGraphChoices),
-	CFG_OBOOL("playerRepathTier", PathfindConfig, playerRepathTierEnabled,      DOC, SHOW,
+	CFG_OBOOL("playerRepathTier", PathfindConfig, playerRepathTierEnabled,      DOC, DEVROW,
 	  "Player path re-request priority",
 	  "A player character's mid-walk path re-request keeps the priority its move order got instead of"
 	  " queueing behind every NPC. Off only counts."),

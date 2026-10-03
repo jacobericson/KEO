@@ -641,8 +641,8 @@ static void EmptyPassTests()
 	Check(MaskNodeWanted(true, true, false, &ran) && !ran, "occupied wins over resize");
 
 	const RenderKey* key = FindRenderKey("emptyPassSkip");
-	Check(key && key->kind == RK_BOOL && key->live && key->label && !key->devOnly,
-	      "emptyPassSkip is a live bool with a PROD row");
+	Check(key && key->kind == RK_BOOL && key->live && key->label && key->devOnly,
+	      "emptyPassSkip is a live bool with a DEV-only row");
 	Check(RenderConfigDefaults().emptyPassSkip, "emptyPassSkip defaults on");
 	RenderConfig c = RenderConfigDefaults();
 	Check(ParseRenderKey(&c, "emptyPassSkip", "false") == RP_OK && !c.emptyPassSkip, "emptyPassSkip parses");
@@ -1562,7 +1562,15 @@ static const SettingsRow* FindRow(const std::vector<SettingsRow>& rows, const ch
 	return NULL;
 }
 
-static void BenchRowsTests(SettingsStaging st, size_t baseRows)
+static size_t SettingRows(const std::vector<SettingsRow>& rows)
+{
+	size_t n = 0;
+	for (size_t i = 0; i < rows.size(); ++i)
+		n += rows[i].kind == SR_HEADER ? 0 : 1;
+	return n;
+}
+
+static void BenchRowsTests(SettingsStaging st, size_t baseRows, size_t prodRows)
 {
 	BenchSlot slots[BENCH_SLOT_COUNT];
 	memset(slots, 0, sizeof(slots));
@@ -1580,6 +1588,9 @@ static void BenchRowsTests(SettingsStaging st, size_t baseRows)
 	bench.activeSlot = 2;
 	std::vector<SettingsRow> rows;
 	BuildSettingsRows(&st, false, &bench, &rows);
+	Check(rows.size() == prodRows && FindRow(rows, "Benchmark") == NULL, "PROD: no Benchmark section");
+	rows.clear();
+	BuildSettingsRows(&st, true, &bench, &rows);
 	Check(rows.size() == baseRows + 1 + 4 * BENCH_SLOT_COUNT + 1, "Benchmark: a header, four rows per slot, the sweep");
 	const SettingsRow* h = baseRows < rows.size() ? &rows[baseRows] : NULL;
 	Check(h && h->kind == SR_HEADER && h->label == "Benchmark", "the section follows the existing rows");
@@ -1606,7 +1617,7 @@ static void BenchRowsTests(SettingsStaging st, size_t baseRows)
 	bench.sweepLeg = 3;
 	bench.sweepLegs = 6;
 	rows.clear();
-	BuildSettingsRows(&st, false, &bench, &rows);
+	BuildSettingsRows(&st, true, &bench, &rows);
 	Check(rows.back().caption == "Sweep 3/6 (stop)", "the sweep caption shows progress");
 	Check(SweepCaption(0, 6) == "Full sweep" && SweepCaption(1, 6) == "Sweep 1/6 (stop)", "sweep caption");
 	Check(rows.back().tooltip.find("minute") == std::string::npos &&
@@ -1615,14 +1626,14 @@ static void BenchRowsTests(SettingsStaging st, size_t baseRows)
 	bench.runSecCombined = 126.0;
 	bench.sweepLegCount = 6;
 	rows.clear();
-	BuildSettingsRows(&st, false, &bench, &rows);
+	BuildSettingsRows(&st, true, &bench, &rows);
 	Check(FindRow(rows, "Swamp benchmark")->tooltip.find("(about 10 minutes, 2 with bench.levers=combined)") != std::string::npos,
 	      "Run tooltip: the run's duration, and combined's");
 	Check(rows.back().tooltip.find("Its 6 legs take about 57 minutes, 13 with bench.levers=combined") != std::string::npos,
 	      "sweep tooltip: the legs times the run");
 	bench.runSec = 126.0;
 	rows.clear();
-	BuildSettingsRows(&st, false, &bench, &rows);
+	BuildSettingsRows(&st, true, &bench, &rows);
 	Check(FindRow(rows, "Swamp benchmark")->tooltip.find("(about 2 minutes)") != std::string::npos,
 	      "combined already on: one duration");
 	Check(FindRow(rows, "City: speed 20x, hour 13.4") != NULL, "recorded slot text");
@@ -1636,7 +1647,7 @@ static void BenchRowsTests(SettingsStaging st, size_t baseRows)
 	bench.available = false;
 	bench.reason = "sky";
 	rows.clear();
-	BuildSettingsRows(&st, false, &bench, &rows);
+	BuildSettingsRows(&st, true, &bench, &rows);
 	Check(rows.size() == baseRows + 2 && rows.back().kind == SR_TEXT
 	      && rows.back().label == "Benchmark unavailable (sky)", "unavailable: one text line, no buttons");
 }
@@ -1687,23 +1698,26 @@ static void SettingsRowsTests()
 				++devOnlyRows;
 		}
 	}
-	Check(devOnlyRows >= 3 && dev.size() == prod.size() + devOnlyRows, "PROD hides the DEV-only diagnostics");
+	// A section with no PROD row has no PROD header either, so count rows only.
+	Check(devOnlyRows >= 3 && SettingRows(dev) == SettingRows(prod) + devOnlyRows, "PROD hides the DEV-only rows");
 	Check(FindRow(dev, "Shadow reach") != NULL && FindRow(prod, "Shadow reach") == NULL, "shadowReachDiag is DEV-only");
 	Check(FindRow(prod, "Shader constant") == NULL, "gpuParamLookupDiag is DEV-only");
 	Check(FindRow(dev, "Animation pass counter") != NULL && FindRow(prod, "Animation pass counter") == NULL,
 	      "oldAnimDiag is DEV-only");
 	Check(FindRow(dev, "Constant upload counter") != NULL && FindRow(prod, "Constant upload counter") == NULL,
 	      "gpuUploadDiag is DEV-only");
-	Check(FindRow(prod, "Skip idle character animation") != NULL, "oldAnimSkip shows in PROD");
-	Check(FindRow(prod, "Skip unchanged shader constant") != NULL, "gpuUploadSkip shows in PROD");
-	Check(FindRow(prod, "Render stats") != NULL, "renderDiag shows in PROD");
+	Check(FindRow(dev, "Skip idle character animation") != NULL && FindRow(prod, "Skip idle character animation") == NULL,
+	      "oldAnimSkip is DEV-only");
+	Check(FindRow(dev, "Skip unchanged shader constant") != NULL && FindRow(prod, "Skip unchanged shader constant") == NULL,
+	      "gpuUploadSkip is DEV-only");
+	Check(FindRow(dev, "Render stats") != NULL && FindRow(prod, "Render stats") == NULL, "renderDiag is DEV-only");
 
 	const SettingsRow* levers = FindRow(prod, "Render and particle levers");
 	Check(levers && levers->label == "Render and particle levers (restart)" && levers->kind == SR_CHECKBOX
 	      && levers->boolPtr == &StagedRender(&st).renderLevers, "renderLevers: a checkbox bound to staging, marked restart");
-	const SettingsRow* skip = FindRow(prod, "Pause off-screen");
-	Check(skip && skip->label.find("(restart)") == std::string::npos, "live keys are not marked restart");
-	const SettingsRow* speed = FindRow(prod, "Particle step cap from");
+	const SettingsRow* cap = FindRow(prod, "Cap particle steps");
+	Check(cap && cap->label.find("(restart)") == std::string::npos, "live keys are not marked restart");
+	const SettingsRow* speed = FindRow(dev, "Particle step cap from");
 	Check(speed && speed->kind == SR_SLIDER && speed->floatPtr == &StagedRender(&st).particleStepCapSpeed
 	      && speed->lo == 1.5f && speed->hi == 20.0f && speed->stepExp == 1, "slider bound to staging with its drag grid");
 
@@ -1780,7 +1794,7 @@ static void SettingsRowsTests()
 		          "navmeshWorkerCount=0\n", "worker line rewritten in place");
 	}
 
-	BenchRowsTests(st, prod.size());
+	BenchRowsTests(st, dev.size(), prod.size());
 }
 
 int main()
