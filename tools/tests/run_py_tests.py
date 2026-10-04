@@ -19,10 +19,11 @@ run add up to that count, and the count is above zero. Up to PY_JOBS shard proce
 usable record, sharded modules go first by shard count, then list order. Each shard process
 holds one host-wide cpu token from tools/build/slots.py while it runs, and inherits KEO_CPU_HELD=1
 so that the processes it starts take none. A runner started under someone else's cpu token
-(KEO_CPU_HELD=1) runs one shard at a time.
+(KEO_CPU_HELD=1) runs one shard at a time. Once one shard gives up waiting for its token, no
+queued shard starts (each fails as not started), and any error in the runner cancels the queue.
 
 Each module's output is printed as one block, in list order, followed by
-    py: <stem>: <n> tests, <N> shard(s), <seconds> s
+    py: <stem>: <n> tests, <N> shard(s), <seconds> s[, <k> skipped]
 or, when it failed, "py: <stem>: FAILED (<reason>), <N> shard(s), <seconds> s". The last line is
 "python tests: <name>, <name>, ... OK", naming each module that ran in list order, or
 "python tests FAILED: <name> (<reason>), ..."; exit 1 on any failure or invalid list.
@@ -31,10 +32,10 @@ Selection is off unless --since REV or PY_TESTS_SINCE=REV is given. Then a row w
 only when a path changed since REV (git diff against the working tree, plus git status, untracked
 files included) matches one of its globs or is the module's own file; globs are repo-relative
 with forward slashes, matched case-insensitively with fnmatch, so * and ** both cross folders.
-A change to this runner, py_shard.py or a list runs every module, and rows without when= always
-run. Skipped modules are named on a "python test selection: skipped ..." line. When REV does not
-resolve or git fails, every module runs, after "python test selection: off (<reason>), running
-every module".
+A change to this runner, py_shard.py, tools/build/slots.py or a list runs every module, and rows
+without when= always run. Skipped modules are named on a "python test selection: skipped ..."
+line, and a selection that leaves no module fails the run. When REV does not resolve or git
+fails, every module runs, after "python test selection: off (<reason>), running every module".
 """
 import argparse
 import concurrent.futures
@@ -46,6 +47,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
@@ -54,7 +56,7 @@ LISTS = [os.path.join(LIST_DIR, 'py_tests.txt'), os.path.join(LIST_DIR, 'py_test
 PY_SHARD = os.path.join(LIST_DIR, 'py_shard.py')
 sys.path.insert(0, os.path.join(REPO, 'tools', 'build'))
 import slots  # noqa: E402
-RUNNER_FILES = ['tools/tests/run_py_tests.py', 'tools/tests/py_shard.py',
+RUNNER_FILES = ['tools/tests/run_py_tests.py', 'tools/tests/py_shard.py', 'tools/build/slots.py',
                 'tools/tests/py_tests.txt', 'tools/tests/py_tests_private.txt']
 MAX_SHARDS = 32
 ROW_RE = re.compile(r'^(\d+)\s+(.+?)((?:\s+[A-Za-z_]+=\S*)*)\s*$')
@@ -249,14 +251,22 @@ def save_timings(path, old, modules):
         if mod.ok:
             data['modules'][mod.row.key] = {'shard_s': round(sum(s.wall for s in mod.shard_runs), 3),
                                             'shards': mod.row.shards}
+    tmp = None
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         fd, tmp = tempfile.mkstemp(prefix='py_tests.', suffix='.tmp', dir=os.path.dirname(path))
         with os.fdopen(fd, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=1, sort_keys=True)
         os.replace(tmp, path)
+        tmp = None
     except OSError as exc:
         print('python test timings: not saved (%s)' % exc)
+    finally:
+        if tmp is not None:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
 
 
 def schedule(modules, timings):
@@ -298,15 +308,21 @@ class Module(object):
         self.end = None
         self.ok = False
         self.total = 0
+        self.skipped = 0
         self.reason = None
 
 
-def run_shard(mod, k, tmp):
+def run_shard(mod, k, tmp, no_token):
+    """Runs shard k of mod under a cpu token. no_token is set by the first shard whose wait for a
+    token runs out; a shard that finds it set does not wait at all."""
     n = mod.row.shards
     base = os.path.join(tmp, '%03d_%s.%d' % (mod.index, mod.row.stem, k))
     out_path, res_path = base + '.out', base + '.json'
     cmd = [sys.executable, PY_SHARD, mod.path, '--shard', '%d/%d' % (k, n), '--result', res_path]
     t0 = time.time()
+    if no_token.is_set():
+        return ShardRun(k, None, out_path, res_path, t0, t0,
+                        error='an earlier shard could not get a cpu token')
     try:
         with slots.cpu_token('py %s %d/%d' % (mod.row.stem, k, n)):
             t0 = time.time()
@@ -314,7 +330,10 @@ def run_shard(mod, k, tmp):
                 rc = subprocess.call(cmd, cwd=REPO, stdout=out, stderr=subprocess.STDOUT,
                                      stdin=subprocess.DEVNULL, env=slots.child_env())
             return ShardRun(k, rc, out_path, res_path, t0, time.time())
-    except (OSError, ValueError, slots.SlotTimeout) as exc:
+    except slots.SlotTimeout as exc:
+        no_token.set()
+        return ShardRun(k, None, out_path, res_path, t0, time.time(), error=str(exc))
+    except (OSError, ValueError) as exc:
         return ShardRun(k, None, out_path, res_path, t0, time.time(), error=str(exc))
 
 
@@ -374,6 +393,7 @@ def judge(mod):
         return total, 'ran %d of %d tests' % (ran, total)
     if not all(r.get('ok') is True for r in results):
         return total, 'a shard reported a failure'
+    mod.skipped = sum(r.get('skipped', 0) for r in results)
     return total, None
 
 
@@ -398,7 +418,8 @@ def print_block(mod):
             pass
     wall = (mod.end - mod.start) if mod.start is not None else 0.0
     if mod.ok:
-        print('py: %s: %d tests, %d shard(s), %.1f s' % (mod.row.stem, mod.total, n, wall))
+        print('py: %s: %d tests, %d shard(s), %.1f s%s' % (
+            mod.row.stem, mod.total, n, wall, (', %d skipped' % mod.skipped) if mod.skipped else ''))
     else:
         print('py: %s: FAILED (%s), %d shard(s), %.1f s' % (mod.row.stem, mod.reason, n, wall))
     sys.stdout.flush()
@@ -422,23 +443,28 @@ def run_modules(modules, jobs_max, tmp):
     by_index = dict((m.index, m) for m in modules)
     order = [m.index for m in modules]
     printed = 0
+    no_token = threading.Event()
     with concurrent.futures.ThreadPoolExecutor(max_workers=jobs_max) as pool:
-        futures = {}
-        for mod, k in schedule(modules, timings):
-            futures[pool.submit(run_shard, mod, k, tmp)] = mod
-        for fut in concurrent.futures.as_completed(futures):
-            mod = futures[fut]
-            run = fut.result()
-            mod.shard_runs.append(run)
-            mod.start = run.t0 if mod.start is None else min(mod.start, run.t0)
-            mod.end = run.t1 if mod.end is None else max(mod.end, run.t1)
-            pending[mod.index] -= 1
-            if pending[mod.index] == 0:
-                mod.total, mod.reason = judge(mod)
-                mod.ok = mod.reason is None
-            while printed < len(order) and pending[order[printed]] == 0:
-                print_block(by_index[order[printed]])
-                printed += 1
+        try:
+            futures = {}
+            for mod, k in schedule(modules, timings):
+                futures[pool.submit(run_shard, mod, k, tmp, no_token)] = mod
+            for fut in concurrent.futures.as_completed(futures):
+                mod = futures[fut]
+                run = fut.result()
+                mod.shard_runs.append(run)
+                mod.start = run.t0 if mod.start is None else min(mod.start, run.t0)
+                mod.end = run.t1 if mod.end is None else max(mod.end, run.t1)
+                pending[mod.index] -= 1
+                if pending[mod.index] == 0:
+                    mod.total, mod.reason = judge(mod)
+                    mod.ok = mod.reason is None
+                while printed < len(order) and pending[order[printed]] == 0:
+                    print_block(by_index[order[printed]])
+                    printed += 1
+        except BaseException:
+            pool.shutdown(wait=False, cancel_futures=True)
+            raise
     save_timings(timings_file, timings, modules)
 
 
@@ -473,6 +499,9 @@ def main(argv=None):
         rows, lines = select(rows, since, [p for p, _ in lists])
         for line in lines:
             print(line)
+        if not rows:
+            print('python tests FAILED: no module selected')
+            return 1
         sys.stdout.flush()
 
     failed, modules = [], []
