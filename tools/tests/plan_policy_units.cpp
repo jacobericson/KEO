@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <cfloat>
 #include "planner/plan_policy.h"
 
 #include "check.h"
@@ -693,6 +694,28 @@ static void CheckWaterArcs()
 	      "water: the route share weights each step by its two nodes");
 }
 
+static void CheckWaterRequest()
+{
+	CHECK(PlanWaterRequestValue(PWC_OFF, 8.0f, 5.0f) == 0.0f, "water request: off leaves the engine's value");
+	CHECK(PlanWaterRequestValue(PWC_DYNAMIC, 0.0f, 5.0f) == 0.0f && PlanWaterRequestValue(PWC_DYNAMIC, -1.0f, 5.0f) == 0.0f,
+	      "water request: no multiplier leaves the engine's value");
+	CHECK(PlanWaterRequestValue(PWC_DYNAMIC, 1.6f, 5.0f) == 1.6f, "water request: dynamic writes the character's multiplier");
+	CHECK(PlanWaterRequestValue(PWC_FLOOR, 10.1f, 5.0f) == 10.1f,
+	      "water request: under floor the request takes the floored multiplier");
+	CHECK(PlanWaterRequestValue(PWC_FLOOR, 5.0f, 5.0f) == 0.0f, "water request: a multiplier equal to the engine's is left");
+	float one = PlanWaterRequestValue(PWC_DYNAMIC, 1.0f, 5.0f);
+	float half = PlanWaterRequestValue(PWC_DYNAMIC, 0.5f, 5.0f);
+	CHECK(one != 1.0f && one == PLAN_WATER_REQ_MIN && half == PLAN_WATER_REQ_MIN && PLAN_WATER_REQ_MIN - 1.0f == FLT_EPSILON,
+	      "water request: a multiplier at or below 1 is written just above 1, never 1");
+	CHECK(PlanWaterRequestValue(PWC_DYNAMIC, 35.0f, 5.0f) == PLAN_WATER_CAP, "water request: the multiplier is capped at 20");
+	CHECK(PlanWaterEffectiveMode(PWC_DYNAMIC, 0) == PWC_FLOOR,
+	      "water mode: dynamic arms as floor while the engine write cannot run");
+	CHECK(PlanWaterEffectiveMode(PWC_DYNAMIC, 1) == PWC_DYNAMIC, "water mode: dynamic arms as dynamic while the engine write runs");
+	CHECK(PlanWaterEffectiveMode(PWC_FLOOR, 0) == PWC_FLOOR && PlanWaterEffectiveMode(PWC_ENGINE, 1) == PWC_ENGINE
+	      && PlanWaterEffectiveMode(PWC_OFF, 0) == PWC_OFF,
+	      "water mode: floor, engine and off arm as configured");
+}
+
 int main()
 {
 	CheckCellsAndMode();
@@ -710,5 +733,6 @@ int main()
 	CheckWaterModes();
 	CheckWaterGroup();
 	CheckWaterArcs();
+	CheckWaterRequest();
 	return CheckExit("plan_policy_units");
 }

@@ -95,6 +95,20 @@ static bool ParsePlannerWaterCost(const std::string& val, ConfigLogFn log)
 	return StoreField(&planner::PlannerConfig::waterCost, mode);
 }
 
+// plannerWaterEngine: off or match; anything else is refused.
+static bool ParsePlannerWaterEngine(const std::string& val, ConfigLogFn log)
+{
+	(void)log;
+	int mode;
+	if (_stricmp(val.c_str(), "off") == 0)
+		mode = planner::PWE_OFF;
+	else if (_stricmp(val.c_str(), "match") == 0)
+		mode = planner::PWE_MATCH;
+	else
+		return false;
+	return StoreField(&planner::PlannerConfig::waterEngine, mode);
+}
+
 namespace planner {
 
 const PlannerConfig kPlannerDefaults =
@@ -104,7 +118,8 @@ const PlannerConfig kPlannerDefaults =
 	1, // baseBuild
 	3, // aheadTiles
 	10, // waitSeconds
-	PWC_FLOOR, // waterCost
+	PWC_DYNAMIC, // waterCost
+	PWE_MATCH, // waterEngine
 };
 
 PlannerConfig g_plannerCfg = kPlannerDefaults;
@@ -141,6 +156,7 @@ const ConfigKey g_plannerConfigKeys[] =
 	CFG_OCUSTOM("plannerAheadTiles", PlannerConfig, aheadTiles, ParsePlannerAheadTiles, NDOC),
 	CFG_OCUSTOM("plannerWaitSeconds", PlannerConfig, waitSeconds, ParsePlannerWaitSeconds, NDOC),
 	CFG_OCUSTOM("plannerWaterCost", PlannerConfig, waterCost, ParsePlannerWaterCost, NDOC),
+	CFG_OCUSTOM("plannerWaterEngine", PlannerConfig, waterEngine, ParsePlannerWaterEngine, NDOC),
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }
 };
 

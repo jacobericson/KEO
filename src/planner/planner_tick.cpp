@@ -816,6 +816,7 @@ void PlannerTick(void* zoneMgr, double now)
 		if (TickSlot(slot, players, nPlayers, now, replans < REPLANS_PER_TICK))
 			++replans;
 	}
+	PlannerWaterRefresh();
 	PlannerReportTick(now);
 }
 

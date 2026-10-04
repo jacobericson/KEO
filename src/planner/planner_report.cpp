@@ -3,6 +3,7 @@
 // goal section's border line. Main thread only; no lock.
 #include "planner/planner_tick.h"
 #include "planner/plan_store.h"
+#include "planner/planner_water_table.h"
 #include "planner/coarse_search.h"
 #include "planner/coarse_graph.h"
 #include "base/core.h"
@@ -55,7 +56,9 @@ void PlannerReportTick(double now)
 		return;
 	s_lastReport = now;
 	const PlannerCounters& c = *PlannerCountersGet();
-	LONG sum = CounterSum(c);
+	PlanWaterTableStats ws;
+	PlannerWaterTableStatsGet(&ws);
+	LONG sum = CounterSum(c) + ws.writes + ws.leaves;
 	if (sum == s_lastSum)
 		return;
 	s_lastSum = sum;
@@ -68,7 +71,8 @@ void PlannerReportTick(double now)
 	            " slotFull=%ld repeats=%ld locFail=%ld goalUnlocated=%ld startUnlocated=%ld notSite=%ld staleAdvance=%ld"
 	            " rung17=%ld ownedSkips=%ld noLocation=%ld"
 	            " reissuedPlanned=%ld heldPlanned=%ld reissueRefused=%ld snapFar=%ld snapMax=%ld"
-	            " waterFail=%ld waterGroups=%ld probeNoRoute=%ld",
+	            " waterFail=%ld waterGroups=%ld probeNoRoute=%ld"
+	            " waterReq=%ld waterReqLeave=%ld waterReqLast=%.2f waterTable=%ld",
 	            (long)c.plans, (long)c.direct, (long)c.legged, (long)c.noRoute, (long)c.legs, (long)c.arrivals,
 	            (long)c.rungs,
 	            (long)c.replans, (long)c.replansBy[1], (long)c.replansBy[2], (long)c.replansBy[3], (long)c.replansBy[4],
@@ -80,7 +84,7 @@ void PlannerReportTick(double now)
 	            (long)c.repeats, (long)c.locFail, (long)c.goalUnlocated, (long)c.startUnlocated, (long)c.notSite,
 	            (long)c.staleAdvance, (long)c.rung17, (long)c.ownedSkips, (long)c.noLocation,
 	            (long)c.reissuedPlanned, (long)c.heldPlanned, (long)c.reissueRefused, (long)c.snapFar, (long)c.snapMax,
-	            (long)c.waterFail, (long)c.waterGroups, CoarseProbeRefusals());
+	            (long)c.waterFail, (long)c.waterGroups, CoarseProbeRefusals(), ws.writes, ws.leaves, (double)ws.last, ws.entries);
 	LogMsg(line);
 }
 

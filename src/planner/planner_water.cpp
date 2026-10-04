@@ -1,13 +1,17 @@
 // planner_water.cpp - The per-character water multiplier's game side: the prologue-checked bindings
-// of CharStats::calculateSwimSpeed and Character::getWaterLevel, each member's reads, and the order's
-// pre-pass. Main thread only (the order capture and the arm); no lock, no allocation, no log. The two
-// engine readers write nothing and take no lock; the engine's own GUI calls them on this thread.
+// of CharStats::calculateSwimSpeed and Character::getWaterLevel, each member's reads, the order's
+// pre-pass, and the per-player-character water table's refresh and order amend. Main thread only (the
+// order capture, the planner's tick and the arm); no lock, no allocation, no log. The two engine
+// readers write nothing and take no lock; the engine's own GUI calls them on this thread.
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #include "planner/planner_water.h"
 #include "planner/plan_policy.h"
 #include "planner/plan_store.h"
+#include "planner/planner_config.h"
+#include "planner/planner_water_table.h"
+#include "plugin/hook_manifest.h"
 #include "game/game.h"
 #include "base/core.h"
 #include "movement/islands.h"
@@ -32,13 +36,30 @@ static calculateSwimSpeed_t fn_calculateSwimSpeed = NULL;
 static getWaterLevel_t      fn_getWaterLevel      = NULL;
 static int                  s_waterMode           = PWC_FLOOR;
 static const char*          s_bindToken           = "unarmed";
+// The water mode as configured, before the coherence rule. Main thread.
+static int s_configuredMode = PWC_FLOOR;
+// The request write's state for the arm line. Main thread.
+static const char* s_engineToken = "unarmed";
+// The main thread's copy of the published water table. Main thread.
+static PlanWaterEntry s_local[PLAN_WATER_TABLE_MAX];
+// The copy's entry count. Main thread.
+static int s_localCount = 0;
 
 // The order pre-pass's scratch, one entry per member. Main thread.
 static PlanWaterInputs      s_members[PLAN_WATER_ORDER_MAX];
 
 bool PlannerWaterArm(int mode)
 {
-	s_waterMode = mode;
+	bool pathRow = HookRowInstalled(HOOK_REQUEST_PATH);
+	bool submitRow = HookRowInstalled(HOOK_PATH_REQ_SUBMIT);
+	bool keyOn = g_plannerCfg.waterEngine == PWE_MATCH;
+	bool on = g_plannerCfg.mode == PLANNER_ON;
+	int live = (keyOn && on && pathRow && submitRow) ? 1 : 0;
+	s_engineToken = live ? "match" : (!keyOn ? "off" : (!on ? "off(observe)"
+	              : (!pathRow ? "refused(requestPath)" : "refused(pathReqSubmit)")));
+	s_configuredMode = mode;
+	s_waterMode = PlanWaterEffectiveMode(mode, live);
+	PlannerWaterTableArm(live, s_waterMode);
 	const void* swim = GameAddr(RVA_CHARSTATS_CALC_SWIM_SPEED);
 	const void* level = GameAddr(RVA_CHARACTER_GET_WATER_LEVEL);
 	bool swimOk = memcmp(swim, kSwimSpeedPrologue, sizeof(kSwimSpeedPrologue)) == 0;
@@ -121,6 +142,61 @@ static bool RunTogether(const uintptr_t* chars, int n)
 	return true;
 }
 
+// The main thread's last published value for a character, 0 when it has none.
+static float LocalFind(uintptr_t hc)
+{
+	for (int i = 0; i < s_localCount; ++i)
+		if (s_local[i].havokChar == hc)
+			return s_local[i].mult;
+	return 0.0f;
+}
+
+static uintptr_t HavokOf(uintptr_t cm)
+{
+	return *(uintptr_t*)(KLIB_MEMBER(3, cm, CharMovement_havokCharacter, OFF_CMOV_HAVOK_CHAR));
+}
+
+// A character's multiplier for its requests: its plan's while it holds one, else its own from a
+// read made now, else (the read failed: in water, or a reader unbound) its last good value.
+static float CharacterWater(uintptr_t character, uintptr_t cm, uintptr_t hc)
+{
+	PlanView v;
+	int slot = PlanStoreFind(cm);
+	if (slot >= 0 && PlanStoreRead(slot, &v))
+		return v.waterMult;
+	PlanWaterInputs in;
+	ReadMember(character, cm, &in);
+	if (in.readOk || s_waterMode == PWC_ENGINE)
+		return PlanWaterMultiplier(in);
+	return LocalFind(hc);
+}
+
+// The order's values into the main thread's copy (amended, or appended while there is room), then
+// one publish, so the order's own first request already carries them.
+static void PublishOrder(const uintptr_t* chars, int n, const float* mult)
+{
+	if (!PlannerWaterTableLive())
+		return;
+	for (int k = 0; k < n; ++k)
+	{
+		uintptr_t cm = MovementOf(chars[k]);
+		uintptr_t hc = cm ? HavokOf(cm) : 0;
+		if (!hc)
+			continue;
+		int i = 0;
+		while (i < s_localCount && s_local[i].havokChar != hc)
+			++i;
+		if (i == s_localCount)
+		{
+			if (s_localCount == PLAN_WATER_TABLE_MAX)
+				continue;
+			s_local[s_localCount++].havokChar = hc;
+		}
+		s_local[i].mult = mult[k];
+	}
+	PlannerWaterTablePublish(s_local, s_localCount);
+}
+
 // Main thread, from the order capture before the original runs; takes no lock and allocates
 // nothing. Calls Character::getWaterLevel and CharStats::calculateSwimSpeed for each member read. In
 // a run-together order an unconscious or carried member is left out of the speeds (its engine value
@@ -164,11 +240,56 @@ int PlannerOrderWater(const uintptr_t* chars, int n, float* mult)
 		for (int k = 0; k < n; ++k)
 			mult[k] = m;
 		InterlockedIncrement(&c->waterGroups);
+		PublishOrder(chars, n, mult);
 		return 1;
 	}
 	for (int k = 0; k < n; ++k)
 		mult[k] = PlanWaterMultiplier(s_members[k]);
+	PublishOrder(chars, n, mult);
 	return 0;
+}
+
+void PlannerWaterRefresh()
+{
+	if (!PlannerWaterTableLive())
+		return;
+	PlanWaterEntry next[PLAN_WATER_TABLE_MAX];
+	int n = 0;
+	uintptr_t pi = *(uintptr_t*)((uintptr_t)GameAddr(RVA_GLOBAL_PLAYER));
+	unsigned count = pi ? GetPlayerCharCount(pi) : 0;
+	uintptr_t* stuff = pi ? GetPlayerCharStuff(pi) : NULL;
+	if (stuff && count <= (unsigned)PLAN_WATER_TABLE_MAX)
+	{
+		for (unsigned i = 0; i < count; ++i)
+		{
+			uintptr_t cm = MovementOf(stuff[i]);
+			uintptr_t hc = cm ? HavokOf(cm) : 0;
+			if (!hc)
+				continue;
+			next[n].havokChar = hc;
+			next[n].mult = CharacterWater(stuff[i], cm, hc);
+			++n;
+		}
+	}
+	memcpy(s_local, next, sizeof(next[0]) * n);
+	s_localCount = n;
+	PlannerWaterTablePublish(s_local, s_localCount);
+}
+
+void PlannerWaterReset()
+{
+	s_localCount = 0;
+	PlannerWaterTableClear();
+}
+
+const char* PlannerWaterModeToken()
+{
+	return s_waterMode != s_configuredMode ? "floor(dynamic)" : PlanWaterModeName(s_waterMode);
+}
+
+const char* PlannerWaterEngineToken()
+{
+	return s_engineToken;
 }
 
 } // namespace planner

@@ -16,6 +16,7 @@
 #include "pathfind/player_repath_tier_policy.h"
 #include "fixes/streaming/navmesh_life.h"
 #include "fixes/stitch/stitch_source.h"
+#include "planner/planner_water_table.h"
 #include <intrin.h>
 #pragma intrinsic(_ReturnAddress)
 
@@ -635,9 +636,11 @@ void hook_requestPath(void* havokChar, float* destination, int priority)
 	squadBoostTier = decision.tier;
 	squadBoostFromRepathTier = (decision.source == PRT_SOURCE_STATE6 && decision.tier > 0);
 
+	planner::PlannerWaterNoteRequester(havokChar);
 	game::g_hookOrig.orig_requestPath(havokChar, destination, priority);
 
 	squadBoostTier = 0;
+	planner::PlannerWaterNoteRequester(NULL);
 
 }
 
@@ -646,11 +649,12 @@ void hook_requestPath(void* havokChar, float* destination, int priority)
 // Hook 5: PathRequestQueue::submit (same thread as its only caller,
 // requestPath -- main thread or the AI back thread)
 // =========================================================================
-// RVA 0x3AAEF0. Calls orig, then overwrites req+44 with boosted priority.
+// RVA 0x3AAEF0. Writes the planner's water multiplier before orig; overwrites req+44 after.
 
 
 void hook_pathReqSubmit(void* sectionMgr, void* requestObj, bool highPriority)
 {
+	planner::PlannerWaterOnSubmit(requestObj ? (float*)((uintptr_t)requestObj + OFF_REQ_WATER_COST_MULT) : NULL);
 	game::g_hookOrig.orig_pathReqSubmit(sectionMgr, requestObj, highPriority);
 
 	if (squadBoostTier > 0)

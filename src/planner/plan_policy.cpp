@@ -361,4 +361,19 @@ float PlanRouteWaterShare(const float (*centres)[3], const int* water, int n)
 	return length > 0.0 ? (float)(wet / length) : 0.0f;
 }
 
+float PlanWaterRequestValue(int mode, float m, float engineValue)
+{
+	if (mode == PWC_OFF || !(m > 0.0f))
+		return 0.0f;
+	float v = m > PLAN_WATER_CAP ? PLAN_WATER_CAP : m;
+	if (v < PLAN_WATER_REQ_MIN)
+		v = PLAN_WATER_REQ_MIN;
+	return v == engineValue ? 0.0f : v;
+}
+
+int PlanWaterEffectiveMode(int configured, int engineLive)
+{
+	return (configured == PWC_DYNAMIC && !engineLive) ? PWC_FLOOR : configured;
+}
+
 } // namespace planner

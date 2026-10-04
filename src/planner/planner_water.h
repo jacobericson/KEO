@@ -8,9 +8,11 @@ namespace planner {
 
 const int PLAN_WATER_ORDER_MAX = 32;   // the order hook passes at most MAX_FORMATION_MEMBERS (30)
 
-// Main thread, from PlannerTickArm: snapshots the mode (PlanWaterMode) and binds the two engine
-// readers after checking their prologues; a mismatch leaves that reader unbound (every speed read
-// then fails and the engine value alone applies) and the planner armed. True when both bound.
+// Main thread, from PlannerTickArm: decides whether the request write runs (the planner on, the water
+// engine key at match, both request rows installed) and arms the water mode through the coherence
+// rule, then binds the two engine readers after checking their prologues; a mismatch leaves that
+// reader unbound (every speed read then fails and the engine value alone applies) and the planner
+// armed. True when both bound.
 bool PlannerWaterArm(int mode);
 // "ok", "refused(calculateSwimSpeed)" or "refused(getWaterLevel)" after the arm; "unarmed" before.
 const char* PlannerWaterBindToken();
@@ -18,5 +20,15 @@ const char* PlannerWaterBindToken();
 // PLAN_WATER_ORDER_MAX of them). A run-together order (n > 1, every member GROUPED) gives every member
 // one value and returns 1; otherwise each member gets its own and it returns 0.
 int PlannerOrderWater(const uintptr_t* chars, int n, float* mult);
+// Main thread, every planner tick: republishes the water table from the player characters, each at
+// its plan's multiplier while it holds a plan, else its own from a read made now, else its last good
+// value. Returns at once while the request write is not armed live.
+void PlannerWaterRefresh();
+// Main thread, at a save load's first frame: empties the table and the main thread's copy of it.
+void PlannerWaterReset();
+// The armed water mode's name, "floor(dynamic)" when dynamic armed as floor; and the request write's
+// state: "match", "off", "off(observe)", "refused(requestPath)" or "refused(pathReqSubmit)".
+const char* PlannerWaterModeToken();
+const char* PlannerWaterEngineToken();
 
 } // namespace planner

@@ -206,6 +206,18 @@ float PlanWaterArcCost(float cost, float m, int wFrom, int wTo);
 // route's length; 0 for fewer than two nodes or a zero length.
 float PlanRouteWaterShare(const float (*centres)[3], const int* water, int n);
 
+enum PlanWaterEngine { PWE_OFF = 0, PWE_MATCH };
+// The float after 1.0. The engine installs no water modifier for a request at exactly 1.0, and the
+// modifier also carries the FaceData-4 step cost, so a request is never written at 1.0.
+const float PLAN_WATER_REQ_MIN = 1.00000012f;
+// The value a player path request's water field takes from the character's multiplier m: 0 to leave
+// the engine's own value (mode off, no multiplier known, or m already the engine's), otherwise m
+// capped at PLAN_WATER_CAP and never below PLAN_WATER_REQ_MIN.
+float PlanWaterRequestValue(int mode, float m, float engineValue);
+// The water mode the planner arms with. Dynamic prices routes the engine's leg searches follow only
+// while the request write runs, so without it dynamic arms as floor; every other mode as given.
+int PlanWaterEffectiveMode(int configured, int engineLive);
+
 } // namespace planner
 
 #endif

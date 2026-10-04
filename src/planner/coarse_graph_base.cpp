@@ -539,8 +539,8 @@ void PlannerBaseStartStep(int* installed, int* total)
 	std::ostringstream arm;
 	arm << "Planner arm: mode=" << PlannerModeName(g_plannerCfg.mode) << " legSpan=" << g_plannerCfg.legSpan
 	    << " aheadTiles=" << g_plannerCfg.aheadTiles << " waitSeconds=" << g_plannerCfg.waitSeconds
-	    << " baseBuild=" << g_plannerCfg.baseBuild << " water=" << PlanWaterModeName(g_plannerCfg.waterCost)
-	    << " waterBind=" << PlannerWaterBindToken();
+	    << " baseBuild=" << g_plannerCfg.baseBuild << " water=" << PlannerWaterModeToken()
+	    << " waterBind=" << PlannerWaterBindToken() << " waterEngine=" << PlannerWaterEngineToken();
 	LogMsg(arm.str());
 	InitializeCriticalSection(&s_requestCS);
 	if (g_plannerCfg.mode == PLANNER_OFF || !g_plannerCfg.baseBuild)
@@ -620,6 +620,7 @@ void PlannerOnFrame(void* zoneMgr, bool saveLoading)
 	if (zoneMgr != s_lastZoneMgr || (loading && !s_wasLoading))
 	{
 		CgStoreNewWorld();
+		PlannerWaterReset();
 		s_snapshotArmed = true;
 	}
 	s_lastZoneMgr = zoneMgr;

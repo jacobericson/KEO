@@ -172,6 +172,10 @@ const size_t OFF_SC_INSTANCES_COUNT = 40;
 // is recovered from it.
 const size_t OFF_REQ_RESULTBUF_SLOT = 128;
 
+// The request's water cost multiplier: requestPath copies the character's value here before it
+// submits the request, and the serve passes it to the search.
+const size_t OFF_REQ_WATER_COST_MULT = 0x34;
+
 
 // Extraction race mitigation: SEH wrap around Havok::contentStreamCallee_0x8869
 // (the path-result-extraction loop). 526 bytes at impl. Called from findPath +

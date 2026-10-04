@@ -17,7 +17,8 @@ struct PlannerConfig
 	int baseBuild;     // plannerBaseBuild: 1 builds the whole-map base at startup; default 1
 	int aheadTiles;    // plannerAheadTiles: 0..8, default 3; route tiles fed to the preload queue
 	int waitSeconds;   // plannerWaitSeconds: 1..60, default 10; the awaited-section wait
-	int waterCost;     // plannerWaterCost: PlanWaterMode; floor by default
+	int waterCost;     // plannerWaterCost: PlanWaterMode; dynamic by default
+	int waterEngine;   // plannerWaterEngine: PlanWaterEngine; match by default
 };
 
 extern PlannerConfig g_plannerCfg;
