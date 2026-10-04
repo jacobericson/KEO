@@ -38,7 +38,10 @@ that source. Each suite's log holds the command and output of each of its
 compiles in source order, then the link's, then a "RUN" line and the .exe's
 output. A failed suite is recorded and the run continues -- no suite is
 skipped because another failed -- so one run reports every failure at once.
-The script exits 1 if any suite failed or if the suite list named a source
+A job that cannot be carried out at all (no cpu token within KEO_CPU_WAIT,
+cl missing, a log that cannot be written) stops the run instead: no further
+job starts, and every suite left unfinished is reported "NOT RUN" and
+counts as failed. The script exits 1 if any suite failed or if the suite list named a source
 that does not exist, printing each failed suite's name and its log's tail;
 it exits 0, printing "N suites, all passed", only when every suite compiled,
 ran and returned 0. A suite's "[x.xs]" runs from the start of the first
@@ -122,6 +125,7 @@ class Suite(object):
         self.ran = None        # returncode, once known
         self.seconds = 0.0
         self.reported = False
+        self.stopped = False   # a job it needs never ran: the run stopped first
 
 
 class Job(object):
@@ -135,6 +139,7 @@ class Job(object):
         self.start = None
         self.end = None
         self.rc = None
+        self.skipped = False
 
     def key(self):
         return (self.priority, self.order)
@@ -311,7 +316,27 @@ def note_failure(job, message):
         sys.stdout.flush()
 
 
-def execute(job, results):
+class Stop(object):
+    """Set by the first job that raises (no cpu token in time, cl missing, a
+    log that cannot be written): no job starts after it, so a jammed slot pool
+    costs one token wait, not one per remaining job."""
+
+    def __init__(self):
+        self._event = threading.Event()
+        self._lock = threading.Lock()
+        self.reason = None
+
+    def set(self, reason):
+        with self._lock:
+            if self.reason is None:
+                self.reason = reason
+        self._event.set()
+
+    def is_set(self):
+        return self._event.is_set()
+
+
+def execute(job, results, stop):
     """Always puts (job) on the queue exactly once, whatever happens: the main
     loop waits for one report per started job, so an uncaught exception here
     (cl missing from PATH, a log-open failure, ...) would otherwise hang the
@@ -319,7 +344,11 @@ def execute(job, results):
     job.start = time.time()
     what = job.source if job.kind == 'compile' else job.suite.name
     try:
-        if job.kind == 'compile':
+        if stop.is_set():
+            job.rc = 1
+            job.skipped = True
+            note_failure(job, 'run_suites.py: %s %s not started: the run stopped' % (job.kind, what))
+        elif job.kind == 'compile':
             job.rc = do_compile(job)
         elif job.kind == 'link':
             job.rc = do_link(job)
@@ -327,12 +356,16 @@ def execute(job, results):
             job.rc = do_run(job)
     except (OSError, ValueError, slots.SlotTimeout) as error:
         job.rc = 1
-        note_failure(job, 'run_suites.py: could not %s %s: %s' % (job.kind, what, error))
+        message = 'run_suites.py: could not %s %s: %s' % (job.kind, what, error)
+        stop.set(message)
+        note_failure(job, message)
     except Exception as error:  # never leave the main loop waiting for this job
         job.rc = 1
+        message = 'run_suites.py: unexpected error in %s %s: %r' % (job.kind, what, error)
+        stop.set(message)
         print('%s: run_suites.py: unexpected error: %r' % (what, error))
         sys.stdout.flush()
-        note_failure(job, 'run_suites.py: unexpected error in %s %s: %r' % (job.kind, what, error))
+        note_failure(job, message)
     finally:
         job.end = time.time()
         results.put(job)
@@ -343,7 +376,9 @@ def report(suite, finished):
     starts = [c.start for c in suite.compiles if c.start is not None]
     suite.seconds = (time.time() - min(starts)) if starts else 0.0
     finished.append(suite)
-    if suite.compiled != 0:
+    if suite.stopped:
+        print('%s: NOT RUN (the run stopped) after %.1fs' % (suite.name, suite.seconds))
+    elif suite.compiled != 0:
         print('%s: COMPILE FAILED (exit %s) after %.1fs' % (suite.name, suite.compiled, suite.seconds))
     elif suite.ran != 0:
         print('%s: FAILED (exit %s) after %.1fs' % (suite.name, suite.ran, suite.seconds))
@@ -370,6 +405,66 @@ def settle_compiles(suite, ready, finished):
 
 def push(ready, job):
     heapq.heappush(ready, job.key() + (job,))
+
+
+def note_not_run(suite):
+    try:
+        with open(suite.log, 'ab') as log:
+            if log.tell() == 0:
+                log.write(('=== %s ===\n' % suite.name).encode('utf-8'))
+            log.write(b'run_suites.py: not run: the run stopped\n')
+    except OSError as error:
+        print('%s: run_suites.py: could not write %s: %s' % (suite.name, suite.log, error))
+
+
+def run_jobs(compiles, jobs, finished):
+    """Runs the job graph from `compiles`, at most `jobs` at once, reporting
+    each suite into `finished` as it settles. Returns the run's Stop: once a
+    job raises, nothing new starts, and the suites left unsettled are the
+    caller's to report."""
+    results = queue.Queue()
+    stop = Stop()
+    ready = []
+    for job in compiles:
+        push(ready, job)
+    running = 0
+    announced = False
+    threads = []
+    while running or (ready and not stop.is_set()):
+        while ready and running < jobs and not stop.is_set():
+            job = heapq.heappop(ready)[-1]
+            t = threading.Thread(target=execute, args=(job, results, stop))
+            threads.append(t)
+            t.start()
+            running += 1
+        if not running:
+            break
+        job = results.get()
+        running -= 1
+        if stop.is_set() and not announced:
+            announced = True
+            print('run_suites.py: stopping, no further job starts: %s' % stop.reason)
+            sys.stdout.flush()
+        if job.kind == 'compile':
+            for s in job.users:
+                s.stopped = s.stopped or job.skipped
+                s.waiting -= 1
+                if s.waiting == 0:
+                    settle_compiles(s, ready, finished)
+        elif job.kind == 'link':
+            job.suite.stopped = job.skipped
+            job.suite.compiled = job.rc
+            if job.rc == 0:
+                push(ready, SuiteJob('run', PRIORITY_RUN, job.suite))
+            else:
+                report(job.suite, finished)
+        else:
+            job.suite.stopped = job.skipped
+            job.suite.ran = job.rc
+            report(job.suite, finished)
+    for t in threads:
+        t.join()
+    return stop
 
 
 def main():
@@ -425,46 +520,21 @@ def main():
         print('run_suites.py: running under a cpu token (KEO_CPU_HELD=1), one job at a time')
     sys.stdout.flush()
 
-    results = queue.Queue()
-    ready = []
-    for job in compiles:
-        push(ready, job)
-    running = 0
     finished = []
-    threads = []
-    while ready or running:
-        while ready and running < jobs:
-            job = heapq.heappop(ready)[-1]
-            t = threading.Thread(target=execute, args=(job, results))
-            threads.append(t)
-            t.start()
-            running += 1
-        job = results.get()
-        running -= 1
-        if job.kind == 'compile':
-            for s in job.users:
-                s.waiting -= 1
-                if s.waiting == 0:
-                    settle_compiles(s, ready, finished)
-        elif job.kind == 'link':
-            job.suite.compiled = job.rc
-            if job.rc == 0:
-                push(ready, SuiteJob('run', PRIORITY_RUN, job.suite))
-            else:
-                report(job.suite, finished)
-        else:
-            job.suite.ran = job.rc
-            report(job.suite, finished)
-    for t in threads:
-        t.join()
+    stop = run_jobs(compiles, jobs, finished)
 
-    unreported = [s.name for s in suites if not s.reported]
-    if unreported or len(finished) != len(suites):
+    unreported = [s for s in suites if not s.reported]
+    if unreported and stop.is_set():
+        for s in unreported:
+            s.stopped = True
+            note_not_run(s)
+            report(s, finished)
+    elif unreported or len(finished) != len(suites):
         print('ERROR: run_suites.py stopped with %d suite(s) never reported: %s'
-              % (len(unreported), ', '.join(unreported)))
+              % (len(unreported), ', '.join(s.name for s in unreported)))
         return 1
 
-    failed = [s for s in finished if s.compiled != 0 or s.ran != 0]
+    failed = [s for s in finished if s.stopped or s.compiled != 0 or s.ran != 0]
     if failed:
         print('')
         print('%d of %d suite(s) FAILED: %s' % (len(failed), len(suites), ', '.join(s.name for s in failed)))
