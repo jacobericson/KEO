@@ -1,5 +1,7 @@
 """Compile and run every host unit-test suite as concurrent processes
-(Python 3, stdlib only), modelled on tools\\build\\run_variants.py.
+(Python 3, stdlib only), modelled on tools\\build\\run_variants.py. Each
+process it starts holds one host-wide cpu token from tools\\build\\slots.py
+(KEO_SLOTS=off turns the pools off).
 
 Called by build_tests.bat after it has set up the VS 2010 x64 environment.
 Suites are data, not code: tools\\tests\\suites.txt lists one per line as
@@ -56,6 +58,9 @@ import subprocess
 import sys
 import threading
 import time
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, 'build'))
+import slots  # noqa: E402
 
 SUITES_TXT = r'tools\tests\suites.txt'
 TAIL_LINES = 30
@@ -241,7 +246,9 @@ def do_compile(job):
     os.makedirs(os.path.dirname(job.obj), exist_ok=True)
     remove_if_present(job.obj)
     command, note = test_command('TEST_SUITES_NOOP_CL', job.cmd)
-    proc = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+    with slots.cpu_token('suite compile %s' % job.source):
+        proc = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                              stdin=subprocess.DEVNULL, env=slots.child_env())
     job.output = note + proc.stdout
     if proc.returncode != 0:
         return proc.returncode
@@ -268,7 +275,9 @@ def do_link(job):
         log.write(('LINK: %s\n' % ' '.join(cmd)).encode('utf-8') + note)
         log.flush()
         remove_if_present(suite.exe)
-        rc = subprocess.call(command, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+        with slots.cpu_token('suite link %s' % suite.name):
+            rc = subprocess.call(command, stdout=log, stderr=subprocess.STDOUT,
+                                 stdin=subprocess.DEVNULL, env=slots.child_env())
         if rc != 0:
             return rc
         problem = stale_output(suite.exe, job.start, 'executable')
@@ -283,7 +292,9 @@ def do_run(job):
     with open(suite.log, 'ab') as log:
         log.write(b'RUN\n')
         log.flush()
-        return subprocess.call([suite.exe], stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+        with slots.cpu_token('suite run %s' % suite.name):
+            return subprocess.call([suite.exe], stdout=log, stderr=subprocess.STDOUT,
+                                   stdin=subprocess.DEVNULL, env=slots.child_env())
 
 
 def note_failure(job, message):
@@ -313,7 +324,7 @@ def execute(job, results):
             job.rc = do_link(job)
         else:
             job.rc = do_run(job)
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, slots.SlotTimeout) as error:
         job.rc = 1
         note_failure(job, 'run_suites.py: could not %s %s: %s' % (job.kind, what, error))
     except Exception as error:  # never leave the main loop waiting for this job
