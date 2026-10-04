@@ -26,6 +26,12 @@ only when its harness exits 0 and its output contains the evidence text. Rows bu
 threads capped at TEST_JOBS (default os.cpu_count()), each into its own object folder, since two
 harnesses may share a source and cl names every object after its source.
 
+The run holds one host-wide heavy slot from tools\\build\\slots.py (none when its parent already
+holds one), and every compile and every harness run holds one cpu token (KEO_SLOTS=off turns the
+pools off). Started under a cpu token itself (KEO_CPU_HELD=1), it runs one row at a time. A cpu
+token that does not come within KEO_CPU_WAIT stops the run: no row starts a process after it,
+and every row left reports "NOT RUN" and counts as failed.
+
 Every run first proves the classification on two scratch harnesses under
 build\\tests\\inj\\_selftest\\ (one exits 0 without the evidence, one lets an access violation
 escape), and stops with exit 1 if either is accepted.
@@ -37,6 +43,7 @@ import sys
 sys.dont_write_bytecode = True
 
 import argparse  # noqa: E402
+import contextlib  # noqa: E402
 import ctypes  # noqa: E402
 import glob  # noqa: E402
 import os  # noqa: E402
@@ -48,8 +55,10 @@ import time  # noqa: E402
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
 sys.path.insert(0, os.path.join(ROOT, 'tools', 'kenshilib'))
+sys.path.insert(0, os.path.join(ROOT, 'tools', 'build'))
 
 import resources_root  # noqa: E402
+import slots  # noqa: E402
 
 LIST_TXT = r'tools\tests\injections.txt'
 OUT_DIR = r'build\tests\inj'
@@ -168,34 +177,92 @@ def classify(compile_rc, run_rc, timed_out, output, evidence):
     return True, 'ok (evidence "%s")' % evidence
 
 
-def build_and_run(row):
-    """Compiles and runs one row into its log, then sets row.passed and row.text."""
+class Skipped(Exception):
+    """The run stopped before this row started its next process."""
+
+
+class Stop(object):
+    """Set by the first row whose cpu token did not come within KEO_CPU_WAIT: no row starts a
+    process after it, so a jammed pool costs one token wait, not one per remaining row."""
+
+    def __init__(self):
+        self._event = threading.Event()
+        self._lock = threading.Lock()
+        self.reason = None
+
+    def set(self, reason):
+        with self._lock:
+            if self.reason is None:
+                self.reason = reason
+        self._event.set()
+
+    def is_set(self):
+        return self._event.is_set()
+
+
+@contextlib.contextmanager
+def cpu_token(label, stop):
+    """One cpu token for the block, unless the run stopped while this row waited for it: then
+    the row starts nothing."""
+    with slots.cpu_token(label):
+        if stop.is_set():
+            raise Skipped()
+        yield
+
+
+def not_run(row, reason, wrote_log=False):
+    """Marks a row that never finished its processes; its log says so, never an older run's."""
+    row.passed, row.text = False, 'NOT RUN (%s)' % reason
+    try:
+        with open(row.log, 'ab' if wrote_log else 'wb') as log:
+            if not wrote_log:
+                log.write(('=== %s ===\n' % row.name).encode('utf-8'))
+            log.write(('run_injections: not run: %s\n' % reason).encode('utf-8', 'replace'))
+    except OSError:
+        pass
+
+
+def build_and_run(row, stop):
+    """Compiles and runs one row into its log, then sets row.passed and row.text. Each process
+    holds one cpu token; a token that does not come sets stop."""
     start = time.time()
     compile_rc, run_rc, timed_out, output = 1, None, False, ''
+    wrote_log = False
     try:
+        if stop.is_set():
+            raise Skipped()
         if not os.path.isdir(row.objdir):
             os.makedirs(row.objdir)
         command = row.command()
         with open(row.log, 'wb') as log:
+            wrote_log = True
             log.write(('=== %s ===\nCL: %s\n' % (row.name, command)).encode('utf-8'))
             log.flush()
-            compile_rc = subprocess.call(command, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT,
-                                         stdin=subprocess.DEVNULL)
+            with cpu_token('injection compile %s' % row.name, stop):
+                compile_rc = subprocess.call(command, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT,
+                                             stdin=subprocess.DEVNULL, env=slots.child_env(leaf=True))
         if compile_rc == 0:
-            proc = subprocess.Popen([os.path.join(ROOT, row.exe)], cwd=ROOT, stdout=subprocess.PIPE,
-                                    stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
-            try:
-                data, _ = proc.communicate(timeout=RUN_TIMEOUT_S)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                data, _ = proc.communicate()
-                timed_out = True
+            with cpu_token('injection run %s' % row.name, stop):
+                proc = subprocess.Popen([os.path.join(ROOT, row.exe)], cwd=ROOT,
+                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                        stdin=subprocess.DEVNULL, env=slots.child_env(leaf=True))
+                try:
+                    data, _ = proc.communicate(timeout=RUN_TIMEOUT_S)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    data, _ = proc.communicate()
+                    timed_out = True
             run_rc = proc.returncode
             with open(row.log, 'ab') as log:
                 log.write(b'RUN\n')
                 log.write(data)
             output = data.decode('mbcs', errors='replace')
         row.passed, row.text = classify(compile_rc, run_rc, timed_out, output, row.evidence)
+    except Skipped:
+        not_run(row, 'the run stopped', wrote_log)
+    except slots.SlotTimeout as error:
+        stop.set(str(error))
+        not_run(row, str(error), wrote_log)
     except Exception as error:  # a row that could not run fails; it never passes silently
         row.passed, row.text = False, 'FAILED (runner error: %r)' % (error,)
     row.seconds = time.time() - start
@@ -209,7 +276,7 @@ def read_log(path):
         return []
 
 
-def self_test():
+def self_test(stop):
     """None when both scratch harnesses are refused as expected, else the failure's description."""
     if not os.path.isdir(SELFTEST_DIR):
         os.makedirs(SELFTEST_DIR)
@@ -222,7 +289,7 @@ def self_test():
         with open(path, 'w') as f:
             f.write(source)
         row = Row(name, '/EHa', [], [], [path], SELFTEST_EVIDENCE, SELFTEST_DIR)
-        build_and_run(row)
+        build_and_run(row, stop)
         if row.passed or row.text != expected:
             return '%s classified as "%s", expected "%s" (log %s)' % (name, row.text, expected, row.log)
     return None
@@ -239,28 +306,40 @@ def jobs_from_env(count):
     return max(1, min(jobs, count))
 
 
-def run_rows(rows, jobs):
+def run_rows(rows, jobs, stop):
+    """Builds and runs the rows, at most jobs at once, printing each row's line as it finishes.
+    Once stop is set no row starts, and every row not started is NOT RUN."""
     results = queue.Queue()
     pending = list(rows)
     running = 0
+    announced = False
 
     def work(row):
         try:
-            build_and_run(row)
+            build_and_run(row, stop)
         finally:
             results.put(row)
 
     threads = []
-    while pending or running:
-        while pending and running < jobs:
+    while running or (pending and not stop.is_set()):
+        while pending and running < jobs and not stop.is_set():
             t = threading.Thread(target=work, args=(pending.pop(0),))
             threads.append(t)
             t.start()
             running += 1
+        if not running:
+            break
         row = results.get()
         running -= 1
+        if stop.is_set() and not announced:
+            announced = True
+            print('run_injections: stopping, no further harness starts: %s' % stop.reason)
         print('%s: %s [%.1fs]' % (row.name, row.text, row.seconds))
         sys.stdout.flush()
+    for row in pending:
+        not_run(row, 'the run stopped')
+        print('%s: %s [%.1fs]' % (row.name, row.text, row.seconds))
+    sys.stdout.flush()
     for t in threads:
         t.join()
 
@@ -300,8 +379,24 @@ def main():
     except ValueError as error:
         print('run_injections: %s' % error)
         return 1
+    # Started under someone else's cpu token, no child here takes a token of its own, so only
+    # one row may run at a time.
+    if slots.cpu_held() and jobs > 1:
+        jobs = 1
+        print('run_injections: running under a cpu token (KEO_CPU_HELD=1), one harness at a time')
 
-    failure = self_test()
+    try:
+        with slots.heavy('run_injections'):
+            return run_all(rows, jobs)
+    except slots.SlotTimeout as error:
+        print('run_injections: FAILED: %s' % error)
+        return 1
+
+
+def run_all(rows, jobs):
+    """The self-test, then every row; the exit code."""
+    stop = Stop()
+    failure = self_test(stop)
     if failure:
         print('run_injections: SELF-TEST FAILED: %s' % failure)
         return 1
@@ -309,7 +404,7 @@ def main():
     print('run_injections: self-test: an access violation that escaped its harness was refused')
     sys.stdout.flush()
 
-    run_rows(rows, jobs)
+    run_rows(rows, jobs, stop)
 
     failed = [r for r in rows if not r.passed]
     if failed:
