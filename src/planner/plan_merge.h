@@ -1,6 +1,6 @@
 // plan_merge.h - A run-together order's merge onto one route, pure: the anchor (the member nearest the
 // others), the biased search's operations, the full-price re-cost and the detour cap, the join index,
-// the gather index and the prefix sample. No Windows, KenshiLib or game header; main thread in the game.
+// the gather index, the prefix sample and the resume source. No Windows, KenshiLib or game header; main thread in the game.
 #pragma once
 #include "planner/coarse_search.h"
 
@@ -47,5 +47,12 @@ int PlanMergeJoinIndex(const unsigned* anchor, int anchorCount, const PlanMergeS
 int PlanMergeGatherIndex(const int* joins, int n);
 // At most max of nodes[0..n), spread over them with the first and the last kept; returns the count.
 int PlanMergeSample(const unsigned* nodes, int n, unsigned* out, int max);
+
+// Where a gathered member's re-plan takes its order from: a member the merge left alone is not re-planned
+// (it walks its own route); a member whose plan still holds the gather hold, from that plan; a member of
+// an unresumed merge record whose plan or hold is gone (the engine's own halt dropped it while it
+// gathered), from the record's order; any other member not at all.
+enum PlanMergeResume { PMR_NONE = 0, PMR_PLAN = 1, PMR_RECORD = 2 };
+int PlanMergeResumeFrom(bool inRecord, bool alone, bool haveSlot, bool haveHold);
 
 } // namespace planner

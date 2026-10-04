@@ -187,7 +187,10 @@ void hook_addOrderSelected(void* thisPI, void* destIndoors, int task,
 			}
 		}
 
-		int lead = planner::PlannerNoteOrder(collectedChars, collectedCount, location, destIndoors, shift, addDontClear);
+		// The formation's own precondition below, less its speed-mode test, which the merge makes itself.
+		bool formationForms = movement::g_movementCfg.groupCohesionEnabled && scatterPatchApplied && collectedCount > 1;
+		int lead = planner::PlannerNoteOrder(collectedChars, collectedCount, location, destIndoors, shift, addDontClear,
+		                                     formationForms);
 
 		// One order-outcome record per player move order, for every
 		// selected character (not just the ones movement-aware preload

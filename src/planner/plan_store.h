@@ -93,9 +93,10 @@ void PlanStoreSetLegAim(int on);
 
 // The slot's pre-arrival request in flight. Two writers: the thread updating the character (the AI
 // back thread, or the main thread with characterMultithreading off) issues and resolves it, and the
-// main thread's slot clear and save-load reset zero it; a rewrite leaves it. A word that survives a
-// clear carries the old epoch, and every reader drops a word whose epoch is not the slot's. The main
-// thread reads it only in PlannerOwnsWait.
+// main thread's slot clear and save-load reset zero it; a rewrite leaves it, but a re-send, which keeps
+// the legs, moves a word of the plan it rewrote to its new epoch by a compare-exchange. A word that
+// survives a clear carries the old epoch, and every reader drops a word whose epoch is not the slot's.
+// The main thread reads it in PlannerOwnsWait and at that carry.
 struct PlanPreFlight { unsigned epoch; int state, from, to; float issueX, issueZ; LONGLONG issueQpc; };
 // Stores the issue position and QPC time, then publishes the word (state ISSUED) in one exchange.
 void PlanStorePreIssue(int slot, unsigned epoch, int from, int to, float x, float z, LONGLONG qpc);
@@ -150,12 +151,13 @@ struct PlannerCounters
 	volatile LONG slotFull, repeats, locFail, goalUnlocated, startUnlocated, notSite, staleAdvance, rung17, ownedSkips, noLocation;
 	volatile LONG reissuedPlanned, heldPlanned, reissueRefused, snapFar, snapMax;
 	volatile LONG waterFail, waterGroups;   // members whose speed read failed; orders planned run-together
+	volatile LONG waterOver;   // water refreshes that published an empty table: more players than it holds
 	volatile LONG aimCount, aimShiftSum;   // aimed recomputes, their summed shift in units
 	volatile LONG merges, mergeJoins, mergeAlone, mergeMoved, mergeWalkOff;   // orders merged; members joined, alone; gathers moved; walks off
 	volatile LONG interiorHeld;   // plans written holding an interior goal at its building's portal
 	volatile LONG pre, preLand, preLate, preBroken, preFailed, preLost;   // pre-arrival advances and their outcomes
 	volatile LONG preSkip, preSkipWait, preSkipSnap, preSkipSame, preSkipHeld;   // legs skipped, the first skip each, by reason
-	volatile LONG preBusy;   // pre-arrival snaps the navmesh lock refused, each retried the next frame
+	volatile LONG preBusy;   // pre-arrival snaps the navmesh lock refused or that found no navmesh yet, each retried the next frame
 	volatile LONG preDCount, preDSum, preDMax;   // landings sampled; units walked from the issue, summed and the most
 	volatile LONG dropsBy[PLAN_DROP_REASONS], replansBy[PLAN_REPLAN_REASONS];   // by PlanDropWhy / PlanReplanWhy
 };

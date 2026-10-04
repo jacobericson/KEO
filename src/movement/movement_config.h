@@ -91,7 +91,7 @@ struct MovementConfig
 	bool k7ArrivalTriggerEnabled;
 
 	// formationFollow: off or probe (FollowMode); read by the session build alone. probe gives a
-	// run-together group's members near the leader the engine's own Follow order and logs Follow:.
+	// run-together group's members near the leader the engine's follow task and logs Follow:.
 	int cfg_formationFollow;
 
 	// formationGatherPace: while a run-together group gathers, the members nearer the gather point

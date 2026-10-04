@@ -345,6 +345,13 @@ const char* IslandK7StuckForm(uintptr_t character);
 // _isBeingCarried || getProneState() >= PS_PLAYING_DEAD. Main thread.
 bool IslandK7IsUnconcious(uintptr_t character);
 
+// Whether the engine has deleted `character`'s tracked move order: the move
+// ran (task 29 seen) and the order state now reads task -1 with an empty
+// deque. False when the deleted-order form is off, the character is not
+// tracked, or its order state is unreadable. Main thread; the caller tests
+// the character against the live player list first.
+bool IslandK7OrderGone(uintptr_t character);
+
 // "reached"/"failed"/"-": the deleted-order form's own end signature for
 // `character` (order_outcome.cpp's stops= guess). Main thread.
 const char* IslandK7StopSig(uintptr_t character);

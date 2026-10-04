@@ -10,7 +10,7 @@
 #include "movement/k7_arrival_policy.h"    // K7ArrivalShouldArm / K7ArrivalPoll
 #include "zone/readiness/zone_readiness_classify.h"  // ClassifyZoneReadiness, ZR_*
 #include "movement/order_outcome.h"            // OrderOutcomeNoteReissueSent
-#include "movement/island_span_policy.h"       // IslandCellSpan (K7 arrival arm line)
+#include "movement/island_span_policy.h"       // IslandCellSpan, IslandReissueCharacterOnly
 #include "zone/zone_pause.h"               // ZonePauseIsPaused (pause gate)
 #include <intrin.h>
 #include <cstring>
@@ -113,6 +113,26 @@ IslandOrder* FindOrderForCharacter(uintptr_t character)
 	return NULL;
 }
 
+// Whether an order's edge park counts this poll. ord's clock starts on the first poll the edge test
+// holds and clears on the first it does not, so a fresh park reads 0 s held. A character the route
+// planner walks counts only after STOPPED_HYSTERESIS; with no ord its park never counts, while an
+// unplanned character's counts at once either way. Main thread.
+static bool EdgeParkCounts(IslandOrder* ord, uintptr_t cm, bool edgeNear, double now)
+{
+	double heldSec = 0.0;
+	if (ord)
+	{
+		if (!edgeNear)
+			ord->edgeParkSince = 0.0;
+		else
+		{
+			if (ord->edgeParkSince <= 0.0) ord->edgeParkSince = now;
+			heldSec = now - ord->edgeParkSince;
+		}
+	}
+	return IslandEdgeParkCounts(edgeNear, planner::PlanStoreFind(cm) >= 0, heldSec, STOPPED_HYSTERESIS);
+}
+
 // Live park test for ANY character, used to
 // check a formation representative's CURRENT CharMovement state directly
 // rather than through its (possibly not-yet-updated-this-tick) IslandOrder
@@ -141,7 +161,9 @@ bool IsCharacterParkedNow(uintptr_t character, float destX, float destZ, double 
 	float lastZ = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_destination_z, OFF_CMOV_LAST_DEST + 8));
 	bool edge   = *(unsigned char*)(KLIB_MEMBER(3, cm, CharMovement_movingToEdge, OFF_CMOV_MOVING_TO_EDGE)) != 0;
 
-	bool edgeParked = edge && Dist2(wpX, wpZ, posX, posZ) < PARK_WP_DIST * PARK_WP_DIST;
+	IslandOrder* ord = FindOrderForCharacter(character);
+	bool edgeNear = edge && Dist2(wpX, wpZ, posX, posZ) < PARK_WP_DIST * PARK_WP_DIST;
+	bool edgeParked = EdgeParkCounts(ord, cm, edgeNear, now);
 
 	// (b) The stopped form only fires while the character's cached order is
 	// still the move order the tracker watches (ORDER_TYPE_MOVE) -- a later
@@ -159,7 +181,6 @@ bool IsCharacterParkedNow(uintptr_t character, float destX, float destZ, double 
 	// IslandOrder (should not happen for a representative -- see above -- but
 	// checked defensively), the stopped form never parks it here.
 	bool stoppedParked = false;
-	IslandOrder* ord = FindOrderForCharacter(character);
 	if (ord)
 	{
 		if (stoppedPredicate)
@@ -284,6 +305,7 @@ static bool PollOrderK7(IslandOrder& o, PollOrdersCtx& c)
 	if (k7On && o.k7Preempted)
 	{
 		o.stoppedSince = 0.0;
+		o.edgeParkSince = 0.0;
 		return true;
 	}
 	c.k7Deleted = k7Deleted;
@@ -303,12 +325,12 @@ static bool PollOrderFormation(IslandOrder& o, PollOrdersCtx& c)
 	// the group's 120s timeout.
 	int slot = FormationSlotForCharacter(o.character);
 	bool forceCharacterOnly = false;
-	// While the character's formation group is still gathering,
-	// its own gather order is a mod move the cancel hooks never see (for
-	// the leader, a move to where it already stands), so a deletion here
-	// is the formation's, not the engine's: no deleted form, for the
-	// representative too. The travel dispatch re-creates every member's
-	// order after the gather.
+	// While the character's formation group is still gathering, its own
+	// gather order is a mod move the cancel hooks never see. The engine can
+	// delete it (a path into a cell whose mesh is still landing), and
+	// PollFormationGather re-sends a deleted gather order itself, so the
+	// tracker takes no deleted form for it, for the representative too. The
+	// travel dispatch re-creates every member's order after the gather.
 	// A member the route planner's merge left alone walks the player's own order: it keeps its forms.
 	if (k7On && slot >= 0 && FormationSkipWhileGathering(formationGroups[slot].gathered, FormationMemberAlone(o.character)))
 	{
@@ -373,6 +395,14 @@ static bool PollOrderFormation(IslandOrder& o, PollOrdersCtx& c)
 			if (IslandRecentlyReissued(o.character, now)) return true;
 			forceCharacterOnly = true;
 		}
+		else
+		{
+			// The representative itself, or a group with no live member left: a member the merge left
+			// alone walks the player's own order, and the group's re-issue refuses a group still
+			// gathering, so its re-issue goes to it alone.
+			forceCharacterOnly = IslandReissueCharacterOnly(forceCharacterOnly, FormationMemberAlone(o.character),
+			                                                formationGroups[slot].gathered);
+		}
 	}
 	c.forceCharacterOnly = forceCharacterOnly;
 	return false;
@@ -432,7 +462,8 @@ static bool PollOrderParkForms(IslandOrder& o, PollOrdersCtx& c)
 	// character that is about to move again. o.stoppedSince resets to 0
 	// the instant the predicate fails; IsCharacterParkedNow (above) shares
 	// this same field for the live representative check.
-	bool edgeParked = edge && Dist2(wpX, wpZ, posX, posZ) < PARK_WP_DIST * PARK_WP_DIST;
+	bool edgeNear = edge && Dist2(wpX, wpZ, posX, posZ) < PARK_WP_DIST * PARK_WP_DIST;
+	bool edgeParked = EdgeParkCounts(&o, cm, edgeNear, now);
 	bool stoppedPredicate = !edge
 	                      && ReadCharOrderType(o.character) == ORDER_TYPE_MOVE
 	                      && Dist2(lastX, lastZ, posX, posZ) < 100.0f   // |+0xDC - pos| < 10
@@ -577,12 +608,20 @@ static void PollOneOrder(IslandOrder& o, PollOrdersCtx& c)
 {
 	if (PollOrderRead(o, c)) return;
 	// A follower under the follow probe walks on the engine's follow task: no K7 form, park, re-issue or
-	// crossing test runs on it.
+	// crossing test runs on it, and an arrival wait armed while it follows is dropped, so a release that
+	// sends nothing does not leave one to fire.
 	if (FormationOwnsFollower(c.cm, FFS_POLL))
 	{
 		o.stoppedSince = 0.0;
+		o.edgeParkSince = 0.0;
 		o.parked = false;
 		o.retryArmed = false;
+		if (o.k7ArrivalWaitSince > 0.0)
+		{
+			o.k7ArrivalWaitSince = 0.0;
+			o.k7ArrivalWouldFireTime = 0.0;
+			g_k7ArrivalResumed++;
+		}
 		return;
 	}
 	if (PollOrderK7(o, c)) return;
@@ -592,6 +631,7 @@ static void PollOneOrder(IslandOrder& o, PollOrdersCtx& c)
 	if (planner::PlannerOwnsWait(c.cm, c.posX, c.posZ, c.wpX, c.wpZ))
 	{
 		o.stoppedSince = 0.0;
+		o.edgeParkSince = 0.0;
 		o.parked = false;
 		o.retryArmed = false;
 		InterlockedIncrement(&planner::PlannerCountersGet()->ownedSkips);

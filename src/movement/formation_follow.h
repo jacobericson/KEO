@@ -1,5 +1,5 @@
 // formation_follow.h - The follow probe (the session build, its key at probe): a run-together group's
-// members near the leader get the engine's own Follow order on it, the poll captures the rest as they
+// members near the leader get the engine's follow task on it, the poll captures the rest as they
 // close, and the Follow: line reads what the engine does with them. It steers nothing. Main thread,
 // except FormationFollowNoteRequest and FormationFollowArmed (any thread). The release build compiles
 // it out: each entry is then an empty inline.
@@ -27,6 +27,8 @@ void FormationFollowOnClear();
 // Whether the movement's character follows under the probe; a true answer is counted as an owned skip
 // at seam (a FollowSeam). False at once unless armed.
 bool FormationOwnsFollower(uintptr_t cm, int seam);
+// The same answer, counted nowhere: for a test run every frame. False at once unless armed.
+bool FormationFollowerOwned(uintptr_t cm);
 // Any thread: whether the probe is armed.
 bool FormationFollowArmed();
 // Any thread, from hook_requestPath before its original: counts a follower's path request. No lock,
@@ -40,6 +42,7 @@ inline void FormationFollowPoll(double, unsigned int, const uintptr_t*) {}
 inline void FormationFollowRelease(const uintptr_t*, int, int) {}
 inline void FormationFollowOnClear() {}
 inline bool FormationOwnsFollower(uintptr_t, int) { return false; }
+inline bool FormationFollowerOwned(uintptr_t) { return false; }
 inline bool FormationFollowArmed() { return false; }
 inline void FormationFollowNoteRequest(void*) {}
 

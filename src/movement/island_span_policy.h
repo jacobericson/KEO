@@ -49,4 +49,16 @@ const int ISLAND_EDGE_PARK_KINDS = 4;
 IslandEdgePark IslandClassifyEdgePark(bool movingToEdge, bool idle, float haltDist,
                                       float wpDist, float destDist);
 
+// Whether the edge form of the park test counts. An unplanned character's edge park counts at once; a
+// character the route planner walks stops at its portals between legs, so its edge park counts only
+// once it has held for hysteresisSec (heldSec: how long the edge test has held without a break).
+bool IslandEdgeParkCounts(bool edgeNear, bool planned, double heldSec, double hysteresisSec);
+
+// Whether a tracked order's re-issue goes to the character alone instead of through its formation
+// group. forced: the caller already chose the character path. A member the route planner's merge left
+// alone walks the player's own order while its group gathers, and the group's re-issue refuses a group
+// that has not gathered, so that member is re-issued alone; a gathered group's members, and a member
+// gathering with its group, keep the group path.
+bool IslandReissueCharacterOnly(bool forced, bool memberAlone, bool groupGathered);
+
 #endif // KEO_ISLAND_SPAN_POLICY_H

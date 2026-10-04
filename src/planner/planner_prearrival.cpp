@@ -170,6 +170,9 @@ static void PreArrivalStep(uintptr_t cm, float dt)
 	PlanView v;
 	if (!PlanStoreRead(slot, &v) || v.cm != cm || v.verdict != PV_LEGGED || v.legIndex < 0 || v.legIndex >= v.legCount)
 		return;
+	// The destination is read whole, height included, so the test is the three-dimensional one the
+	// getZoneEdge detour steers by: the pre-call advances only a character that detour would steer.
+	// The x-z test is for a destination read without its height.
 	const float* dest = (const float*)KLIB_MEMBER(3, cm, AbstractMovementBase_destination_x, OFF_CMOV_LAST_DEST);
 	if (!PlanDestIsPlans(dest, v.finalDest, v.resend, v.resendCount) || PlanStorePreBlocked(slot, v.epoch, v.legIndex))
 		return;
@@ -193,6 +196,7 @@ static void PreArrivalStep(uintptr_t cm, float dt)
 	DoorHitFilterBytes filter = { s_doorFilterVtable, 0xFFFF0001u, 0 };
 	float snapped[3];
 	unsigned key = 0;
+	// No navmesh yet answers as the lock's refusal: counted in preBusy and tried again next frame.
 	int got = nm ? fn_getClosestPoint(nm, o.point, SNAP_RADIUS, SNAP_INSET, &filter, snapped, &key) : -1;
 	if (PlanStorePreSnap(slot, v.epoch, v.legIndex, got) != PLAN_PRE_SNAP_HIT)
 		return;

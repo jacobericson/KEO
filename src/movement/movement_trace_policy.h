@@ -1,6 +1,6 @@
 // movement_trace_policy.h - The movement trace's pure rules: when a member is sampled, a member's
 // sample ring, the path-result ring between the path thread and the main thread, a result's
-// attribution to a member, the move out of the shifted Havok frame, and the trace file's three line
+// attribution to a member, the move out of the shifted Havok frame, and the trace file's four line
 // formats with their parser, which the offline harness reads the file with. No game or Windows
 // header; the result ring's writer is one thread and its reader another, every other rule any thread.
 #ifndef KEO_MOVEMENT_TRACE_POLICY_H
@@ -14,7 +14,7 @@ const int    TRACE_RING          = 4096;    // samples one member keeps, the new
 const int    TRACE_MEMBERS       = 64;      // members traced at once
 const int    TRACE_RESULT_NODES  = 256;     // nodes a path result keeps; a longer chain is cut
 const int    TRACE_RESULT_RING   = 16;      // results in flight from the path thread to the main thread
-const float  TRACE_ATTRIB_UNITS  = 50.0f;   // a result's first point this near a member's last sample
+const float  TRACE_ATTRIB_UNITS  = 50.0f;   // a request's start this near a sample: above 37.5, half the spacing
 const double TRACE_ATTRIB_SECONDS = 3.0;     // a result's member is sought among samples this recent, and its newest
 const int    TRACE_ORDER_RESULTS = 1024;    // results one order keeps
 const double TRACE_LINE_SECONDS  = 30.0;    // the Trace: line's period
@@ -51,6 +51,7 @@ struct TraceResult
 	int      copied;   // the nodes kept: count, at most TRACE_RESULT_NODES
 	int      cut;      // 1 when count passes TRACE_RESULT_NODES
 	float    shift[3];
+	float    start[3];   // the request's start point
 	unsigned face[TRACE_RESULT_NODES];
 	float    mid[TRACE_RESULT_NODES][3];   // each node's mLeft/mRight midpoint
 };
@@ -72,25 +73,33 @@ void         TraceResultEnd(TraceResultRing* r);
 bool         TraceResultTake(TraceResultRing* r, long* taken, TraceResult* out, long* overruns, long* torn);
 
 // The member a result belongs to: of the n members whose rings[i] is set, the one with a sample lying
-// nearest firstXz and within TRACE_ATTRIB_UNITS, among its newest sample and every sample taken no
-// earlier than resultT - TRACE_ATTRIB_SECONDS (the path latency it walked on through); -1 when none.
+// nearest startXz (the request's start point) and within TRACE_ATTRIB_UNITS, among its newest sample
+// and every sample taken no earlier than resultT - TRACE_ATTRIB_SECONDS (the path latency it walked on
+// through); -1 when none.
 // Each ring is read newest first, stopping at the first sample older than the window.
-int  TraceAttribute(const float firstXz[2], double resultT, const TraceRing* const* rings, int n);
+int  TraceAttribute(const float startXz[2], double resultT, const TraceRing* const* rings, int n);
 // A shifted Havok point in world units: (h - shift) * 10, per axis.
 void TraceHavokToWorld(const float h[3], const float shift[3], float out[3]);
+// A result's request start point in world units, x and z: the point its member is sought by. A start
+// between two of its samples, taken TRACE_SAMPLE_UNITS apart, lies within half that of one of them.
+void TraceResultStartXz(const TraceResult& r, float outXz[2]);
 
 // The trace file's lines.
 struct TraceOrderLine { int order; float fromX, fromZ, toX, toZ; int members; double t0; };
 struct TraceNode { unsigned face; float x, y, z; };
 struct TraceResultLine { int order, member; double t; int cut, count; std::vector<TraceNode> nodes; };
+struct TraceLaunchLine { unsigned pid; int year, month, day, hour, minute, second; double t; };
 // "o order=<n> from=(<x>,<z>) to=(<x>,<z>) members=<n> t0=<t>"
 std::string TraceFormatOrder(const TraceOrderLine& o);
 // "s order=<n> member=<k> t=<t> x=<x> y=<y> z=<z> ps=<n> cs=<n> cell=<cx>.<cy> leg=<n>"
 std::string TraceFormatSample(const TraceSample& s);
-// "p order=<n> member=<k> t=<t> cut=<0|1> n=<count>", then " <face>:<x>,<y>,<z>" per node
+// "p order=<n> member=<k> t=<t> cut=<0|1> n=<count>", then " <face>:<x>,<y>,<z>" per node; member -1
+// for a result no member took, written under the next closed order
 std::string TraceFormatResult(const TraceResultLine& p);
-enum TraceLineKind { TLK_NONE = 0, TLK_ORDER, TLK_SAMPLE, TLK_RESULT };
-struct TraceLine { int kind; TraceOrderLine o; TraceSample s; TraceResultLine p; };
+// "l pid=<n> armed=<YYYY-MM-DD HH:MM:SS> t=<t>": one per launch, written when the trace arms
+std::string TraceFormatLaunch(const TraceLaunchLine& l);
+enum TraceLineKind { TLK_NONE = 0, TLK_ORDER, TLK_SAMPLE, TLK_RESULT, TLK_LAUNCH };
+struct TraceLine { int kind; TraceOrderLine o; TraceSample s; TraceResultLine p; TraceLaunchLine l; };
 // One line of a trace file into out: its kind, TLK_NONE for a blank or malformed line.
 int  TraceParseLine(const char* line, TraceLine* out);
 

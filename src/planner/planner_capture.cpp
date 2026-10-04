@@ -143,7 +143,8 @@ static int MarkRepeats(const uintptr_t* chars, int n, const float dest[3], doubl
 // The engine's move branch applies the destination at once whatever the order's two flags carry
 // (a plain click sends the add flag set; the flags matter only to the engine's other orders), so
 // every captured move order is planned.
-int PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void* destIndoors, bool shift, bool addDontClear)
+int PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void* destIndoors, bool shift, bool addDontClear,
+                     bool formationForms)
 {
 	if (PlanStoreMode() == PLANNER_OFF) return 0;
 	(void)shift;
@@ -181,7 +182,8 @@ int PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void*
 	ClearMemo();
 	PlannerOrderWater(chars, n, s_orderMult, s_orderAcid);
 	PlanSearchParams orderPrices = { s_orderMult[0], s_orderAcid[0] };
-	int lead = MergeOrder(chars, n, goal, dest, orderPrices, order, now);
+	int lead = MergeOrder(chars, n, goal, dest, orderPrices, s_orderMult, s_orderAcid, destIndoors == NULL ? 1 : 0,
+	                      formationForms, order, now);
 	for (int k = 0; k < n; ++k)
 	{
 		uintptr_t cm = MovementOf(chars[k]);

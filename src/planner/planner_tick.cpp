@@ -576,7 +576,7 @@ static PlanDropWhy SlotDropDue(const PlanView& v, uintptr_t character, const flo
 		return PlanDropDue(false, false, 0.0f, v.finalDest, v.finalDest, v.destAtPlan, false, false);
 	float* moveDest = f->moveDest;
 	ReadMoveDest(v.cm, moveDest);
-	bool halted = DistXz(moveDest, pos) <= PLAN_DEST_MATCH;
+	bool halted = PlanIsHalt(moveDest, pos);
 	f->halted = halted;
 	return PlanDropDue(true, IslandK7IsUnconcious(character), DistXz(pos, v.finalDest), moveDest, v.finalDest,
 	                   v.destAtPlan,

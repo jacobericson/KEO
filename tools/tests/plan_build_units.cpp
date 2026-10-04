@@ -243,6 +243,24 @@ static void CheckDrop()
 	      "drop: a destination 1.5 units from a recorded re-send is the re-send");
 }
 
+// The halt test: the engine's halt lands a few units off the character, inside the halt match and
+// outside the destination match; a point farther off is no halt.
+static void CheckHalt()
+{
+	float planDest[3], destAtPlan[3], pos[3], slid[3], far[3];
+	Set3(planDest, 5000.0f, 40.0f, -7000.0f);
+	Set3(destAtPlan, 2000.0f, 0.0f, -7000.0f);
+	Set3(pos, 3500.0f, 0.0f, -7000.0f);
+	Set3(slid, 3506.0f, 0.0f, -7000.0f);
+	Set3(far, 3520.0f, 0.0f, -7000.0f);
+	bool halted = PlanIsHalt(slid, pos);
+	Check(halted && PlanDropDue(true, false, 900.0f, slid, planDest, destAtPlan, false, halted) == PDW_NONE
+	      && PlanDropDue(true, false, 900.0f, slid, planDest, destAtPlan, false, false) == PDW_NEW_DEST,
+	      "halt: a halt 6 units off the character reads halted and keeps the plan the new-destination test drops");
+	Check(!PlanIsHalt(far, pos) && PlanDropDue(true, false, 900.0f, far, planDest, destAtPlan, false, PlanIsHalt(far, pos)) == PDW_NEW_DEST,
+	      "halt: a point 20 units off the character is no halt");
+}
+
 // The gather hold's age on the game-time clock the tick and the formation share: fed in raw-time order,
 // it stands still while the game is paused.
 static void CheckHoldClock()
@@ -326,6 +344,7 @@ int main()
 	CheckLegs();
 	CheckFootprint();
 	CheckDrop();
+	CheckHalt();
 	CheckHoldClock();
 	CheckRepeat();
 	CheckMemo();

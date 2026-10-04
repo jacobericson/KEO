@@ -77,6 +77,8 @@ void InstallFormationPace(int* installed, int*)
 
 void FormationPaceResetGroup(int g)
 {
+	if (!s_armed)
+		return;
 	for (int m = 0; m < MAX_FORMATION_MEMBERS_LIMIT; ++m)
 	{
 		PaceMember* s = PaceSlot(g, m);
@@ -90,6 +92,8 @@ void FormationPaceResetGroup(int g)
 
 void FormationPaceForget(int g, int m)
 {
+	if (!s_armed)
+		return;
 	PaceMember* s = PaceSlot(g, m);
 	if (s)
 		s->distSq = -1.0f;
@@ -97,6 +101,8 @@ void FormationPaceForget(int g, int m)
 
 void FormationPaceNote(int g, int m, float distSq, float gatherRadiusSq, double now)
 {
+	if (!s_armed)
+		return;
 	PaceMember* s = PaceSlot(g, m);
 	if (!s)
 		return;
@@ -166,16 +172,18 @@ void FormationPaceFramePublish()
 
 void FormationPaceClear()
 {
-	for (int g = 0; g < MAX_FORMATION_GROUPS; ++g)
-		FormationPaceResetGroup(g);
 	if (!s_armed)
 		return;
+	for (int g = 0; g < MAX_FORMATION_GROUPS; ++g)
+		FormationPaceResetGroup(g);
 	s_stagedCount = 0;
 	PaceTablePublish(&s_table, NULL, 0);
 }
 
 void FormationPaceAppendGathered(int g, const FormationGroup& grp, std::ostringstream& ss)
 {
+	if (!s_armed)
+		return;
 	int n = grp.count < MAX_FORMATION_MEMBERS_LIMIT ? grp.count : MAX_FORMATION_MEMBERS_LIMIT;
 	double arrive[MAX_FORMATION_MEMBERS_LIMIT];
 	int paced = 0;

@@ -16,6 +16,7 @@
 #include <cstring>
 #include "movement/islands_reissue_internal.h"
 #include "movement/islands_reissue_counters.h"
+#include "movement/formation_follow.h"
 namespace order_tracker_detail {
 // -------------------------------------------------------------------------
 // K7: deleted-order form (main thread only).
@@ -236,7 +237,9 @@ void K7SampleSignatures(double now, bool paused)
 		// leg was requested just before the cell streamed in and the
 		// character stopped just after.
 		//
-		// The cheap tests (edge, gathering, distance) run first, every frame,
+		// A follower the follow probe still owns never arms: its walk is the
+		// engine's follow task, and a wait armed now would outlive its release.
+		// The cheap tests (edge, gathering, follower, distance) run first, every frame,
 		// for every tracked entry; ClassifyZoneReadiness -- a try-shared
 		// +0x200 scan -- only runs on a qualifying rising edge, at most once
 		// per signature, not once per frame for every unarmed entry.
@@ -245,7 +248,7 @@ void K7SampleSignatures(double now, bool paused)
 			int fslot = FormationSlotForCharacter(o.character);
 			bool gathering = fslot >= 0 && FormationSkipWhileGathering(formationGroups[fslot].gathered, FormationMemberAlone(o.character));
 			float dDestSq = Dist2(posX, posZ, o.destX, o.destZ);
-			if (!gathering && dDestSq > K7_ARRIVAL_MIN_DIST_SQ)
+			if (!gathering && !FormationFollowerOwned(cm) && dDestSq > K7_ARRIVAL_MIN_DIST_SQ)
 			{
 				int dgx = 0, dgy = 0;
 				int cls = ZR_UNKNOWN;

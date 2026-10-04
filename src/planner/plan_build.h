@@ -41,6 +41,10 @@ PlanDropWhy PlanDropDue(bool livePlayer, bool unconscious, float distToDest, con
                         const float planDest[3], const float destAtPlan[3], bool moveDestIsModSend,
                         bool halted);
 
+// Whether the movement destination is a halt onto the character's own position: within
+// PLAN_HALT_MATCH of it in x-z. PlanDropDue's halted argument.
+bool PlanIsHalt(const float moveDest[3], const float pos[3]);
+
 // A mod detour (the formation's gather) keeps a plan for this long without steering it.
 const double PLAN_HOLD_SECONDS = 20.0;
 // Whether the movement destination is one the mod sent for this plan: within PLAN_DEST_MATCH in x-z of

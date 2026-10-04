@@ -1,7 +1,8 @@
 // movement_trace.cpp - The movement trace: per-member samples by distance moved and at every state
-// change, the path results the path thread copied attributed to the nearest member, and each closed
-// order's lines appended to the trace file beside the log in one write. Main thread; the path-thread
-// half is path_result_trace.cpp. The release build compiles the whole body out.
+// change, the path results the path thread copied attributed to the member nearest the request's
+// start, a launch line at the arm, and each closed order's lines appended to the trace file beside
+// the log in one write on the next frame, with the results no member took. Main thread; the
+// path-thread half is path_result_trace.cpp. The release build compiles the whole body out.
 #include "movement/movement_trace.h"
 #ifdef KEO_DEBUG
 #include "movement/movement_config.h"
@@ -11,6 +12,7 @@
 #include "planner/plan_store.h"
 #include "plugin/hook_manifest.h"
 #include "base/core.h"
+#include "base/ini_names.h"
 #include "game/game.h"
 #include <new>
 #include <stdio.h>
@@ -51,6 +53,24 @@ static long         s_taken = 0, s_overruns = 0, s_torn = 0;
 static long         s_samples = 0, s_written = 0, s_bytes = 0, s_drops = 0, s_results = 0, s_cut = 0;
 static long         s_unmatched = 0, s_openFail = 0;
 static double       s_lastLine = 0.0;
+static std::vector<TraceResultLine>* s_unmatchedLines = NULL;   // made at the first result no member took
+static int          s_closing[TRACE_MEMBERS];                   // closed orders waiting for their write
+static int          s_closingCount = 0;
+
+// Text appended to the trace file in one write; false, counted, when the file does not open.
+static bool AppendLine(const std::string& text)
+{
+	FILE* f = NULL;
+	if (fopen_s(&f, s_path, "ab") != 0 || !f)
+	{
+		++s_openFail;
+		return false;
+	}
+	fwrite(text.c_str(), 1, text.size(), f);
+	fclose(f);
+	s_bytes += (long)text.size();
+	return true;
+}
 
 // The trace arms once, at its first use on the main thread: the key at on (the release build has no
 // body to arm).
@@ -61,11 +81,16 @@ static void ArmOnce()
 	s_armState = -1;
 	if (movement::g_movementCfg.cfg_movementTrace != TRACE_ON)
 		return;
-	_snprintf_s(s_path, sizeof(s_path), _TRUNCATE, "%sKEO.trace.txt", GetDLLDirectory().c_str());
+	_snprintf_s(s_path, sizeof(s_path), _TRUNCATE, "%s%s", GetDLLDirectory().c_str(), MOVEMENT_TRACE_NAME);
 	s_resultsHook = HookRowInstalled(HOOK_CS_FIND_PATH) && HookRowInstalled(HOOK_CS_FIND_PATH_FALLBACK);
 	PathResultTraceArm();
 	s_armState = 1;
 	s_armed = 1;
+	SYSTEMTIME st;
+	GetLocalTime(&st);
+	TraceLaunchLine l = { (unsigned)GetCurrentProcessId(), st.wYear, st.wMonth, st.wDay,
+	                      st.wHour, st.wMinute, st.wSecond, ElapsedSec() };
+	AppendLine(TraceFormatLaunch(l) + "\n");
 	LogMsg(s_resultsHook ? "Trace: armed file=KEO.trace.txt resultsHook=ok"
 	                     : "Trace: armed file=KEO.trace.txt resultsHook=off");
 }
@@ -189,7 +214,9 @@ void MovementTraceSample(uintptr_t character, uintptr_t cm, uintptr_t hc, int ch
 	++s_samples;
 }
 
-// One copied result, in the world frame, to the member nearest its first point.
+// One copied result, in the world frame, to the member nearest its request's start among the members
+// still under the order they are sampled for; a result no member takes joins the session's unmatched
+// list, member -1, written with the next closed order.
 static void Attribute(const TraceResult& r)
 {
 	++s_results;
@@ -197,30 +224,30 @@ static void Attribute(const TraceResult& r)
 		++s_cut;
 	if (r.copied <= 0)
 		return;
-	float first[3];
-	TraceHavokToWorld(r.mid[0], r.shift, first);
 	const TraceRing* rings[TRACE_MEMBERS];
 	for (int i = 0; i < TRACE_MEMBERS; ++i)
-		rings[i] = s_members[i].character ? s_members[i].ring : NULL;
-	const float firstXz[2] = { first[0], first[2] };
-	int who = TraceAttribute(firstXz, r.t, rings, TRACE_MEMBERS);
+	{
+		const TraceMember& m = s_members[i];
+		rings[i] = m.character && OOT_OrderOf((size_t)m.character) == m.order ? m.ring : NULL;
+	}
+	float startXz[2];
+	TraceResultStartXz(r, startXz);
+	int who = TraceAttribute(startXz, r.t, rings, TRACE_MEMBERS);
 	TraceOrder* o = who >= 0 ? FindOrder(s_members[who].order) : NULL;
 	if (!o)
-	{
 		++s_unmatched;
-		return;
-	}
-	if (!o->results)
-		o->results = new (std::nothrow) std::vector<TraceResultLine>;
-	if (!o->results || (int)o->results->size() >= TRACE_ORDER_RESULTS)
+	std::vector<TraceResultLine>** list = o ? &o->results : &s_unmatchedLines;
+	if (!*list)
+		*list = new (std::nothrow) std::vector<TraceResultLine>;
+	if (!*list || (int)(*list)->size() >= TRACE_ORDER_RESULTS)
 	{
 		++s_drops;
 		return;
 	}
-	o->results->push_back(TraceResultLine());
-	TraceResultLine& p = o->results->back();
-	p.order = o->order;
-	p.member = s_members[who].index;
+	(*list)->push_back(TraceResultLine());
+	TraceResultLine& p = (*list)->back();
+	p.order = o ? o->order : 0;
+	p.member = o ? s_members[who].index : -1;
 	p.t = r.t;
 	p.cut = r.cut;
 	p.count = r.count;
@@ -234,25 +261,6 @@ static void Attribute(const TraceResult& r)
 		p.nodes[i].y = w[1];
 		p.nodes[i].z = w[2];
 	}
-}
-
-void MovementTraceFrame(double now)
-{
-	ArmOnce();
-	if (!s_armed)
-		return;
-	while (PathResultTraceTake(&s_taken, &s_take, &s_overruns, &s_torn))
-		Attribute(s_take);
-	if (now - s_lastLine < TRACE_LINE_SECONDS)
-		return;
-	s_lastLine = now;
-	char line[384];
-	_snprintf_s(line, sizeof(line), _TRUNCATE,
-	            "Trace: samples=%ld orders=%ld bytes=%ld traceDrop=%ld results=%ld cut=%ld traceUnmatched=%ld"
-	            " overruns=%ld torn=%ld traceOpenFail=%ld resultsHook=%s",
-	            s_samples, s_written, s_bytes, s_drops, s_results, s_cut, s_unmatched, s_overruns, s_torn,
-	            s_openFail, s_resultsHook ? "ok" : "off");
-	LogMsg(line);
 }
 
 // Frees one order's entries: its members' rings and its results.
@@ -269,10 +277,10 @@ static void FreeOrder(TraceOrder* o)
 	memset(o, 0, sizeof(*o));
 }
 
-void MovementTraceOnOrderClose(int orderNum)
+// One closed order's lines in one write: its order line, its members' samples, its results, then the
+// session's unmatched results under its number; its buffers and the unmatched list freed.
+static void WriteOrder(int orderNum)
 {
-	if (!s_armed)
-		return;
 	TraceOrder* o = FindOrder(orderNum);
 	if (!o)
 		return;
@@ -288,23 +296,69 @@ void MovementTraceOnOrderClose(int orderNum)
 	}
 	for (size_t r = 0; o->results && r < o->results->size(); ++r)
 		text += TraceFormatResult((*o->results)[r]) + "\n";
-	FILE* f = NULL;
-	if (fopen_s(&f, s_path, "ab") != 0 || !f)
-		++s_openFail;
-	else
+	for (size_t r = 0; s_unmatchedLines && r < s_unmatchedLines->size(); ++r)
 	{
-		fwrite(text.c_str(), 1, text.size(), f);
-		fclose(f);
-		s_bytes += (long)text.size();
-		++s_written;
+		(*s_unmatchedLines)[r].order = orderNum;
+		text += TraceFormatResult((*s_unmatchedLines)[r]) + "\n";
 	}
+	delete s_unmatchedLines;
+	s_unmatchedLines = NULL;
+	if (AppendLine(text))
+		++s_written;
 	FreeOrder(o);
+}
+
+void MovementTraceFrame(double now)
+{
+	ArmOnce();
+	if (!s_armed)
+		return;
+	while (PathResultTraceTake(&s_taken, &s_take, &s_overruns, &s_torn))
+		Attribute(s_take);
+	for (int i = 0; i < s_closingCount; ++i)
+		WriteOrder(s_closing[i]);
+	s_closingCount = 0;
+	if (now - s_lastLine < TRACE_LINE_SECONDS)
+		return;
+	s_lastLine = now;
+	char line[384];
+	_snprintf_s(line, sizeof(line), _TRUNCATE,
+	            "Trace: samples=%ld orders=%ld bytes=%ld traceDrop=%ld results=%ld cut=%ld traceUnmatched=%ld"
+	            " overruns=%ld torn=%ld traceOpenFail=%ld resultsHook=%s",
+	            s_samples, s_written, s_bytes, s_drops, s_results, s_cut, s_unmatched, s_overruns, s_torn,
+	            s_openFail, s_resultsHook ? "ok" : "off");
+	LogMsg(line);
+}
+
+// Queues the order's write for the next frame, once. Each queued number holds one of the
+// TRACE_MEMBERS order entries until written, so the queue cannot fill; were it full, the order would
+// be dropped, its buffers freed and traceDrop counted.
+void MovementTraceOnOrderClose(int orderNum)
+{
+	if (!s_armed)
+		return;
+	TraceOrder* o = FindOrder(orderNum);
+	if (!o)
+		return;
+	for (int i = 0; i < s_closingCount; ++i)
+		if (s_closing[i] == orderNum)
+			return;
+	if (s_closingCount >= TRACE_MEMBERS)
+	{
+		++s_drops;
+		FreeOrder(o);
+		return;
+	}
+	s_closing[s_closingCount++] = orderNum;
 }
 
 void MovementTraceReset()
 {
 	if (!s_armed)
 		return;
+	s_closingCount = 0;
+	delete s_unmatchedLines;
+	s_unmatchedLines = NULL;
 	for (int i = 0; i < TRACE_MEMBERS; ++i)
 		if (s_orders[i].order)
 			FreeOrder(&s_orders[i]);

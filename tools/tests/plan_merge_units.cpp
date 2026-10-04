@@ -202,6 +202,20 @@ static void CheckSample()
 	      "merge: an empty prefix samples nothing, and one slot keeps the first node");
 }
 
+static void CheckResume()
+{
+	CHECK(PlanMergeResumeFrom(true, false, false, false) == PMR_RECORD,
+	      "merge resume: a member whose plan dropped while it gathered is re-planned from the record");
+	CHECK(PlanMergeResumeFrom(true, false, true, false) == PMR_RECORD,
+	      "merge resume: a member whose hold is gone is re-planned from the record");
+	CHECK(PlanMergeResumeFrom(true, false, true, true) == PMR_PLAN && PlanMergeResumeFrom(false, false, true, true) == PMR_PLAN,
+	      "merge resume: a held member is re-planned from its plan");
+	CHECK(PlanMergeResumeFrom(true, true, true, true) == PMR_NONE && PlanMergeResumeFrom(true, true, false, false) == PMR_NONE,
+	      "merge resume: a member the merge left alone is not re-planned");
+	CHECK(PlanMergeResumeFrom(false, false, false, false) == PMR_NONE && PlanMergeResumeFrom(false, false, true, false) == PMR_NONE,
+	      "merge resume: a member in no record without a held plan is not re-planned");
+}
+
 int main()
 {
 	s_scratch = new CoarseScratch;
@@ -209,5 +223,6 @@ int main()
 	CheckMedoid();
 	CheckBias();
 	CheckSample();
+	CheckResume();
 	return CheckExit("plan_merge_units");
 }

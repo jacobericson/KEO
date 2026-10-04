@@ -15,8 +15,6 @@
 #include "pathfind/astar_hier.h"
 #include "pathfind/player_repath_tier.h"
 #include "pathfind/player_repath_tier_policy.h"
-#include "fixes/streaming/navmesh_life.h"
-#include "fixes/stitch/stitch_source.h"
 #include "planner/planner_water_table.h"
 #include "pathfind/path_result_trace.h"
 #include <intrin.h>
@@ -99,7 +97,7 @@ char hook_csFindPath(void* manager, unsigned int startFaceKey, void* startPos,
 	}
 
 	// The movement trace's copy of a direct success, by the request's own player priority.
-	PathResultTraceCopy(manager, resultBuf, result != 0,
+	PathResultTraceCopy(manager, resultBuf, startPos, result != 0,
 	                    g_pathPoolLastCsFindPathReq && *(int*)((uintptr_t)g_pathPoolLastCsFindPathReq + 0x2C) >= 20);
 	return result;
 }
@@ -716,7 +714,7 @@ char hook_csFindPathFallback(void* manager, unsigned int startFaceKey, void* sta
 	                                       destFaceKey, destPos, radius,
 	                                       param6, param7, resultBuf);
 	t_waveAuth = 0;
-	PathResultTraceCopy(manager, resultBuf, result != 0, !param7);   // param7: the engine's own NPC flag
+	PathResultTraceCopy(manager, resultBuf, startPos, result != 0, !param7);   // param7: the engine's own NPC flag
 	return result;
 }
 

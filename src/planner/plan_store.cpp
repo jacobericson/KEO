@@ -547,6 +547,10 @@ int PlannerNoteModSend(uintptr_t cm, const float sent[3], int kind, double now)
 	}
 	InterlockedIncrement(&s_counters.reissuedPlanned);
 	if (PlanDestIsPlans(sent, s.finalDest, s.resend, s.resendCount)) return 1;
+	// A re-send keeps the legs, so an in-flight word of this plan moves to the new epoch with it. The
+	// carry is one compare-exchange against the word read here: a word the AI thread resolved or
+	// replaced in between fails it and stays as that thread left it.
+	LONGLONG seen = InterlockedCompareExchange64(&s.preWord, 0, 0);
 	unsigned leg = 0;
 	unsigned e = BeginRewriteKeepLeg(s, &leg);
 	if (s.resendCount >= PLAN_RESEND_POINTS)
@@ -557,6 +561,10 @@ int PlannerNoteModSend(uintptr_t cm, const float sent[3], int kind, double now)
 	memcpy(s.resend[s.resendCount], sent, sizeof(s.resend[0]));
 	++s.resendCount;
 	EndRewrite(s, e, (int)leg);
+	unsigned long long w = (unsigned long long)seen;
+	int state = (int)((w >> 16) & 0xFF);
+	if ((unsigned)(w >> 32) == e && (state & PLAN_PRE_STATE_MASK) != PLAN_PRE_NONE)
+		InterlockedCompareExchange64(&s.preWord, MakePre(e + 2u, state, (int)((w >> 8) & 0xFF), (int)(w & 0xFF)), seen);
 	return 1;
 }
 

@@ -43,7 +43,7 @@ static LONG CounterSum(const PlannerCounters& c)
 	     + c.slotFull + c.repeats + c.locFail + c.goalUnlocated + c.startUnlocated + c.notSite + c.staleAdvance + c.rung17
 	     + c.ownedSkips + c.noLocation
 	     + c.reissuedPlanned + c.heldPlanned + c.reissueRefused + c.snapFar + c.snapMax
-	     + c.waterFail + c.waterGroups + (LONG)CoarseProbeRefusals()
+	     + c.waterFail + c.waterGroups + c.waterOver + (LONG)CoarseProbeRefusals()
 	     + c.aimCount + c.pre + c.preLand + c.preLate + c.preBroken + c.preFailed + c.preLost + c.preSkip + c.preBusy
 	     + c.merges + c.mergeJoins + c.mergeAlone + c.mergeMoved + c.mergeWalkOff + c.interiorHeld;
 }
@@ -63,7 +63,8 @@ void PlannerReportTick(double now)
 	PlannerWaterTableStatsGet(&ws);
 	PlanAcidStats as;
 	PlannerAcidStatsGet(&as);
-	LONG sum = CounterSum(c) + ws.writes + ws.leaves;
+	// waterReqLeave= moves on every path request the water write leaves, so it prints but never wakes a line.
+	LONG sum = CounterSum(c) + ws.writes;
 	if (sum == s_lastSum)
 		return;
 	s_lastSum = sum;
@@ -77,7 +78,7 @@ void PlannerReportTick(double now)
 	            " rung17=%ld ownedSkips=%ld noLocation=%ld"
 	            " reissuedPlanned=%ld heldPlanned=%ld reissueRefused=%ld snapFar=%ld snapMax=%ld"
 	            " waterFail=%ld waterGroups=%ld probeNoRoute=%ld"
-	            " waterReq=%ld waterReqLeave=%ld waterReqLast=%.2f waterTable=%ld"
+	            " waterReq=%ld waterReqLeave=%ld waterReqLast=%.2f waterTable=%ld waterOver=%ld"
 	            " acidCells=%d acidUnknown=%d"
 	            " aimShift=%.1f"
 	            " pre=%ld preLand=%ld preLate=%ld preBroken=%ld preFailed=%ld preLost=%ld preSkip=%ld(w%ld/sn%ld/same%ld/held%ld) preBusy=%ld preD=%ld/%ld"
@@ -94,7 +95,7 @@ void PlannerReportTick(double now)
 	            (long)c.repeats, (long)c.locFail, (long)c.goalUnlocated, (long)c.startUnlocated, (long)c.notSite,
 	            (long)c.staleAdvance, (long)c.rung17, (long)c.ownedSkips, (long)c.noLocation,
 	            (long)c.reissuedPlanned, (long)c.heldPlanned, (long)c.reissueRefused, (long)c.snapFar, (long)c.snapMax,
-	            (long)c.waterFail, (long)c.waterGroups, CoarseProbeRefusals(), ws.writes, ws.leaves, (double)ws.last, ws.entries,
+	            (long)c.waterFail, (long)c.waterGroups, CoarseProbeRefusals(), ws.writes, ws.leaves, (double)ws.last, ws.entries, (long)c.waterOver,
 	            as.acidCells, as.unknown,
 	            c.aimCount > 0 ? (double)c.aimShiftSum / (double)c.aimCount : 0.0,
 	            (long)c.pre, (long)c.preLand, (long)c.preLate, (long)c.preBroken, (long)c.preFailed, (long)c.preLost,

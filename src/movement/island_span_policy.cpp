@@ -59,3 +59,14 @@ IslandEdgePark IslandClassifyEdgePark(bool movingToEdge, bool idle, float haltDi
 	if (haltDist < 10.0f) return EDGEPARK_HALTED;
 	return (wpDist < 20.0f) ? EDGEPARK_AT_EDGE : EDGEPARK_SHORT_LEG;
 }
+
+bool IslandEdgeParkCounts(bool edgeNear, bool planned, double heldSec, double hysteresisSec)
+{
+	if (!edgeNear) return false;
+	return !planned || heldSec >= hysteresisSec;
+}
+
+bool IslandReissueCharacterOnly(bool forced, bool memberAlone, bool groupGathered)
+{
+	return forced || (memberAlone && !groupGathered);
+}

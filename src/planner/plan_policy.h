@@ -14,6 +14,9 @@ const int   PLAN_MAX_LEGS     = 32;      // leg slots: up to PLAN_MAX_PORTAL_LEG
 const int   PLAN_MAX_PORTAL_LEGS = 31;
 const float PLAN_REACH        = 20.0f;   // the parked test's reach; arrival at a portal
 const float PLAN_DEST_MATCH   = 2.0f;    // a call carries the plan's destination within this
+// An order the engine ends copies the character's position to its movement destination, and the
+// character slides up to 8 units on after that copy, so the halt test reads with a wider match.
+const float PLAN_HALT_MATCH   = 16.0f;   // a movement destination this near the character is a halt
 // A gather sends every member to one point and each walks to its own slot around it. The engine's
 // slot spread is not read: the formation's arrival-scatter radius stands in as a proxy for it,
 // sqrt(members * 60) / 2 + 5, 26.2 at the 30-member cap, plus the 2-unit match and a margin.
@@ -260,8 +263,8 @@ enum PlanArm { PLAN_ARM_OFF = 0, PLAN_ARM_GO, PLAN_ARM_REFUSE_PREREQ };
 PlanArm PlanArmDecide(int mode, bool playerHierarchicalOn);
 
 // The water cost. A coarse arc's cost rises with the water under its two nodes by a per-character
-// multiplier m >= 1: OFF plans as if water were land; FLOOR (the default) takes the larger of the
-// land-to-water speed ratio and the engine's own water value; DYNAMIC the ratio alone; ENGINE the
+// multiplier m >= 1: OFF plans as if water were land; FLOOR takes the larger of the land-to-water
+// speed ratio and the engine's own water value; DYNAMIC (the default) the ratio alone; ENGINE the
 // engine value alone.
 enum PlanWaterMode { PWC_OFF = 0, PWC_FLOOR, PWC_DYNAMIC, PWC_ENGINE };
 const float PLAN_WATER_CAP   = 20.0f;   // the largest multiplier a plan uses

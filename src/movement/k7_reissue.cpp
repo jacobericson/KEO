@@ -487,6 +487,16 @@ bool IslandK7IsUnconcious(uintptr_t character)
 	return K7IsUnconcious(character);
 }
 
+bool IslandK7OrderGone(uintptr_t character)
+{
+	if (!character || !K7FormOn()) return false;
+	IslandOrder* o = FindOrderForCharacter(character);   // pointer compare only
+	if (!o || !o->k7Seen29) return false;
+	K7OrderState st;
+	if (!K7ReadOrders(character, &st)) return false;
+	return st.curType == -1 && st.size == 0;
+}
+
 // PLAYER STUCK's stops= class guess (order_outcome.cpp): whichever of the
 // deleted-order form's two end signatures is newer, "-" when neither has
 // latched. "reached" is a partial path end short of the destination (class
@@ -553,6 +563,7 @@ void K7RebasePausedClocks(bool paused, double now)
 		ShiftStamp(o.parkTime, pausedFor);
 		ShiftStamp(o.lastReissueTime, pausedFor);
 		ShiftStamp(o.stoppedSince, pausedFor);
+		ShiftStamp(o.edgeParkSince, pausedFor);
 		ShiftStamp(o.k7ReachedTime, pausedFor);
 		ShiftStamp(o.k7FailedTime, pausedFor);
 		ShiftStamp(o.k7DeletedSince, pausedFor);
@@ -572,7 +583,7 @@ void K7RebasePausedClocks(bool paused, double now)
 // A field added to either struct changes its size and stops the build here:
 // decide whether K7RebasePausedClocks must shift it, then update the size. A
 // field that fits in existing padding leaves the size as it was.
-static_assert(sizeof(IslandOrder) == 272, "IslandOrder changed: K7RebasePausedClocks must shift every clock field");
+static_assert(sizeof(IslandOrder) == 280, "IslandOrder changed: K7RebasePausedClocks must shift every clock field");
 static_assert(sizeof(ReissueCheck) == 128, "ReissueCheck changed: K7RebasePausedClocks must shift every clock field");
 
 } // namespace order_tracker_detail

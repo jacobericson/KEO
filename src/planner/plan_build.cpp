@@ -141,6 +141,11 @@ PlanDropWhy PlanDropDue(bool livePlayer, bool unconscious, float distToDest, con
 	return PDW_NEW_DEST;
 }
 
+bool PlanIsHalt(const float moveDest[3], const float pos[3])
+{
+	return DistanceSqXz(moveDest, pos) <= PLAN_HALT_MATCH * PLAN_HALT_MATCH;
+}
+
 bool PlanIsModSend(const float moveDest[3], const float resend[][3], int resendCount,
                    const float holdDest[3], int haveHold, double holdAge)
 {

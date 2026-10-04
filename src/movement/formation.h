@@ -15,8 +15,21 @@ const int MAX_FORMATION_MEMBERS      = 30;
 const float SCATTER_APPROACH_DIST_SQ = 2500.0f;  // 50 world units squared
 // Gather-completion radius: per group, sized to its member count
 // (FormationGatherRadius, formation_members.h) and stored as grp.gatherRadiusSq.
-const double GATHER_TIMEOUT          = 15.0;      // seconds before skipping gather
+// The gather timeout: the farthest member's route to the gather point at the group's speed
+// (FormationGatherTimeout, formation_gather_policy.h), aged on the active clock and held to
+// [GATHER_TIMEOUT, GATHER_TIMEOUT_CAP]. The cap leaves at least half of FORMATION_TIMEOUT for the travel.
+const double GATHER_TIMEOUT          = 15.0;      // seconds: the floor, a short gather's timeout
+const double GATHER_TIMEOUT_CAP      = 60.0;      // seconds: the longest gather
 const double FORMATION_TIMEOUT       = 120.0;     // seconds before auto-cleanup
+// A merged order's group outlives FORMATION_TIMEOUT while a member still walks to the destination, up to
+// this many seconds (FormationTimeoutCancels).
+const double FORMATION_TIMEOUT_CEILING = 600.0;
+// A gather order the engine deleted is sent again only for a member farther than this from the gather
+// point: an order that completed leaves its member within the engine's slot spread, well inside it.
+const float  GATHER_RESEND_FAR       = 100.0f;
+// A member walks to the group's destination while its movement destination lies within this of it
+// (a re-issue nudges an order 8 units at a time).
+const float  FORMATION_WALK_DEST_TOL = 100.0f;
 
 
 // =========================================================================

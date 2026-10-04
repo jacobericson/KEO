@@ -1,6 +1,6 @@
 // plan_merge.cpp - The merge's pure rules: the medoid and the leader, the anchor set, the biased
-// operations, the re-cost and the cap, the join index, the gather index and the prefix sample. Pure;
-// the caller's thread, no lock.
+// operations, the re-cost and the cap, the join index, the gather index, the prefix sample and the resume
+// source. Pure; the caller's thread, no lock.
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -170,6 +170,15 @@ int PlanMergeSample(const unsigned* nodes, int n, unsigned* out, int max)
 	for (int i = 0; i < max; ++i)
 		out[i] = nodes[(int)((long long)i * (n - 1) / (max - 1))];
 	return max;
+}
+
+int PlanMergeResumeFrom(bool inRecord, bool alone, bool haveSlot, bool haveHold)
+{
+	if (alone)
+		return PMR_NONE;
+	if (haveSlot && haveHold)
+		return PMR_PLAN;
+	return inRecord ? PMR_RECORD : PMR_NONE;
 }
 
 } // namespace planner

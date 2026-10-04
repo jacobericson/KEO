@@ -76,7 +76,7 @@ static bool Shown(const ConfigKey& k, bool devBuild)
 
 static std::string RowLabel(const ConfigKey& k)
 {
-	return std::string(k.label) + (k.live ? "" : " *");
+	return std::string(k.label ? k.label : "") + (k.live ? "" : " *");
 }
 
 static bool EndsWith(const std::string& s, const char* tail)

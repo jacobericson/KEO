@@ -32,6 +32,7 @@ struct IslandOrder {
 	unsigned int seenSig;
 	bool      noCrossingLogged;
 	double    stoppedSince;    // (c): 0.0 = stopped predicate not currently holding
+	double    edgeParkSince;   // first poll of the current unbroken edge park; 0.0 = the edge test not holding
 	// K7 deleted-order form (K7Observe / K7SampleSignatures /
 	// K7TryDeletedReissue). IslandNoteOrder's memset zeroes all of it on
 	// every new player move order; a deleted re-issue restarts the episode.
@@ -92,8 +93,9 @@ const int    MAX_REISSUES        = 8;
 // (c) The stopped form of the park test in island_orders.cpp must hold
 // continuously for this long before it counts as parked -- a single bad poll
 // (mid-frame state change, a still-settling order) must not park a character
-// about to move again. The edge form keeps its existing (unhysteresised)
-// behaviour.
+// about to move again. The edge form counts at once for a character the
+// route planner does not walk, and after this same hysteresis for one it
+// does (it stops at its portals between legs).
 const double STOPPED_HYSTERESIS  = 3.0;
 const int    MAX_REISSUE_CHECKS     = 256;
 

@@ -477,24 +477,34 @@ void FormationFollowOnClear()
 	s_orphanDue = 1;
 }
 
-bool FormationOwnsFollower(uintptr_t cm, int seam)
+// Whether cm is a member a live record still follows. Main thread.
+static bool FollowerOwned(uintptr_t cm)
 {
-	if (!s_armed || !cm || seam < 0 || seam >= FFS_COUNT)
-		return false;
 	for (int ri = 0; ri < FOLLOW_RECORDS; ++ri)
 	{
 		const FollowRecord& r = s_records[ri];
 		if (!r.active)
 			continue;
 		for (int i = 0; i < r.count; ++i)
-		{
-			if (r.members[i].cm != cm || !FollowOwns((int)s_armed, r.members[i].following))
-				continue;
-			++s_ownedSkips[seam];
-			return true;
-		}
+			if (r.members[i].cm == cm && FollowOwns((int)s_armed, r.members[i].following))
+				return true;
 	}
 	return false;
+}
+
+bool FormationOwnsFollower(uintptr_t cm, int seam)
+{
+	if (!s_armed || !cm || seam < 0 || seam >= FFS_COUNT)
+		return false;
+	if (!FollowerOwned(cm))
+		return false;
+	++s_ownedSkips[seam];
+	return true;
+}
+
+bool FormationFollowerOwned(uintptr_t cm)
+{
+	return s_armed && cm && FollowerOwned(cm);
 }
 
 bool FormationFollowArmed()

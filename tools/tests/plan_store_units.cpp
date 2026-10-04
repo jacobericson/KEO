@@ -590,6 +590,32 @@ static void PreFlightRows()
 	Check(first == 1 && again == 0 && waitOpen && blockedNow == 0 && blocked && other == 1
 	      && !PlanStorePreBlocked(slot, v.epoch, 1),
 	      "pre flight: a leg's first skip counts once, a wait is tried again, a block holds until another leg");
+
+	// A re-send keeps the legs: the word in flight moves to the new epoch, and an update made against
+	// the word as it stood before the re-send is refused. A word of an earlier plan is not carried.
+	Fresh(PLANNER_ON);
+	MakeWrite(&w, CM_A, 1.0f);
+	slot = PlanStoreWrite(w);
+	PlanStoreRead(slot, &v);
+	PlanStoreAdvance(slot, v.epoch, 0, 1);
+	QueryPerformanceCounter(&now);
+	PlanStorePreIssue(slot, v.epoch, 0, 1, 990.0f, 4.0f, now.QuadPart);
+	PlanPreFlight before;
+	PlanStorePreRead(slot, &before);
+	float p[3] = { 3008.0f, 1.0f, 0.0f };
+	int resent = PlannerNoteModSend(CM_A, p, PLAN_SEND_RESEND, 20.0);
+	Check(resent == 1 && PlanStorePreRead(slot, &f) && PlanStoreLeg(slot, &epoch, &leg) && f.epoch == epoch
+	      && epoch != before.epoch && f.state == PLAN_PRE_ISSUED && f.from == 0 && f.to == 1 && leg == 1
+	      && f.issueX == 990.0f && f.issueQpc == now.QuadPart,
+	      "pre flight: a re-send carries the word in flight to the new epoch with its legs");
+	PlanStorePreUpdate(slot, before, PLAN_PRE_NONE);
+	Check(PlanStorePreRead(slot, &f) && f.epoch == epoch && f.state == PLAN_PRE_ISSUED,
+	      "pre flight: an update at the epoch before the re-send is refused after the carry");
+	PlanStorePreIssue(slot, before.epoch, 0, 1, 990.0f, 4.0f, now.QuadPart);
+	p[0] = 2992.0f;
+	PlannerNoteModSend(CM_A, p, PLAN_SEND_RESEND, 22.0);
+	Check(PlanStorePreRead(slot, &f) && f.epoch == before.epoch && PlanStoreLeg(slot, &epoch, &leg) && epoch != f.epoch,
+	      "pre flight: a word of an earlier epoch is not carried by a re-send");
 	Fresh(PLANNER_OFF);
 }
 

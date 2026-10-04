@@ -305,7 +305,9 @@ void PlannerWaterRefresh()
 	uintptr_t pi = *(uintptr_t*)((uintptr_t)GameAddr(RVA_GLOBAL_PLAYER));
 	unsigned count = pi ? GetPlayerCharCount(pi) : 0;
 	uintptr_t* stuff = pi ? GetPlayerCharStuff(pi) : NULL;
-	if (stuff && count <= (unsigned)PLAN_WATER_TABLE_MAX)
+	if (stuff && count > (unsigned)PLAN_WATER_TABLE_MAX)
+		InterlockedIncrement(&PlannerCountersGet()->waterOver);
+	else if (stuff)
 	{
 		for (unsigned i = 0; i < count; ++i)
 		{

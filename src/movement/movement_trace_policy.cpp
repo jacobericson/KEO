@@ -76,7 +76,7 @@ bool TraceResultTake(TraceResultRing* r, long* taken, TraceResult* out, long* ov
 	}
 }
 
-int TraceAttribute(const float firstXz[2], double resultT, const TraceRing* const* rings, int n)
+int TraceAttribute(const float startXz[2], double resultT, const TraceRing* const* rings, int n)
 {
 	int best = -1;
 	float bestSq = TRACE_ATTRIB_UNITS * TRACE_ATTRIB_UNITS;
@@ -90,7 +90,7 @@ int TraceAttribute(const float firstXz[2], double resultT, const TraceRing* cons
 			const TraceSample& s = r->s[(r->head - 1 - k + TRACE_RING) % TRACE_RING];
 			if (k > 0 && s.t < resultT - TRACE_ATTRIB_SECONDS)
 				break;
-			float dx = s.x - firstXz[0], dz = s.z - firstXz[1];
+			float dx = s.x - startXz[0], dz = s.z - startXz[1];
 			float d2 = dx * dx + dz * dz;
 			if (d2 <= bestSq)
 			{
@@ -106,6 +106,14 @@ void TraceHavokToWorld(const float h[3], const float shift[3], float out[3])
 {
 	for (int k = 0; k < 3; ++k)
 		out[k] = (h[k] - shift[k]) * 10.0f;
+}
+
+void TraceResultStartXz(const TraceResult& r, float outXz[2])
+{
+	float w[3];
+	TraceHavokToWorld(r.start, r.shift, w);
+	outXz[0] = w[0];
+	outXz[1] = w[2];
 }
 
 std::string TraceFormatOrder(const TraceOrderLine& o)
@@ -138,6 +146,14 @@ std::string TraceFormatResult(const TraceResultLine& p)
 		out += buf;
 	}
 	return out;
+}
+
+std::string TraceFormatLaunch(const TraceLaunchLine& l)
+{
+	char buf[96];
+	_snprintf_s(buf, sizeof(buf), _TRUNCATE, "l pid=%u armed=%04d-%02d-%02d %02d:%02d:%02d t=%.3f",
+	            l.pid, l.year, l.month, l.day, l.hour, l.minute, l.second, l.t);
+	return buf;
 }
 
 int TraceParseLine(const char* line, TraceLine* out)
@@ -178,6 +194,13 @@ int TraceParseLine(const char* line, TraceLine* out)
 		}
 		if (*q == '\0')
 			out->kind = TLK_RESULT;
+	}
+	else if (line[0] == 'l' && line[1] == ' ')
+	{
+		TraceLaunchLine& l = out->l;
+		if (sscanf_s(line, "l pid=%u armed=%d-%d-%d %d:%d:%d t=%lf", &l.pid, &l.year, &l.month, &l.day,
+		             &l.hour, &l.minute, &l.second, &l.t) == 8)
+			out->kind = TLK_LAUNCH;
 	}
 	return out->kind;
 }

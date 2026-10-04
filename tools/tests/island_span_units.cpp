@@ -12,6 +12,26 @@ static void CheckEdgeLegStarts()
 	      "edge legs: a waypoint moved more than the move distance starts a leg, one no farther does not");
 }
 
+static void CheckEdgeParkCounts()
+{
+	Check(IslandEdgeParkCounts(true, false, 0.0, 3.0), "edge park: an unplanned edge park counts at once");
+	Check(IslandEdgeParkCounts(true, true, 3.0, 3.0), "edge park: a planned edge park counts at 3.0 s");
+	Check(!IslandEdgeParkCounts(true, true, 2.9, 3.0), "edge park: a planned edge park does not count at 2.9 s");
+	Check(!IslandEdgeParkCounts(false, false, 10.0, 3.0) && !IslandEdgeParkCounts(false, true, 10.0, 3.0),
+	      "edge park: nothing counts without the edge test");
+}
+
+static void CheckReissueCharacterOnly()
+{
+	Check(IslandReissueCharacterOnly(false, true, false),
+	      "character only: an alone first-live member of a gathering group is re-issued alone");
+	Check(!IslandReissueCharacterOnly(false, false, true) && !IslandReissueCharacterOnly(false, true, true),
+	      "character only: a gathered group's representative keeps the group path");
+	Check(!IslandReissueCharacterOnly(false, false, false),
+	      "character only: a member gathering with its group keeps the group path");
+	Check(IslandReissueCharacterOnly(true, false, true), "character only: a forced caller stays forced");
+}
+
 int main()
 {
 	// Span is the Chebyshev distance, symmetric, 0 for one cell.
@@ -79,5 +99,7 @@ int main()
 	Check(IslandClassifyEdgePark(false, true, 0.0f, 0.0f, 5000.0f) == EDGEPARK_NONE, "a halt out of edge mode is not an edge park");
 
 	CheckEdgeLegStarts();
+	CheckEdgeParkCounts();
+	CheckReissueCharacterOnly();
 	return CheckExit("island_span_units");
 }

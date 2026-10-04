@@ -18,9 +18,9 @@ void PathResultTraceArm()
 	InterlockedExchange(&s_armed, 1);
 }
 
-void PathResultTraceCopy(void* navMesh, const void* resultBuf, int ok, int player)
+void PathResultTraceCopy(void* navMesh, const void* resultBuf, const void* startPos, int ok, int player)
 {
-	if (!s_armed || !ok || !player || !navMesh || !resultBuf)
+	if (!s_armed || !ok || !player || !navMesh || !resultBuf || !startPos)
 		return;
 	const char* nodes = *(const char* const*)(KLIB_MEMBER(5, resultBuf, ResultPathArray_m_data, 0));
 	int count = *(const int*)(KLIB_MEMBER(5, resultBuf, ResultPathArray_m_size, 8));
@@ -33,6 +33,7 @@ void PathResultTraceCopy(void* navMesh, const void* resultBuf, int ok, int playe
 	r->copied = count < TRACE_RESULT_NODES ? count : TRACE_RESULT_NODES;
 	r->cut = count > TRACE_RESULT_NODES ? 1 : 0;
 	memcpy(r->shift, shift, sizeof(r->shift));
+	memcpy(r->start, startPos, sizeof(r->start));
 	for (int i = 0; i < r->copied; ++i)
 	{
 		const char* node = nodes + (size_t)i * EDGE_PATH_NODE_BYTES;

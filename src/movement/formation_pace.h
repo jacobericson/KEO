@@ -13,14 +13,14 @@
 // startPlugin, once: installs the detour while formationGatherPace is on, and logs pace=.
 void InstallFormationPace(int* installed, int* total);
 // CreateFormationGroup, once its slot g is chosen: forgets every member slot of group g (no arrival,
-// no distance, not paced), whatever the key says.
+// no distance, not paced). Returns at once unless armed.
 void FormationPaceResetGroup(int g);
 // PollFormationGather's loop, for each member slot m of group g it visits: m is not paced this poll
-// unless FormationPaceNote runs for it below. Whatever the key says.
+// unless FormationPaceNote runs for it below. Returns at once unless armed.
 void FormationPaceForget(int g, int m);
 // PollFormationGather's proximity test: member m of group g stands distSq (squared, x-z) from the
-// gather point; its first poll within gatherRadiusSq stamps its arrival at now. Whatever the key
-// says.
+// gather point; its first poll within gatherRadiusSq stamps its arrival at now. Returns at once
+// unless armed.
 void FormationPaceNote(int g, int m, float distSq, float gatherRadiusSq, double now);
 // PollFormationGroups, before its group loop: empties the staged set. Returns at once unless armed.
 void FormationPaceFrameBegin();
@@ -29,10 +29,10 @@ void FormationPaceFrameBegin();
 void FormationPaceStageGroup(int g, const FormationGroup& grp);
 // PollFormationGroups, after its group loop: publishes the staged set. Returns at once unless armed.
 void FormationPaceFramePublish();
-// ClearFormationGroups (a save load, the install): forgets every group's member slots, then, when
-// armed, publishes an empty table.
+// ClearFormationGroups (a save load, the install): forgets every group's member slots and publishes
+// an empty table. Returns at once unless armed.
 void FormationPaceClear();
-// The Formation gathered: line's " spread=<s> paced=<n>" for group g, whatever the key says.
+// The Formation gathered: line's " spread=<s> paced=<n>" for group g. Returns at once unless armed.
 void FormationPaceAppendGathered(int g, const FormationGroup& grp, std::ostringstream& ss);
 // The Islands: line's " paceMin=<f|-|off> paceHits=<n>": the smallest factor staged and the detour's
 // paced answers since the previous call, whose window it restarts. Main thread.
