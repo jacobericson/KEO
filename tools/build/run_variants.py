@@ -53,9 +53,11 @@ Environment:
 
   Memory per process: a cl process needs about 260 MB and an LTCG link about 90 MB.
 
-Failure: a failed source does not stop its variant's other compiles, but once a variant fails no
+Failure: a compile error does not stop its variant's other compiles, but once a variant fails no
 new variant is started; a variant already started still finishes (its link runs once its own
-compile succeeded). The script then prints "<fail-prefix> <OUTDIR>" for the first failed variant
+compile succeeded). A failure of the runner itself (no cpu token within KEO_CPU_WAIT, cl not
+started) stops the run at once: no compile starts after it, and every queued one fails its
+variant uncompiled. The script then prints "<fail-prefix> <OUTDIR>" for the first failed variant
 in the order given and exits 1. Exit 0 when every variant built.
 """
 import argparse
@@ -83,7 +85,8 @@ MANIFEST = 'objects.json'
 TIMINGS = 'compile.json'
 TAIL_LINES = 40
 WARNING_RE = re.compile(r'\bwarning [A-Z]+\d+', re.IGNORECASE)
-ERROR_RE = re.compile(r'\berror\b', re.IGNORECASE)
+ERROR_RE = re.compile(r'\berror\b|was not compiled', re.IGNORECASE)
+FAILED_LISTED = 10
 NOTE = b'Note: including file:'
 TAMPER = b'TEST_OBJ_TAMPER!'
 
@@ -386,12 +389,21 @@ def start_variant(v):
     return True
 
 
-def run_compile(v, position, source, cl, done):
-    """Compiles one source; always reports on the queue, since the main loop waits for it."""
-    rc, output, includes, seconds = 1, b'', [], None
+def not_compiled(source, why):
+    return ('run_variants.py: %s was not compiled: %s\r\n' % (source, why)).encode('mbcs', 'replace')
+
+
+def run_compile(v, position, source, cl, stop, done):
+    """Compiles one source; always reports on the queue, since the main loop waits for it. A
+    failure of the runner itself (no cpu token in time, cl not started) is reported as `broken`,
+    which stops the run; a compile error is not."""
+    rc, output, includes, seconds, broken = 1, b'', [], None, None
     try:
         command = v.compile_command(cl, source)
         with slots.cpu_token('cl ' + source):
+            if stop.is_set():
+                output = not_compiled(source, 'the run stopped')
+                return
             t0 = time.time()
             p = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                stdin=subprocess.DEVNULL, env=slots.child_env())
@@ -399,11 +411,13 @@ def run_compile(v, position, source, cl, done):
         output, includes = split_notes(p.stdout)
         rc = p.returncode
     except (OSError, ValueError, slots.SlotTimeout) as error:
-        output = ('run_variants.py: could not compile %s: %s\r\n' % (source, error)).encode('mbcs', 'replace')
+        broken = '%s: %s' % (source, error)
+        output = not_compiled(source, error)
     except Exception as error:  # never leave the main loop waiting for this compile
-        output = ('run_variants.py: unexpected error compiling %s: %r\r\n' % (source, error)).encode('mbcs', 'replace')
+        broken = '%s: unexpected error %r' % (source, error)
+        output = not_compiled(source, 'unexpected error %r' % error)
     finally:
-        done.put(('compile', v, (position, rc, output, includes, seconds)))
+        done.put(('compile', v, (position, rc, output, includes, seconds, broken)))
 
 
 def finish_variant(v, done):
@@ -418,10 +432,12 @@ def finish_variant(v, done):
             # The console shows only the log's tail, so each failed source's first error is
             # repeated here (never a warning line, which would be counted twice).
             lines = ['', '%s COMPILE FAILED (%d source(s)):' % (v.label, len(failed))]
-            for i in failed:
+            for i in failed[:FAILED_LISTED]:
                 text = v.results[i][1].decode('mbcs', 'replace').splitlines()
                 first = [l.strip() for l in text if ERROR_RE.search(l) and not WARNING_RE.search(l)]
                 lines.append('  %s: %s' % (v.sources[i], first[0] if first else 'exit %s, see above' % v.results[i][0]))
+            if len(failed) > FAILED_LISTED:
+                lines.append('  ... and %d more, see above' % (len(failed) - FAILED_LISTED))
             append_log(v.log, '\n'.join(lines))
             return
         problems = check_objects_fresh(v.objdir, v.sources, v.compile_start)
@@ -493,9 +509,10 @@ def build(variants, jobs, mp, cl):
     failed = []
     running = 0
     done = queue.Queue()
+    stop = threading.Event()
     while True:
         # Variants start in the order given; none after a failure.
-        while pending and len(active) < jobs and not failed:
+        while pending and len(active) < jobs and not failed and not stop.is_set():
             v = pending.pop(0)
             if start_variant(v):
                 v.state = 'compiling'
@@ -526,18 +543,30 @@ def build(variants, jobs, mp, cl):
         while running < mp and heap:
             index, _, position, source = heapq.heappop(heap)
             v = variants[index]
-            threading.Thread(target=run_compile, args=(v, position, source, cl, done)).start()
+            threading.Thread(target=run_compile, args=(v, position, source, cl, stop, done)).start()
             running += 1
         if not running:
             break
         what, v, payload = done.get()
         running -= 1
         if what == 'compile':
-            position, rc, output, includes, seconds = payload
+            position, rc, output, includes, seconds, broken = payload
             v.results[position] = (rc, output, includes)
             v.left -= 1
             if rc == 0 and seconds is not None and os.environ.get('TEST_NOOP_CL') != '1':
                 measured[timing_key(v.sources[position])] = round(seconds, 2)
+            if broken and not stop.is_set():
+                # Every later compile would likely fail the same way, each after its own wait:
+                # nothing more starts, and what was queued fails its variant uncompiled.
+                stop.set()
+                print('run_variants.py: stopping the run: %s; %d queued compile(s) not started'
+                      % (broken, len(heap)))
+                sys.stdout.flush()
+                while heap:
+                    index, _, position, source = heapq.heappop(heap)
+                    w = variants[index]
+                    w.results[position] = (1, not_compiled(source, 'the run stopped'), [])
+                    w.left -= 1
         else:
             v.returncode = payload
             v.seconds = time.time() - v.start
