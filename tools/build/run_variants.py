@@ -9,8 +9,8 @@ Each variant compiles every source of its list in its own
 process; cl_args() is the one definition of the compile flags. Then, unless --compile-only, it
 links through tools\\build\\variant.bat link. A variant's whole output goes to <OBJDIR>\\build.log:
 a header, each source's cl output in list order without its "Note: including file:" lines (so the
-log reads as a single cl run's would), then the link's. The console gets the list check's line,
-one line per finished variant, any compiler/linker warning lines, and on failure the tail of the
+log reads as a single cl run's would), then the link's. The console gets the list check's line
+(--kind opt), one line per finished variant, any compiler/linker warning lines, and on failure the tail of the
 failing variant's log.
 
 Before an object can reach a link:
