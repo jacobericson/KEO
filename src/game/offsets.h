@@ -61,6 +61,15 @@ const size_t OFF_CMOV_MOVING_TO_EDGE = 0x370;  // BYTE: 1 while routing to an is
 KLIB_ASSERT_OFFSET(CharMovement_movingToEdge, OFF_CMOV_MOVING_TO_EDGE);
 const size_t OFF_CMOV_MOVEMENT_MODE = 0x378;  // int MovementMode: 0 path following, 1 combat, 2 direct
 KLIB_ASSERT_OFFSET(CharMovement_movementMode, OFF_CMOV_MOVEMENT_MODE);
+const size_t OFF_CMOV_ANIMATION_OVERRIDE = 0x37C;  // bool: an animation drives the character, not its path
+KLIB_ASSERT_OFFSET(CharMovement_animationOverride, OFF_CMOV_ANIMATION_OVERRIDE);
+const size_t OFF_CMOV_ROAD_FOLLOWER = 0xF8;  // RoadFollower*: set while the character follows a road
+KLIB_ASSERT_OFFSET(AbstractMovementBase_roadFollower, OFF_CMOV_ROAD_FOLLOWER);
+const size_t OFF_ROAD_FOLLOWER_STATE = 0x18;  // int: RoadPathBuilder::isValid 0x45A240 reads it valid unless 0, 3 or 4
+const size_t OFF_HC_ACCELERATION  = 0x78;  // float: the Havok character's acceleration, tenths of a unit
+KLIB_ASSERT_OFFSET(HavokCharacter_acceleration, OFF_HC_ACCELERATION);
+const size_t OFF_HC_DESIRED_SPEED = 0x7C;  // float: its desired speed, tenths of a game unit per second
+KLIB_ASSERT_OFFSET(HavokCharacter_desiredSpeed, OFF_HC_DESIRED_SPEED);
 
 // ZoneMap entry (360 bytes each in ZoneManager zone array)
 const int    ZONE_ENTRY_SIZE     = 360;

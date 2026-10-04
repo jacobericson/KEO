@@ -40,6 +40,7 @@ enum HookWant
 	HOOK_WANT_CLUSTER_CROSS_COST, // clusterCrossCost or plannerMode != off
 	HOOK_WANT_PLANNER,            // plannerMode != off
 	HOOK_WANT_GATHER_PACE,        // formationGatherPace
+	HOOK_WANT_PLANNER_PRE_ARRIVAL, // plannerMode == on and plannerPreArrivalMs > 0
 	HOOK_WANT_UNCOUNTED
 };
 
@@ -72,6 +73,7 @@ struct HookWantInputs
 	bool clusterCrossCost;
 	bool planner;  // plannerMode != off
 	bool gatherPace;          // formationGatherPace
+	bool preArrival;          // plannerMode == on and plannerPreArrivalMs > 0
 };
 
 bool HookWantEval(HookWant want, const HookWantInputs& in);

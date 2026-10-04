@@ -406,16 +406,16 @@ static bool HaltIsPlans(float haltDist)
 static void CheckOwns()
 {
 	static const float FAR_WP = 1.0e9f;
-	Check(PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 12.0f, FAR_WP, FAR_WP, true), "owns: on, legged, waiting and within reach owns the wait");
-	Check(!PlanOwnsWait(PLANNER_OBSERVE, PV_LEGGED, 0, 1, 12.0f, FAR_WP, FAR_WP, true) && !PlanOwnsWait(PLANNER_OFF, PV_LEGGED, 0, 1, 12.0f, FAR_WP, FAR_WP, true),
+	Check(PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 12.0f, FAR_WP, FAR_WP, true, 0, 0.0f), "owns: on, legged, waiting and within reach owns the wait");
+	Check(!PlanOwnsWait(PLANNER_OBSERVE, PV_LEGGED, 0, 1, 12.0f, FAR_WP, FAR_WP, true, 0, 0.0f) && !PlanOwnsWait(PLANNER_OFF, PV_LEGGED, 0, 1, 12.0f, FAR_WP, FAR_WP, true, 0, 0.0f),
 	      "owns: observe never owns a wait");
-	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 1, 1, 12.0f, FAR_WP, FAR_WP, true), "owns: the destination leg is never owned");
-	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 20.0f, FAR_WP, FAR_WP, true) && !PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 35.0f, FAR_WP, FAR_WP, true),
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 1, 1, 12.0f, FAR_WP, FAR_WP, true, 0, 0.0f), "owns: the destination leg is never owned");
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 20.0f, FAR_WP, FAR_WP, true, 0, 0.0f) && !PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 35.0f, FAR_WP, FAR_WP, true, 0, 0.0f),
 	      "owns: beyond reach is not owned");
-	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 12.0f, FAR_WP, FAR_WP, true) && !PlanOwnsWait(PLANNER_ON, PV_DIRECT, 0, 1, 12.0f, FAR_WP, FAR_WP, true),
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 12.0f, FAR_WP, FAR_WP, true, 0, 0.0f) && !PlanOwnsWait(PLANNER_ON, PV_DIRECT, 0, 1, 12.0f, FAR_WP, FAR_WP, true, 0, 0.0f),
 	      "owns: no waiting word or a direct plan is not owned");
-	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 12.0f, FAR_WP, FAR_WP, false), "owns: a halt at the portal is not owned (held wait)");
-	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 7.0f, 5.0f, 3.0f, false), "owns: a halt at the portal is not owned (arrival)");
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 12.0f, FAR_WP, FAR_WP, false, 0, 0.0f), "owns: a halt at the portal is not owned (held wait)");
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 7.0f, 5.0f, 3.0f, false, 0, 0.0f), "owns: a halt at the portal is not owned (arrival)");
 
 	bool subset = PLAN_REACH <= PARK_REACH && PLAN_POST_ARRIVAL == PARK_FAR_DEST;
 	int ownedWaits = 0;
@@ -424,22 +424,22 @@ static void CheckOwns()
 		for (int h = 0; h < HALT_COUNT; ++h)
 		{
 			bool mine = HaltIsPlans(HALTS[h]);
-			if (PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, dists[i], FAR_WP, FAR_WP, mine))
+			if (PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, dists[i], FAR_WP, FAR_WP, mine, 0, 0.0f))
 			{
 				++ownedWaits;
 				subset = subset && ParkedAtEdge(true, true, HALTS[h], dists[i], 500.0f);
 			}
 		}
-	Check(subset && ownedWaits == 10 && PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 19.99f, FAR_WP, FAR_WP, true),
+	Check(subset && ownedWaits == 10 && PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 1, 19.99f, FAR_WP, FAR_WP, true, 0, 0.0f),
 	      "owns: an owned wait satisfies the parked predicate");
 
 	// The stop at the planner's own portal, before the engine's next advance: waiting word clear.
-	Check(PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 7.0f, 5.0f, 3.0f, true), "owns: standing at the planner's waypoint owns the arrival");
-	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 300.0f, 5.0f, 295.0f, true), "owns: walking toward the planner's waypoint is not owned");
-	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 27.0f, 25.0f, 3.0f, true), "owns: a waypoint beyond reach of the portal is not owned");
-	Check(!PlanOwnsWait(PLANNER_OBSERVE, PV_LEGGED, 0, 0, 7.0f, 5.0f, 3.0f, true) && !PlanOwnsWait(PLANNER_OFF, PV_LEGGED, 0, 0, 7.0f, 5.0f, 3.0f, true),
+	Check(PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 7.0f, 5.0f, 3.0f, true, 0, 0.0f), "owns: standing at the planner's waypoint owns the arrival");
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 300.0f, 5.0f, 295.0f, true, 0, 0.0f), "owns: walking toward the planner's waypoint is not owned");
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 27.0f, 25.0f, 3.0f, true, 0, 0.0f), "owns: a waypoint beyond reach of the portal is not owned");
+	Check(!PlanOwnsWait(PLANNER_OBSERVE, PV_LEGGED, 0, 0, 7.0f, 5.0f, 3.0f, true, 0, 0.0f) && !PlanOwnsWait(PLANNER_OFF, PV_LEGGED, 0, 0, 7.0f, 5.0f, 3.0f, true, 0, 0.0f),
 	      "owns: observe never owns an arrival");
-	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 1, 0, 7.0f, 5.0f, 3.0f, true), "owns: the destination leg's arrival is never owned");
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 1, 0, 7.0f, 5.0f, 3.0f, true, 0, 0.0f), "owns: the destination leg's arrival is never owned");
 
 	bool arrivalSubset = true;
 	int ownedArrivals = 0;
@@ -448,13 +448,13 @@ static void CheckOwns()
 		for (int h = 0; h < HALT_COUNT; ++h)
 		{
 			bool mine = HaltIsPlans(HALTS[h]);
-			if (PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, toWp[i] + 5.0f, 5.0f, toWp[i], mine))
+			if (PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, toWp[i] + 5.0f, 5.0f, toWp[i], mine, 0, 0.0f))
 			{
 				++ownedArrivals;
 				arrivalSubset = arrivalSubset && ParkedAtEdge(true, true, HALTS[h], toWp[i], 500.0f);
 			}
 		}
-	Check(arrivalSubset && ownedArrivals == 10 && PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 24.99f, 5.0f, 19.99f, true),
+	Check(arrivalSubset && ownedArrivals == 10 && PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 24.99f, 5.0f, 19.99f, true, 0, 0.0f),
 	      "owns: an owned arrival satisfies the parked predicate");
 }
 
@@ -807,48 +807,180 @@ static void CheckInteriorHold()
 	      "interior hold: the recheck at the interior portal advances onto the click");
 }
 
-static void SectionIn(PlanEdgeIn* in, const float pos[3], unsigned mask, int section, int aim)
+// The pre-arrival decision against the parked recheck it moves earlier: at each fixture portal, for
+// each loaded mask and with the plan truncated or not, it answers the recheck's target and point, or
+// WAIT where the recheck holds; then literal targets, so a change inside the shared recheck shows.
+static void CheckPreArrival()
 {
-	EdgeIn(in, PES_RECHECK, 0.0f, pos, 0, mask);
-	in->advanceSection = section;
-	in->aim = aim;
-	in->exteriorSlots = 4096;
+	PlanLeg legs[4];
+	BuildRoute(legs);
+	float at0[3], at1[3], at2[3];
+	Set3(at0, -4590.0f, 50.0f, ROW_Z + 5.0f);
+	Set3(at1, 15.0f, 50.0f, ROW_Z);
+	Set3(at2, 4625.0f, 50.0f, ROW_Z);
+	const float* at[3] = { at0, at1, at2 };
+	const unsigned masks[3] = { 0xFu, 0x1u, 0x0u };
+	int same = 0, cases = 0;
+	for (int k = 0; k < 3; ++k)
+		for (int m = 0; m < 3; ++m)
+			for (int t = 0; t < 2; ++t)
+			{
+				PlanEdgeIn in;
+				EdgeIn(&in, PES_RECHECK, 0.0f, at[k], k, masks[m]);
+				in.routeTruncated = t;
+				PlanEdgeOut rc;
+				PlanEdgeStep(legs, 4, in, &rc);
+				PlanPreOut pre;
+				PlanPreArrival(legs, 4, in, &pre);
+				bool ok = rc.newLegIndex > k
+				        ? (pre.skip == PPS_NONE && pre.target == rc.newLegIndex && Same3(pre.point, rc.point))
+				        : (pre.skip == PPS_WAIT && pre.target == -1);
+				same += ok ? 1 : 0;
+				++cases;
+			}
+	Check(cases == 18 && same == 18, "pre: at every fixture portal the decision is the parked recheck's");
+
+	PlanEdgeIn in;
+	PlanPreOut pre;
+	EdgeIn(&in, PES_RECHECK, 0.0f, at0, 0, 0xFu);
+	PlanPreArrival(legs, 4, in, &pre);
+	Check(pre.skip == PPS_NONE && pre.target == 1 && Same3(pre.point, legs[1].point),
+	      "pre: from the first portal the target is the next portal");
+	EdgeIn(&in, PES_RECHECK, 0.0f, at0, 0, 0x0u);
+	PlanPreArrival(legs, 4, in, &pre);
+	Check(pre.skip == PPS_WAIT && pre.target == -1, "pre: an unloaded far section waits");
+	EdgeIn(&in, PES_RECHECK, 0.0f, at2, 2, 0xFu);
+	in.routeTruncated = 1;
+	PlanPreArrival(legs, 4, in, &pre);
+	bool truncWaits = pre.skip == PPS_WAIT;
+	in.routeTruncated = 0;
+	PlanPreArrival(legs, 4, in, &pre);
+	Check(truncWaits && pre.skip == PPS_NONE && pre.target == 3 && Same3(pre.point, legs[3].point),
+	      "pre: a truncated plan's last portal waits; an exterior goal's destination leg is a target");
+
+	float away[3];
+	Set3(away, -4625.0f, 50.0f, ROW_Z);
+	EdgeIn(&in, PES_RECHECK, 0.0f, away, 0, 0xFu);
+	PlanPreArrival(legs, 4, in, &pre);
+	bool farOff = pre.skip == PPS_NOT_MINE;
+	EdgeIn(&in, PES_RECHECK, 0.0f, at2, 3, 0xFu);
+	PlanPreArrival(legs, 4, in, &pre);
+	bool onDest = pre.skip == PPS_NOT_MINE;
+	EdgeIn(&in, PES_RECHECK, 0.0f, at0, 4, 0xFu);
+	PlanPreArrival(legs, 4, in, &pre);
+	Check(farOff && onDest && pre.skip == PPS_NOT_MINE && pre.target == -1,
+	      "pre: a park point off the portal, the destination leg and a leg out of range are not the planner's");
+
+	float onEdge[3];
+	Set3(onEdge, -4601.0f, 50.0f, ROW_Z - 30.0f);   // 1 unit from leg 0's edge, 30 from its midpoint
+	EdgeIn(&in, PES_RECHECK, 0.0f, onEdge, 0, 0xFu);
+	PlanPreArrival(legs, 4, in, &pre);
+	bool midpointOff = pre.skip == PPS_NOT_MINE;
+	in.aim = 1;
+	PlanPreArrival(legs, 4, in, &pre);
+	Check(midpointOff && pre.skip == PPS_NONE && pre.target == 1,
+	      "pre: with the aim on, a park point anywhere on the portal's edge is the planner's");
+
+	PlanLeg inner[3];
+	BuildInteriorRoute(inner);
+	float atInner[3];
+	Set3(atInner, -4295.0f, 50.0f, ROW_Z);
+	EdgeIn(&in, PES_RECHECK, 0.0f, atInner, 1, 0x7u);
+	in.exteriorSlots = 4096;
+	in.holdInteriorPortal = 1;
+	PlanPreArrival(inner, 3, in, &pre);
+	bool held = pre.skip == PPS_HELD && pre.target == -1;
+	in.holdInteriorPortal = 0;
+	PlanPreArrival(inner, 3, in, &pre);
+	Check(held && pre.skip == PPS_NONE && pre.target == 2,
+	      "pre: a held interior goal's destination leg is skipped as held, an unheld one's is the target");
 }
 
-static void CheckSectionAdvance()
+static void CheckPreReach()
 {
-	PlanLeg legs[3];
-	BuildCellRoute(legs);
-	float inFar[3];
-	Set3(inFar, -4500.0f, 50.0f, ROW_Z + 30.0f);   // past leg 0's portal, in cell (31, 30), 104 units off
-	PlanEdgeIn in;
-	PlanEdgeOut out;
+	float zero = 0.0f;
+	float notANumber = std::sqrt(-1.0f);
+	Check(std::fabs(PlanPreArrivalReach(5.0f, 0.0f, 20.0f, 1000, 0.5f) - 1045.0f) < 0.01f,
+	      "pre reach: v (s T + dt) + PLAN_REACH with no braking term");
+	Check(std::fabs(PlanPreArrivalReach(5.0f, 2.5f, 20.0f, 1000, 0.5f) - 1095.0f) < 0.01f,
+	      "pre reach: the braking distance 10 v^2 / 2a is added");
+	Check(PlanPreArrivalReach(5.0f, notANumber, 20.0f, 1000, 0.5f) == PlanPreArrivalReach(5.0f, zero, 20.0f, 1000, 0.5f)
+	      && PlanPreArrivalReach(5.0f, -1.0f, 20.0f, 1000, 0.5f) == PlanPreArrivalReach(5.0f, zero, 20.0f, 1000, 0.5f),
+	      "pre reach: a zero, negative or NaN acceleration adds no braking term");
+	Check(PlanPreArrivalReach(5.0f, 0.0f, 0.0f, 1000, 0.5f) == PLAN_PRE_REACH_MIN,
+	      "pre reach: a paused game clamps to the floor");
+	Check(PlanPreArrivalReach(9.25f, 0.0f, 20.0f, 3000, 0.5f) == PLAN_PRE_REACH_MAX,
+	      "pre reach: a long latency at 20x clamps to half a cell");
+	Check(std::fabs(PlanPreArrivalReach(9.25f, 0.0f, 1.0f, 1000, 0.016f) - (92.5f * 1.016f + 20.0f)) < 0.01f,
+	      "pre reach: at 1x the look-ahead is about one second's walk");
+}
 
-	SectionIn(&in, inFar, 0x7u, 1, 0);
-	PlanEdgeStep(legs, 3, in, &out);
-	Check(out.newLegIndex == 1 && out.bySection == 1 && out.waiting == 0 && Same3(out.point, legs[1].point),
-	      "section: a start in the far section's cell advances");
-	SectionIn(&in, inFar, 0x0u, 1, 0);
-	PlanEdgeStep(legs, 3, in, &out);
-	Check(out.newLegIndex == 0 && out.waiting == 0 && Same3(out.point, legs[0].point),
-	      "section: an unloaded far section keeps the portal, not waiting");
-	PlanLeg inner[3];
-	BuildCellRoute(inner);
-	inner[0].farSection = 4096 + 5;
-	SectionIn(&in, inFar, 0x7u, 1, 0);
-	PlanEdgeStep(inner, 3, in, &out);
-	Check(out.newLegIndex == 0 && out.bySection == 0, "section: an interior far section keeps the reach rule");
-	SectionIn(&in, inFar, 0x7u, 0, 0);
-	PlanEdgeStep(legs, 3, in, &out);
-	Check(out.newLegIndex == 0 && out.bySection == 0 && Same3(out.point, legs[0].point),
-	      "section: with the key off the reach rule alone decides");
-	float atLeg0[3];
-	Set3(atLeg0, -4590.0f, 50.0f, ROW_Z + 5.0f);
-	SectionIn(&in, atLeg0, 0x7u, 1, 0);
-	PlanEdgeStep(legs, 3, in, &out);
-	Check(out.newLegIndex == 1 && out.bySection == 0, "section: an arrival within the reach is not counted as an entry");
-	Check(PlanInFarCell(legs[0], inFar, 4096) && !PlanInFarCell(legs[1], inFar, 4096),
-	      "section: the far cell is the directory index of the start's cell");
+static PlanPreResolveOut Resolve(int state, int ps, int cs, double age, int epochHolds, int legIsTo)
+{
+	PlanPreResolveIn in;
+	in.state = state;
+	in.epochHolds = epochHolds;
+	in.legIsTo = legIsTo;
+	in.pathState = ps;
+	in.characterState = cs;
+	in.age = age;
+	PlanPreResolveOut o;
+	PlanPreResolve(in, &o);
+	return o;
+}
+
+static bool Is(const PlanPreResolveOut& o, int keep, int newState, int count, int stepBack, int sample)
+{
+	return o.keep == keep && (!keep || o.newState == newState) && o.count == count && o.stepBack == stepBack
+	       && o.sample == sample;
+}
+
+// One row per line of the resolution table.
+static void CheckPreResolve()
+{
+	const int Issued = PLAN_PRE_ISSUED, Late = PLAN_PRE_LATE, Seen = PLAN_PRE_BROKEN_SEEN;
+	const int FOLLOW = PLAN_CHAR_FOLLOWING, REACHED = PLAN_CHAR_GOAL_REACHED, IDLE = PLAN_CHAR_IDLE;
+	Check(Is(Resolve(Issued, PLAN_PATH_UPDATING, FOLLOW, 0.1, 0, 1), 0, 0, PPC_NONE, 0, 0)
+	      && Is(Resolve(Issued, PLAN_PATH_UPDATING, FOLLOW, 0.1, 1, 0), 0, 0, PPC_NONE, 0, 0),
+	      "pre resolve: a moved epoch or another leg clears the word, nothing counted");
+	Check(Is(Resolve(Issued, PLAN_PATH_UPDATING, FOLLOW, 0.1, 1, 1), 1, Issued, PPC_NONE, 0, 0),
+	      "pre resolve: a request pending while walking keeps the word");
+	Check(Is(Resolve(Issued, PLAN_PATH_COMPLETE, FOLLOW, 0.4, 1, 1), 0, 0, PPC_LAND, 0, 1),
+	      "pre resolve: a landing while walking counts LAND with a sample and clears");
+	Check(Is(Resolve(Issued, PLAN_PATH_UPDATING, REACHED, 0.4, 1, 1), 1, Late, PPC_LATE, 0, 0)
+	      && Is(Resolve(Late, PLAN_PATH_UPDATING, REACHED, 0.5, 1, 1), 1, Late, PPC_NONE, 0, 0)
+	      && Is(Resolve(Issued, PLAN_PATH_WAITING, IDLE, 0.4, 1, 1), 1, Late, PPC_LATE, 0, 0),
+	      "pre resolve: the old path ending first marks the word LATE once");
+	Check(Is(Resolve(Late, PLAN_PATH_COMPLETE, FOLLOW, 0.9, 1, 1), 0, 0, PPC_NONE, 0, 0),
+	      "pre resolve: the late request's landing clears the word uncounted");
+	Check(Is(Resolve(Issued, PLAN_PATH_COMPLETE, REACHED, 0.4, 1, 1), 0, 0, PPC_LATE, 0, 0)
+	      && Is(Resolve(Late, PLAN_PATH_COMPLETE, IDLE, 0.9, 1, 1), 0, 0, PPC_NONE, 0, 0),
+	      "pre resolve: landed and stopped before this frame counts LATE unless already LATE");
+	Check(Is(Resolve(Issued, PLAN_PATH_BROKEN, FOLLOW, 0.4, 1, 1), 1, Issued | Seen, PPC_BROKEN, 0, 0)
+	      && Is(Resolve(Issued | Seen, PLAN_PATH_BROKEN, FOLLOW, 0.5, 1, 1), 1, Issued | Seen, PPC_NONE, 0, 0),
+	      "pre resolve: BROKEN keeps the word and counts once");
+	Check(Is(Resolve(Issued, PLAN_PATH_FAILED, IDLE, 0.4, 1, 1), 0, 0, PPC_FAILED, 1, 0),
+	      "pre resolve: FAILED steps back and clears");
+	Check(Is(Resolve(Issued, PLAN_PATH_NONE, IDLE, 0.4, 1, 1), 0, 0, PPC_LOST, 0, 0),
+	      "pre resolve: a cleared path counts LOST");
+	Check(Is(Resolve(Issued, PLAN_PATH_UPDATING, FOLLOW, 6.0, 1, 1), 0, 0, PPC_LOST, 0, 0),
+	      "pre resolve: a word older than the hold is an orphan");
+	Check(Is(Resolve(Issued, 2, FOLLOW, 0.4, 1, 1), 1, Issued, PPC_NONE, 0, 0),
+	      "pre resolve: a state the table does not list keeps the word");
+}
+
+static void CheckPreOwns()
+{
+	Check(PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 300.0f, 300.0f, 300.0f, true, 1, 5.0f),
+	      "owns: a pre-request in flight owns the standstill at the portal it left");
+	Check(PlanOwnsWait(PLANNER_ON, PV_LEGGED, 1, 0, 300.0f, 300.0f, 300.0f, true, 1, 5.0f),
+	      "owns: a pre-request in flight owns the standstill on the destination leg");
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 300.0f, 300.0f, 300.0f, true, 1, 25.0f)
+	      && !PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 300.0f, 300.0f, 300.0f, true, 0, 5.0f),
+	      "owns: in flight beyond reach of the portal it left, or no word, owns nothing more");
+	Check(!PlanOwnsWait(PLANNER_ON, PV_LEGGED, 0, 0, 300.0f, 300.0f, 300.0f, false, 1, 5.0f)
+	      && !PlanOwnsWait(PLANNER_OBSERVE, PV_LEGGED, 0, 0, 300.0f, 300.0f, 300.0f, true, 1, 5.0f),
+	      "owns: a pre-request never owns a halt or an observe stop");
 }
 
 // Leg 0's edge runs 80 units along z at x = -4600 (edgeA y 40 at z - 40, edgeB y 60 at z + 40).
@@ -909,14 +1041,16 @@ static void CheckAim()
 
 	PlanLeg route[3];
 	BuildCellRoute(route);
-	float inFar[3];
-	Set3(inFar, -4500.0f, 50.0f, ROW_Z + 30.0f);
-	SectionIn(&in, inFar, 0x7u, 1, 1);
+	float atRoute0[3];
+	Set3(atRoute0, -4590.0f, 50.0f, ROW_Z + 5.0f);
+	EdgeIn(&in, PES_RECHECK, 0.0f, atRoute0, 0, 0x7u);
+	in.aim = 1;
+	in.exteriorSlots = 4096;
 	PlanEdgeStep(route, 3, in, &rc);
 	float aimed1[3];
-	bool aimOk = PlanLegAim(route[1], inFar, route[2].point, aimed1);
-	Check(rc.newLegIndex == 1 && rc.bySection == 1 && aimOk && Same3(rc.point, aimed1),
-	      "section and aim: an entry advances to the next portal's aimed point");
+	bool aimOk = PlanLegAim(route[1], atRoute0, route[2].point, aimed1);
+	Check(rc.newLegIndex == 1 && aimOk && Same3(rc.point, aimed1),
+	      "aim: an arrival advances to the next portal's aimed point");
 }
 
 int main()
@@ -938,8 +1072,11 @@ int main()
 	CheckWaterArcs();
 	CheckWaterRequest();
 	CheckAcid();
-	CheckSectionAdvance();
 	CheckAim();
 	CheckInteriorHold();
+	CheckPreArrival();
+	CheckPreReach();
+	CheckPreResolve();
+	CheckPreOwns();
 	return CheckExit("plan_policy_units");
 }

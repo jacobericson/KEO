@@ -31,6 +31,7 @@ bool HookWantEval(HookWant want, const HookWantInputs& in)
 	case HOOK_WANT_CLUSTER_CROSS_COST: return in.clusterCrossCost || in.planner;
 	case HOOK_WANT_PLANNER:            return in.planner;
 	case HOOK_WANT_GATHER_PACE:       return in.gatherPace;
+	case HOOK_WANT_PLANNER_PRE_ARRIVAL: return in.preArrival;
 	case HOOK_WANT_UNCOUNTED:         return false;
 	}
 	return false;
@@ -67,6 +68,7 @@ HookWantInputs HookWantInputsFromConfig()
 	in.clusterCrossCost    = fixes::g_fixesCfg.clusterCrossCostOn != 0;
 	in.planner = planner::g_plannerCfg.mode != planner::PLANNER_OFF;
 	in.gatherPace = movement::g_movementCfg.formationGatherPaceEnabled;
+	in.preArrival = planner::g_plannerCfg.mode == planner::PLANNER_ON && planner::g_plannerCfg.preArrivalMs > 0;
 	return in;
 }
 

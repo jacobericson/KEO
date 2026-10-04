@@ -84,6 +84,9 @@ static const ConfigKey kCoreKeys[] =
 	//                   against another dead key, but nothing outside the parser
 	//                   read the global it wrote. Retiring them stops them being
 	//                   counted as applied overrides.
+	//   plannerAdvanceSection: the route planner's arrival on entering a portal's far section. The
+	//                   engine consults the planner only once a character is parked at the end of its
+	//                   path, which is the planner's own portal point, so the rule could never act.
 	CFG_RETIRED("squadPathCache"),
 	CFG_RETIRED("stuckRetry"),
 	CFG_RETIRED("instanceCullSingleThread"),
@@ -106,6 +109,7 @@ static const ConfigKey kCoreKeys[] =
 	CFG_RETIRED("maxWatched"),
 	CFG_RETIRED("preloadThreshold"),
 	CFG_RETIRED("scatterApproachDistSq"),
+	CFG_RETIRED("plannerAdvanceSection"),
 
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0,
 	  NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }

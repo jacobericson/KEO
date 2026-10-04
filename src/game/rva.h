@@ -403,6 +403,7 @@ const size_t RVA_SET_DESTINATION_VEC3      = 0x6607E0;  // CharMovement::setDest
 const size_t RVA_SETDEST_RET_EDGE_RECHECK  = 0x660EFD;  // returns from its getZoneEdge call at 0x660EF8 (arrival recheck)
 const size_t RVA_SETDEST_RET_EDGE_COMPUTE  = 0x660F43;  // returns from its call at 0x660F3E (initial, rung, recompute)
 const size_t RVA_NAVMESH_GET_CLOSEST_POINT = 0x3A21C0;  // NavMesh::getClosestPoint(point, radius, inset, filter, out, key)
+const size_t RVA_CHARMOVEMENT_UPDATE      = 0x65F510;  // CharMovement::update(this, float dt), vtable slot 11, the AI thread's list 1; pre-call hooked by src/planner/planner_prearrival.cpp
 const size_t RVA_CHARSTATS_CALC_SWIM_SPEED = 0x884FE0; // CharStats::calculateSwimSpeed(): pure reads; the GUI calls it on the main thread
 const size_t RVA_CHARACTER_GET_WATER_LEVEL = 0x5C7540; // Character::getWaterLevel(): pure reads; 0 = NO_WATER
 const size_t RVA_RACEDATA_IS_IMMUNE = 0x5E7290;  // RaceData::isImmune(WeatherAffecting): a hash-set find; no lock, no write

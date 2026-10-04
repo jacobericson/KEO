@@ -289,6 +289,12 @@
 	         0x40,0x55,0x53,0x56,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x48,0x8D,0xAC,0x24,0x10)
 	HOOK_ROW(HOOK_GET_ZONE_EDGE, "getZoneEdge", RVA_GET_ZONE_EDGE, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_PLANNER, HOOK_CAP_NONE,
 	         0x48,0x8B,0xC4,0x55,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x48,0x8D,0x68,0xA9,0x48)
+	// CharMovement::update (src/planner/planner_prearrival.cpp), pre-call: mov rax,rsp; push rbp; push rsi,
+	// whole and position-independent, and no jump targets them; KEOProfiler detours the same entry with
+	// the same bytes. Wanted only while plannerMode is on and plannerPreArrivalMs > 0. diagnostic = true: a
+	// mismatch turns the pre-arrival request off alone, and the planner keeps its portal protocol.
+	HOOK_ROW(HOOK_CHARMOVEMENT_UPDATE, "charMovementUpdate", RVA_CHARMOVEMENT_UPDATE, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_PLANNER_PRE_ARRIVAL, HOOK_CAP_NONE,
+	         0x48,0x8B,0xC4,0x55,0x56,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x41,0x57,0x48,0x8D)
 	// --- hook_manifest.cpp, player cancel hooks ---
 	// Bytes read from the IDB (ida MCP read_data/disassemble).
 	// All three prologues are position-independent over the bytes a detour

@@ -119,14 +119,14 @@ static bool ParsePlannerAcidCost(const std::string& val, ConfigLogFn log)
 	return StoreField(&planner::PlannerConfig::acidCost, v);
 }
 
-// plannerAdvanceSection: true or false.
-static bool ParsePlannerAdvanceSection(const std::string& val, ConfigLogFn log)
+// plannerPreArrivalMs: 0..3000; a value out of range is refused and the default stays.
+static bool ParsePlannerPreArrivalMs(const std::string& val, ConfigLogFn log)
 {
 	(void)log;
-	bool b = true, third = false;
-	if (!ParseBoolOr(val, NULL, &b, &third) || third)
+	int v;
+	if (!ParseRanged(val, 0, 3000, &v))
 		return false;
-	return StoreField(&planner::PlannerConfig::advanceSection, b ? 1 : 0);
+	return StoreField(&planner::PlannerConfig::preArrivalMs, v);
 }
 
 // plannerLegAim: true or false.
@@ -171,7 +171,7 @@ const PlannerConfig kPlannerDefaults =
 	PWC_DYNAMIC, // waterCost
 	PWE_MATCH, // waterEngine
 	3, // acidCost
-	1, // advanceSection
+	1000, // preArrivalMs
 	1, // legAim
 	3, // mergeBias
 	15, // mergeDetour
@@ -213,7 +213,7 @@ const ConfigKey g_plannerConfigKeys[] =
 	CFG_OCUSTOM("plannerWaterCost", PlannerConfig, waterCost, ParsePlannerWaterCost, NDOC),
 	CFG_OCUSTOM("plannerWaterEngine", PlannerConfig, waterEngine, ParsePlannerWaterEngine, NDOC),
 	CFG_OCUSTOM("plannerAcidCost", PlannerConfig, acidCost, ParsePlannerAcidCost, NDOC),
-	CFG_OCUSTOM("plannerAdvanceSection", PlannerConfig, advanceSection, ParsePlannerAdvanceSection, NDOC),
+	CFG_OCUSTOM("plannerPreArrivalMs", PlannerConfig, preArrivalMs, ParsePlannerPreArrivalMs, NDOC),
 	CFG_OCUSTOM("plannerLegAim", PlannerConfig, legAim, ParsePlannerLegAim, NDOC),
 	CFG_OCUSTOM("plannerMergeBias", PlannerConfig, mergeBias, ParsePlannerMergeBias, NDOC),
 	CFG_OCUSTOM("plannerMergeDetour", PlannerConfig, mergeDetour, ParsePlannerMergeDetour, NDOC),

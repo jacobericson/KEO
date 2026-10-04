@@ -82,7 +82,7 @@ static bool HasName(const TestRow* rows, int n, const char* name)
 	return false;
 }
 
-// The 23 inputs, each with its field and the config global it is read from; a
+// The 24 inputs, each with its field and the config global it is read from; a
 // NULL global is a key a PROD build does not carry, or an int key
 // CheckInputMapping flips on its own.
 struct InputField
@@ -122,6 +122,7 @@ static const InputField kFields[] =
 	{ "clusterCrossCost",    &HookWantInputs::clusterCrossCost,    NULL },
 	{ "planner", &HookWantInputs::planner, NULL },
 	{ "gatherPace",          &HookWantInputs::gatherPace,          &movement::g_movementCfg.formationGatherPaceEnabled },
+	{ "preArrival",          &HookWantInputs::preArrival,          NULL },
 };
 static const int kFieldCount = (int)(sizeof(kFields) / sizeof(kFields[0]));
 
@@ -299,6 +300,7 @@ static const Flip kFlips[] =
 	{ "clusterCrossCost", { "clusterCrossCost" }, { NULL } },
 	{ "plannerMode", { "planner" }, { "graphInstanceConnect", "getZoneEdge", "setDestinationVec3" } },
 	{ "gatherPace", { "gatherPace" }, { "getSpeed" } },
+	{ "preArrival", { "preArrival" }, { "charMovementUpdate" } },
 };
 
 static void CheckWantTruthTable()
@@ -392,15 +394,26 @@ static void CheckInputMapping()
 	fixes::g_fixesCfg.clusterCrossCostOn = savedCross;
 	Check(SameInputs(cross, base, FieldIndex("clusterCrossCost")), "inputs clusterCrossCost");
 
-	// plannerMode is an int key, on by default: off flips exactly the planner input, observe keeps it.
+	// plannerMode is an int key, on by default: off flips the planner input and the pre-arrival one
+	// (which needs on), observe flips the pre-arrival input alone.
 	const int savedPlanner = planner::g_plannerCfg.mode;
 	planner::g_plannerCfg.mode = planner::PLANNER_OFF;
 	HookWantInputs plannerOff = HookWantInputsFromConfig();
 	planner::g_plannerCfg.mode = planner::PLANNER_OBSERVE;
 	HookWantInputs plannerObserve = HookWantInputsFromConfig();
 	planner::g_plannerCfg.mode = savedPlanner;
-	Check(SameInputs(plannerOff, base, FieldIndex("planner")), "inputs plannerMode off");
-	Check(SameInputs(plannerObserve, base, -1), "inputs plannerMode observe");
+	HookWantInputs plannerOffPre = plannerOff;
+	plannerOffPre.preArrival = !plannerOffPre.preArrival;
+	Check(SameInputs(plannerOffPre, base, FieldIndex("planner")) && plannerOff.preArrival == false,
+	      "inputs plannerMode off");
+	Check(SameInputs(plannerObserve, base, FieldIndex("preArrival")), "inputs plannerMode observe");
+
+	// plannerPreArrivalMs is an int key too, 1000 by default: 0 flips exactly the pre-arrival input.
+	const int savedPre = planner::g_plannerCfg.preArrivalMs;
+	planner::g_plannerCfg.preArrivalMs = 0;
+	HookWantInputs preOff = HookWantInputsFromConfig();
+	planner::g_plannerCfg.preArrivalMs = savedPre;
+	Check(SameInputs(preOff, base, FieldIndex("preArrival")), "inputs plannerPreArrivalMs 0");
 }
 
 // The rows carrying HOOK_CAP_WORKER_POOL are exactly navMeshStop and
@@ -436,14 +449,14 @@ int main()
 {
 	CheckInstallAdmit();
 #if ZONEHAND_STEP >= 3
+	CheckVariant(kDevRows, kDevCount, "dev", 73, 58, 57, 25, 33, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 69, 54, 52, 25, 29, ProdDefaults());
+#elif ZONEHAND_STEP == 2
 	CheckVariant(kDevRows, kDevCount, "dev", 72, 57, 56, 25, 32, DevDefaults());
 	CheckVariant(kProdRows, kProdCount, "prod", 68, 53, 51, 25, 28, ProdDefaults());
-#elif ZONEHAND_STEP == 2
-	CheckVariant(kDevRows, kDevCount, "dev", 71, 56, 55, 25, 31, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 67, 52, 50, 25, 27, ProdDefaults());
 #else
-	CheckVariant(kDevRows, kDevCount, "dev", 68, 53, 52, 25, 28, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 64, 49, 47, 25, 24, ProdDefaults());
+	CheckVariant(kDevRows, kDevCount, "dev", 69, 54, 53, 25, 29, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 65, 50, 48, 25, 25, ProdDefaults());
 #endif
 	CheckDevMinusProd();
 	CheckWantTruthTable();

@@ -20,7 +20,7 @@ struct PlannerConfig
 	int waterCost;     // plannerWaterCost: PlanWaterMode; dynamic by default
 	int waterEngine;   // plannerWaterEngine: PlanWaterEngine; match by default
 	int acidCost;      // plannerAcidCost: 1..10, default 3; 1 prices acidic water as any water
-	int advanceSection;   // plannerAdvanceSection: 1 arrives at a portal on entering its exterior far section; default 1
+	int preArrivalMs;     // plannerPreArrivalMs: 0..3000 ms, default 1000; the path latency the pre-arrival request covers, 0 off
 	int legAim;           // plannerLegAim: 1 aims each portal along the line to the next leg; default 1
 	int mergeBias;     // plannerMergeBias: 1..10, default 3; an arc onto the anchor's route costs 1/k
 	int mergeDetour;   // plannerMergeDetour: 0..100 per cent, default 15; a member's detour cap

@@ -20,6 +20,7 @@
 #include "planner/planner_water.h"
 #include "planner/planner_search_ops.h"
 #include "planner/planner_acid.h"
+#include "planner/planner_prearrival.h"
 #include "game/game.h"
 #include "base/core.h"
 #include "zone/readiness/readiness_bindings.h"
@@ -731,6 +732,7 @@ void PlannerTick(void* zoneMgr, double now)
 {
 	if (PlanStoreMode() == PLANNER_OFF) return;
 	(void)zoneMgr;
+	PlannerPreArrivalFrame();
 	if (now - s_lastTick < TICK_SECONDS)
 		return;
 	s_lastTick = now;

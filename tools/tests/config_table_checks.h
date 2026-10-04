@@ -233,8 +233,8 @@ const char* const kUndocumented[] =
 	"gatePassDiag",
 	"graphHeuristicGuard", "graphPositionGuard", "groupCohesion", "islandDeletedReissue", "islandFix",
 	"islandReadinessRule", "movementAware", "movementTrace", "navmeshDiskCacheMaxMB", "navmeshNeighbourSeeds",
-	"navmeshVanillaPruning", "npcWaitDiag", "pathfindDiag", "plannerAcidCost", "plannerAdvanceSection", "plannerAheadTiles", "plannerBaseBuild",
-	"plannerLegAim", "plannerLegSpan", "plannerMergeBias", "plannerMergeDetour", "plannerMode", "plannerWaitSeconds", "plannerWaterCost", "plannerWaterEngine", "playerHierOnCap", "playerHierarchical",
+	"navmeshVanillaPruning", "npcWaitDiag", "pathfindDiag", "plannerAcidCost", "plannerAheadTiles", "plannerBaseBuild",
+	"plannerLegAim", "plannerLegSpan", "plannerMergeBias", "plannerMergeDetour", "plannerMode", "plannerPreArrivalMs", "plannerWaitSeconds", "plannerWaterCost", "plannerWaterEngine", "playerHierOnCap", "playerHierarchical",
 	"preload", "preloadKeepAliveSeconds",
 	"priorityBoost", "readinessOverrides", "saveLoadUnload", "zoneLifeIdleSeconds",
 	"zoneLifeRetainRadius", "zoneLifeUnload", NULL
@@ -672,7 +672,7 @@ void CheckTables()
 		Check(mod.keys[i].name == NULL, "tables end");
 	}
 	Check(kConfigModuleCount == 9, "tables end: nine modules");
-	Check(active == 117 && retired == 22, "tables end: active and retired rows");
+	Check(active == 117 && retired == 23, "tables end: active and retired rows");
 	Check(coreActive == 2 && renderActive == 22, "tables end: rows per module");
 	std::printf("  tables: %d module(s), %d active row(s) (core %d, render %d), %d retired\n",
 	            kConfigModuleCount, active, coreActive, renderActive, retired);

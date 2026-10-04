@@ -1,7 +1,10 @@
-// plan_store.cpp - The plan slots: a file-static fixed array with one writer per field. The main
-// thread writes a slot's plan while the slot's epoch is odd; the AI back thread copies it between
-// two loads of the sequence word, advances its leg by a compare-exchange on that word, and sets
-// the slot's words only while the epoch it read still holds. No lock, no allocation, no logging.
+// plan_store.cpp - The plan slots: a file-static fixed array with one writer per field. The
+// pre-arrival words have two writers: the thread updating the character issues and resolves them, and
+// the main thread's slot clear and save-load reset zero them; a word that survives a clear carries the
+// old epoch, and every reader drops it. The main thread writes a slot's plan while the slot's epoch is
+// odd; the AI back thread copies it between two loads of the sequence word, advances its leg by a
+// compare-exchange on that word, and sets the slot's words only while the epoch it read still holds.
+// No lock, no allocation, no logging.
 
 #include <math.h>
 #include <string.h>
@@ -19,6 +22,10 @@ struct PlanSlot
 	volatile LONG     rungs;       // AI thread: rungs on the current leg, reset by the advance
 	volatile LONG     arrival;     // AI thread sets on an advance; the tick clears it
 	volatile LONG     consulted;   // AI thread: getZoneEdge calls with this plan
+	volatile LONGLONG preWord;     // (epoch << 32) | (state << 16) | (from << 8) | to; 0 none
+	volatile LONGLONG preQpc;      // the issue time, stored before the word
+	volatile LONG     preTried;    // ((epoch & 0xFFFF) << 16) | (kind << 8) | leg; kind 1 skipped, 2 blocked
+	float             preX, preZ;  // the issue position, stored before the word
 	uintptr_t         cm;          // 0 free; written only under an odd epoch
 	int               verdict, legCount, routeTruncated;
 	float             finalDest[3];
@@ -45,6 +52,7 @@ static PlanStorePause  s_pauseInRead = NULL;
 static void*           s_pauseInReadCtx = NULL;
 static PlanMoveDestReader s_moveDestReader = NULL;
 static int                s_legAim = 0;   // written once at the arm, before any reader runs
+static LONGLONG          s_preHoldTicks = 0;   // written once at the pre-arrival install
 
 static LONGLONG MakeWord(unsigned epoch, unsigned leg)
 {
@@ -127,6 +135,11 @@ static void ClearSlot(PlanSlot& s)
 	memset(&s.main, 0, sizeof(s.main));
 	InterlockedExchange(&s.loadedMask, 0);
 	ZeroWords(s);
+	InterlockedExchange64(&s.preWord, 0);
+	InterlockedExchange64(&s.preQpc, 0);
+	InterlockedExchange(&s.preTried, 0);
+	s.preX = 0.0f;
+	s.preZ = 0.0f;
 	EndRewrite(s, e, 0);
 }
 
@@ -359,6 +372,13 @@ static float DistXz(float ax, float az, float bx, float bz)
 	return sqrtf(dx * dx + dz * dz);
 }
 
+static LONGLONG QpcTicks()
+{
+	LARGE_INTEGER t;
+	QueryPerformanceCounter(&t);
+	return t.QuadPart;
+}
+
 bool PlannerOwnsWait(uintptr_t cm, float posX, float posZ, float wpX, float wpZ)
 {
 	if (PlanStoreMode() == PLANNER_OFF) return false;
@@ -377,7 +397,17 @@ bool PlannerOwnsWait(uintptr_t cm, float posX, float posZ, float wpX, float wpZ)
 	float moveDest[3];
 	s_moveDestReader(cm, moveDest);
 	bool destIsPlans = PlanDestIsPlansXz(moveDest, v.finalDest, v.resend, v.resendCount);
-	return PlanOwnsWait(PlanStoreMode(), v.verdict, leg.isDestination, v.waiting, posToPortal, wpToPortal, posToWp, destIsPlans);
+	int preInFlight = 0;
+	float posToPrePortal = 0.0f;
+	PlanPreFlight f;
+	if (s_preHoldTicks > 0 && PlanStorePreRead(slot, &f) && f.epoch == v.epoch && f.to == v.legIndex
+	    && f.from >= 0 && f.from < v.legCount && QpcTicks() - f.issueQpc < s_preHoldTicks)
+	{
+		preInFlight = 1;
+		posToPrePortal = PlanDistToPortal(v.legs[f.from], pos, s_legAim);
+	}
+	return PlanOwnsWait(PlanStoreMode(), v.verdict, leg.isDestination, v.waiting, posToPortal, wpToPortal,
+	                    posToWp, destIsPlans, preInFlight, posToPrePortal);
 }
 
 void PlanStoreSetMoveDestReader(PlanMoveDestReader fn)
@@ -388,6 +418,110 @@ void PlanStoreSetMoveDestReader(PlanMoveDestReader fn)
 void PlanStoreSetLegAim(int on)
 {
 	s_legAim = on ? 1 : 0;
+}
+
+static LONGLONG MakePre(unsigned epoch, int state, int from, int to)
+{
+	return (LONGLONG)(((unsigned long long)epoch << 32) | ((unsigned long long)(state & 0xFF) << 16)
+	                  | ((unsigned long long)(from & 0xFF) << 8) | (unsigned long long)(to & 0xFF));
+}
+
+static LONG MakeTried(unsigned epoch, int kind, int leg)
+{
+	return (LONG)(((epoch & 0xFFFFu) << 16) | ((unsigned)(kind & 0xFF) << 8) | ((unsigned)leg & 0xFFu));
+}
+
+void PlanStorePreIssue(int slot, unsigned epoch, int from, int to, float x, float z, LONGLONG qpc)
+{
+	if (!SlotInRange(slot) || from < 0 || to < 0 || from >= PLAN_MAX_LEGS || to >= PLAN_MAX_LEGS) return;
+	PlanSlot& s = s_slots[slot];
+	s.preX = x;
+	s.preZ = z;
+	InterlockedExchange64(&s.preQpc, qpc);
+	InterlockedExchange64(&s.preWord, MakePre(epoch, PLAN_PRE_ISSUED, from, to));
+}
+
+bool PlanStorePreRead(int slot, PlanPreFlight* out)
+{
+	if (!SlotInRange(slot) || !out) return false;
+	PlanSlot& s = s_slots[slot];
+	unsigned long long w = (unsigned long long)InterlockedCompareExchange64(&s.preWord, 0, 0);
+	int state = (int)((w >> 16) & 0xFF);
+	if ((state & PLAN_PRE_STATE_MASK) == PLAN_PRE_NONE) return false;
+	out->epoch = (unsigned)(w >> 32);
+	out->state = state;
+	out->from = (int)((w >> 8) & 0xFF);
+	out->to = (int)(w & 0xFF);
+	out->issueX = s.preX;
+	out->issueZ = s.preZ;
+	out->issueQpc = InterlockedCompareExchange64(&s.preQpc, 0, 0);
+	return true;
+}
+
+void PlanStorePreUpdate(int slot, const PlanPreFlight& f, int state)
+{
+	if (!SlotInRange(slot)) return;
+	LONGLONG seen = MakePre(f.epoch, f.state, f.from, f.to);
+	LONGLONG next = (state & PLAN_PRE_STATE_MASK) == PLAN_PRE_NONE ? 0 : MakePre(f.epoch, state, f.from, f.to);
+	InterlockedCompareExchange64(&s_slots[slot].preWord, next, seen);
+}
+
+bool PlanStoreLeg(int slot, unsigned* epoch, int* leg)
+{
+	if (!SlotInRange(slot) || !epoch || !leg) return false;
+	LONGLONG w = LoadWord(s_slots[slot]);
+	if (EpochOf(w) & 1u) return false;
+	*epoch = EpochOf(w);
+	*leg = (int)LegOf(w);
+	return true;
+}
+
+int PlanStorePreNoteSkip(int slot, unsigned epoch, int leg, int blocks)
+{
+	if (!SlotInRange(slot)) return 0;
+	PlanSlot& s = s_slots[slot];
+	LONG cur = InterlockedCompareExchange(&s.preTried, 0, 0);
+	bool same = (cur & 0xFFFF00FF) == (MakeTried(epoch, 0, leg) & 0xFFFF00FF);
+	int had = same ? (int)((cur >> 8) & 0xFF) : 0;
+	int kind = (blocks || had == 2) ? 2 : 1;
+	if (kind != had)
+		InterlockedExchange(&s.preTried, MakeTried(epoch, kind, leg));
+	return had == 0 ? 1 : 0;
+}
+
+bool PlanStorePreBlocked(int slot, unsigned epoch, int leg)
+{
+	if (!SlotInRange(slot)) return false;
+	return InterlockedCompareExchange(&s_slots[slot].preTried, 0, 0) == MakeTried(epoch, 2, leg);
+}
+
+void PlanStorePreSkip(int slot, unsigned epoch, int leg, int why)
+{
+	if (!PlanStorePreNoteSkip(slot, epoch, leg, why != PPS_WAIT ? 1 : 0))
+		return;
+	InterlockedIncrement(&s_counters.preSkip);
+	if (why == PPS_WAIT) InterlockedIncrement(&s_counters.preSkipWait);
+	else if (why == PPS_SNAP) InterlockedIncrement(&s_counters.preSkipSnap);
+	else if (why == PPS_SAME) InterlockedIncrement(&s_counters.preSkipSame);
+	else if (why == PPS_HELD) InterlockedIncrement(&s_counters.preSkipHeld);
+}
+
+int PlanStorePreSnap(int slot, unsigned epoch, int leg, int got)
+{
+	if (got == 1)
+		return PLAN_PRE_SNAP_HIT;
+	if (got == -1)
+	{
+		InterlockedIncrement(&s_counters.preBusy);
+		return PLAN_PRE_SNAP_RETRY;
+	}
+	PlanStorePreSkip(slot, epoch, leg, PPS_SNAP);
+	return PLAN_PRE_SNAP_BLOCK;
+}
+
+void PlanStoreSetPreHold(LONGLONG ticks)
+{
+	s_preHoldTicks = ticks > 0 ? ticks : 0;
 }
 
 // Main thread (the slots' one writer).

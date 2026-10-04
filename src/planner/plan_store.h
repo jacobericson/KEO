@@ -91,6 +91,39 @@ void PlanStoreSetMoveDestReader(PlanMoveDestReader fn);
 // edge (plannerLegAim) rather than its midpoint; 0 until then.
 void PlanStoreSetLegAim(int on);
 
+// The slot's pre-arrival request in flight. Two writers: the thread updating the character (the AI
+// back thread, or the main thread with characterMultithreading off) issues and resolves it, and the
+// main thread's slot clear and save-load reset zero it; a rewrite leaves it. A word that survives a
+// clear carries the old epoch, and every reader drops a word whose epoch is not the slot's. The main
+// thread reads it only in PlannerOwnsWait.
+struct PlanPreFlight { unsigned epoch; int state, from, to; float issueX, issueZ; LONGLONG issueQpc; };
+// Stores the issue position and QPC time, then publishes the word (state ISSUED) in one exchange.
+void PlanStorePreIssue(int slot, unsigned epoch, int from, int to, float x, float z, LONGLONG qpc);
+// The word as stored; false when none is set.
+bool PlanStorePreRead(int slot, PlanPreFlight* out);
+// Replaces the word read as f with state (PLAN_PRE_NONE clears it) by a compare-exchange: a word
+// changed since f was read is left.
+void PlanStorePreUpdate(int slot, const PlanPreFlight& f, int state);
+// The slot's current epoch and leg; false while it is rewritten.
+bool PlanStoreLeg(int slot, unsigned* epoch, int* leg);
+// A pre-arrival skip of (epoch, leg): 1 when it is the leg's first skip (the caller counts it); with
+// blocks set, the leg is not tried again (a wait skip is tried again every frame).
+int  PlanStorePreNoteSkip(int slot, unsigned epoch, int leg, int blocks);
+bool PlanStorePreBlocked(int slot, unsigned epoch, int leg);
+// A pre-arrival skip of the slot's leg for a PlanPreSkip reason: counted, by reason, on the leg's first
+// skip only; every reason but PPS_WAIT blocks the leg from another try (the recheck at its portal
+// serves it). Interlocked only.
+void PlanStorePreSkip(int slot, unsigned epoch, int leg, int why);
+// The pre-arrival snap's answer for the slot's leg, got being getClosestPoint's return (-1 also for no
+// navmesh). 1, a face: PLAN_PRE_SNAP_HIT. -1, the navmesh lock refused: PLAN_PRE_SNAP_RETRY, counted in
+// preBusy with the slot untouched, so the next frame tries again. Any other value, no face within the
+// radius: PLAN_PRE_SNAP_BLOCK, a PPS_SNAP skip. Interlocked only.
+enum PlanPreSnap { PLAN_PRE_SNAP_HIT = 0, PLAN_PRE_SNAP_RETRY, PLAN_PRE_SNAP_BLOCK };
+int  PlanStorePreSnap(int slot, unsigned epoch, int leg, int got);
+// Main thread, at the pre-arrival install: the owned-wait clause's age cap in QPC ticks; 0, the
+// default, leaves the clause off.
+void PlanStoreSetPreHold(LONGLONG ticks);
+
 enum PlanSendKind { PLAN_SEND_RESEND = 1, PLAN_SEND_HOLD = 2 };
 // Main thread, the movement module's send paths, before the order is sent. PLAN_SEND_RESEND: the
 // order's destination re-sent (nudged past the engine's two-unit drop); it joins the slot's record of
@@ -117,9 +150,13 @@ struct PlannerCounters
 	volatile LONG slotFull, repeats, locFail, goalUnlocated, startUnlocated, notSite, staleAdvance, rung17, ownedSkips, noLocation;
 	volatile LONG reissuedPlanned, heldPlanned, reissueRefused, snapFar, snapMax;
 	volatile LONG waterFail, waterGroups;   // members whose speed read failed; orders planned run-together
-	volatile LONG arrSection, aimCount, aimShiftSum;   // advances by section entry; aimed recomputes, their summed shift in units
+	volatile LONG aimCount, aimShiftSum;   // aimed recomputes, their summed shift in units
 	volatile LONG merges, mergeJoins, mergeAlone, mergeMoved, mergeWalkOff;   // orders merged; members joined, alone; gathers moved; walks off
 	volatile LONG interiorHeld;   // plans written holding an interior goal at its building's portal
+	volatile LONG pre, preLand, preLate, preBroken, preFailed, preLost;   // pre-arrival advances and their outcomes
+	volatile LONG preSkip, preSkipWait, preSkipSnap, preSkipSame, preSkipHeld;   // legs skipped, the first skip each, by reason
+	volatile LONG preBusy;   // pre-arrival snaps the navmesh lock refused, each retried the next frame
+	volatile LONG preDCount, preDSum, preDMax;   // landings sampled; units walked from the issue, summed and the most
 	volatile LONG dropsBy[PLAN_DROP_REASONS], replansBy[PLAN_REPLAN_REASONS];   // by PlanDropWhy / PlanReplanWhy
 };
 PlannerCounters* PlannerCountersGet();   // any thread; the fields are interlocked

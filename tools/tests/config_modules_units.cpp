@@ -109,7 +109,7 @@ static const Owner kOwners[] =
 	{ "plannerWaterCost", "planner" },
 	{ "plannerWaterEngine", "planner" },
 	{ "plannerAcidCost", "planner" },
-	{ "plannerAdvanceSection", "planner" },
+	{ "plannerPreArrivalMs", "planner" },
 	{ "plannerLegAim", "planner" },
 	{ "plannerMergeBias", "planner" },
 	{ "plannerMergeDetour", "planner" },
@@ -190,7 +190,7 @@ int main()
 		}
 		if (i == CONFIG_STAGE_MAX) Fail(mod.name, "no table end within stage capacity");
 	}
-	Check(moduleKeys == 93 && activeCore == 2 && retiredCore == 22 && debug == 4, "module and core row counts");
+	Check(moduleKeys == 93 && activeCore == 2 && retiredCore == 23 && debug == 4, "module and core row counts");
 	for (size_t i = 0; i < sizeof(kOwners) / sizeof(kOwners[0]); ++i)
 	{
 		const ConfigModule* mod = NULL;

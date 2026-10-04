@@ -12,7 +12,7 @@ void InstallPlannerHooks(int* installed, int* total);
 // Any thread, from the island hook only: the calling character's plan's answer. Lock-free,
 // allocation-free, no logging; PFA_NOT_MINE unless armed with a matching plan (in observe, always).
 PlanFlipAnswer PlannerIslandVerdict();
-// Main thread: "<off|observe|on|refused(<why>)> base=<tiles>/<total> hooks=<n>/2".
+// Main thread: "<off|observe|on|refused(<why>)> base=<tiles>/<total> hooks=<n>/2 pre=<on|off|refused>".
 std::string PlannerBannerToken();
 
 } // namespace planner

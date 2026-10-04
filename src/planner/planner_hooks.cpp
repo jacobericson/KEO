@@ -6,6 +6,7 @@
 #define NOMINMAX
 #endif
 #include "planner/planner_hooks.h"
+#include "planner/planner_prearrival.h"
 #include "planner/plan_store.h"
 #include "planner/planner_config.h"
 #include "planner/coarse_graph_base.h"
@@ -59,7 +60,6 @@ static uintptr_t            s_retRecheck = 0, s_retCompute = 0;   // gameBase + 
 static volatile LONG        s_armed = 0;                         // set last by the install step
 static int                  s_mode  = PLANNER_OFF;
 static int                  s_legSpan = 2;                       // plannerLegSpan, captured at install
-static int                  s_advanceSection = 0;                // plannerAdvanceSection, captured at install
 static int                  s_legAim = 0;                        // plannerLegAim, captured at install
 static const char*          s_refusedWhy = NULL;                 // a literal: the refusal's reason
 
@@ -111,7 +111,7 @@ static float* hook_getZoneEdge(void* nm, float* retstr, const float* start, cons
 	in.site = site; in.offset = offset; in.pos[0] = start[0]; in.pos[1] = start[1]; in.pos[2] = start[2];
 	in.legIndex = v.legIndex; in.loadedMask = v.loadedMask; in.legSpan = s_legSpan;
 	in.routeTruncated = v.routeTruncated;
-	in.advanceSection = s_advanceSection; in.aim = s_legAim; in.exteriorSlots = CG_EXTERIOR_SLOTS;
+	in.aim = s_legAim; in.exteriorSlots = CG_EXTERIOR_SLOTS;
 	in.holdInteriorPortal = v.holdInteriorPortal;
 	PlanEdgeOut o;
 	PlanEdgeStep(v.legs, v.legCount, in, &o);
@@ -125,7 +125,6 @@ static float* hook_getZoneEdge(void* nm, float* retstr, const float* start, cons
 	{
 		if (!PlanStoreAdvance(t.slot, v.epoch, v.legIndex, o.newLegIndex)) return r;
 		InterlockedIncrement(&PlannerCountersGet()->arrivals);
-		if (o.bySection) InterlockedIncrement(&PlannerCountersGet()->arrSection);
 		PlanStoreNoteArrival(t.slot, v.epoch);
 	}
 	PlanStoreSetWaiting(t.slot, v.epoch, o.waiting);
@@ -194,7 +193,6 @@ void InstallPlannerHooks(int* installed, int*)
 	s_retCompute = (uintptr_t)GameAddr(RVA_SETDEST_RET_EDGE_COMPUTE);
 	s_mode = g_plannerCfg.mode;
 	s_legSpan = g_plannerCfg.legSpan;
-	s_advanceSection = g_plannerCfg.advanceSection;
 	s_legAim = g_plannerCfg.legAim;
 
 	HookRowId failed = HOOK_ROW_COUNT;
@@ -217,6 +215,7 @@ void InstallPlannerHooks(int* installed, int*)
 	}
 	InterlockedExchange(&s_armed, 1);
 	LogMsg(std::string("Planner: hooks installed (mode=") + PlannerModeName(s_mode) + ")");
+	InstallPlannerPreArrival(installed);
 }
 
 // Main thread, the startup banner. The mode is the one captured when the hooks installed; a later
@@ -231,7 +230,7 @@ std::string PlannerBannerToken()
 		os << "refused(" << s_refusedWhy << ")";
 	else
 		os << PlannerModeName(s_mode);
-	os << " base=" << tiles << "/" << total << " hooks=" << hooks << "/2";
+	os << " base=" << tiles << "/" << total << " hooks=" << hooks << "/2" << " pre=" << PlannerPreArrivalBannerToken();
 	return os.str();
 }
 

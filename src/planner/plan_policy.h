@@ -70,7 +70,6 @@ struct PlanEdgeIn
 	unsigned loadedMask;
 	int      legSpan;
 	int      routeTruncated;   // the plan kept its first PLAN_MAX_PORTAL_LEGS portals of a longer route
-	int      advanceSection;   // plannerAdvanceSection: entering an exterior far section's cell arrives
 	int      aim;              // plannerLegAim: a portal leg's point is aimed along the line to the next
 	int      exteriorSlots;    // the store's exterior directory size; a far section at or past it is interior
 	int      holdInteriorPortal;   // the plan holds its interior goal at the building's portal
@@ -82,7 +81,6 @@ struct PlanEdgeOut
 	int   waiting;         // 1: within reach of the current portal and no later leg is a target yet
 	int   rung;            // 1: this call is a rung (COMPUTE with offset != 0)
 	float point[3];        // the waypoint to return, before the snap
-	int   bySection;       // 1: the recheck advanced by section entry, outside the reach
 	int   aimed;           // 1: point is a leg's aimed point, not its midpoint
 	float aimShift;        // x-z distance from that leg's midpoint to the aimed point; 0 unless aimed
 };
@@ -97,10 +95,8 @@ struct PlanEdgeOut
 // destination leg is never slid.
 // With in.aim set, a portal leg's point is PlanLegAim's from in.pos toward the next leg's point
 // (none for the destination leg, the last leg, or a truncated plan's last portal: the midpoint),
-// the reach is PlanDistToPortal's edge distance, and a rung slides from the aimed point. With
-// in.advanceSection set, the recheck also arrives when in.pos lies in the current leg's exterior far
-// section's cell (PlanInFarCell); an arrival with no target past legIndex then keeps the current
-// point without waiting. Both off: the answers above, exactly.
+// the reach is PlanDistToPortal's edge distance, and a rung slides from the aimed point. With the aim
+// off: the answers above, exactly.
 void PlanEdgeStep(const PlanLeg* legs, int n, const PlanEdgeIn& in, PlanEdgeOut* out);
 
 // The point moved along its edge (edgeA -> edgeB, x-z direction) by offset, clamped to
@@ -117,9 +113,63 @@ bool PlanLegAim(const PlanLeg& leg, const float start[3], const float next[3], f
 // is on, so a character arrives anywhere along the edge), else to its point; a destination leg's is
 // its point either way.
 float PlanDistToPortal(const PlanLeg& leg, const float pos[3], int edgeAware);
-// Whether pos lies in the leg's exterior far section: farSection below exteriorSlots and equal to
-// cy * 64 + cx, the directory index of pos's cell (PlanCellOf).
-bool PlanInFarCell(const PlanLeg& leg, const float pos[3], int exteriorSlots);
+
+// The pre-arrival request: the recheck the engine's parked call would make at the portal it walks to,
+// decided while the character still walks. PPS_SNAP and PPS_SAME are the caller's, after its snap.
+enum PlanPreSkip { PPS_NONE = 0, PPS_WAIT, PPS_HELD, PPS_NOT_MINE, PPS_SNAP, PPS_SAME };
+struct PlanPreOut
+{
+	int   target;     // the leg to advance to; -1 unless skip is PPS_NONE
+	float point[3];   // that leg's point as the recheck gives it (aimed with in.aim), before the snap
+	int   skip;       // PlanPreSkip
+};
+// in.pos is the point the engine will park at (the movement's pathDestination) and in.legIndex the
+// slot's current leg. NOT_MINE: a leg index out of range, the current leg the destination, or in.pos
+// not within PLAN_REACH of the current leg's portal (PlanDistToPortal with in.aim: the engine is not
+// heading there). Otherwise PlanEdgeStep's RECHECK at in.pos decides: an advance is the target and its
+// point; a destination-leg target of a plan holding its interior goal (in.holdInteriorPortal) is HELD;
+// no advance (the far section unloaded, no target past the leg, a truncated plan's last portal) is WAIT.
+void PlanPreArrival(const PlanLeg* legs, int n, const PlanEdgeIn& in, PlanPreOut* out);
+
+const float PLAN_PRE_REACH_MIN = 50.0f;     // the look-ahead's floor, game units
+const float PLAN_PRE_REACH_MAX = 2304.0f;   // half a cell: a pre-request searches at most this much past the portal's
+// The look-ahead before a portal at which the next leg is requested, game units:
+// L = v * (s * T + dt) + B + PLAN_REACH, with v = 10 * desiredSpeed (the Havok speed is a tenth of a game
+// unit per second), s the game speed, T = latencyMs / 1000, dt the frame's game seconds, and
+// B = 10 * desiredSpeed^2 / (2 * acceleration), 0 unless the acceleration is finite and positive; a speed,
+// game speed or dt that is not finite and positive reads as 0; clamped to [PLAN_PRE_REACH_MIN, PLAN_PRE_REACH_MAX].
+float PlanPreArrivalReach(float desiredSpeed, float acceleration, float gameSpeed, int latencyMs, float dt);
+
+enum PlanPreState { PLAN_PRE_NONE = 0, PLAN_PRE_ISSUED = 1, PLAN_PRE_LATE = 2 };
+const int    PLAN_PRE_STATE_MASK   = 3;
+const int    PLAN_PRE_BROKEN_SEEN  = 4;     // or'ed into a word's state once its BROKEN was counted
+const double PLAN_PRE_HOLD_SECONDS = 5.0;   // an in-flight word older than this is an orphan
+enum PlanPreCount { PPC_NONE = 0, PPC_LAND, PPC_LATE, PPC_BROKEN, PPC_FAILED, PPC_LOST };
+struct PlanPreResolveIn
+{
+	int    state;            // the word's state: a PlanPreState, with PLAN_PRE_BROKEN_SEEN
+	int    epochHolds;       // the slot still carries the word's epoch
+	int    legIsTo;          // the slot's current leg is the word's target
+	int    pathState, characterState;   // the character's HavokCharacter states this frame
+	double age;              // wall seconds since the issue
+};
+struct PlanPreResolveOut
+{
+	int keep;       // 1: the word stays, with newState
+	int newState;
+	int count;      // the PlanPreCount this frame counts
+	int stepBack;   // 1: the leg goes back from the word's target to its from before the word clears
+	int sample;     // 1: a preD sample (the issue position to the character's)
+};
+// One frame's resolution of a set in-flight word. The epoch moved or the leg is not the target:
+// cleared, nothing counted. Then by the states: UPDATING or WAITING while FOLLOWING_PATH: kept;
+// UPDATING or WAITING while GOAL_REACHED or IDLE: kept as LATE, counted LATE the first time;
+// COMPLETE while FOLLOWING_PATH: cleared, counted LAND with a sample when ISSUED, nothing when LATE;
+// COMPLETE while GOAL_REACHED or IDLE: cleared, counted LATE unless already LATE; BROKEN: kept,
+// counted BROKEN once per word; FAILED: cleared with the step-back, counted FAILED; NONE: cleared,
+// counted LOST; any other state: kept. A kept word older than PLAN_PRE_HOLD_SECONDS is cleared and
+// counted LOST instead.
+void PlanPreResolve(const PlanPreResolveIn& in, PlanPreResolveOut* out);
 
 // The flip, from the thread-local the entry detour published.
 enum PlanFlipAnswer { PFA_NOT_MINE = 0, PFA_FALSE, PFA_VANILLA };
@@ -158,16 +208,21 @@ bool PlanEdgeSteers(int mode, int verdict, bool destMatches);
 bool PlanReplacesAhead(int mode, int verdict);
 
 // Whether the planner owns a character's stop at its current portal (PlannerOwnsWait's pure half):
-// on, LEGGED, the current leg not the destination, and either the slot's waiting word set within
-// PLAN_REACH of the portal (a held wait), or the character within PLAN_REACH of its waypoint while
-// that waypoint lies within PLAN_REACH of the portal (it stands at the portal the planner gave,
-// before the engine's next advance). Distances x-z. Only while the movement destination is the
-// plan's (destIsPlans): a halt or a detour's hold point is never owned.
+// on, LEGGED and the movement destination the plan's (destIsPlans: a halt or a detour's hold point is
+// never owned); then, before the destination-leg exit, a pre-arrival request in flight for the leg the
+// slot is on (preInFlight) with the character within PLAN_REACH of the portal that request left
+// (posToPrePortal): a late landing's standstill; then, the current leg not the destination, either
+// the slot's waiting word set within PLAN_REACH of the portal (a held wait), or the character within
+// PLAN_REACH of its waypoint while that waypoint lies within PLAN_REACH of the portal (it stands at
+// the portal the planner gave, before the engine's next advance). Distances x-z.
 bool PlanOwnsWait(int mode, int verdict, int legIsDestination, int waiting, float distToPortal,
-                  float wpToPortal, float posToWp, bool destIsPlans);
+                  float wpToPortal, float posToWp, bool destIsPlans, int preInFlight, float posToPrePortal);
 
 const int PLAN_PATH_COMPLETE     = 1;   // HavokCharacter::PathState COMPLETE
 const int PLAN_CHAR_GOAL_REACHED = 1;   // HavokCharacter::CharacterState GOAL_REACHED (IDLE is 0)
+// The other HavokCharacter states the pre-arrival request reads.
+const int PLAN_PATH_NONE = 0, PLAN_PATH_FAILED = 3, PLAN_PATH_WAITING = 4, PLAN_PATH_UPDATING = 5, PLAN_PATH_BROKEN = 6;
+const int PLAN_CHAR_IDLE = 0, PLAN_CHAR_FOLLOWING = 2;
 // A portal leg is complete when its path search finished and the character has stopped at the path's
 // end (IDLE or GOAL_REACHED, the engine's own advance test) farther than PLAN_REACH from the portal in
 // x-z. A path stays COMPLETE for the whole walk along it.

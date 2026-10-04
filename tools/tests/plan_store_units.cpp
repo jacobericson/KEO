@@ -492,11 +492,148 @@ static void HoldRows()
 	Fresh(PLANNER_OFF);
 }
 
+// The in-flight words: published, updated against the word read, left by a rewrite whose epoch then
+// drops them, cleared by the reset; the backward advance; the owned-wait clause, its age cap and its
+// epoch and leg tests, and a word issued after the slot's clear; the tried word.
+static void PreFlightRows()
+{
+	s_fakeDest[0] = 3000.0f;
+	s_fakeDest[1] = 0.0f;
+	s_fakeDest[2] = 0.0f;
+	PlanStoreSetMoveDestReader(FakeMoveDest);
+	Fresh(PLANNER_ON);
+	PlanWrite w;
+	MakeWrite(&w, CM_A, 1.0f);
+	int slot = PlanStoreWrite(w);
+	PlanView v;
+	PlanStoreRead(slot, &v);
+	LARGE_INTEGER now;
+	QueryPerformanceCounter(&now);
+	PlanStorePreIssue(slot, v.epoch, 0, 1, 990.0f, 4.0f, now.QuadPart);
+	PlanPreFlight f;
+	bool read = PlanStorePreRead(slot, &f) && f.epoch == v.epoch && f.state == PLAN_PRE_ISSUED && f.from == 0
+	            && f.to == 1 && f.issueX == 990.0f && f.issueZ == 4.0f && f.issueQpc == now.QuadPart;
+	Check(read, "pre flight: a published word reads back with its position and time");
+	PlanStorePreUpdate(slot, f, PLAN_PRE_LATE);
+	PlanPreFlight late;
+	bool updated = PlanStorePreRead(slot, &late) && late.state == PLAN_PRE_LATE;
+	PlanStorePreUpdate(slot, f, PLAN_PRE_NONE);
+	PlanPreFlight still;
+	Check(updated && PlanStorePreRead(slot, &still) && still.state == PLAN_PRE_LATE,
+	      "pre flight: an update applies against the word read, and a stale one is left");
+	PlanStorePreUpdate(slot, still, PLAN_PRE_NONE);
+	Check(!PlanStorePreRead(slot, &f), "pre flight: a NONE update clears the word");
+
+	PlanStorePreIssue(slot, v.epoch, 0, 1, 990.0f, 4.0f, now.QuadPart);
+	MakeWrite(&w, CM_A, 2.0f);
+	PlanStoreWrite(w);
+	unsigned epoch = 0;
+	int leg = -1;
+	Check(PlanStorePreRead(slot, &f) && PlanStoreLeg(slot, &epoch, &leg) && f.epoch != epoch,
+	      "pre flight: a rewrite leaves the word, its epoch no longer the slot's");
+	PlanStoreReset();
+	Check(!PlanStorePreRead(slot, &f), "pre flight: the save-load reset clears the word");
+
+	Fresh(PLANNER_ON);
+	MakeWrite(&w, CM_A, 1.0f);
+	slot = PlanStoreWrite(w);
+	PlanStoreRead(slot, &v);
+	bool forward = PlanStoreAdvance(slot, v.epoch, 0, 1);
+	PlanStoreAddRung(slot, v.epoch);
+	PlanStoreAddRung(slot, v.epoch);
+	bool back = PlanStoreAdvance(slot, v.epoch, 1, 0);
+	PlanStoreRead(slot, &v);
+	Check(forward && back && v.legIndex == 0 && v.rungs == 0,
+	      "pre flight: the step-back's backward advance restarts the rungs");
+
+	PlanStoreSetPreHold(0x7FFFFFFFFFFFLL);
+	PlanStoreAdvance(slot, v.epoch, 0, 1);
+	QueryPerformanceCounter(&now);
+	PlanStorePreIssue(slot, v.epoch, 0, 1, 990.0f, 4.0f, now.QuadPart - 1000);
+	Check(PlannerOwnsWait(CM_A, 1005.0f, 5.0f, 2000.0f, 0.0f),
+	      "owns: a late landing's standstill at the portal the pre-request left is the planner's");
+	PlanStoreSetPreHold(1);
+	Check(!PlannerOwnsWait(CM_A, 1005.0f, 5.0f, 2000.0f, 0.0f), "owns: an in-flight word older than the hold is not owned");
+	PlanStoreSetPreHold(0);
+	Check(!PlannerOwnsWait(CM_A, 1005.0f, 5.0f, 2000.0f, 0.0f), "owns: with the hold at 0 the clause is off");
+
+	PlanStoreSetPreHold(0x7FFFFFFFFFFFLL);
+	PlanStoreRead(slot, &v);
+	PlanStorePreIssue(slot, v.epoch, 0, 2, 990.0f, 4.0f, now.QuadPart);
+	Check(!PlannerOwnsWait(CM_A, 1005.0f, 5.0f, 2000.0f, 0.0f),
+	      "owns: a word for another leg than the slot's does not own the standstill");
+	PlanStorePreIssue(slot, v.epoch, 0, 1, 990.0f, 4.0f, now.QuadPart);
+	MakeWrite(&w, CM_A, 1.0f);
+	w.firstLeg = 1;
+	PlanStoreWrite(w);
+	Check(PlanStorePreRead(slot, &f) && f.to == 1 && !PlannerOwnsWait(CM_A, 1005.0f, 5.0f, 2000.0f, 0.0f),
+	      "owns: a word from an earlier epoch does not own the standstill");
+	PlanStoreRead(slot, &v);
+	unsigned cleared = v.epoch;
+	PlanStoreDrop(CM_A);
+	PlanStorePreIssue(slot, cleared, 0, 1, 990.0f, 4.0f, now.QuadPart);
+	MakeWrite(&w, CM_A, 1.0f);
+	w.firstLeg = 1;
+	int reused = PlanStoreWrite(w);
+	Check(reused == slot && PlanStorePreRead(slot, &f) && f.epoch == cleared && PlanStoreLeg(slot, &epoch, &leg)
+	      && epoch != cleared && leg == 1 && !PlannerOwnsWait(CM_A, 1005.0f, 5.0f, 2000.0f, 0.0f),
+	      "pre flight: a word issued after the slot's clear keeps the old epoch and owns nothing");
+	PlanStoreSetPreHold(0);
+
+	PlanStoreRead(slot, &v);
+	int first = PlanStorePreNoteSkip(slot, v.epoch, 1, 0);
+	int again = PlanStorePreNoteSkip(slot, v.epoch, 1, 0);
+	bool waitOpen = !PlanStorePreBlocked(slot, v.epoch, 1);
+	int blockedNow = PlanStorePreNoteSkip(slot, v.epoch, 1, 1);
+	bool blocked = PlanStorePreBlocked(slot, v.epoch, 1);
+	int other = PlanStorePreNoteSkip(slot, v.epoch, 2, 1);
+	Check(first == 1 && again == 0 && waitOpen && blockedNow == 0 && blocked && other == 1
+	      && !PlanStorePreBlocked(slot, v.epoch, 1),
+	      "pre flight: a leg's first skip counts once, a wait is tried again, a block holds until another leg");
+	Fresh(PLANNER_OFF);
+}
+
+// The pre-arrival snap's answer: a face goes on; the navmesh lock's refusal (-1) retries next frame,
+// counted in preBusy with the leg unmarked, so the next answer is still the leg's first; no face (0, or
+// any other value) is a counted SNAP skip that blocks the leg; a wait skip counts and never blocks.
+static void PreSnapRows()
+{
+	Fresh(PLANNER_ON);
+	PlanWrite w;
+	MakeWrite(&w, CM_A, 1.0f);
+	int slot = PlanStoreWrite(w);
+	PlanView v;
+	PlanStoreRead(slot, &v);
+	PlannerCounters* c = PlannerCountersGet();
+	const LONG busy = c->preBusy, skip = c->preSkip, snap = c->preSkipSnap, wait = c->preSkipWait;
+	int hit = PlanStorePreSnap(slot, v.epoch, 0, 1);
+	Check(hit == PLAN_PRE_SNAP_HIT && c->preBusy == busy && c->preSkip == skip && !PlanStorePreBlocked(slot, v.epoch, 0),
+	      "pre snap: a face goes on, nothing counted or marked");
+	int retry = PlanStorePreSnap(slot, v.epoch, 0, -1);
+	bool retryClean = retry == PLAN_PRE_SNAP_RETRY && c->preBusy == busy + 1 && c->preSkip == skip
+	                  && c->preSkipSnap == snap && !PlanStorePreBlocked(slot, v.epoch, 0);
+	Check(retryClean, "pre snap: a refused navmesh lock (-1) retries, counted in preBusy, no skip recorded, the leg unmarked");
+	int block = PlanStorePreSnap(slot, v.epoch, 0, 0);
+	Check(block == PLAN_PRE_SNAP_BLOCK && c->preSkip == skip + 1 && c->preSkipSnap == snap + 1 && c->preBusy == busy + 1
+	      && PlanStorePreBlocked(slot, v.epoch, 0),
+	      "pre snap: no face (0) after a retry is the leg's first skip, a counted SNAP block");
+	int stray = PlanStorePreSnap(slot, v.epoch, 1, 5);
+	Check(stray == PLAN_PRE_SNAP_BLOCK && c->preSkipSnap == snap + 2 && PlanStorePreBlocked(slot, v.epoch, 1),
+	      "pre snap: any answer but 1 and -1 blocks as SNAP");
+	PlanStorePreSkip(slot, v.epoch, 2, PPS_WAIT);
+	PlanStorePreSkip(slot, v.epoch, 2, PPS_WAIT);
+	Check(c->preSkipWait == wait + 1 && c->preSkip == skip + 3 && !PlanStorePreBlocked(slot, v.epoch, 2),
+	      "pre skip: a wait skip counts on the leg's first skip only and never blocks");
+	Fresh(PLANNER_OFF);
+}
+
 int main()
 {
 	StoreRows();
 	OwnsRows();
 	SendRows();
 	HoldRows();
+	PreFlightRows();
+	PreSnapRows();
 	return CheckExit("plan_store_units");
 }

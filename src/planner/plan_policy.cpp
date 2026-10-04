@@ -9,7 +9,6 @@ namespace planner {
 
 static const float GRID_ORIGIN = 147456.0f;
 static const float GRID_CELL   = 4608.0f;
-static const int   GRID_SIDE   = 64;
 
 static const double ARRIVAL_TIMEOUT_SECONDS = 8.0;
 static const double PLAN_AGE_SECONDS        = 120.0;
@@ -127,9 +126,7 @@ static void EdgeRecheck(const PlanLeg* legs, int n, const PlanEdgeIn& in, PlanEd
 	const PlanLeg& cur = legs[in.legIndex];
 	LegPoint(legs, n, in.legIndex, in, out, out->point);
 	if (cur.isDestination) return;
-	bool reached = PlanDistToPortal(cur, in.pos, in.aim) < PLAN_REACH;
-	bool entered = !reached && in.advanceSection && PlanInFarCell(cur, in.pos, in.exteriorSlots);
-	if (!reached && !entered) return;
+	if (!(PlanDistToPortal(cur, in.pos, in.aim) < PLAN_REACH)) return;
 
 	// Past the current portal only once its far section is in: until then the character holds it.
 	int target = -1;
@@ -145,12 +142,10 @@ static void EdgeRecheck(const PlanLeg* legs, int n, const PlanEdgeIn& in, PlanEd
 	if (target > in.legIndex)
 	{
 		out->newLegIndex = target;
-		out->bySection = entered ? 1 : 0;
 		LegPoint(legs, n, target, in, out, out->point);
 		return;
 	}
-	if (reached)
-		out->waiting = 1;
+	out->waiting = 1;
 }
 
 void PlanEdgeStep(const PlanLeg* legs, int n, const PlanEdgeIn& in, PlanEdgeOut* out)
@@ -159,7 +154,6 @@ void PlanEdgeStep(const PlanLeg* legs, int n, const PlanEdgeIn& in, PlanEdgeOut*
 	out->newLegIndex = in.legIndex;
 	out->waiting     = 0;
 	out->rung        = 0;
-	out->bySection   = 0;
 	out->aimed       = 0;
 	out->aimShift    = 0.0f;
 	out->point[0] = out->point[1] = out->point[2] = 0.0f;
@@ -258,16 +252,37 @@ float PlanDistToPortal(const PlanLeg& leg, const float pos[3], int edgeAware)
 	return DistanceXz(pos, q);
 }
 
-bool PlanInFarCell(const PlanLeg& leg, const float pos[3], int exteriorSlots)
+// The engine's parked recheck at in.pos, through PlanEdgeStep, so the pre-arrival request and the
+// recheck at the portal never answer differently. The NOT_MINE test is the recheck's own reach.
+void PlanPreArrival(const PlanLeg* legs, int n, const PlanEdgeIn& in, PlanPreOut* out)
 {
-	if (leg.farSection < 0 || leg.farSection >= exteriorSlots)
-		return false;
-	int cx, cy;
-	PlanCellOf(pos[0], pos[2], &cx, &cy);
-	if (cx < 0 || cx >= GRID_SIDE || cy < 0 || cy >= GRID_SIDE)
-		return false;
-	return leg.farSection == cy * GRID_SIDE + cx;
+	out->target = -1;
+	out->skip = PPS_NOT_MINE;
+	out->point[0] = out->point[1] = out->point[2] = 0.0f;
+	if (n > PLAN_MAX_LEGS) n = PLAN_MAX_LEGS;
+	if (!legs || in.legIndex < 0 || in.legIndex >= n) return;
+	const PlanLeg& cur = legs[in.legIndex];
+	if (cur.isDestination || !(PlanDistToPortal(cur, in.pos, in.aim) < PLAN_REACH)) return;
+	PlanEdgeIn at = in;
+	at.site = PES_RECHECK;
+	at.offset = 0.0f;
+	PlanEdgeOut rc;
+	PlanEdgeStep(legs, n, at, &rc);
+	if (rc.newLegIndex <= in.legIndex)
+	{
+		out->skip = PPS_WAIT;
+		return;
+	}
+	if (in.holdInteriorPortal && legs[rc.newLegIndex].isDestination)
+	{
+		out->skip = PPS_HELD;
+		return;
+	}
+	out->target = rc.newLegIndex;
+	Copy3(out->point, rc.point);
+	out->skip = PPS_NONE;
 }
+
 
 PlanFlipAnswer PlanFlipRule(const PlanFlipIn& in)
 {
@@ -321,10 +336,12 @@ bool PlanReplacesAhead(int mode, int verdict)
 }
 
 bool PlanOwnsWait(int mode, int verdict, int legIsDestination, int waiting, float distToPortal,
-                  float wpToPortal, float posToWp, bool destIsPlans)
+                  float wpToPortal, float posToWp, bool destIsPlans, int preInFlight, float posToPrePortal)
 {
-	if (mode != PLANNER_ON || verdict != PV_LEGGED || legIsDestination) return false;
+	if (mode != PLANNER_ON || verdict != PV_LEGGED) return false;
 	if (!destIsPlans) return false;
+	if (preInFlight && posToPrePortal < PLAN_REACH) return true;
+	if (legIsDestination) return false;
 	if (waiting != 0 && distToPortal < PLAN_REACH) return true;
 	return wpToPortal < PLAN_REACH && posToWp < PLAN_REACH;
 }
@@ -522,6 +539,83 @@ float PlanAcidGroupFactor(const float* factors, int n)
 		if (factors[k] > a)
 			a = factors[k];
 	return a;
+}
+
+float PlanPreArrivalReach(float desiredSpeed, float acceleration, float gameSpeed, int latencyMs, float dt)
+{
+	float hv = PositiveFinite(desiredSpeed) ? desiredSpeed : 0.0f;
+	float s = PositiveFinite(gameSpeed) ? gameSpeed : 0.0f;
+	float step = PositiveFinite(dt) ? dt : 0.0f;
+	float t = latencyMs > 0 ? (float)latencyMs / 1000.0f : 0.0f;
+	float brake = PositiveFinite(acceleration) ? 10.0f * hv * hv / (2.0f * acceleration) : 0.0f;
+	float reach = 10.0f * hv * (s * t + step) + brake + PLAN_REACH;
+	if (!(reach >= PLAN_PRE_REACH_MIN))
+		reach = PLAN_PRE_REACH_MIN;
+	else if (reach > PLAN_PRE_REACH_MAX)
+		reach = PLAN_PRE_REACH_MAX;
+	return reach;
+}
+
+void PlanPreResolve(const PlanPreResolveIn& in, PlanPreResolveOut* out)
+{
+	out->keep = 0;
+	out->newState = in.state;
+	out->count = PPC_NONE;
+	out->stepBack = 0;
+	out->sample = 0;
+	if (!in.epochHolds || !in.legIsTo)
+		return;
+	int base = in.state & PLAN_PRE_STATE_MASK;
+	bool walking = in.characterState == PLAN_CHAR_FOLLOWING;
+	bool stopped = in.characterState == PLAN_CHAR_IDLE || in.characterState == PLAN_CHAR_GOAL_REACHED;
+	bool pending = in.pathState == PLAN_PATH_UPDATING || in.pathState == PLAN_PATH_WAITING;
+	if (pending && stopped)
+	{
+		out->keep = 1;
+		if (base != PLAN_PRE_LATE)
+		{
+			out->newState = (in.state & ~PLAN_PRE_STATE_MASK) | PLAN_PRE_LATE;
+			out->count = PPC_LATE;
+		}
+	}
+	else if (pending)
+		out->keep = 1;
+	else if (in.pathState == PLAN_PATH_COMPLETE && walking)
+	{
+		if (base == PLAN_PRE_ISSUED)
+		{
+			out->count = PPC_LAND;
+			out->sample = 1;
+		}
+	}
+	else if (in.pathState == PLAN_PATH_COMPLETE && stopped)
+	{
+		if (base != PLAN_PRE_LATE)
+			out->count = PPC_LATE;
+	}
+	else if (in.pathState == PLAN_PATH_BROKEN)
+	{
+		out->keep = 1;
+		if (!(in.state & PLAN_PRE_BROKEN_SEEN))
+		{
+			out->newState = in.state | PLAN_PRE_BROKEN_SEEN;
+			out->count = PPC_BROKEN;
+		}
+	}
+	else if (in.pathState == PLAN_PATH_FAILED)
+	{
+		out->count = PPC_FAILED;
+		out->stepBack = 1;
+	}
+	else if (in.pathState == PLAN_PATH_NONE)
+		out->count = PPC_LOST;
+	else
+		out->keep = 1;
+	if (out->keep && in.age > PLAN_PRE_HOLD_SECONDS)
+	{
+		out->keep = 0;
+		out->count = PPC_LOST;
+	}
 }
 
 } // namespace planner

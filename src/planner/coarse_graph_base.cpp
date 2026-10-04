@@ -21,6 +21,7 @@
 #include "planner/planner_tick.h"
 #include "planner/planner_water.h"
 #include "planner/planner_acid.h"
+#include "planner/planner_prearrival.h"
 #include "game/game.h"
 #include "base/core.h"
 #include "zone/readiness/readiness_bindings.h"
@@ -537,12 +538,15 @@ void PlannerBaseStartStep(int* installed, int* total)
 		g_plannerCfg.mode = PLANNER_OFF;
 		PlanStoreArm(PLANNER_OFF);
 	}
+	// pre= follows mode=: the pre-arrival install runs before this step, so a planner turned off above reads
+	// off there too (its detour then finds no plan).
 	std::ostringstream arm;
 	arm << "Planner arm: mode=" << PlannerModeName(g_plannerCfg.mode) << " legSpan=" << g_plannerCfg.legSpan
 	    << " aheadTiles=" << g_plannerCfg.aheadTiles << " waitSeconds=" << g_plannerCfg.waitSeconds
 	    << " baseBuild=" << g_plannerCfg.baseBuild << " water=" << PlannerWaterModeToken()
 	    << " waterBind=" << PlannerWaterBindToken() << " waterEngine=" << PlannerWaterEngineToken()
-	    << " acidBind=" << PlannerWaterAcidToken() << " acidCost=" << g_plannerCfg.acidCost;
+	    << " acidBind=" << PlannerWaterAcidToken() << " acidCost=" << g_plannerCfg.acidCost
+	    << " pre=" << (g_plannerCfg.mode == PLANNER_OFF ? std::string("off") : PlannerPreArrivalArmToken());
 	LogMsg(arm.str());
 	InitializeCriticalSection(&s_requestCS);
 	if (g_plannerCfg.mode == PLANNER_OFF || !g_plannerCfg.baseBuild)

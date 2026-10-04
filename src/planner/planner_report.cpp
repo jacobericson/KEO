@@ -44,7 +44,7 @@ static LONG CounterSum(const PlannerCounters& c)
 	     + c.ownedSkips + c.noLocation
 	     + c.reissuedPlanned + c.heldPlanned + c.reissueRefused + c.snapFar + c.snapMax
 	     + c.waterFail + c.waterGroups + (LONG)CoarseProbeRefusals()
-	     + c.arrSection + c.aimCount
+	     + c.aimCount + c.pre + c.preLand + c.preLate + c.preBroken + c.preFailed + c.preLost + c.preSkip + c.preBusy
 	     + c.merges + c.mergeJoins + c.mergeAlone + c.mergeMoved + c.mergeWalkOff + c.interiorHeld;
 }
 
@@ -67,7 +67,7 @@ void PlannerReportTick(double now)
 	if (sum == s_lastSum)
 		return;
 	s_lastSum = sum;
-	char line[1536];
+	char line[2048];
 	_snprintf_s(line, sizeof(line), _TRUNCATE,
 	            "Planner: plans=%ld direct=%ld legged=%ld noRoute=%ld legs=%ld arrivals=%ld rungs=%ld"
 	            " replans=%ld(w%ld/at%ld/ru%ld/age%ld/gl%ld/end%ld)"
@@ -79,7 +79,8 @@ void PlannerReportTick(double now)
 	            " waterFail=%ld waterGroups=%ld probeNoRoute=%ld"
 	            " waterReq=%ld waterReqLeave=%ld waterReqLast=%.2f waterTable=%ld"
 	            " acidCells=%d acidUnknown=%d"
-	            " arrSection=%ld aimShift=%.1f"
+	            " aimShift=%.1f"
+	            " pre=%ld preLand=%ld preLate=%ld preBroken=%ld preFailed=%ld preLost=%ld preSkip=%ld(w%ld/sn%ld/same%ld/held%ld) preBusy=%ld preD=%ld/%ld"
 	            " merges=%ld mergeJoins=%ld mergeAlone=%ld mergeMoved=%ld mergeWalkOff=%ld"
 	            " interiorHeld=%ld",
 	            (long)c.plans, (long)c.direct, (long)c.legged, (long)c.noRoute, (long)c.legs, (long)c.arrivals,
@@ -95,7 +96,11 @@ void PlannerReportTick(double now)
 	            (long)c.reissuedPlanned, (long)c.heldPlanned, (long)c.reissueRefused, (long)c.snapFar, (long)c.snapMax,
 	            (long)c.waterFail, (long)c.waterGroups, CoarseProbeRefusals(), ws.writes, ws.leaves, (double)ws.last, ws.entries,
 	            as.acidCells, as.unknown,
-	            (long)c.arrSection, c.aimCount > 0 ? (double)c.aimShiftSum / (double)c.aimCount : 0.0,
+	            c.aimCount > 0 ? (double)c.aimShiftSum / (double)c.aimCount : 0.0,
+	            (long)c.pre, (long)c.preLand, (long)c.preLate, (long)c.preBroken, (long)c.preFailed, (long)c.preLost,
+	            (long)c.preSkip, (long)c.preSkipWait, (long)c.preSkipSnap, (long)c.preSkipSame, (long)c.preSkipHeld,
+	            (long)c.preBusy,
+	            c.preDCount > 0 ? (long)(c.preDSum / c.preDCount) : 0L, (long)c.preDMax,
 	            (long)c.merges, (long)c.mergeJoins, (long)c.mergeAlone, (long)c.mergeMoved, (long)c.mergeWalkOff,
 	            (long)c.interiorHeld);
 	LogMsg(line);
