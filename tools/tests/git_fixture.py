@@ -24,10 +24,10 @@ def _make_template(branch, config):
     if not _scratch:
         _scratch.append(tempfile.mkdtemp(prefix='git-fixture-'))
         atexit.register(shutil.rmtree, _scratch[0], True)
-    base = os.path.join(_scratch[0], str(len(_templates)))
+    base = tempfile.mkdtemp(dir=_scratch[0])
     empty = os.path.join(base, 'empty')
     repo = os.path.join(base, 'repo')
-    os.makedirs(empty)
+    os.mkdir(empty)
     env = dict(os.environ)
     for name in _REPO_VARS:
         env.pop(name, None)
@@ -38,7 +38,7 @@ def _make_template(branch, config):
     git_dir = os.path.join(repo, '.git')
     # A default init has both directories; tests install hooks in the first.
     for name in ('hooks', 'info'):
-        os.mkdir(os.path.join(git_dir, name))
+        os.makedirs(os.path.join(git_dir, name), exist_ok=True)
     return git_dir
 
 
