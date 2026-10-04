@@ -59,11 +59,15 @@ CLOSING = {
 POLL_S = 0.1
 
 
+def log_path(name):
+    return os.path.join(LOG_DIR, 'gate-%s.log' % name)
+
+
 class Phase(object):
     def __init__(self, name, cmd):
         self.name = name
         self.cmd = cmd
-        self.log = os.path.join(LOG_DIR, 'gate-%s.log' % name)
+        self.log = log_path(name)
         self.proc = None
         self.start = None
         self.end = None
@@ -98,7 +102,6 @@ def merge_suites():
         public = f.read()
     with open(private, 'rb') as f:
         extra = f.read()
-    os.makedirs(LOG_DIR, exist_ok=True)
     with open(os.path.join(REPO, MERGED_SUITES), 'wb') as f:
         f.write(public + b'\r\n' + extra)
     return MERGED_SUITES, True
@@ -201,6 +204,17 @@ def say(line):
 
 def run(since, forced, no_close):
     try:
+        os.makedirs(LOG_DIR, exist_ok=True)
+    except OSError as exc:
+        say('build_tests: could not create %s: %s' % (LOG_DIR, exc))
+        say('build_tests: FAILED: setup')
+        return 1
+    for name in PHASES:
+        try:
+            os.remove(log_path(name))
+        except OSError:
+            pass  # start() truncates it, or fails the phase when it cannot
+    try:
         suite_list, merged = merge_suites()
     except OSError as exc:
         say('build_tests: could not merge the private suite list: %s' % exc)
@@ -210,11 +224,6 @@ def run(since, forced, no_close):
     by_name = dict((name, Phase(name, cmds[name])) for name in PHASES)
     phases = [by_name[name] for name in PHASES]
     env = slots.child_env(leaf=False)
-    for p in phases:
-        try:
-            os.remove(p.log)
-        except FileNotFoundError:
-            pass
     try:
         for name in START_ORDER:
             start(by_name[name], env)
