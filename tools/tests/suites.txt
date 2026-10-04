@@ -85,3 +85,10 @@ coarse_graph_units | tools\tests\coarse_graph_units.cpp | src\planner\coarse_gra
 coarse_graph_live_units | tools\tests\coarse_graph_live_units.cpp | src\planner\coarse_graph_live.cpp src\planner\coarse_graph.cpp src\planner\coarse_graph_cross.cpp |
 plan_build_units | tools\tests\plan_build_units.cpp | src\planner\plan_build.cpp src\planner\plan_policy.cpp src\movement\order_outcome_table.cpp src\movement\order_outcome_policy.cpp |
 legacy_ini_import_units | tools\tests\legacy_ini_import_units.cpp | src\base\legacy_ini_import.cpp src\base\ini_text.cpp | 
+planner_water_table_units | tools\tests\planner_water_table_units.cpp | src\planner\planner_water_table.cpp src\planner\plan_policy.cpp |
+planner_acid_units | tools\tests\planner_acid_units.cpp | src\planner\planner_acid.cpp src\planner\plan_policy.cpp |
+plan_merge_units | tools\tests\plan_merge_units.cpp | src\planner\plan_merge.cpp src\planner\coarse_search.cpp src\planner\plan_policy.cpp |
+formation_gather_policy_units | tools\tests\formation_gather_policy_units.cpp | src\movement\formation_gather_policy.cpp |
+formation_follow_policy_units | tools\tests\formation_follow_policy_units.cpp | src\movement\formation_follow_policy.cpp |
+formation_pace_policy_units | tools\tests\formation_pace_policy_units.cpp | src\movement\formation_pace_policy.cpp |
+movement_trace_policy_units | tools\tests\movement_trace_policy_units.cpp | src\movement\movement_trace_policy.cpp |
