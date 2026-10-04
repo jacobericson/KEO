@@ -41,7 +41,8 @@ set "OBJS_RSP=%OBJDIR%\objs.rsp"
 REM --- Compile: one cl process per source (tools\build\run_variants.py, which
 REM holds the flags). Every listed object is deleted first and must come back
 REM fresh and match objects.json before the link below may run. Its output is
-REM in %OBJDIR%\build.log; BUILD_MP sets how many cl processes run at once. ---
+REM in %OBJDIR%\build.log; BUILD_MP sets how many cl processes run at once, and
+REM BUILD_CACHE=on (default), write or off the object cache (tools\build\objcache.py). ---
 python tools\build\run_variants.py --kind prof --sources tools\build\profsrc.txt --compile-only ^
     --fail-prefix "PROFILER COMPILE FAILED at" --variant "%OUTDIR%" "%OBJDIR%" "" ""
 if errorlevel 1 (

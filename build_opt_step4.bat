@@ -26,7 +26,9 @@ REM
 REM The variants build at the same time through tools\build\run_variants.py:
 REM one cl process per source, then each variant's link through
 REM tools\build\variant.bat. BUILD_JOBS=1 builds them one after the other;
-REM BUILD_MP sets how many processes run at once. Each variant's full output
+REM BUILD_MP sets how many processes run at once; BUILD_CACHE=on (default),
+REM write or off selects the object cache (tools\build\objcache.py), whose
+REM line each variant prints. Each variant's full output
 REM is in build\obj_step4<SUFFIX>_dev\build.log / ..._prod\build.log; a failure
 REM prints that log's tail and "STEP4 FAILED at <folder>", and exits 1.
 

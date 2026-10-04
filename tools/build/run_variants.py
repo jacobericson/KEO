@@ -23,6 +23,16 @@ Before an object can reach a link:
     order). validate_manifest() reads it back, re-reads the list file, and refuses another run's
     manifest, a list that changed, and a missing object or one whose bytes changed.
 
+Object cache (tools\\build\\objcache.py): before a compile takes its cpu token, the source is
+looked up; a hit writes the cached object where the compile would have (a new file, so the checks
+above apply to it unchanged) and its stored cl output stands in for cl's. Once a variant's
+compiles have all ended, what it compiled is published. Each variant writes one line after its
+compile output, and the console repeats it:
+    object cache: <h> restored, <c> compiled, <r> rejected, <u> uncacheable (BUILD_CACHE=<mode>)
+where c counts the cl processes run, r the cache entries refused (and moved aside), u the
+compiles not published. objects.json records per source how it was made, its cache entry and,
+when it was not published, why.
+
 Usage:
   run_variants.py --fail-prefix PREFIX [--kind opt|prof] [--sources LIST] [--compile-only]
                   [--defines "<common>"] --variant OUTDIR OBJDIR "<extra defines>" "<label>" ...
@@ -49,7 +59,10 @@ Environment:
   cpu token; KEO_SLOTS=off turns them off.
   KEO_TIMINGS_DIR  where compile.json keeps each source's last compile time, used to start the
               longest compiles first (default %LOCALAPPDATA%\\KEO\\timings; else source size).
-  TEST_NOOP_CL=1     test only: each compile is a command that exits 0 and writes nothing.
+  BUILD_CACHE, KEO_CACHE_DIR, KEO_CACHE_MAX_GB  the object cache: on (default), write or off; its
+              folder; its size cap (objcache.py). A malformed value refuses the run.
+  TEST_NOOP_CL=1     test only: each compile is a command that exits 0 and writes nothing; the
+                     object cache is off.
   TEST_OBJ_TAMPER=1  test only: the first listed object is overwritten after the compile.
 
   Memory per process: a cl process needs about 260 MB and an LTCG link about 90 MB.
@@ -81,6 +94,7 @@ import uuid
 sys.dont_write_bytecode = True  # no tools\build\__pycache__ in the worktree
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import check_coresrc  # noqa: E402
+import objcache  # noqa: E402
 import slots  # noqa: E402
 
 VARIANT_BAT = r'tools\build\variant.bat'
@@ -291,6 +305,8 @@ class Variant(object):
         self.sources = []        # the list's sources, set once in main()
         self.args = []           # cl_args() for this variant
         self.results = {}        # list position -> (returncode, output bytes, includes)
+        self.cached = {}         # list position -> the object cache's record (see no_cache())
+        self.cache_desc = ''     # the cache line's "(BUILD_CACHE=...)" text
         self.left = 0            # compiles not yet reported
         self.state = 'pending'   # pending, compiling, finishing, done
         self.returncode = None
@@ -328,8 +344,10 @@ def write_manifest(v):
     entries = []
     for i, source in enumerate(v.sources):
         path = os.path.join(v.objdir, obj_name(source))
-        entries.append({'src': source, 'obj': path, 'how': 'compiled', 'sha256': file_sha256(path),
-                        'size': os.path.getsize(path), 'includes': v.results[i][2]})
+        cached = v.cached.get(i) or no_cache()
+        entries.append({'src': source, 'obj': path, 'how': cached['how'] or 'compiled',
+                        'sha256': file_sha256(path), 'size': os.path.getsize(path),
+                        'key': cached['entry'], 'cache': cached['note'], 'includes': v.results[i][2]})
     data = {'build_id': v.build_id, 'kind': v.kind, 'flavour': v.flavour,
             'cmd_sha256': cmd_sha256(v.args), 'sources': entries}
     tmp = v.manifest + '.tmp'
@@ -416,13 +434,34 @@ def not_compiled(source, why):
     return ('run_variants.py: %s was not compiled: %s\r\n' % (source, why)).encode('mbcs', 'replace')
 
 
-def run_compile(v, position, source, cl, stop, done):
-    """Compiles one source; always reports on the queue, since the main loop waits for it. A
-    failure of the runner itself (no cpu token in time, cl not started) is reported as `broken`,
-    which stops the run; a compile error is not."""
+def no_cache():
+    """A source's object cache record: how it was made (compiled, restored, or None when neither),
+    entries refused while looking it up, the compile awaiting publication, the note objects.json
+    keeps, and the cache entry it came from or went to."""
+    return {'how': None, 'rejected': 0, 'compiled': None, 'note': None, 'entry': None}
+
+
+def run_compile(v, position, source, cl, stop, done, cache):
+    """Restores one source from the object cache or compiles it; always reports on the queue,
+    since the main loop waits for it. A failure of the runner itself (no cpu token in time, cl
+    not started) is reported as `broken`, which stops the run; a compile error is not."""
     rc, output, includes, seconds, broken = 1, b'', [], None, None
+    cached = no_cache()
     try:
         command = v.compile_command(cl, source)
+        obj_path = os.path.join(v.objdir, obj_name(source))
+        key = None
+        if cache.lookups or cache.publishes:
+            try:
+                key = cache.key(command, source)
+            except OSError as error:  # cl will report an unreadable source itself
+                cached['note'] = 'uncacheable: no key (%s)' % error
+        if key is not None and cache.lookups:
+            hit, cached['rejected'] = cache.restore(key, obj_path)
+            if hit is not None:
+                output, includes, cached['entry'] = hit
+                rc, cached['how'], cached['note'] = 0, 'restored', 'restored'
+                return
         with slots.cpu_token('cl ' + source):
             if stop.is_set():
                 output = not_compiled(source, 'the run stopped')
@@ -431,8 +470,19 @@ def run_compile(v, position, source, cl, stop, done):
             p = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                stdin=subprocess.DEVNULL, env=slots.child_env())
             seconds = time.time() - t0
+        cached['how'] = 'compiled'
         output, includes = split_notes(p.stdout)
         rc = p.returncode
+        if key is not None and cache.publishes:
+            obj_sha = None
+            if rc == 0:
+                try:
+                    obj_sha = file_sha256(obj_path)  # publishing refuses an object changed after this
+                except OSError:
+                    pass
+            cached['compiled'] = objcache.Compiled(key, t0, rc, obj_path, obj_sha, output, includes)
+        elif cached['note'] is None:
+            cached['note'] = 'uncacheable: TEST_NOOP_CL=1' if cache.noop else 'off'
     except (OSError, ValueError, slots.SlotTimeout) as error:
         broken = '%s: %s' % (source, error)
         output = not_compiled(source, error)
@@ -440,16 +490,43 @@ def run_compile(v, position, source, cl, stop, done):
         broken = '%s: unexpected error %r' % (source, error)
         output = not_compiled(source, 'unexpected error %r' % error)
     finally:
-        done.put(('compile', v, (position, rc, output, includes, seconds, broken)))
+        done.put(('compile', v, (position, rc, output, includes, seconds, broken, cached)))
 
 
-def finish_variant(v, done):
-    """After the last compile: the log's compile output, the object checks, then the link."""
+def publish(v, cache):
+    """Publishes what this variant compiled; each record's note says what became of it."""
+    waiting = [i for i in range(len(v.sources)) if v.cached[i]['compiled'] is not None]
+    if not waiting:
+        return
+    results = cache.publish_all([v.cached[i]['compiled'] for i in waiting])
+    for i, (state, detail) in zip(waiting, results):
+        v.cached[i]['compiled'] = None
+        if state == 'uncacheable':
+            v.cached[i]['note'] = 'uncacheable: ' + detail
+        else:
+            v.cached[i]['note'], v.cached[i]['entry'] = state, detail
+
+
+def cache_line(v):
+    records = [v.cached[i] for i in range(len(v.sources))]
+    return 'object cache: %d restored, %d compiled, %d rejected, %d uncacheable (%s)' % (
+        sum(1 for r in records if r['how'] == 'restored'),
+        sum(1 for r in records if r['how'] == 'compiled'),
+        sum(r['rejected'] for r in records),
+        sum(1 for r in records if (r['note'] or '').startswith('uncacheable')),
+        v.cache_desc)
+
+
+def finish_variant(v, done, cache):
+    """After the last compile: publication, the log's compile output, the object checks, then
+    the link."""
     rc = 1
     try:
+        publish(v, cache)
         with open(v.log, 'ab') as log:
             for output in drop_repeated_command_line_warnings(v.results[i][1] for i in range(len(v.sources))):
                 log.write(output)
+        append_log(v.log, cache_line(v))
         failed = [i for i in range(len(v.sources)) if v.results[i][0] != 0]
         if failed:
             # The console shows only the log's tail, so each failed source's first error is
@@ -510,6 +587,9 @@ def report(variant):
     warnings = [l.strip() for l in lines if WARNING_RE.search(l)]
     for line in warnings:
         print('  %s: %s' % (variant.label, line))
+    for line in lines:
+        if line.startswith('object cache: '):
+            print('  %s: %s' % (variant.label, line))
     if variant.returncode == 0:
         ok = [l for l in lines if l.startswith(variant.ok_marker)]
         print('%s   [%.1f s]' % (ok[-1] if ok else variant.ok_marker.rstrip(':'), variant.seconds))
@@ -522,7 +602,7 @@ def report(variant):
     sys.stdout.flush()
 
 
-def build(variants, jobs, mp, cl):
+def build(variants, jobs, mp, cl, cache):
     """Runs every variant; returns the failed ones in the order they failed."""
     estimates = load_timings()
     measured = {}
@@ -561,20 +641,21 @@ def build(variants, jobs, mp, cl):
                 break
             if v.state == 'compiling' and v.left == 0:
                 v.state = 'finishing'
-                threading.Thread(target=finish_variant, args=(v, done)).start()
+                threading.Thread(target=finish_variant, args=(v, done, cache)).start()
                 running += 1
         while running < mp and heap:
             index, _, position, source = heapq.heappop(heap)
             v = variants[index]
-            threading.Thread(target=run_compile, args=(v, position, source, cl, stop, done)).start()
+            threading.Thread(target=run_compile, args=(v, position, source, cl, stop, done, cache)).start()
             running += 1
         if not running:
             break
         what, v, payload = done.get()
         running -= 1
         if what == 'compile':
-            position, rc, output, includes, seconds, broken = payload
+            position, rc, output, includes, seconds, broken, cached = payload
             v.results[position] = (rc, output, includes)
+            v.cached[position] = cached
             v.left -= 1
             if rc == 0 and seconds is not None and os.environ.get('TEST_NOOP_CL') != '1':
                 measured[timing_key(v.sources[position])] = round(seconds, 2)
@@ -589,6 +670,7 @@ def build(variants, jobs, mp, cl):
                     index, _, position, source = heapq.heappop(heap)
                     w = variants[index]
                     w.results[position] = (1, not_compiled(source, 'the run stopped'), [])
+                    w.cached[position] = no_cache()
                     w.left -= 1
         else:
             v.returncode = payload
@@ -667,6 +749,9 @@ def main():
         cl = shutil.which('cl.exe')
         if os.environ.get('TEST_NOOP_CL') != '1' and not cl:
             raise ValueError('cl.exe is not on PATH (run vcvarsall.bat amd64 first)')
+        cache = objcache.ObjectCache.from_env(os.getcwd())  # cl runs here, so includes resolve here
+        for v in variants:
+            v.cache_desc = cache.describe()
     except (OSError, ValueError) as error:
         return refuse(args, error)
 
@@ -677,9 +762,13 @@ def main():
 
     try:
         with slots.heavy('run_variants ' + ' '.join(v.outdir for v in variants)):
-            failed = build(variants, jobs, mp, cl)
+            failed = build(variants, jobs, mp, cl, cache)
     except (slots.SlotTimeout, ValueError) as error:
         return refuse(args, error)
+    evicted = cache.finish()
+    if evicted:
+        print(evicted)
+        sys.stdout.flush()
 
     unfinished = [v for v in variants if v.returncode is None]
     if failed or unfinished:
