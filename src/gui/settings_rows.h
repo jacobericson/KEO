@@ -28,7 +28,8 @@ int RenderModuleIndex();
 // copy that nothing stages or saves.
 RenderConfig& StagedRender(SettingsStaging* s);
 
-enum SettingsRowKind { SR_HEADER, SR_TEXT, SR_CHECKBOX, SR_SLIDER, SR_DROPBOX, SR_BUTTON };
+// SR_NOTE: a dim line after the last section, set apart by a space.
+enum SettingsRowKind { SR_HEADER, SR_TEXT, SR_NOTE, SR_CHECKBOX, SR_SLIDER, SR_DROPBOX, SR_BUTTON };
 
 // Button ids: the slot index plus RECORD or RUN; SWEEP alone.
 enum { BENCH_BUTTON_RECORD = 100, BENCH_BUTTON_RUN = 200, BENCH_BUTTON_SWEEP = 300 };
@@ -46,7 +47,13 @@ struct SettingsRow
 	std::vector<std::pair<std::string, int> > choices;   // SR_DROPBOX: text, value
 	std::string     caption;    // SR_BUTTON: the button's text (label is the line's key, shown beside it)
 	int             buttonId;   // SR_BUTTON
+	bool            restart;    // a startup-only key's row, marked RESTART_MARK
 };
+
+// A startup-only key's label ends with RESTART_MARK and its tooltip with
+// RESTART_NOTE; the footnote is "*" and RESTART_NOTE.
+extern const char* const RESTART_MARK;
+extern const char* const RESTART_NOTE;
 
 // What the Benchmark section shows, read by the caller from the runner.
 struct SettingsBench
@@ -72,9 +79,10 @@ std::string SweepCaption(int leg, int legs);
 
 // The rows in display order: each module's section in kConfigModules[] order,
 // bound into its own staged copy (DEV-only keys only when devBuild;
-// startup-only ones say "(restart)"), then, when devBuild holds and bench is
-// set, the Benchmark section: four rows per slot, then the sweep button.
-// Every row's label is unique: the panel keys its lines by label.
+// startup-only ones marked RESTART_MARK and listed after the live ones), the
+// RESTART_NOTE footnote when a marked row shows, then, when devBuild holds
+// and bench is set, the Benchmark section: four rows per slot, then the sweep
+// button. Every row's label is unique: the panel keys its lines by label.
 void BuildSettingsRows(SettingsStaging* staging, bool devBuild, const SettingsBench* bench,
                        std::vector<SettingsRow>* out);
 

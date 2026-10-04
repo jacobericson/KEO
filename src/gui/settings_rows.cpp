@@ -6,6 +6,9 @@
 
 static_assert(sizeof(RenderConfig) <= CONFIG_STATE_MAX, "the render module's state fits its staged copy");
 
+const char* const RESTART_MARK = " *";
+const char* const RESTART_NOTE = "Takes effect after restarting the game.";
+
 static SettingsRow Row(SettingsRowKind kind, const std::string& label, const char* tooltip)
 {
 	SettingsRow r;
@@ -18,6 +21,7 @@ static SettingsRow Row(SettingsRowKind kind, const std::string& label, const cha
 	r.lo = r.hi = 0.0f;
 	r.stepExp = 0;
 	r.buttonId = 0;
+	r.restart = false;
 	return r;
 }
 
@@ -128,9 +132,17 @@ RenderConfig& StagedRender(SettingsStaging* s)
 void BuildSettingsRows(SettingsStaging* staging, bool devBuild, const SettingsBench* bench,
                        std::vector<SettingsRow>* out)
 {
-	out->push_back(Row(SR_HEADER, "Kenshi Engine Optimizations", NULL));
 	for (int m = 0; m < kConfigModuleCount && m < CONFIG_MODULE_MAX; ++m)
 		AddModuleRows(kConfigModules[m], &staging->module[m], devBuild, out);
+
+	for (size_t i = 0; i < out->size(); ++i)
+	{
+		if ((*out)[i].restart)
+		{
+			out->push_back(Row(SR_NOTE, std::string("* ") + RESTART_NOTE, NULL));
+			break;
+		}
+	}
 
 	if (bench && devBuild)
 		AddBenchRows(staging, *bench, out);

@@ -35,10 +35,25 @@ struct ConfigModuleStage
 // whose widget cannot bind their field into their slots.
 void StageModule(const ConfigModule& m, ConfigModuleStage* s);
 
-// A header only when a row shows, then one row per shown key, bound into s.
-// Offset fields that fit bind directly; other rows bind their staged slots.
-// A key shows when it has a label, is not retired or CK_TEXT, has a widget,
-// and devBuild holds or neither devOnly nor debugOnlyReader holds.
+// Whether a key has a row: it has a label, is not retired or CK_TEXT, has a
+// widget, and devBuild holds or neither devOnly nor debugOnlyReader holds.
+bool SettingsKeyShown(const ConfigKey& k, bool devBuild);
+
+// One key of a section: module->keys[key], staged in stage.
+struct SettingsKeyRef
+{
+	const ConfigModule* module;
+	int                 key;
+	ConfigModuleStage*  stage;
+};
+
+// A header titled title only when a row shows, then one row per shown key:
+// the live keys, then the startup-only ones, each in keys order. Offset
+// fields that fit bind directly; other rows bind their staged slots.
+void AddSectionRows(const char* title, const std::vector<SettingsKeyRef>& keys, bool devBuild,
+                    std::vector<SettingsRow>* out);
+
+// AddSectionRows over every key of m, under m.title, bound into s.
 void AddModuleRows(const ConfigModule& m, ConfigModuleStage* s, bool devBuild, std::vector<SettingsRow>* out);
 
 // Holds each numeric value that differs from its saved one to the loader's

@@ -123,6 +123,11 @@ static void OnButtonPress(DataPanelLine* line)
 	}
 }
 
+// The game's own Options tabs draw a heading as "[title]" in this colour,
+// after a full line of space.
+static const char* const HEADING_COLOUR = "#afa68b";
+static const char* const NOTE_COLOUR    = "#a0a0a0";
+
 static void AddRows(DatapanelGUI* panel, const std::vector<SettingsRow>& rows, int cat, ToolTip* tooltip)
 {
 	const std::string buttonSkin = "Kenshi_Button2";
@@ -133,11 +138,15 @@ static void AddRows(DatapanelGUI* panel, const std::vector<SettingsRow>& rows, i
 		{
 		case SR_HEADER:
 			if (i)
-				panel->addSpace(cat, 0.25f);
-			panel->setLine(r.label, std::string(), cat, false, true);
+				panel->addSpace(cat, 1.0f);
+			panel->setLine(std::string(HEADING_COLOUR) + "[" + r.label + "]", std::string(), cat, false, true);
 			break;
 		case SR_TEXT:
 			panel->setLine(r.label, std::string(), cat, false, true);
+			break;
+		case SR_NOTE:
+			panel->addSpace(cat, 1.0f);
+			panel->setLine(NOTE_COLOUR + r.label, std::string(), cat, false, true);
 			break;
 		case SR_BUTTON:
 		{

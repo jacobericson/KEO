@@ -82,7 +82,7 @@ static bool Shown(const ConfigKey& k, bool devBuild)
 
 static std::string RowLabel(const ConfigKey& k)
 {
-	return std::string(k.label) + (k.live ? "" : " (restart)");
+	return std::string(k.label) + (k.live ? "" : " *");
 }
 
 static bool EndsWith(const std::string& s, const char* tail)
@@ -126,14 +126,14 @@ static int RowCount(const ConfigKey* keys)
 	return n;
 }
 
-// The rows between the header titled title and the next header.
+// The rows between the header titled title and the next header or note.
 static std::vector<const SettingsRow*> Section(const std::vector<SettingsRow>& rows, const char* title)
 {
 	std::vector<const SettingsRow*> out;
 	size_t i = 0;
 	while (i < rows.size() && !(rows[i].kind == SR_HEADER && rows[i].label == title))
 		++i;
-	for (++i; i < rows.size() && rows[i].kind != SR_HEADER; ++i)
+	for (++i; i < rows.size() && rows[i].kind != SR_HEADER && rows[i].kind != SR_NOTE; ++i)
 		out.push_back(&rows[i]);
 	return out;
 }
@@ -213,40 +213,41 @@ static void CheckSections()
 
 	// DEV: every module section, then the Benchmark section.
 	std::vector<std::string> dev = Headers(Rows(&st, true, &bench));
-	bool sections = dev.size() == 9 && dev[0] == "Kenshi Engine Optimizations" && dev[1] == RENDER_TITLE
-	                && dev[8] == "Benchmark";
-	for (int i = 0; sections && i < 6; ++i) sections = dev[i + 2] == MODULE_TITLES[i];
+	bool sections = dev.size() == 8 && dev[0] == RENDER_TITLE && dev[7] == "Benchmark";
+	for (int i = 0; sections && i < 6; ++i) sections = dev[i + 1] == MODULE_TITLES[i];
 	Check(sections, "Sections: DEV");
 
 	// PROD: only the sections that keep a row, and no Benchmark.
 	std::vector<SettingsRow> rows = Rows(&st, false, &bench);
 	std::vector<std::string> prod = Headers(rows);
-	const char* const want[] = { "Kenshi Engine Optimizations", RENDER_TITLE, "Zone loading", "Navmesh", "Movement and orders" };
-	sections = prod.size() == 5;
-	for (int i = 0; sections && i < 5; ++i) sections = prod[i] == want[i];
+	const char* const want[] = { RENDER_TITLE, "Zone loading", "Navmesh", "Movement and orders" };
+	sections = prod.size() == 4;
+	for (int i = 0; sections && i < 4; ++i) sections = prod[i] == want[i];
 	Check(sections, "Sections: PROD");
-	Check(!rows.empty() && rows[0].kind == SR_HEADER && rows[0].label == "Kenshi Engine Optimizations",
-	      "the page opens with the long-name header");
+	Check(!rows.empty() && rows[0].kind == SR_HEADER && rows[0].label == want[0],
+	      "the page opens with its first section's heading");
 
-	// The render section is today's, label for label and kind for kind.
+	// The render section: its live rows in table order, then its startup-only
+	// ones, label for label and kind for kind.
 	std::vector<const SettingsRow*> render = Section(rows, RENDER_TITLE);
 	std::vector<std::string> wantLabel;
 	std::vector<SettingsRowKind> wantKind;
+	for (int pass = 0; pass < 2; ++pass)
 	for (int i = 0; g_renderKeys[i].name; ++i)
 	{
 		const RenderKey& k = g_renderKeys[i];
-		if (!k.label || k.kind == RK_TEXT || k.devOnly)
+		if (!k.label || k.kind == RK_TEXT || k.devOnly || k.live != (pass == 0))
 			continue;
-		wantLabel.push_back(std::string(k.label) + (k.live ? "" : " (restart)"));
+		wantLabel.push_back(std::string(k.label) + (k.live ? "" : " *"));
 		wantKind.push_back(k.kind == RK_BOOL ? SR_CHECKBOX : SR_SLIDER);
 	}
 	bool same = render.size() == wantLabel.size();
 	for (size_t i = 0; same && i < render.size(); ++i)
 		same = render[i]->label == wantLabel[i] && render[i]->kind == wantKind[i];
 	Check(same, "Sections");
-	Check(render.size() == 3 && render[0]->label == "Render and particle levers (restart)"
-	      && render[1]->label == "Cap particle steps at high game speed"
-	      && render[2]->label == "Foliage build budget at speed (ms, 0 = off)", "Sections");
+	Check(render.size() == 3 && render[0]->label == "Cap particle steps at high game speed"
+	      && render[1]->label == "Foliage build budget at speed (ms, 0 = off)"
+	      && render[2]->label == "Render and particle levers *", "Sections");
 }
 
 // ---- Every shown key once; labels; counts ---------------------------------
@@ -319,7 +320,7 @@ static void CheckRestart()
 	std::vector<const SettingsRow*> core = ModuleSections(rows);
 	bool ok = !core.empty();
 	for (size_t i = 0; i < core.size(); ++i)
-		ok = ok && EndsWith(core[i]->label, " (restart)");
+		ok = ok && EndsWith(core[i]->label, " *") && core[i]->restart;
 	int live = 0;
 	for (int i = 0; g_renderKeys[i].name; ++i)
 	{
@@ -327,10 +328,60 @@ static void CheckRestart()
 		if (!k.live || !k.label || k.kind == RK_TEXT)
 			continue;
 		const SettingsRow* r = FindLabel(rows, k.label);
-		ok = ok && r && !EndsWith(r->label, " (restart)");
+		ok = ok && r && !EndsWith(r->label, " *") && !r->restart;
 		++live;
 	}
 	Check(ok && live > 0, "Restart");
+}
+
+// In every section the startup-only rows follow the live ones; one footnote
+// follows the sections exactly when a startup-only row shows, before the
+// Benchmark section.
+static void CheckRestartOrder()
+{
+	SettingsStaging st;
+	StageAll(&st);
+	SettingsBench bench;
+	bench.available = false;
+	bench.reason = "test";
+	for (int view = 0; view < 2; ++view)
+	{
+		std::vector<SettingsRow> rows = Rows(&st, view != 0, &bench);
+		bool order = true, seenRestart = false, anyRestart = false, tooltips = true;
+		int notes = 0;
+		size_t note = rows.size(), benchmark = rows.size();
+		for (size_t i = 0; i < rows.size(); ++i)
+		{
+			const SettingsRow& r = rows[i];
+			if (r.kind == SR_HEADER)
+			{
+				seenRestart = false;
+				if (r.label == "Benchmark")
+					benchmark = i;
+				continue;
+			}
+			if (r.kind == SR_NOTE)
+			{
+				++notes;
+				note = i;
+				continue;
+			}
+			if (r.restart)
+			{
+				seenRestart = anyRestart = true;
+				tooltips = tooltips && EndsWith(r.tooltip, " Takes effect after restarting the game.");
+			}
+			else if (seenRestart && i < benchmark)
+				order = false;
+		}
+		std::string name = view ? "DEV" : "PROD";
+		CheckNamed(order, "restart rows trail live rows: " + name);
+		CheckNamed(tooltips, "restart rows say so in their tooltips: " + name);
+		CheckNamed(anyRestart && notes == 1 && rows[note].label == "* Takes effect after restarting the game.",
+		           "one footnote: " + name);
+		bool placed = note < rows.size() && (view ? benchmark == note + 1 : note + 1 == rows.size());
+		CheckNamed(placed, "the footnote follows the sections: " + name);
+	}
 }
 
 static bool OnProdPage(const char* name)
@@ -386,7 +437,7 @@ static void CheckDevOnly()
 	}
 	Check(n == PROD_PAGE_ROWS, "PROD page: every listed key has a row");
 	for (size_t i = 0; i < prod.size(); ++i)
-		n -= prod[i].kind == SR_HEADER ? 0 : 1;
+		n -= prod[i].kind == SR_HEADER || prod[i].kind == SR_NOTE ? 0 : 1;
 	Check(n == 0, "PROD page: the listed keys are its only rows");
 }
 
@@ -518,7 +569,7 @@ static void CheckStagePerModule()
 	std::vector<SettingsRow> rows;
 	for (int m = 0; m < 3; ++m)
 		AddModuleRows(mods[m], &staged[m], true, &rows);
-	const SettingsRow* a = FindLabel(rows, "Test switch A (restart)");
+	const SettingsRow* a = FindLabel(rows, "Test switch A *");
 	Check(a && a->kind == SR_CHECKBOX && a->boolPtr == &staged[2].slots[0].b, "stage per module: the test row");
 	if (a)
 		*a->boolPtr = false;
@@ -576,14 +627,14 @@ static void CheckWorkerRow()
 	StageAll(&saved);
 	SettingsStaging st = saved;
 	std::vector<SettingsRow> rows = Rows(&st, false, NULL);
-	const SettingsRow* r = FindLabel(rows, "Navmesh worker threads (restart)");
+	const SettingsRow* r = FindLabel(rows, "Navmesh worker threads *");
 	bool ok = r && w >= 0 && r->kind == SR_DROPBOX && r->intPtr == &((navmesh::NavMeshConfig*)st.module[c].state)->cfg_navmeshWorkerCount && r->choices.size() == 7
 	       && r->choices[0].first == "Auto" && r->choices[0].second == 0;
 	for (int n = 1; ok && n <= 6; ++n)
 		ok = r->choices[n].second == n && r->choices[n].first == std::string(1, (char)('0' + n));
 	Check(ok, "worker row");
-	Check(r && r->tooltip == "Threads that generate and load navmesh tiles in the background. Auto uses half the logical CPUs.",
-	      "worker row");
+	Check(r && r->tooltip == "Threads that generate and load navmesh tiles in the background. Auto uses half the logical CPUs."
+	      " Takes effect after restarting the game.", "worker row");
 	if (!ok)
 		return;
 	std::vector<IniEntry> e;
@@ -1119,6 +1170,7 @@ int main()
 	CheckLabels();
 	CheckRowCounts();
 	CheckRestart();
+	CheckRestartOrder();
 	CheckDevOnly();
 	CheckNumericRows();
 	CheckStagePerModule();

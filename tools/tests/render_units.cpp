@@ -1713,10 +1713,10 @@ static void SettingsRowsTests()
 	Check(FindRow(dev, "Render stats") != NULL && FindRow(prod, "Render stats") == NULL, "renderDiag is DEV-only");
 
 	const SettingsRow* levers = FindRow(prod, "Render and particle levers");
-	Check(levers && levers->label == "Render and particle levers (restart)" && levers->kind == SR_CHECKBOX
+	Check(levers && levers->label == "Render and particle levers *" && levers->kind == SR_CHECKBOX
 	      && levers->boolPtr == &StagedRender(&st).renderLevers, "renderLevers: a checkbox bound to staging, marked restart");
 	const SettingsRow* cap = FindRow(prod, "Cap particle steps");
-	Check(cap && cap->label.find("(restart)") == std::string::npos, "live keys are not marked restart");
+	Check(cap && cap->label.find(" *") == std::string::npos && !cap->restart, "live keys are not marked restart");
 	const SettingsRow* speed = FindRow(dev, "Particle step cap from");
 	Check(speed && speed->kind == SR_SLIDER && speed->floatPtr == &StagedRender(&st).particleStepCapSpeed
 	      && speed->lo == 1.5f && speed->hi == 20.0f && speed->stepExp == 1, "slider bound to staging with its drag grid");
@@ -1742,14 +1742,14 @@ static void SettingsRowsTests()
 		if (defSteps != floor(defSteps) || hiSteps != floor(hiSteps))
 			printf("  slider grid: %s\n", k.name);
 	}
-	Check(prod[0].kind == SR_HEADER && prod[0].label == "Kenshi Engine Optimizations", "the long-name header comes first");
+	Check(prod[0].kind == SR_HEADER, "a section heading comes first");
 
 	const SettingsRow* wp = FindRow(prod, "Navmesh worker threads");
 	Check(wp != NULL, "the worker drop box is shown");
 	if (!wp)
 		return;
 	const SettingsRow& w = *wp;
-	Check(w.kind == SR_DROPBOX && w.intPtr == &((navmesh::NavMeshConfig*)st.module[core].state)->cfg_navmeshWorkerCount && w.label.find("(restart)") != std::string::npos,
+	Check(w.kind == SR_DROPBOX && w.intPtr == &((navmesh::NavMeshConfig*)st.module[core].state)->cfg_navmeshWorkerCount && w.label.find(" *") != std::string::npos && w.restart,
 	      "worker drop box bound to staging, marked restart");
 	Check(w.choices.size() == 7 && w.choices[0].first == "Auto" && w.choices[0].second == 0
 	      && w.choices[6].first == "6" && w.choices[6].second == 6, "worker choices Auto, 1..capacity");

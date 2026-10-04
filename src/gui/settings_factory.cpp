@@ -33,7 +33,7 @@ static StageWidget WidgetOf(const ConfigKey& k)
 	}
 }
 
-static bool Shown(const ConfigKey& k, bool devBuild)
+bool SettingsKeyShown(const ConfigKey& k, bool devBuild)
 {
 	return k.label && !k.retired && k.kind != CK_TEXT && WidgetOf(k) != SW_NONE && (devBuild || (!k.devOnly && !k.debugOnlyReader));
 }
@@ -134,60 +134,81 @@ static SettingsRow NewRow(SettingsRowKind kind, const std::string& label, const 
 	r.lo = r.hi = 0.0f;
 	r.stepExp = 0;
 	r.buttonId = 0;
+	r.restart = false;
 	return r;
+}
+
+// One shown key's row, bound into s: a fitting offset field directly, any
+// other row through its staged slot.
+static void AddKeyRow(const ConfigKey& k, int i, ConfigModuleStage* s, std::vector<SettingsRow>* out)
+{
+	std::string label = k.label;
+	std::string tooltip = k.tooltip ? k.tooltip : "";
+	if (!k.live)
+	{
+		label += RESTART_MARK;
+		tooltip += tooltip.empty() ? RESTART_NOTE : std::string(" ") + RESTART_NOTE;
+	}
+	char* field = !k.target && OffsetWidgetFits(k) ? (char*)s->state + k.offset : NULL;
+	ConfigStageValue* slot = &s->slots[i];
+	SettingsRow r;
+	switch (WidgetOf(k))
+	{
+	case SW_CHECKBOX:
+		r = NewRow(SR_CHECKBOX, label, tooltip.c_str());
+		r.boolPtr = field ? (bool*)field : &slot->b;
+		break;
+	case SW_SLIDER:
+	case SW_INT_SLIDER:
+		r = NewRow(SR_SLIDER, label, tooltip.c_str());
+		r.floatPtr = field ? (float*)field : &slot->f;
+		r.lo = k.sliderLo;
+		r.hi = k.hi;
+		r.stepExp = WidgetOf(k) == SW_INT_SLIDER ? 0 : k.stepExp;
+		break;
+	case SW_DROPBOX:
+		r = NewRow(SR_DROPBOX, label, tooltip.c_str());
+		r.intPtr = field ? (int*)field : &slot->i;
+		for (int c = 0; c < k.choiceCount; ++c)
+			r.choices.push_back(std::make_pair(std::string(k.choices[c].label), k.choices[c].value));
+		break;
+	default:
+		return;
+	}
+	r.restart = !k.live;
+	out->push_back(r);
+}
+
+void AddSectionRows(const char* title, const std::vector<SettingsKeyRef>& keys, bool devBuild,
+                    std::vector<SettingsRow>* out)
+{
+	bool headerAdded = false;
+	for (int pass = 0; pass < 2; ++pass)
+	{
+		for (size_t j = 0; j < keys.size(); ++j)
+		{
+			const ConfigKey& k = keys[j].module->keys[keys[j].key];
+			if (!SettingsKeyShown(k, devBuild) || k.live != (pass == 0))
+				continue;
+			if (!headerAdded)
+			{
+				out->push_back(NewRow(SR_HEADER, title, NULL));
+				headerAdded = true;
+			}
+			AddKeyRow(k, keys[j].key, keys[j].stage, out);
+		}
+	}
 }
 
 void AddModuleRows(const ConfigModule& m, ConfigModuleStage* s, bool devBuild, std::vector<SettingsRow>* out)
 {
-	bool headerAdded = false;
+	std::vector<SettingsKeyRef> keys;
 	for (int i = 0; i < CONFIG_STAGE_MAX && m.keys[i].name; ++i)
 	{
-		const ConfigKey& k = m.keys[i];
-		if (!Shown(k, devBuild))
-			continue;
-		if (!headerAdded)
-		{
-			out->push_back(NewRow(SR_HEADER, m.title, NULL));
-			headerAdded = true;
-		}
-		std::string label = k.label;
-		if (!k.live)
-			label += " (restart)";
-		char* field = !k.target && OffsetWidgetFits(k) ? (char*)s->state + k.offset : NULL;
-		ConfigStageValue* slot = &s->slots[i];
-		switch (WidgetOf(k))
-		{
-		case SW_CHECKBOX:
-		{
-			SettingsRow r = NewRow(SR_CHECKBOX, label, k.tooltip);
-			r.boolPtr = field ? (bool*)field : &slot->b;
-			out->push_back(r);
-			break;
-		}
-		case SW_SLIDER:
-		case SW_INT_SLIDER:
-		{
-			SettingsRow r = NewRow(SR_SLIDER, label, k.tooltip);
-			r.floatPtr = field ? (float*)field : &slot->f;
-			r.lo = k.sliderLo;
-			r.hi = k.hi;
-			r.stepExp = WidgetOf(k) == SW_INT_SLIDER ? 0 : k.stepExp;
-			out->push_back(r);
-			break;
-		}
-		case SW_DROPBOX:
-		{
-			SettingsRow r = NewRow(SR_DROPBOX, label, k.tooltip);
-			r.intPtr = field ? (int*)field : &slot->i;
-			for (int c = 0; c < k.choiceCount; ++c)
-				r.choices.push_back(std::make_pair(std::string(k.choices[c].label), k.choices[c].value));
-			out->push_back(r);
-			break;
-		}
-		default:
-			break;
-		}
+		SettingsKeyRef ref = { &m, i, s };
+		keys.push_back(ref);
 	}
+	AddSectionRows(m.title, keys, devBuild, out);
 }
 
 // Whether a target row's staged slot differs from its saved one, read
