@@ -45,11 +45,12 @@ Eviction: after a run that published, when the cache exceeds KEO_CACHE_MAX_GB, t
 used entries (meta.json's mtime, touched on each hit) go until it is under 80 %, by one process
 at a time (a non-blocking lock on evict.lock); an entry a reader holds open is skipped.
 
-Not detected, so the clean audit build stays the proof:
+Not detected, so a clean build (BUILD_CACHE=off) stays the check:
   - a new header under BOOST_ROOT or the INCLUDE folders that would shadow an included one;
   - an object that depends on the absolute path it was compiled at. Objects are shared between
-    checkouts, which is sound while the DLLs are path-independent (verify_identical.py's premise;
-    no DLL source holds an anonymous namespace, whose name hashes that path, or __DATE__/__TIME__);
+    checkouts, which is sound while the DLLs linked from them are path-independent: no DLL source
+    holds an anonymous namespace (MSVC names one after the source's absolute path) or uses
+    __DATE__ or __TIME__;
   - a header edited, or a folder changed, within a second of a lookup in the same run.
 """
 import hashlib
