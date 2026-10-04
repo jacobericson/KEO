@@ -64,6 +64,7 @@ using namespace planner_tick_detail;
 // Written by the arm, then read by the main thread alone.
 static CoarseScratch* s_scratch     = NULL;
 static int            s_legSpan     = 2;
+static int            s_legAim      = 0;
 static int            s_aheadTiles  = 3;
 static int            s_waitSeconds = 10;
 
@@ -485,7 +486,9 @@ bool PlannerTickArm()
 	s_aheadTiles = g_plannerCfg.aheadTiles < 0 ? 0 : (g_plannerCfg.aheadTiles > 8 ? 8 : g_plannerCfg.aheadTiles);   // the feed buffers hold 8 cells
 	s_waitSeconds = g_plannerCfg.waitSeconds;
 	PlannerWaterArm(g_plannerCfg.waterCost);
+	s_legAim = g_plannerCfg.legAim;
 	PlanStoreSetMoveDestReader(ReadMoveDest);
+	PlanStoreSetLegAim(s_legAim);
 	return true;
 }
 
@@ -691,7 +694,7 @@ static bool TickSlot(int slot, const PlayerChar* players, int nPlayers, double n
 			EnqueueCharacterZone(xy[2 * i], xy[2 * i + 1]);
 	}
 	bool onLeg = v.legIndex >= 0 && v.legIndex < v.legCount;
-	float distToPortal = onLeg ? DistXz(pos, v.legs[v.legIndex].point) : 0.0f;
+	float distToPortal = onLeg ? PlanDistToPortal(v.legs[v.legIndex], pos, s_legAim) : 0.0f;
 	UpdateClocks(slot, v, now, distToPortal, onLeg && !v.legs[v.legIndex].isDestination);
 	PlanReplanWhy why = mayReplan ? SlotReplanDue(slot, v, now, distToPortal) : PRW_NONE;
 	if (why == PRW_NONE)

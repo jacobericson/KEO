@@ -9,6 +9,7 @@
 #include "planner/plan_store.h"
 #include "planner/planner_config.h"
 #include "planner/coarse_graph_base.h"
+#include "planner/coarse_graph.h"
 #include "pathfind/astar_hier_policy.h"
 #include "base/config_values.h"
 #include "game/game.h"
@@ -58,6 +59,8 @@ static uintptr_t            s_retRecheck = 0, s_retCompute = 0;   // gameBase + 
 static volatile LONG        s_armed = 0;                         // set last by the install step
 static int                  s_mode  = PLANNER_OFF;
 static int                  s_legSpan = 2;                       // plannerLegSpan, captured at install
+static int                  s_advanceSection = 0;                // plannerAdvanceSection, captured at install
+static int                  s_legAim = 0;                        // plannerLegAim, captured at install
 static const char*          s_refusedWhy = NULL;                 // a literal: the refusal's reason
 
 // AI back thread (the main thread with characterMultithreading off). Publishes the character and a
@@ -108,13 +111,20 @@ static float* hook_getZoneEdge(void* nm, float* retstr, const float* start, cons
 	in.site = site; in.offset = offset; in.pos[0] = start[0]; in.pos[1] = start[1]; in.pos[2] = start[2];
 	in.legIndex = v.legIndex; in.loadedMask = v.loadedMask; in.legSpan = s_legSpan;
 	in.routeTruncated = v.routeTruncated;
+	in.advanceSection = s_advanceSection; in.aim = s_legAim; in.exteriorSlots = CG_EXTERIOR_SLOTS;
 	PlanEdgeOut o;
 	PlanEdgeStep(v.legs, v.legCount, in, &o);
 	if (o.action == PEA_PASS) return r;
+	if (o.aimed && site == PES_COMPUTE)
+	{
+		InterlockedIncrement(&PlannerCountersGet()->aimCount);
+		InterlockedExchangeAdd(&PlannerCountersGet()->aimShiftSum, (LONG)(o.aimShift + 0.5f));
+	}
 	if (o.newLegIndex != v.legIndex)
 	{
 		if (!PlanStoreAdvance(t.slot, v.epoch, v.legIndex, o.newLegIndex)) return r;
 		InterlockedIncrement(&PlannerCountersGet()->arrivals);
+		if (o.bySection) InterlockedIncrement(&PlannerCountersGet()->arrSection);
 		PlanStoreNoteArrival(t.slot, v.epoch);
 	}
 	PlanStoreSetWaiting(t.slot, v.epoch, o.waiting);
@@ -183,6 +193,8 @@ void InstallPlannerHooks(int* installed, int*)
 	s_retCompute = (uintptr_t)GameAddr(RVA_SETDEST_RET_EDGE_COMPUTE);
 	s_mode = g_plannerCfg.mode;
 	s_legSpan = g_plannerCfg.legSpan;
+	s_advanceSection = g_plannerCfg.advanceSection;
+	s_legAim = g_plannerCfg.legAim;
 
 	HookRowId failed = HOOK_ROW_COUNT;
 	const char* why = HookInstall(HOOK_SET_DESTINATION_VEC3, hook_setDestinationVec3, &orig_setDestinationVec3, installed, true);

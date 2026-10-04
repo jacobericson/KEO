@@ -43,7 +43,8 @@ static LONG CounterSum(const PlannerCounters& c)
 	     + c.slotFull + c.repeats + c.locFail + c.goalUnlocated + c.startUnlocated + c.notSite + c.staleAdvance + c.rung17
 	     + c.ownedSkips + c.noLocation
 	     + c.reissuedPlanned + c.heldPlanned + c.reissueRefused + c.snapFar + c.snapMax
-	     + c.waterFail + c.waterGroups + (LONG)CoarseProbeRefusals();
+	     + c.waterFail + c.waterGroups + (LONG)CoarseProbeRefusals()
+	     + c.arrSection + c.aimCount;
 }
 
 void PlannerReportTick(double now)
@@ -65,7 +66,7 @@ void PlannerReportTick(double now)
 	if (sum == s_lastSum)
 		return;
 	s_lastSum = sum;
-	char line[1024];
+	char line[1280];
 	_snprintf_s(line, sizeof(line), _TRUNCATE,
 	            "Planner: plans=%ld direct=%ld legged=%ld noRoute=%ld legs=%ld arrivals=%ld rungs=%ld"
 	            " replans=%ld(w%ld/at%ld/ru%ld/age%ld/gl%ld/end%ld)"
@@ -76,7 +77,8 @@ void PlannerReportTick(double now)
 	            " reissuedPlanned=%ld heldPlanned=%ld reissueRefused=%ld snapFar=%ld snapMax=%ld"
 	            " waterFail=%ld waterGroups=%ld probeNoRoute=%ld"
 	            " waterReq=%ld waterReqLeave=%ld waterReqLast=%.2f waterTable=%ld"
-	            " acidCells=%d acidUnknown=%d",
+	            " acidCells=%d acidUnknown=%d"
+	            " arrSection=%ld aimShift=%.1f",
 	            (long)c.plans, (long)c.direct, (long)c.legged, (long)c.noRoute, (long)c.legs, (long)c.arrivals,
 	            (long)c.rungs,
 	            (long)c.replans, (long)c.replansBy[1], (long)c.replansBy[2], (long)c.replansBy[3], (long)c.replansBy[4],
@@ -89,7 +91,8 @@ void PlannerReportTick(double now)
 	            (long)c.staleAdvance, (long)c.rung17, (long)c.ownedSkips, (long)c.noLocation,
 	            (long)c.reissuedPlanned, (long)c.heldPlanned, (long)c.reissueRefused, (long)c.snapFar, (long)c.snapMax,
 	            (long)c.waterFail, (long)c.waterGroups, CoarseProbeRefusals(), ws.writes, ws.leaves, (double)ws.last, ws.entries,
-	            as.acidCells, as.unknown);
+	            as.acidCells, as.unknown,
+	            (long)c.arrSection, c.aimCount > 0 ? (double)c.aimShiftSum / (double)c.aimCount : 0.0);
 	LogMsg(line);
 }
 

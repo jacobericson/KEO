@@ -119,6 +119,26 @@ static bool ParsePlannerAcidCost(const std::string& val, ConfigLogFn log)
 	return StoreField(&planner::PlannerConfig::acidCost, v);
 }
 
+// plannerAdvanceSection: true or false.
+static bool ParsePlannerAdvanceSection(const std::string& val, ConfigLogFn log)
+{
+	(void)log;
+	bool b = true, third = false;
+	if (!ParseBoolOr(val, NULL, &b, &third) || third)
+		return false;
+	return StoreField(&planner::PlannerConfig::advanceSection, b ? 1 : 0);
+}
+
+// plannerLegAim: true or false.
+static bool ParsePlannerLegAim(const std::string& val, ConfigLogFn log)
+{
+	(void)log;
+	bool b = true, third = false;
+	if (!ParseBoolOr(val, NULL, &b, &third) || third)
+		return false;
+	return StoreField(&planner::PlannerConfig::legAim, b ? 1 : 0);
+}
+
 namespace planner {
 
 const PlannerConfig kPlannerDefaults =
@@ -131,6 +151,8 @@ const PlannerConfig kPlannerDefaults =
 	PWC_DYNAMIC, // waterCost
 	PWE_MATCH, // waterEngine
 	3, // acidCost
+	1, // advanceSection
+	1, // legAim
 };
 
 PlannerConfig g_plannerCfg = kPlannerDefaults;
@@ -169,6 +191,8 @@ const ConfigKey g_plannerConfigKeys[] =
 	CFG_OCUSTOM("plannerWaterCost", PlannerConfig, waterCost, ParsePlannerWaterCost, NDOC),
 	CFG_OCUSTOM("plannerWaterEngine", PlannerConfig, waterEngine, ParsePlannerWaterEngine, NDOC),
 	CFG_OCUSTOM("plannerAcidCost", PlannerConfig, acidCost, ParsePlannerAcidCost, NDOC),
+	CFG_OCUSTOM("plannerAdvanceSection", PlannerConfig, advanceSection, ParsePlannerAdvanceSection, NDOC),
+	CFG_OCUSTOM("plannerLegAim", PlannerConfig, legAim, ParsePlannerLegAim, NDOC),
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }
 };
 

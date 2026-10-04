@@ -9,6 +9,7 @@ namespace planner {
 
 static const float GRID_ORIGIN = 147456.0f;
 static const float GRID_CELL   = 4608.0f;
+static const int   GRID_SIDE   = 64;
 
 static const double ARRIVAL_TIMEOUT_SECONDS = 8.0;
 static const double PLAN_AGE_SECONDS        = 120.0;
@@ -80,11 +81,44 @@ int PlanLegTarget(const PlanLeg* legs, int n, unsigned loadedMask, int from, int
 	return legs[from].isDestination ? -1 : from;
 }
 
+// The rung slide from an explicit base point (PlanRungSlide's is the leg's point).
+static void SlideFrom(const PlanLeg& leg, const float base[3], float offset, float out[3]);
+
+// Leg i's next point for the aim: the following leg's point; none past the last leg or onto a
+// truncated plan's destination leg.
+static bool LegNextPoint(const PlanLeg* legs, int n, int i, int routeTruncated, float out[3])
+{
+	if (i + 1 >= n || (routeTruncated && legs[i + 1].isDestination))
+		return false;
+	Copy3(out, legs[i + 1].point);
+	return true;
+}
+
+// The point leg i yields for a call from in.pos: its aimed point while the aim is on and it has a
+// next point, else its point.
+static void LegPoint(const PlanLeg* legs, int n, int i, const PlanEdgeIn& in, PlanEdgeOut* out, float pt[3])
+{
+	Copy3(pt, legs[i].point);
+	out->aimed = 0;
+	out->aimShift = 0.0f;
+	float next[3];
+	if (!in.aim || legs[i].isDestination || !LegNextPoint(legs, n, i, in.routeTruncated, next))
+		return;
+	if (PlanLegAim(legs[i], in.pos, next, pt))
+	{
+		out->aimed = 1;
+		out->aimShift = DistanceXz(pt, legs[i].point);
+	}
+}
+
 static void EdgeRecheck(const PlanLeg* legs, int n, const PlanEdgeIn& in, PlanEdgeOut* out)
 {
 	const PlanLeg& cur = legs[in.legIndex];
-	Copy3(out->point, cur.point);
-	if (!(DistanceXz(in.pos, cur.point) < PLAN_REACH) || cur.isDestination) return;
+	LegPoint(legs, n, in.legIndex, in, out, out->point);
+	if (cur.isDestination) return;
+	bool reached = PlanDistToPortal(cur, in.pos, in.aim) < PLAN_REACH;
+	bool entered = !reached && in.advanceSection && PlanInFarCell(cur, in.pos, in.exteriorSlots);
+	if (!reached && !entered) return;
 
 	// Past the current portal only once its far section is in: until then the character holds it.
 	int target = -1;
@@ -99,10 +133,12 @@ static void EdgeRecheck(const PlanLeg* legs, int n, const PlanEdgeIn& in, PlanEd
 	if (target > in.legIndex)
 	{
 		out->newLegIndex = target;
-		Copy3(out->point, legs[target].point);
+		out->bySection = entered ? 1 : 0;
+		LegPoint(legs, n, target, in, out, out->point);
 		return;
 	}
-	out->waiting = 1;
+	if (reached)
+		out->waiting = 1;
 }
 
 void PlanEdgeStep(const PlanLeg* legs, int n, const PlanEdgeIn& in, PlanEdgeOut* out)
@@ -111,6 +147,9 @@ void PlanEdgeStep(const PlanLeg* legs, int n, const PlanEdgeIn& in, PlanEdgeOut*
 	out->newLegIndex = in.legIndex;
 	out->waiting     = 0;
 	out->rung        = 0;
+	out->bySection   = 0;
+	out->aimed       = 0;
+	out->aimShift    = 0.0f;
 	out->point[0] = out->point[1] = out->point[2] = 0.0f;
 	if (n > PLAN_MAX_LEGS) n = PLAN_MAX_LEGS;
 	if (!legs || in.legIndex < 0 || in.legIndex >= n) return;
@@ -123,19 +162,21 @@ void PlanEdgeStep(const PlanLeg* legs, int n, const PlanEdgeIn& in, PlanEdgeOut*
 		return;
 	}
 	const PlanLeg& cur = legs[in.legIndex];
+	float base[3];
+	LegPoint(legs, n, in.legIndex, in, out, base);
 	if (in.offset != 0.0f)
 	{
 		out->rung = 1;
 		if (!cur.isDestination)
 		{
-			PlanRungSlide(cur, in.offset, out->point);
+			SlideFrom(cur, base, in.offset, out->point);
 			return;
 		}
 	}
-	Copy3(out->point, cur.point);
+	Copy3(out->point, base);
 }
 
-void PlanRungSlide(const PlanLeg& leg, float offset, float out[3])
+static void SlideFrom(const PlanLeg& leg, const float base[3], float offset, float out[3])
 {
 	const float* a = leg.edgeA;
 	const float* b = leg.edgeB;
@@ -149,12 +190,71 @@ void PlanRungSlide(const PlanLeg& leg, float offset, float out[3])
 		return;
 	}
 	float ux = dx / len, uz = dz / len;
-	float t = (leg.point[0] - a[0]) * ux + (leg.point[2] - a[2]) * uz + offset;
+	float t = (base[0] - a[0]) * ux + (base[2] - a[2]) * uz + offset;
 	if (!(t >= PLAN_RUNG_INSET)) t = PLAN_RUNG_INSET;
 	else if (t > len - PLAN_RUNG_INSET) t = len - PLAN_RUNG_INSET;
 	out[0] = a[0] + ux * t;
 	out[1] = a[1] + (b[1] - a[1]) * (t / len);
 	out[2] = a[2] + uz * t;
+}
+
+void PlanRungSlide(const PlanLeg& leg, float offset, float out[3])
+{
+	SlideFrom(leg, leg.point, offset, out);
+}
+
+bool PlanLegAim(const PlanLeg& leg, const float start[3], const float next[3], float out[3])
+{
+	Copy3(out, leg.point);
+	if (leg.isDestination)
+		return false;
+	const float* a = leg.edgeA;
+	const float* b = leg.edgeB;
+	float ex = b[0] - a[0], ez = b[2] - a[2];
+	float len = std::sqrt(ex * ex + ez * ez);
+	if (!(len >= 2.0f * PLAN_RUNG_INSET))
+		return false;
+	float ux = ex / len, uz = ez / len;
+	float dx = next[0] - start[0], dz = next[2] - start[2];
+	float dl = std::sqrt(dx * dx + dz * dz);
+	// The line start + s * d meets a + t * u where t * (u x d) = (start - a) x d, with
+	// v x w = v.x * w.z - v.z * w.x.
+	float denom = ux * dz - uz * dx;
+	if (!(dl > 0.0f) || !(std::fabs(denom) > 1e-4f * dl))
+		return false;
+	float t = ((start[0] - a[0]) * dz - (start[2] - a[2]) * dx) / denom;
+	if (!(t >= PLAN_RUNG_INSET)) t = PLAN_RUNG_INSET;
+	else if (t > len - PLAN_RUNG_INSET) t = len - PLAN_RUNG_INSET;
+	out[0] = a[0] + ux * t;
+	out[1] = a[1] + (b[1] - a[1]) * (t / len);
+	out[2] = a[2] + uz * t;
+	return true;
+}
+
+float PlanDistToPortal(const PlanLeg& leg, const float pos[3], int edgeAware)
+{
+	if (!edgeAware || leg.isDestination)
+		return DistanceXz(pos, leg.point);
+	float ex = leg.edgeB[0] - leg.edgeA[0], ez = leg.edgeB[2] - leg.edgeA[2];
+	float l2 = ex * ex + ez * ez;
+	if (!(l2 > 0.0f))
+		return DistanceXz(pos, leg.point);
+	float t = ((pos[0] - leg.edgeA[0]) * ex + (pos[2] - leg.edgeA[2]) * ez) / l2;
+	if (!(t >= 0.0f)) t = 0.0f;
+	else if (t > 1.0f) t = 1.0f;
+	float q[3] = { leg.edgeA[0] + ex * t, 0.0f, leg.edgeA[2] + ez * t };
+	return DistanceXz(pos, q);
+}
+
+bool PlanInFarCell(const PlanLeg& leg, const float pos[3], int exteriorSlots)
+{
+	if (leg.farSection < 0 || leg.farSection >= exteriorSlots)
+		return false;
+	int cx, cy;
+	PlanCellOf(pos[0], pos[2], &cx, &cy);
+	if (cx < 0 || cx >= GRID_SIDE || cy < 0 || cy >= GRID_SIDE)
+		return false;
+	return leg.farSection == cy * GRID_SIDE + cx;
 }
 
 PlanFlipAnswer PlanFlipRule(const PlanFlipIn& in)

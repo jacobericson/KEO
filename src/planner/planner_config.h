@@ -20,6 +20,8 @@ struct PlannerConfig
 	int waterCost;     // plannerWaterCost: PlanWaterMode; dynamic by default
 	int waterEngine;   // plannerWaterEngine: PlanWaterEngine; match by default
 	int acidCost;      // plannerAcidCost: 1..10, default 3; 1 prices acidic water as any water
+	int advanceSection;   // plannerAdvanceSection: 1 arrives at a portal on entering its exterior far section; default 1
+	int legAim;           // plannerLegAim: 1 aims each portal along the line to the next leg; default 1
 };
 
 extern PlannerConfig g_plannerCfg;

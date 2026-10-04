@@ -84,6 +84,9 @@ bool PlannerOwnsWait(uintptr_t cm, float posX, float posZ, float wpX, float wpZ)
 // arms; NULL until then.
 typedef void (*PlanMoveDestReader)(uintptr_t cm, float out[3]);
 void PlanStoreSetMoveDestReader(PlanMoveDestReader fn);
+// Main thread, when the planner arms: whether the owned-wait test measures to a portal's whole border
+// edge (plannerLegAim) rather than its midpoint; 0 until then.
+void PlanStoreSetLegAim(int on);
 
 enum PlanSendKind { PLAN_SEND_RESEND = 1, PLAN_SEND_HOLD = 2 };
 // Main thread, the movement module's send paths, before the order is sent. PLAN_SEND_RESEND: the
@@ -111,6 +114,7 @@ struct PlannerCounters
 	volatile LONG slotFull, repeats, locFail, goalUnlocated, startUnlocated, notSite, staleAdvance, rung17, ownedSkips, noLocation;
 	volatile LONG reissuedPlanned, heldPlanned, reissueRefused, snapFar, snapMax;
 	volatile LONG waterFail, waterGroups;   // members whose speed read failed; orders planned run-together
+	volatile LONG arrSection, aimCount, aimShiftSum;   // advances by section entry; aimed recomputes, their summed shift in units
 	volatile LONG dropsBy[PLAN_DROP_REASONS], replansBy[PLAN_REPLAN_REASONS];   // by PlanDropWhy / PlanReplanWhy
 };
 PlannerCounters* PlannerCountersGet();   // any thread; the fields are interlocked

@@ -43,6 +43,7 @@ static void*           s_pauseInRewriteCtx = NULL;
 static PlanStorePause  s_pauseInRead = NULL;
 static void*           s_pauseInReadCtx = NULL;
 static PlanMoveDestReader s_moveDestReader = NULL;
+static int                s_legAim = 0;   // written once at the arm, before any reader runs
 
 static LONGLONG MakeWord(unsigned epoch, unsigned leg)
 {
@@ -361,8 +362,10 @@ bool PlannerOwnsWait(uintptr_t cm, float posX, float posZ, float wpX, float wpZ)
 	if (!PlanStoreRead(slot, &v) || v.cm != cm) return false;
 	if (v.legIndex < 0 || v.legIndex >= v.legCount) return false;
 	const PlanLeg& leg = v.legs[v.legIndex];
-	float posToPortal = DistXz(posX, posZ, leg.point[0], leg.point[2]);
-	float wpToPortal = DistXz(wpX, wpZ, leg.point[0], leg.point[2]);
+	const float pos[3] = { posX, 0.0f, posZ };
+	const float wp[3] = { wpX, 0.0f, wpZ };
+	float posToPortal = PlanDistToPortal(leg, pos, s_legAim);
+	float wpToPortal = PlanDistToPortal(leg, wp, s_legAim);
 	float posToWp = DistXz(posX, posZ, wpX, wpZ);
 	float moveDest[3];
 	s_moveDestReader(cm, moveDest);
@@ -373,6 +376,11 @@ bool PlannerOwnsWait(uintptr_t cm, float posX, float posZ, float wpX, float wpZ)
 void PlanStoreSetMoveDestReader(PlanMoveDestReader fn)
 {
 	s_moveDestReader = fn;
+}
+
+void PlanStoreSetLegAim(int on)
+{
+	s_legAim = on ? 1 : 0;
 }
 
 // Main thread (the slots' one writer).

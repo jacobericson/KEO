@@ -748,6 +748,127 @@ static void CheckWaterRequest()
 	      "water mode: floor, engine and off arm as configured");
 }
 
+// A route east along the row whose far sections are real exterior indices: leg 0's portal into cell
+// (31, 30), leg 1's into (32, 30), the destination in (33, 30), two cells past leg 0's far side.
+static void BuildCellRoute(PlanLeg legs[3])
+{
+	MakeLeg(&legs[0], -4600.0f, ROW_Z, 30 * 64 + 31, 0);
+	MakeLeg(&legs[1], 10.0f, ROW_Z, 30 * 64 + 32, 0);
+	MakeLeg(&legs[2], 4700.0f, ROW_Z, 30 * 64 + 33, 1);
+}
+
+static void SectionIn(PlanEdgeIn* in, const float pos[3], unsigned mask, int section, int aim)
+{
+	EdgeIn(in, PES_RECHECK, 0.0f, pos, 0, mask);
+	in->advanceSection = section;
+	in->aim = aim;
+	in->exteriorSlots = 4096;
+}
+
+static void CheckSectionAdvance()
+{
+	PlanLeg legs[3];
+	BuildCellRoute(legs);
+	float inFar[3];
+	Set3(inFar, -4500.0f, 50.0f, ROW_Z + 30.0f);   // past leg 0's portal, in cell (31, 30), 104 units off
+	PlanEdgeIn in;
+	PlanEdgeOut out;
+
+	SectionIn(&in, inFar, 0x7u, 1, 0);
+	PlanEdgeStep(legs, 3, in, &out);
+	Check(out.newLegIndex == 1 && out.bySection == 1 && out.waiting == 0 && Same3(out.point, legs[1].point),
+	      "section: a start in the far section's cell advances");
+	SectionIn(&in, inFar, 0x0u, 1, 0);
+	PlanEdgeStep(legs, 3, in, &out);
+	Check(out.newLegIndex == 0 && out.waiting == 0 && Same3(out.point, legs[0].point),
+	      "section: an unloaded far section keeps the portal, not waiting");
+	PlanLeg inner[3];
+	BuildCellRoute(inner);
+	inner[0].farSection = 4096 + 5;
+	SectionIn(&in, inFar, 0x7u, 1, 0);
+	PlanEdgeStep(inner, 3, in, &out);
+	Check(out.newLegIndex == 0 && out.bySection == 0, "section: an interior far section keeps the reach rule");
+	SectionIn(&in, inFar, 0x7u, 0, 0);
+	PlanEdgeStep(legs, 3, in, &out);
+	Check(out.newLegIndex == 0 && out.bySection == 0 && Same3(out.point, legs[0].point),
+	      "section: with the key off the reach rule alone decides");
+	float atLeg0[3];
+	Set3(atLeg0, -4590.0f, 50.0f, ROW_Z + 5.0f);
+	SectionIn(&in, atLeg0, 0x7u, 1, 0);
+	PlanEdgeStep(legs, 3, in, &out);
+	Check(out.newLegIndex == 1 && out.bySection == 0, "section: an arrival within the reach is not counted as an entry");
+	Check(PlanInFarCell(legs[0], inFar, 4096) && !PlanInFarCell(legs[1], inFar, 4096),
+	      "section: the far cell is the directory index of the start's cell");
+}
+
+// Leg 0's edge runs 80 units along z at x = -4600 (edgeA y 40 at z - 40, edgeB y 60 at z + 40).
+static void CheckAim()
+{
+	PlanLeg legs[2];
+	MakeLeg(&legs[0], -4600.0f, ROW_Z, 30 * 64 + 31, 0);
+	MakeLeg(&legs[1], -4500.0f, ROW_Z - 80.0f / 3.0f, 30 * 64 + 31, 1);
+	const float aimY = 40.0f + 20.0f / 3.0f, aimZ = ROW_Z - 40.0f / 3.0f;
+	float start[3];
+	Set3(start, -4700.0f, 50.0f, ROW_Z);
+	float out[3];
+	Check(PlanLegAim(legs[0], start, legs[1].point, out) && Near3(out, -4600.0f, aimY, aimZ),
+	      "aim: a line crossing the edge at its third aims there");
+	float far[3];
+	Set3(far, -4500.0f, 50.0f, ROW_Z - 200.0f);
+	Check(PlanLegAim(legs[0], start, far, out) && Near3(out, -4600.0f, 41.25f, ROW_Z - 35.0f),
+	      "aim: a crossing beyond the inset clamps to it");
+	float along[3];
+	Set3(along, -4650.0f, 50.0f, ROW_Z - 20.0f / 3.0f);
+	Check(PlanLegAim(legs[0], along, legs[1].point, out) && Near3(out, -4600.0f, aimY, aimZ),
+	      "aim: a start moved along the aim line keeps the aimed point");
+	Check(!PlanLegAim(legs[1], start, far, out) && Same3(out, legs[1].point), "aim: the destination leg is never aimed");
+
+	PlanEdgeIn in;
+	PlanEdgeOut rc, cp;
+	EdgeIn(&in, PES_COMPUTE, 0.0f, start, 0, 0x3u);
+	in.aim = 1;
+	PlanEdgeStep(legs, 2, in, &cp);
+	Check(cp.aimed == 1 && Near3(cp.point, -4600.0f, aimY, aimZ) && cp.aimShift > 13.3f && cp.aimShift < 13.4f,
+	      "aim: the recompute returns the aimed point and its shift");
+	EdgeIn(&in, PES_RECHECK, 0.0f, start, 0, 0x3u);
+	in.aim = 1;
+	PlanEdgeStep(legs, 2, in, &rc);
+	Check(rc.newLegIndex == 0 && Same3(rc.point, cp.point), "aim: the recheck and the recompute of one frame agree");
+	EdgeIn(&in, PES_COMPUTE, 10.0f, start, 0, 0x3u);
+	in.aim = 1;
+	PlanEdgeStep(legs, 2, in, &cp);
+	Check(cp.rung == 1 && Near3(cp.point, -4600.0f, 40.0f + 20.0f * (80.0f / 3.0f + 10.0f) / 80.0f, aimZ + 10.0f),
+	      "aim: a rung slides from the aimed point");
+	EdgeIn(&in, PES_COMPUTE, 0.0f, start, 0, 0x3u);
+	in.aim = 1;
+	in.routeTruncated = 1;
+	PlanEdgeStep(legs, 2, in, &cp);
+	Check(cp.aimed == 0 && Same3(cp.point, legs[0].point), "aim: a truncated plan's last portal keeps the midpoint");
+	EdgeIn(&in, PES_COMPUTE, 0.0f, start, 0, 0x3u);
+	PlanEdgeStep(legs, 2, in, &cp);
+	Check(cp.aimed == 0 && Same3(cp.point, legs[0].point), "aim: with the key off the midpoint stays");
+
+	float onEdge[3];
+	Set3(onEdge, -4601.0f, 50.0f, ROW_Z - 30.0f);   // 1 unit from the edge, 30 from the midpoint
+	Check(PlanDistToPortal(legs[0], onEdge, 1) < 1.01f && PlanDistToPortal(legs[0], onEdge, 0) > 30.0f,
+	      "aim: the portal's reach is the edge with the aim on and the midpoint with it off");
+	EdgeIn(&in, PES_RECHECK, 0.0f, onEdge, 0, 0x3u);
+	in.aim = 1;
+	PlanEdgeStep(legs, 2, in, &rc);
+	Check(rc.newLegIndex == 1, "aim: a character at the aimed edge point arrives");
+
+	PlanLeg route[3];
+	BuildCellRoute(route);
+	float inFar[3];
+	Set3(inFar, -4500.0f, 50.0f, ROW_Z + 30.0f);
+	SectionIn(&in, inFar, 0x7u, 1, 1);
+	PlanEdgeStep(route, 3, in, &rc);
+	float aimed1[3];
+	bool aimOk = PlanLegAim(route[1], inFar, route[2].point, aimed1);
+	Check(rc.newLegIndex == 1 && rc.bySection == 1 && aimOk && Same3(rc.point, aimed1),
+	      "section and aim: an entry advances to the next portal's aimed point");
+}
+
 int main()
 {
 	CheckCellsAndMode();
@@ -767,5 +888,7 @@ int main()
 	CheckWaterArcs();
 	CheckWaterRequest();
 	CheckAcid();
+	CheckSectionAdvance();
+	CheckAim();
 	return CheckExit("plan_policy_units");
 }

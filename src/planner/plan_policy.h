@@ -63,6 +63,9 @@ struct PlanEdgeIn
 	unsigned loadedMask;
 	int      legSpan;
 	int      routeTruncated;   // the plan kept its first PLAN_MAX_PORTAL_LEGS portals of a longer route
+	int      advanceSection;   // plannerAdvanceSection: entering an exterior far section's cell arrives
+	int      aim;              // plannerLegAim: a portal leg's point is aimed along the line to the next
+	int      exteriorSlots;    // the store's exterior directory size; a far section at or past it is interior
 };
 struct PlanEdgeOut
 {
@@ -71,6 +74,9 @@ struct PlanEdgeOut
 	int   waiting;         // 1: within reach of the current portal and no later leg is a target yet
 	int   rung;            // 1: this call is a rung (COMPUTE with offset != 0)
 	float point[3];        // the waypoint to return, before the snap
+	int   bySection;       // 1: the recheck advanced by section entry, outside the reach
+	int   aimed;           // 1: point is a leg's aimed point, not its midpoint
+	float aimShift;        // x-z distance from that leg's midpoint to the aimed point; 0 unless aimed
 };
 // PES_OTHER, or a legIndex out of range: PASS. RECHECK: within PLAN_REACH (x-z distance) of the
 // current leg's point, and only once the current leg's far section is loaded (loadedMask bit
@@ -81,12 +87,31 @@ struct PlanEdgeOut
 // re-plan. COMPUTE with offset 0: the current point.
 // COMPUTE with offset != 0: the current point slid by offset (PlanRungSlide), rung = 1. A
 // destination leg is never slid.
+// With in.aim set, a portal leg's point is PlanLegAim's from in.pos toward the next leg's point
+// (none for the destination leg, the last leg, or a truncated plan's last portal: the midpoint),
+// the reach is PlanDistToPortal's edge distance, and a rung slides from the aimed point. With
+// in.advanceSection set, the recheck also arrives when in.pos lies in the current leg's exterior far
+// section's cell (PlanInFarCell); an arrival with no target past legIndex then keeps the current
+// point without waiting. Both off: the answers above, exactly.
 void PlanEdgeStep(const PlanLeg* legs, int n, const PlanEdgeIn& in, PlanEdgeOut* out);
 
 // The point moved along its edge (edgeA -> edgeB, x-z direction) by offset, clamped to
 // [PLAN_RUNG_INSET, length - PLAN_RUNG_INSET] along the edge (the midpoint when shorter than twice
 // the inset). y interpolated along the edge.
 void PlanRungSlide(const PlanLeg& leg, float offset, float out[3]);
+
+// The leg's point aimed along the straight line from start toward next (x-z): the point of the
+// border edge, edgeA -> edgeB inset PLAN_RUNG_INSET from each end, nearest that line, y interpolated
+// along the edge. False, with out = leg.point, for a destination leg, an edge shorter than twice the
+// inset, start equal to next, or a line parallel to the edge.
+bool PlanLegAim(const PlanLeg& leg, const float start[3], const float next[3], float out[3]);
+// The x-z distance from pos to the leg's portal: to its border edge segment when edgeAware (the aim
+// is on, so a character arrives anywhere along the edge), else to its point; a destination leg's is
+// its point either way.
+float PlanDistToPortal(const PlanLeg& leg, const float pos[3], int edgeAware);
+// Whether pos lies in the leg's exterior far section: farSection below exteriorSlots and equal to
+// cy * 64 + cx, the directory index of pos's cell (PlanCellOf).
+bool PlanInFarCell(const PlanLeg& leg, const float pos[3], int exteriorSlots);
 
 // The flip, from the thread-local the entry detour published.
 enum PlanFlipAnswer { PFA_NOT_MINE = 0, PFA_FALSE, PFA_VANILLA };
