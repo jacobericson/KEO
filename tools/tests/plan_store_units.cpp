@@ -473,10 +473,30 @@ static void SendRows()
 	Fresh(PLANNER_OFF);
 }
 
+// The order's outdoors bit and the plan's hold flag ride the slot as written, and a rewrite replaces them.
+static void HoldRows()
+{
+	Fresh(PLANNER_ON);
+	PlanWrite w;
+	MakeWrite(&w, CM_A, 1.0f);
+	w.orderOutdoors = 1;
+	w.holdInteriorPortal = 1;
+	int slot = PlanStoreWrite(w);
+	PlanView v;
+	bool held = slot >= 0 && PlanStoreRead(slot, &v) && v.orderOutdoors == 1 && v.holdInteriorPortal == 1;
+	w.holdInteriorPortal = 0;
+	PlanStoreWrite(w);
+	bool cleared = PlanStoreRead(slot, &v) && v.orderOutdoors == 1 && v.holdInteriorPortal == 0;
+	PlanStoreDrop(CM_A);
+	Check(held && cleared, "store: a plan's outdoors bit and hold flag read back as written");
+	Fresh(PLANNER_OFF);
+}
+
 int main()
 {
 	StoreRows();
 	OwnsRows();
 	SendRows();
+	HoldRows();
 	return CheckExit("plan_store_units");
 }

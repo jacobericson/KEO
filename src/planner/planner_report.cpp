@@ -45,7 +45,7 @@ static LONG CounterSum(const PlannerCounters& c)
 	     + c.reissuedPlanned + c.heldPlanned + c.reissueRefused + c.snapFar + c.snapMax
 	     + c.waterFail + c.waterGroups + (LONG)CoarseProbeRefusals()
 	     + c.arrSection + c.aimCount
-	     + c.merges + c.mergeJoins + c.mergeAlone + c.mergeMoved + c.mergeWalkOff;
+	     + c.merges + c.mergeJoins + c.mergeAlone + c.mergeMoved + c.mergeWalkOff + c.interiorHeld;
 }
 
 void PlannerReportTick(double now)
@@ -80,7 +80,8 @@ void PlannerReportTick(double now)
 	            " waterReq=%ld waterReqLeave=%ld waterReqLast=%.2f waterTable=%ld"
 	            " acidCells=%d acidUnknown=%d"
 	            " arrSection=%ld aimShift=%.1f"
-	            " merges=%ld mergeJoins=%ld mergeAlone=%ld mergeMoved=%ld mergeWalkOff=%ld",
+	            " merges=%ld mergeJoins=%ld mergeAlone=%ld mergeMoved=%ld mergeWalkOff=%ld"
+	            " interiorHeld=%ld",
 	            (long)c.plans, (long)c.direct, (long)c.legged, (long)c.noRoute, (long)c.legs, (long)c.arrivals,
 	            (long)c.rungs,
 	            (long)c.replans, (long)c.replansBy[1], (long)c.replansBy[2], (long)c.replansBy[3], (long)c.replansBy[4],
@@ -95,7 +96,8 @@ void PlannerReportTick(double now)
 	            (long)c.waterFail, (long)c.waterGroups, CoarseProbeRefusals(), ws.writes, ws.leaves, (double)ws.last, ws.entries,
 	            as.acidCells, as.unknown,
 	            (long)c.arrSection, c.aimCount > 0 ? (double)c.aimShiftSum / (double)c.aimCount : 0.0,
-	            (long)c.merges, (long)c.mergeJoins, (long)c.mergeAlone, (long)c.mergeMoved, (long)c.mergeWalkOff);
+	            (long)c.merges, (long)c.mergeJoins, (long)c.mergeAlone, (long)c.mergeMoved, (long)c.mergeWalkOff,
+	            (long)c.interiorHeld);
 	LogMsg(line);
 }
 

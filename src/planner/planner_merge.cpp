@@ -322,7 +322,7 @@ void PlannerResumeFromGather(const uintptr_t* chars, int n, double now)
 		PlanSearchParams p = { v.waterMult, v.acidMult };
 		const Built* b = SearchAndBuild(start, goal, v.finalDest, p);
 		int verdict = PV_NONE;
-		WritePlan(cm, pos, goal, v.finalDest, *b, now, &verdict, 0, p);
+		WritePlan(cm, pos, goal, v.finalDest, *b, now, &verdict, 0, p, v.orderOutdoors);
 	}
 	for (int i = 0; i < MERGE_RECORDS; ++i)
 		for (int k = 0; s_records[i].order && k < s_records[i].n; ++k)

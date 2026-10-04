@@ -112,6 +112,7 @@ static float* hook_getZoneEdge(void* nm, float* retstr, const float* start, cons
 	in.legIndex = v.legIndex; in.loadedMask = v.loadedMask; in.legSpan = s_legSpan;
 	in.routeTruncated = v.routeTruncated;
 	in.advanceSection = s_advanceSection; in.aim = s_legAim; in.exteriorSlots = CG_EXTERIOR_SLOTS;
+	in.holdInteriorPortal = v.holdInteriorPortal;
 	PlanEdgeOut o;
 	PlanEdgeStep(v.legs, v.legCount, in, &o);
 	if (o.action == PEA_PASS) return r;

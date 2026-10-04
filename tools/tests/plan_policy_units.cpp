@@ -90,12 +90,12 @@ static void CheckCellsAndMode()
 
 static void CheckVerdict()
 {
-	Check(PlanDecideVerdict(true, 4, 0xFu, 1, 2) == PV_DIRECT, "verdict: every leg loaded and span below legSpan is direct");
-	Check(PlanDecideVerdict(true, 4, 0xBu, 1, 2) == PV_LEGGED, "verdict: one unloaded leg is legged");
-	Check(PlanDecideVerdict(true, 4, 0xFu, 2, 2) == PV_LEGGED, "verdict: span at legSpan is legged");
-	Check(PlanDecideVerdict(false, 0, 0xFFFFFFFFu, 0, 2) == PV_NO_ROUTE, "verdict: no route is no route");
-	Check(PlanDecideVerdict(true, 32, 0xFFFFFFFFu, 0, 2) == PV_DIRECT &&
-	      PlanDecideVerdict(true, 32, 0x7FFFFFFFu, 0, 2) == PV_LEGGED,
+	Check(PlanDecideVerdict(true, 4, 0xFu, 1, 2, 0) == PV_DIRECT, "verdict: every leg loaded and span below legSpan is direct");
+	Check(PlanDecideVerdict(true, 4, 0xBu, 1, 2, 0) == PV_LEGGED, "verdict: one unloaded leg is legged");
+	Check(PlanDecideVerdict(true, 4, 0xFu, 2, 2, 0) == PV_LEGGED, "verdict: span at legSpan is legged");
+	Check(PlanDecideVerdict(false, 0, 0xFFFFFFFFu, 0, 2, 0) == PV_NO_ROUTE, "verdict: no route is no route");
+	Check(PlanDecideVerdict(true, 32, 0xFFFFFFFFu, 0, 2, 0) == PV_DIRECT &&
+	      PlanDecideVerdict(true, 32, 0x7FFFFFFFu, 0, 2, 0) == PV_LEGGED,
 	      "verdict: all 32 legs read the whole mask");
 }
 
@@ -104,12 +104,12 @@ static void CheckLegTarget()
 	PlanLeg legs[4];
 	BuildRoute(legs);
 	// The 3x3 around cell 30 holds cells 29-31: leg 0's far side is in it, leg 1's is not.
-	Check(PlanLegTarget(legs, 4, 0x1u, 0, 30, 30, 2) == 0, "leg: a plain 3x3 loaded set targets the first exit");
-	Check(PlanLegTarget(legs, 4, 0xFu, 0, 30, 30, 3) == 1 && PlanLegTarget(legs, 4, 0x1u, 0, 30, 30, 3) == 0,
+	Check(PlanLegTarget(legs, 4, 0x1u, 0, 30, 30, 2, 0, 0) == 0, "leg: a plain 3x3 loaded set targets the first exit");
+	Check(PlanLegTarget(legs, 4, 0xFu, 0, 30, 30, 3, 0, 0) == 1 && PlanLegTarget(legs, 4, 0x1u, 0, 30, 30, 3, 0, 0) == 0,
 	      "leg: a widened loaded set targets a bounded leg");
-	Check(PlanLegTarget(legs, 4, 0xFu, 0, 30, 30, 2) == 0 && PlanLegTarget(legs, 4, 0xFu, 0, 31, 30, 2) == 1,
+	Check(PlanLegTarget(legs, 4, 0xFu, 0, 30, 30, 2, 0, 0) == 0 && PlanLegTarget(legs, 4, 0xFu, 0, 31, 30, 2, 0, 0) == 1,
 	      "leg: the target stays within legSpan - 1 cells");
-	Check(PlanLegTarget(legs, 4, 0x0u, 0, 30, 30, 2) == 0 && PlanLegTarget(legs, 4, 0x1u, 1, 31, 30, 2) == 1,
+	Check(PlanLegTarget(legs, 4, 0x0u, 0, 30, 30, 2, 0, 0) == 0 && PlanLegTarget(legs, 4, 0x1u, 1, 31, 30, 2, 0, 0) == 1,
 	      "leg: an unloaded next leg is itself the target");
 
 	// A loop: out through cells 31 and 32, back into 32 then 31 two rows up, beyond the bound.
@@ -119,8 +119,8 @@ static void CheckLegTarget()
 	MakeLeg(&loop[2], 10.0f, ROW_Z + 9216.0f, 22, 0);
 	MakeLeg(&loop[3], -4600.0f, ROW_Z + 9216.0f, 21, 1);
 	Check(loop[2].cellY == 32 && loop[3].cellX == 31 && loop[3].cellY == 32 &&
-	      PlanLegTarget(loop, 4, 0xFu, 0, 30, 30, 2) == 0 && PlanLegTarget(loop, 4, 0x5u, 0, 30, 30, 2) == 0 &&
-	      PlanLegTarget(loop, 4, 0xDu, 0, 30, 30, 2) == 0,
+	      PlanLegTarget(loop, 4, 0xFu, 0, 30, 30, 2, 0, 0) == 0 && PlanLegTarget(loop, 4, 0x5u, 0, 30, 30, 2, 0, 0) == 0 &&
+	      PlanLegTarget(loop, 4, 0xDu, 0, 30, 30, 2, 0, 0) == 0,
 	      "leg: a loop whose re-entry is loaded but beyond the bound is not the target");
 
 	// A loaded, bounded leg after an unloaded one is past a stretch the character cannot walk.
@@ -128,18 +128,18 @@ static void CheckLegTarget()
 	MakeLeg(&back[0], -4600.0f, ROW_Z, 11, 0);
 	MakeLeg(&back[1], -4600.0f, ROW_Z + 4608.0f, 12, 0);
 	MakeLeg(&back[2], -4700.0f, ROW_Z + 10.0f, 10, 1);
-	Check(PlanLegTarget(back, 3, 0x5u, 0, 30, 30, 2) == 0, "leg: an unloaded leg ends the run");
+	Check(PlanLegTarget(back, 3, 0x5u, 0, 30, 30, 2, 0, 0) == 0, "leg: an unloaded leg ends the run");
 
 	PlanLeg dest[1];
 	MakeLeg(&dest[0], 6000.0f, ROW_Z, 13, 1);
-	bool alone = PlanLegTarget(dest, 1, 0x1u, 0, 33, 30, 2) == 0 && PlanLegTarget(dest, 1, 0x0u, 0, 33, 30, 2) == -1 &&
-	             PlanLegTarget(dest, 1, 0x1u, 0, 30, 30, 2) == -1;
-	bool onRoute = PlanLegTarget(legs, 4, 0xFu, 0, 32, 30, 2) == 3 && PlanLegTarget(legs, 4, 0x7u, 0, 32, 30, 2) == 2 &&
-	               PlanLegTarget(legs, 4, 0xFu, 3, 30, 30, 2) == -1;
+	bool alone = PlanLegTarget(dest, 1, 0x1u, 0, 33, 30, 2, 0, 0) == 0 && PlanLegTarget(dest, 1, 0x0u, 0, 33, 30, 2, 0, 0) == -1 &&
+	             PlanLegTarget(dest, 1, 0x1u, 0, 30, 30, 2, 0, 0) == -1;
+	bool onRoute = PlanLegTarget(legs, 4, 0xFu, 0, 32, 30, 2, 0, 0) == 3 && PlanLegTarget(legs, 4, 0x7u, 0, 32, 30, 2, 0, 0) == 2 &&
+	               PlanLegTarget(legs, 4, 0xFu, 3, 30, 30, 2, 0, 0) == -1;
 	Check(alone && onRoute, "leg: the destination qualifies only loaded and within the bound");
-	Check(PlanLegTarget(legs, 4, 0xFu, 4, 30, 30, 2) == -1 && PlanLegTarget(legs, 4, 0xFu, -1, 30, 30, 2) == -1,
+	Check(PlanLegTarget(legs, 4, 0xFu, 4, 30, 30, 2, 0, 0) == -1 && PlanLegTarget(legs, 4, 0xFu, -1, 30, 30, 2, 0, 0) == -1,
 	      "leg: a start outside the legs has no target");
-	Check(PlanLegTarget(legs, 4, 0x3u, 0, 30, 30, 1) == 0, "leg: a portal with no bounded run is still the next step");
+	Check(PlanLegTarget(legs, 4, 0x3u, 0, 30, 30, 1, 0, 0) == 0, "leg: a portal with no bounded run is still the next step");
 }
 
 static void EdgeIn(PlanEdgeIn* in, int site, float offset, const float pos[3], int legIndex, unsigned mask)
@@ -757,6 +757,56 @@ static void BuildCellRoute(PlanLeg legs[3])
 	MakeLeg(&legs[2], 4700.0f, ROW_Z, 30 * 64 + 33, 1);
 }
 
+// An interior goal's legs: the portal into cell (31, 30), the portal into the building's interior
+// (directory index 4103, past the 4096 exterior slots) 300 units on, and the click inside it.
+static void BuildInteriorRoute(PlanLeg legs[3])
+{
+	MakeLeg(&legs[0], -4600.0f, ROW_Z, 30 * 64 + 31, 0);
+	MakeLeg(&legs[1], -4300.0f, ROW_Z, 4096 + 7, 0);
+	MakeLeg(&legs[2], -4240.0f, ROW_Z, 4096 + 7, 1);
+}
+
+static void CheckInteriorHold()
+{
+	PlanLeg legs[3];
+	BuildInteriorRoute(legs);
+	Check(PlanLegTarget(legs, 3, 0x7u, 0, 30, 30, 2, 4096, 1) == 1,
+	      "interior hold: the scan stops at the leg into the interior");
+	Check(PlanDecideVerdict(true, 3, 0x7u, 1, 2, 1) == PV_LEGGED,
+	      "interior hold: a held plan's verdict stays legged at span 1");
+	Check(PlanLegTarget(legs, 3, 0x7u, 0, 30, 30, 2, 4096, 0) == 2 && PlanDecideVerdict(true, 3, 0x7u, 1, 2, 0) == PV_DIRECT,
+	      "interior hold: without the hold the click is the target and the verdict direct");
+	PlanLeg route[3];
+	BuildCellRoute(route);
+	Check(PlanLegTarget(route, 3, 0x7u, 0, 32, 30, 2, 4096, 1) == 2 && PlanLegTarget(route, 3, 0x7u, 0, 32, 30, 2, 4096, 0) == 2,
+	      "interior hold: an exterior goal's legs answer as without it");
+	Check(PlanLegTarget(legs, 3, 0x7u, 2, 31, 30, 2, 4096, 1) == 2,
+	      "interior hold: past the interior portal the click is the target");
+	Check(PlanLegTarget(legs, 3, 0x5u, 0, 30, 30, 2, 4096, 1) == 0,
+	      "interior hold: an unloaded interior portal ends the run before it");
+	Check(PlanHoldInteriorPortal(1, 4103, 4096) == 1 && PlanHoldInteriorPortal(0, 4103, 4096) == 0
+	      && PlanHoldInteriorPortal(1, 30 * 64 + 31, 4096) == 0,
+	      "interior hold: only an outdoors order with an interior goal holds");
+
+	float atLeg0[3], atLeg1[3];
+	Set3(atLeg0, -4590.0f, 50.0f, ROW_Z + 5.0f);
+	Set3(atLeg1, -4295.0f, 50.0f, ROW_Z);
+	PlanEdgeIn in;
+	PlanEdgeOut out;
+	EdgeIn(&in, PES_RECHECK, 0.0f, atLeg0, 0, 0x7u);
+	in.exteriorSlots = 4096;
+	in.holdInteriorPortal = 1;
+	PlanEdgeStep(legs, 3, in, &out);
+	Check(out.newLegIndex == 1 && Same3(out.point, legs[1].point),
+	      "interior hold: the recheck at the exterior portal advances to the interior portal, not the click");
+	EdgeIn(&in, PES_RECHECK, 0.0f, atLeg1, 1, 0x7u);
+	in.exteriorSlots = 4096;
+	in.holdInteriorPortal = 1;
+	PlanEdgeStep(legs, 3, in, &out);
+	Check(out.newLegIndex == 2 && Same3(out.point, legs[2].point),
+	      "interior hold: the recheck at the interior portal advances onto the click");
+}
+
 static void SectionIn(PlanEdgeIn* in, const float pos[3], unsigned mask, int section, int aim)
 {
 	EdgeIn(in, PES_RECHECK, 0.0f, pos, 0, mask);
@@ -890,5 +940,6 @@ int main()
 	CheckAcid();
 	CheckSectionAdvance();
 	CheckAim();
+	CheckInteriorHold();
 	return CheckExit("plan_policy_units");
 }

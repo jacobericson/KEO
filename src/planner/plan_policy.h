@@ -42,14 +42,21 @@ void PlanCellOf(float x, float z, int* cx, int* cy);
 void PlanCellCentre(int cx, int cy, float* x, float* z);
 int  PlanCellSpan(int ax, int ay, int bx, int by);   // Chebyshev
 
-// DIRECT: a route, every leg's far section loaded (loadedMask bit i for leg i) and span < legSpan.
-// LEGGED: a route otherwise. NO_ROUTE: none.
-PlanVerdict PlanDecideVerdict(bool routeFound, int legCount, unsigned loadedMask, int span, int legSpan);
+// DIRECT: a route, every leg's far section loaded (loadedMask bit i for leg i), span < legSpan, and the
+// plan not holding an interior goal at its portal. LEGGED: a route otherwise. NO_ROUTE: none.
+PlanVerdict PlanDecideVerdict(bool routeFound, int legCount, unsigned loadedMask, int span, int legSpan,
+                              int holdInteriorPortal);
 
 // The leg-target rule, from leg `from` on: the last leg whose far section is loaded and whose cell
 // is within legSpan - 1 of (cx, cy); when leg `from` itself is unloaded, `from`. The destination leg
-// qualifies only loaded and within the bound. -1 when from >= n.
-int PlanLegTarget(const PlanLeg* legs, int n, unsigned loadedMask, int from, int cx, int cy, int legSpan);
+// qualifies only loaded and within the bound. With holdInteriorPortal set, the run ends at the first
+// portal leg whose far section is interior (farSection >= exteriorSlots): that leg is the target when
+// the run reaches it, and no leg past it is. -1 when from >= n.
+int PlanLegTarget(const PlanLeg* legs, int n, unsigned loadedMask, int from, int cx, int cy, int legSpan,
+                  int exteriorSlots, int holdInteriorPortal);
+// Whether a plan holds its interior goal at the building's portal: the order's building argument was
+// NULL (orderOutdoors) and its goal lies in an interior section (goalDir >= exteriorSlots).
+int PlanHoldInteriorPortal(int orderOutdoors, int goalDir, int exteriorSlots);
 
 // The leg state machine at getZoneEdge's two sites.
 enum PlanEdgeSite   { PES_OTHER = 0, PES_RECHECK, PES_COMPUTE };
@@ -66,6 +73,7 @@ struct PlanEdgeIn
 	int      advanceSection;   // plannerAdvanceSection: entering an exterior far section's cell arrives
 	int      aim;              // plannerLegAim: a portal leg's point is aimed along the line to the next
 	int      exteriorSlots;    // the store's exterior directory size; a far section at or past it is interior
+	int      holdInteriorPortal;   // the plan holds its interior goal at the building's portal
 };
 struct PlanEdgeOut
 {

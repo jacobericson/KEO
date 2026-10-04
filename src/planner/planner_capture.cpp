@@ -38,6 +38,15 @@ static const char* VerdictName(int v)
 	return v == PV_DIRECT ? "direct" : (v == PV_LEGGED ? "legged" : "noRoute");
 }
 
+// The plan line's goal kind: an exterior goal, an interior goal the engine's building argument names,
+// or an interior goal the plan holds at its building's portal (the engine routes the order outdoors).
+static const char* GoalKind(int goalDir, bool indoors)
+{
+	if (PlanHoldInteriorPortal(indoors ? 0 : 1, goalDir, CG_EXTERIOR_SLOTS))
+		return "held";
+	return goalDir >= CG_EXTERIOR_SLOTS ? "int" : "ext";
+}
+
 // The distinct exterior cells of the legs, in route order, as gx.gy pairs.
 static void FormatTiles(const PlanLeg* legs, int n, char* out, size_t size)
 {
@@ -67,11 +76,12 @@ static void ReportOrderPlan(int order, int k, const Located& from, const Located
 	char line[512];
 	_snprintf_s(line, sizeof(line), _TRUNCATE,
 	            "Planner plan: order=%d char=%d from=%x:%d to=%x:%d verdict=%s legs=%d tiles=%s span=%d"
-	            " cost=%.0f expanded=%d ms=%.1f loc=%s indoors=%d road=%.3f m=%.2f water=%.0f%%"
+	            " cost=%.0f expanded=%d ms=%.1f loc=%s indoors=%d goal=%s"
+	            " road=%.3f m=%.2f water=%.0f%%"
 	            " a=%.0f acid=%.0f%%",
 	            order, k, (unsigned)from.uid, from.node, (unsigned)to.uid, to.node, VerdictName(verdict),
 	            b.found ? b.legCount : 0, tiles, span, b.cost, b.expanded, b.ms,
-	            to.exact ? "exact" : "footprint", indoors ? 1 : 0, road, b.waterMult, b.waterShare * 100.0f,
+	            to.exact ? "exact" : "footprint", indoors ? 1 : 0, GoalKind(to.dir, indoors), road, b.waterMult, b.waterShare * 100.0f,
 	            b.acidMult, b.acidShare * 100.0f);
 	PlannerReportPlan(line);
 	if (verdict == PV_NO_ROUTE || indoors)
@@ -193,7 +203,7 @@ int PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void*
 		}
 		const Built* b = SearchAndBuild(start, goal, dest, p);
 		int verdict = PV_NONE;
-		if (WritePlan(cm, pos, goal, dest, *b, now, &verdict, 0, p) < 0)
+		if (WritePlan(cm, pos, goal, dest, *b, now, &verdict, 0, p, destIndoors == NULL ? 1 : 0) < 0)
 			continue;
 		int sx, sy, gx, gy;
 		PlanCellOf(pos[0], pos[2], &sx, &sy);

@@ -33,6 +33,8 @@ struct PlanWrite
 	                            //   the slot's destAtPlan
 	float     waterMult;        // the water multiplier the plan was searched at; its re-plans reuse it
 	float     acidMult;         // the acid factor the plan was searched at; its re-plans reuse it
+	int       orderOutdoors;      // the order's building argument was NULL; a re-plan passes the view's back
+	int       holdInteriorPortal; // PlanHoldInteriorPortal of this plan's goal, set by WritePlan
 	PlanLeg   legs[PLAN_MAX_LEGS];
 };
 // A consistent copy for any thread.
@@ -48,6 +50,7 @@ struct PlanView
 	float     resend[PLAN_RESEND_POINTS][3]; int resendCount;
 	float     waterMult;
 	float     acidMult;
+	int       orderOutdoors, holdInteriorPortal;
 	PlanLeg   legs[PLAN_MAX_LEGS];
 };
 // The main thread's own fields for one slot (never read off the main thread).
@@ -116,6 +119,7 @@ struct PlannerCounters
 	volatile LONG waterFail, waterGroups;   // members whose speed read failed; orders planned run-together
 	volatile LONG arrSection, aimCount, aimShiftSum;   // advances by section entry; aimed recomputes, their summed shift in units
 	volatile LONG merges, mergeJoins, mergeAlone, mergeMoved, mergeWalkOff;   // orders merged; members joined, alone; gathers moved; walks off
+	volatile LONG interiorHeld;   // plans written holding an interior goal at its building's portal
 	volatile LONG dropsBy[PLAN_DROP_REASONS], replansBy[PLAN_REPLAN_REASONS];   // by PlanDropWhy / PlanReplanWhy
 };
 PlannerCounters* PlannerCountersGet();   // any thread; the fields are interlocked

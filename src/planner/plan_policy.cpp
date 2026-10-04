@@ -53,9 +53,11 @@ int PlanCellSpan(int ax, int ay, int bx, int by)
 	return (sx > sy) ? sx : sy;
 }
 
-PlanVerdict PlanDecideVerdict(bool routeFound, int legCount, unsigned loadedMask, int span, int legSpan)
+PlanVerdict PlanDecideVerdict(bool routeFound, int legCount, unsigned loadedMask, int span, int legSpan,
+                              int holdInteriorPortal)
 {
 	if (!routeFound) return PV_NO_ROUTE;
+	if (holdInteriorPortal) return PV_LEGGED;
 	if (legCount < 0) legCount = 0;
 	unsigned all = (legCount >= 32) ? 0xFFFFFFFFu : ((1u << legCount) - 1u);
 	if ((loadedMask & all) == all && span < legSpan) return PV_DIRECT;
@@ -64,9 +66,12 @@ PlanVerdict PlanDecideVerdict(bool routeFound, int legCount, unsigned loadedMask
 
 // The scan walks the route from leg `from` while each leg's far section is loaded and its cell is
 // inside the bound: an unloaded leg or one past the bound ends the run, so the target is never
-// beyond a stretch the character cannot walk or a leg that leaves the bounded span. A portal leg
-// with no qualifying run is still the next step; the destination leg is never a fallback.
-int PlanLegTarget(const PlanLeg* legs, int n, unsigned loadedMask, int from, int cx, int cy, int legSpan)
+// beyond a stretch the character cannot walk or a leg that leaves the bounded span. A held interior
+// goal's run also ends at the leg into the interior, so the engine is never handed the goal from
+// outside the building's portal. A portal leg with no qualifying run is still the next step; the
+// destination leg is never a fallback.
+int PlanLegTarget(const PlanLeg* legs, int n, unsigned loadedMask, int from, int cx, int cy, int legSpan,
+                  int exteriorSlots, int holdInteriorPortal)
 {
 	if (n > PLAN_MAX_LEGS) n = PLAN_MAX_LEGS;
 	if (!legs || from < 0 || from >= n) return -1;
@@ -76,9 +81,15 @@ int PlanLegTarget(const PlanLeg* legs, int n, unsigned loadedMask, int from, int
 		if (!LegLoaded(loadedMask, i)) break;
 		if (!(PlanCellSpan(legs[i].cellX, legs[i].cellY, cx, cy) <= legSpan - 1)) break;
 		target = i;
+		if (holdInteriorPortal && !legs[i].isDestination && legs[i].farSection >= exteriorSlots) break;
 	}
 	if (target >= 0) return target;
 	return legs[from].isDestination ? -1 : from;
+}
+
+int PlanHoldInteriorPortal(int orderOutdoors, int goalDir, int exteriorSlots)
+{
+	return (orderOutdoors && goalDir >= exteriorSlots) ? 1 : 0;
 }
 
 // The rung slide from an explicit base point (PlanRungSlide's is the leg's point).
@@ -126,7 +137,8 @@ static void EdgeRecheck(const PlanLeg* legs, int n, const PlanEdgeIn& in, PlanEd
 	{
 		int cx, cy;
 		PlanCellOf(in.pos[0], in.pos[2], &cx, &cy);
-		target = PlanLegTarget(legs, n, in.loadedMask, in.legIndex + 1, cx, cy, in.legSpan);
+		target = PlanLegTarget(legs, n, in.loadedMask, in.legIndex + 1, cx, cy, in.legSpan, in.exteriorSlots,
+		                       in.holdInteriorPortal);
 		// A truncated plan's destination leg is not the order's end: hold its last portal instead.
 		if (in.routeTruncated && target >= 0 && legs[target].isDestination) target -= 1;
 	}

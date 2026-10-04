@@ -429,7 +429,8 @@ void planner_tick_detail::CrossingPoint(unsigned from, unsigned to, float out[3]
 // Writes the character's plan, with the prices p its re-plans search at, and feeds its route's next
 // tiles; -1 when the store is full.
 int planner_tick_detail::WritePlan(uintptr_t cm, const float pos[3], const Located& goal, const float dest[3],
-                                   const Built& b, double now, int* verdictOut, int keepSends, const PlanSearchParams& p)
+                                   const Built& b, double now, int* verdictOut, int keepSends, const PlanSearchParams& p,
+                                   int orderOutdoors)
 {
 	PlanWrite& w = s_write;
 	memset(&w, 0, sizeof(w));
@@ -437,6 +438,8 @@ int planner_tick_detail::WritePlan(uintptr_t cm, const float pos[3], const Locat
 	w.keepSends = keepSends;
 	w.waterMult = p.m;
 	w.acidMult = p.a;
+	w.orderOutdoors = orderOutdoors ? 1 : 0;
+	w.holdInteriorPortal = PlanHoldInteriorPortal(w.orderOutdoors, goal.dir, CG_EXTERIOR_SLOTS);
 	w.legCount = b.found ? b.legCount : 0;
 	memcpy(w.legs, b.legs, sizeof(PlanLeg) * w.legCount);
 	w.routeTruncated = b.truncated;
@@ -446,8 +449,9 @@ int planner_tick_detail::WritePlan(uintptr_t cm, const float pos[3], const Locat
 	PlanCellOf(pos[0], pos[2], &sx, &sy);
 	PlanCellOf(dest[0], dest[2], &gx, &gy);
 	int span = PlanCellSpan(sx, sy, gx, gy);
-	w.verdict = PlanDecideVerdict(b.found != 0, w.legCount, w.loadedMask, span, s_legSpan);
-	int first = PlanLegTarget(w.legs, w.legCount, w.loadedMask, 0, sx, sy, s_legSpan);
+	w.verdict = PlanDecideVerdict(b.found != 0, w.legCount, w.loadedMask, span, s_legSpan, w.holdInteriorPortal);
+	int first = PlanLegTarget(w.legs, w.legCount, w.loadedMask, 0, sx, sy, s_legSpan, CG_EXTERIOR_SLOTS,
+	                          w.holdInteriorPortal);
 	w.firstLeg = first < 0 ? 0 : first;
 	memcpy(w.finalDest, dest, sizeof(w.finalDest));
 	ReadMoveDest(cm, w.destAtPlan);
@@ -461,6 +465,7 @@ int planner_tick_detail::WritePlan(uintptr_t cm, const float pos[3], const Locat
 	InterlockedIncrement(&c->plans);
 	InterlockedIncrement(w.verdict == PV_DIRECT ? &c->direct : (w.verdict == PV_LEGGED ? &c->legged : &c->noRoute));
 	InterlockedExchangeAdd(&c->legs, w.legCount);
+	if (w.holdInteriorPortal) InterlockedIncrement(&c->interiorHeld);
 	int xy[2 * 8];
 	int cells = PlanFeedCells(w.legs, w.legCount, w.firstLeg, s_aheadTiles, CG_EXTERIOR_SLOTS, xy);
 	for (int i = 0; i < cells; ++i)
@@ -644,7 +649,7 @@ static bool Replan(const PlanView& v, uintptr_t character, double now, PlanRepla
 	PlanSearchParams p = { v.waterMult, v.acidMult };
 	const Built* b = SearchAndBuild(start, goal, v.finalDest, p);
 	int verdict = PV_NONE;
-	int slot = WritePlan(v.cm, pos, goal, v.finalDest, *b, now, &verdict, 1, p);
+	int slot = WritePlan(v.cm, pos, goal, v.finalDest, *b, now, &verdict, 1, p, v.orderOutdoors);
 	if (slot < 0)
 		return false;
 	if (why == PRW_GOAL_LOADED && !goal.exact)

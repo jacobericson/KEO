@@ -26,6 +26,7 @@ struct PlanSlot
 	float             resend[PLAN_RESEND_POINTS][3]; int resendCount;   // written only under an odd epoch
 	float             waterMult;                                        // written only under an odd epoch
 	float             acidMult;                                         // written only under an odd epoch
+	int               orderOutdoors, holdInteriorPortal;                // written only under an odd epoch
 	PlanLeg           legs[PLAN_MAX_LEGS];
 	PlanMainState     main;
 };
@@ -120,6 +121,8 @@ static void ClearSlot(PlanSlot& s)
 	s.resendCount = 0;
 	s.waterMult = 0.0f;
 	s.acidMult = 0.0f;
+	s.orderOutdoors = 0;
+	s.holdInteriorPortal = 0;
 	memset(s.legs, 0, sizeof(s.legs));
 	memset(&s.main, 0, sizeof(s.main));
 	InterlockedExchange(&s.loadedMask, 0);
@@ -175,6 +178,8 @@ int PlanStoreWrite(const PlanWrite& w)
 	memcpy(s.finalDest, w.finalDest, sizeof(s.finalDest));
 	s.waterMult = w.waterMult;
 	s.acidMult = w.acidMult;
+	s.orderOutdoors = w.orderOutdoors;
+	s.holdInteriorPortal = w.holdInteriorPortal;
 	if (!keep)
 	{
 		memcpy(s.destAtPlan, w.destAtPlan, sizeof(s.destAtPlan));
@@ -274,6 +279,8 @@ bool PlanStoreRead(int slot, PlanView* out)
 		out->resendCount = s.resendCount;
 		out->waterMult = s.waterMult;
 		out->acidMult = s.acidMult;
+		out->orderOutdoors = s.orderOutdoors;
+		out->holdInteriorPortal = s.holdInteriorPortal;
 		memcpy(out->legs, s.legs, sizeof(out->legs));
 		LONGLONG w2 = LoadWord(s);
 		if (EpochOf(w2) != e) continue;

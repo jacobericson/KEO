@@ -40,9 +40,11 @@ bool Locate(const float p[3], Located* out);
 // Forgets the memoised searches; each order and each re-plan starts empty.
 void ClearMemo();
 const Built* SearchAndBuild(const Located& start, const Located& goal, const float dest[3], const PlanSearchParams& p);
-// Writes the character's plan and feeds its route's next tiles; -1 when the store is full.
+// Writes the character's plan and feeds its route's next tiles; -1 when the store is full. orderOutdoors
+// is the order's own bit (the engine's building argument was NULL), carried for the re-plans.
 int WritePlan(uintptr_t cm, const float pos[3], const Located& goal, const float dest[3],
-              const Built& b, double now, int* verdictOut, int keepSends, const PlanSearchParams& p);
+              const Built& b, double now, int* verdictOut, int keepSends, const PlanSearchParams& p,
+              int orderOutdoors);
 // Drops the character's plan by reason; its edge-branch consultations, -1 when it had none.
 int DropPlan(uintptr_t cm, PlanDropWhy why);
 // Whether the player list is longer than the tick scans; the tick and the order capture both refuse
