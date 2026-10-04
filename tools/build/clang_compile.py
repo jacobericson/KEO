@@ -51,10 +51,13 @@ byte). Every pass's checks above run before anything starts, and every pass's
 log is deleted before the queue starts, so a run that stops leaves no log that
 reads as clean. Each log is written once the queue is done, in its list's
 order, exactly as one pass alone writes it; a pass refused by its /E check
-writes no log. A pass's summary line times it from the queue's start to its
-last process's end. The run holds one host-wide heavy slot and each clang-cl
-one cpu token (tools\\build\\slots.py); started under a cpu token, it runs
-one process at a time.
+prints every /E verdict and its failed sources and writes no log. A pass's
+summary line times it from the queue's start to its last process's end. The
+run holds one host-wide heavy slot and each clang-cl one cpu token
+(tools\\build\\slots.py); started under a cpu token, it runs one process at
+a time. When any task fails to run (a slot wait that runs out, a clang-cl that
+cannot start), no queued task starts another clang-cl. A slot wait that runs
+out exits 75 (slots.EXIT_TIMEOUT) after the slots: FAILED line.
 
 Environment: BUILD_MP = processes at once (unset = logical cores, 0 = one).
 """
@@ -64,6 +67,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import time
 
 sys.dont_write_bytecode = True
@@ -296,8 +300,9 @@ class Pass(object):
         self.tries = {}     # --ehsc source -> __try count, or the /E failure text
         self.end = 0.0      # seconds from the queue's start to this pass's last process
 
-    def prefix(self, multi):
-        return '%s: ' % self.name if multi else ''
+    def prefix(self):
+        """'<name>: ' for a --pass pass; '' for the single-pass form, whose pass has no name."""
+        return '%s: ' % self.name if self.name else ''
 
 
 def split_passes(argv):
@@ -321,6 +326,8 @@ def parse_pass(tokens):
     parser.add_argument('log')
     parser.add_argument('--ehsc', action='append', default=[])
     a = parser.parse_args(tokens)
+    if not a.name:
+        parser.error('a pass needs a name')
     return Pass(a.name, a.flags, a.sources, a.log, a.ehsc)
 
 
@@ -359,41 +366,57 @@ def load_slots():
     return slots
 
 
-def run_task(slots, clang, p, kind, source, env):
+def run_task(slots, stop, clang, p, kind, source, env):
     """One clang-cl under one cpu token: an /E check's __try count (or its
-    failure text), or compile_one's /Zs result."""
-    with slots.cpu_token('clang-cl'):
-        if kind == 'E':
-            try:
-                return preprocessed_try_count(clang, p.flags, source, env)
-            except ValueError as error:
-                return str(error)
-        return compile_one(clang, p.flags, source, None, os.path.normcase(source) in p.ehsc_set, env,
-                           syntax_only=True)
+    failure text), or compile_one's /Zs result. None, running nothing, once
+    stop is set; a task that raises sets stop before its worker takes the
+    next task."""
+    if stop.is_set():
+        return None
+    try:
+        with slots.cpu_token('clang-cl'):
+            if stop.is_set():
+                return None
+            if kind == 'E':
+                try:
+                    return preprocessed_try_count(clang, p.flags, source, env)
+                except ValueError as error:
+                    return str(error)
+            return compile_one(clang, p.flags, source, None, os.path.normcase(source) in p.ehsc_set, env,
+                               syntax_only=True)
+    except BaseException:
+        stop.set()
+        raise
 
 
-def report_pass(p, multi, jobs):
-    """Writes p's log and prints its lines; True when the pass failed."""
-    for s in p.ehsc:
-        if not isinstance(p.tries[s], int):
-            print('clang_compile.py: ERROR: %s%s' % (p.prefix(multi), p.tries[s]))
-            return True
-    seh = ['%s (%d)' % (s, p.tries[s]) for s in p.ehsc if p.tries[s]]
+def report_pass(p, jobs):
+    """Writes p's log and prints its lines; True when the pass failed. A pass
+    refused by its /E checks prints each of them and its failed sources, and
+    writes no log."""
+    refusals = ['%s%s' % (p.prefix(), p.tries[s]) for s in p.ehsc if not isinstance(p.tries[s], int)]
+    seh = ['%s (%d)' % (s, p.tries[s]) for s in p.ehsc if isinstance(p.tries[s], int) and p.tries[s]]
     if seh:
-        print('clang_compile.py: ERROR: %s--ehsc refused for a source whose preprocessed text holds __try '
-              '(its handlers would be dropped): %s' % (p.prefix(multi), ', '.join(seh)))
-        return True
+        refusals.append('%s--ehsc refused for a source whose preprocessed text holds __try (its handlers '
+                        'would be dropped): %s' % (p.prefix(), ', '.join(seh)))
 
     warnings = 0
     failed = []
+    entries = []
+    for s in p.sources:
+        _, cmd, rc, output, seconds = p.results[s]
+        lines = output.splitlines()
+        warnings += sum(1 for line in lines if WARNING_RE.search(line))
+        entries.append(log_entry(s, rc, seconds, cmd, output))
+        if rc != 0:
+            failed.append((s, rc, True, [line for line in lines if ERROR_RE.search(line)]))
+    if refusals:
+        for line in refusals:
+            print('clang_compile.py: ERROR: %s' % line)
+        print_failures(failed)
+        return True
+
     with open(p.log, 'wb') as log:
-        for s in p.sources:
-            _, cmd, rc, output, seconds = p.results[s]
-            lines = output.splitlines()
-            warnings += sum(1 for line in lines if WARNING_RE.search(line))
-            log.write(log_entry(s, rc, seconds, cmd, output))
-            if rc != 0:
-                failed.append((s, rc, True, [line for line in lines if ERROR_RE.search(line)]))
+        log.write(b''.join(entries))
     print('clang_compile: %d source(s) in %.1f s, %d at a time; %d warning line(s); %d failed; messages: %s'
           % (len(p.sources), p.end, jobs, warnings, len(failed), p.log))
     if p.ehsc:
@@ -403,7 +426,7 @@ def report_pass(p, multi, jobs):
     return bool(failed)
 
 
-def syntax_main(clang, passes, multi):
+def syntax_main(clang, passes):
     """The syntax-only run: every pass through one queue (see the module text)."""
     child_env, dropped = clang_child_env()
     if dropped:
@@ -417,7 +440,7 @@ def syntax_main(clang, passes, multi):
             try:
                 p.sources, p.ehsc_set = check_sources(p.flags, p.sources_path, p.ehsc)
             except (OSError, ValueError) as error:
-                raise ValueError(p.prefix(multi) + str(error))
+                raise ValueError(p.prefix() + str(error))
         if not os.path.isfile(clang):
             raise ValueError('clang-cl not found: ' + clang)
         for p in passes:
@@ -439,10 +462,14 @@ def syntax_main(clang, passes, multi):
         with slots.heavy('clang_check'):
             env = slots.child_env(child_env)
             start = time.time()
-            with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
+            # A task that raises ends the run: the stop event keeps every task
+            # still queued or waiting for a token from starting a clang-cl.
+            stop = threading.Event()
+            pool = concurrent.futures.ThreadPoolExecutor(max_workers=jobs)
+            try:
                 futures = {}
                 for kind, pi, s in tasks:
-                    futures[pool.submit(run_task, slots, clang, passes[pi], kind, s, env)] = (kind, pi, s)
+                    futures[pool.submit(run_task, slots, stop, clang, passes[pi], kind, s, env)] = (kind, pi, s)
                 for fut in concurrent.futures.as_completed(futures):
                     kind, pi, s = futures[fut]
                     p = passes[pi]
@@ -451,17 +478,20 @@ def syntax_main(clang, passes, multi):
                     else:
                         p.results[s] = fut.result()
                     p.end = max(p.end, time.time() - start)
+            finally:
+                stop.set()
+                pool.shutdown(wait=True, cancel_futures=True)
             elapsed = time.time() - start
     except slots.SlotTimeout:
-        return 1
+        return slots.EXIT_TIMEOUT
     except ValueError as error:
         print('clang_compile.py: ERROR: %s' % error)
         return 1
 
     failed = False
     for p in passes:
-        failed = report_pass(p, multi, jobs) or failed
-    if multi:
+        failed = report_pass(p, jobs) or failed
+    if passes[0].name:
         print('clang_compile: %d passes, %d clang-cl run(s) in %.1f s, %d at a time'
               % (len(passes), len(tasks), elapsed, jobs))
     return 1 if failed else 0
@@ -485,7 +515,7 @@ def main(argv=None):
             parser.error('--objdir is required unless --syntax-only')
         if not args.syntax_only:
             return compile_main(args)
-        return syntax_main(args.clang, [Pass('', args.flags, args.sources, args.log, args.ehsc)], False)
+        return syntax_main(args.clang, [Pass('', args.flags, args.sources, args.log, args.ehsc)])
 
     if not args.syntax_only:
         parser.error('--pass needs --syntax-only')
@@ -496,7 +526,7 @@ def main(argv=None):
     logs = [os.path.normcase(os.path.abspath(p.log)) for p in passes]
     if len(set(names)) != len(names) or len(set(logs)) != len(logs):
         parser.error('two passes share one name or one log')
-    return syntax_main(args.clang, passes, True)
+    return syntax_main(args.clang, passes)
 
 
 if __name__ == '__main__':

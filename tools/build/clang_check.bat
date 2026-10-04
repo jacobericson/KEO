@@ -11,7 +11,8 @@ REM first; its warnings count toward DEV's classes, and a baseline write refuses
 REM exists.
 REM Output: build\clang_check\ (the .rsp files and dev.log, prod.log, prof.log)
 REM and compile_commands.json at the repository root. Exit 0 when every source
-REM parses and no warning class is above the baseline; 1 otherwise.
+REM parses and no warning class is above the baseline; 75 when no host-wide
+REM build slot came free in time (tools\build\slots.py); 1 otherwise.
 
 setlocal enabledelayedexpansion
 cd /d "%~dp0..\.."
@@ -44,7 +45,9 @@ if defined TEST_CLANG_EXTRA (
 )
 set "EHSC=--ehsc src\gui\settings_panel.cpp --ehsc src\render\gpu_upload.cpp"
 python tools\build\clang_compile.py --syntax-only --clang "%CLANG_CL%" %EXTRA_PASS% --pass dev "%CC_DIR%\dev.rsp" tools\build\coresrc.txt "%CC_DIR%\dev.log" %EHSC% --pass prod "%CC_DIR%\prod.rsp" tools\build\coresrc.txt "%CC_DIR%\prod.log" %EHSC% --pass prof "%CC_DIR%\prof.rsp" tools\build\profsrc.txt "%CC_DIR%\prof.log"
-if errorlevel 1 goto :failed
+set "CC_RC=!errorlevel!"
+if "!CC_RC!"=="75" goto :no_slot
+if not "!CC_RC!"=="0" goto :failed
 
 if /i "%~1"=="update-baseline" (
     python tools\build\clang_warnings.py write --logdir "%CC_DIR%" --baseline tools\build\clang_warnings_baseline.txt
@@ -52,6 +55,10 @@ if /i "%~1"=="update-baseline" (
 )
 python tools\build\clang_warnings.py check --logdir "%CC_DIR%" --baseline tools\build\clang_warnings_baseline.txt
 exit /b %errorlevel%
+
+:no_slot
+echo clang_check: FAILED ^(no host-wide build slot came free in time; see the slots: lines above^)
+exit /b 75
 
 :failed
 echo clang_check: FAILED ^(a source did not parse; see %CC_DIR%\*.log^)
