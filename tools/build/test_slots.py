@@ -1,0 +1,421 @@
+"""Tests of tools\\build\\slots.py, the host-wide slot pools (unittest, standard library only).
+
+Every test runs against its own temporary KEO_SLOTS_DIR with every KEO_* variable of the caller
+removed first, so a run under a slot-holding parent tests the pools rather than their bypass.
+Child processes report through stdout lines and block on release files, so no assertion depends
+on a sleep's length.
+"""
+import contextlib
+import io
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import unittest
+
+sys.dont_write_bytecode = True
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import slots  # noqa: E402
+
+SLOTS_PY = os.path.join(HERE, 'slots.py')
+PY = sys.executable
+WAIT = 10.0  # upper bound on any expected event; a broken pool fails here instead of hanging
+
+# Holds one slot of argv[2] until the file argv[3] exists; prints 'got <id> <pid>' inside it.
+HOLDER = r'''
+import os, sys, time
+sys.path.insert(0, sys.argv[1])
+import slots
+take = slots.heavy if sys.argv[2] == 'heavy' else slots.cpu_token
+with take('holder') as sid:
+    print('got %s %d' % (sid, os.getpid()), flush=True)
+    end = time.monotonic() + 30
+    while not os.path.exists(sys.argv[3]) and time.monotonic() < end:
+        time.sleep(0.01)
+'''
+
+# Takes one slot of argv[2] argv[3] times in a row, printing 'got <id>' each time; exit 3 on a
+# wait timeout.
+TAKE = r'''
+import sys
+sys.path.insert(0, sys.argv[1])
+import slots
+take = slots.heavy if sys.argv[2] == 'heavy' else slots.cpu_token
+for _ in range(int(sys.argv[3])):
+    try:
+        with take('take') as sid:
+            print('got %s' % sid, flush=True)
+    except slots.SlotTimeout:
+        sys.exit(3)
+'''
+
+
+class Child(object):
+    """A child process whose stdout and stderr lines are collected as they arrive."""
+
+    def __init__(self, args, env):
+        self.p = subprocess.Popen([PY] + args, env=env, cwd=HERE, stdout=subprocess.PIPE,
+                                  stderr=subprocess.PIPE, universal_newlines=True)
+        self.lines = {'out': [], 'err': []}
+        self.cv = threading.Condition()
+        self.pumps = [threading.Thread(target=self._pump, args=(stream, name))
+                      for stream, name in ((self.p.stdout, 'out'), (self.p.stderr, 'err'))]
+        for t in self.pumps:
+            t.daemon = True
+            t.start()
+
+    def _pump(self, stream, name):
+        for line in stream:
+            with self.cv:
+                self.lines[name].append(line.rstrip('\r\n'))
+                self.cv.notify_all()
+
+    def matching(self, name, prefix):
+        with self.cv:
+            return [line for line in self.lines[name] if line.startswith(prefix)]
+
+    def wait_lines(self, name, prefix, count=1, timeout=WAIT):
+        """The first line of stream name starting with prefix once count of them arrived, else None."""
+        end = time.monotonic() + timeout
+        with self.cv:
+            while True:
+                hits = [line for line in self.lines[name] if line.startswith(prefix)]
+                if len(hits) >= count:
+                    return hits[0]
+                left = end - time.monotonic()
+                if left <= 0:
+                    return None
+                self.cv.wait(left)
+
+    def finish(self, timeout=WAIT):
+        rc = self.p.wait(timeout)
+        for t in self.pumps:
+            t.join(timeout)
+        return rc
+
+    def stop(self):
+        if self.p.poll() is None:
+            self.p.kill()
+        self.p.wait()
+        for t in self.pumps:
+            t.join(WAIT)
+        self.p.stdout.close()
+        self.p.stderr.close()
+
+
+def touch(path):
+    open(path, 'w').close()
+
+
+def pid_of(got_line):
+    return int(got_line.split()[-1])
+
+
+@unittest.skipUnless(slots.msvcrt, 'the slot pools need msvcrt (Windows)')
+class SlotsTest(unittest.TestCase):
+
+    def setUp(self):
+        self.saved = dict((k, v) for k, v in os.environ.items() if k.startswith('KEO_'))
+        for k in self.saved:
+            del os.environ[k]
+        self.tmp = tempfile.mkdtemp(prefix='keo_slots_test_')
+        os.environ['KEO_SLOTS_DIR'] = self.tmp
+        # Bounded waits, here and in every child, so a broken bypass fails instead of hanging.
+        os.environ['KEO_HEAVY_WAIT'] = os.environ['KEO_CPU_WAIT'] = str(WAIT)
+        self.children = []
+        self.releases = 0
+
+    def tearDown(self):
+        for c in self.children:
+            c.stop()
+        for k in [k for k in os.environ if k.startswith('KEO_')]:
+            del os.environ[k]
+        os.environ.update(self.saved)
+        shutil.rmtree(self.tmp, ignore_errors=True)
+        self.assertEqual(slots._held, {}, 'a slot was left held')
+        self.assertEqual(slots._heavy_ids, [])
+
+    def env(self, **extra):
+        """os.environ without this process's markers, plus extra."""
+        e = dict(os.environ)
+        e.pop('KEO_HEAVY_HELD', None)
+        e.pop('KEO_CPU_HELD', None)
+        e.update((k, str(v)) for k, v in extra.items())
+        return e
+
+    def spawn(self, args, env):
+        c = Child(args, env)
+        self.children.append(c)
+        return c
+
+    def holder(self, pool, env):
+        """Starts a child holding one slot of pool; returns (child, its 'got' line, release path)."""
+        self.releases += 1
+        release = os.path.join(self.tmp, 'release-%d' % self.releases)
+        c = self.spawn(['-c', HOLDER, HERE, pool, release], env)
+        got = c.wait_lines('out', 'got %s-' % pool)
+        self.assertIsNotNone(got, 'holder took no %s slot: %r' % (pool, c.lines))
+        return c, got, release
+
+    def take(self, pool, env, times=1):
+        c = self.spawn(['-c', TAKE, HERE, pool, str(times)], env)
+        return c, c.finish()
+
+    def test_third_heavy_process_waits_until_one_releases(self):
+        e = self.env(KEO_HEAVY_SLOTS=2)
+        a, got_a, release_a = self.holder('heavy', e)
+        b, got_b, release_b = self.holder('heavy', e)
+        self.assertEqual(sorted([got_a.split()[1], got_b.split()[1]]), ['heavy-0', 'heavy-1'])
+        c = self.spawn(['-c', HOLDER, HERE, 'heavy', os.path.join(self.tmp, 'release-c')], e)
+        note = c.wait_lines('err', 'slots: waiting for a heavy slot (held: ')
+        self.assertIsNotNone(note, c.lines)
+        self.assertIn('pid %d holder in ' % pid_of(got_a), note)
+        self.assertIn('pid %d holder in ' % pid_of(got_b), note)
+        self.assertIsNone(c.wait_lines('out', 'got', timeout=0.3), 'a third holder got in')
+        touch(release_a)
+        self.assertEqual(a.finish(), 0)
+        self.assertEqual(c.wait_lines('out', 'got heavy-').split()[1], got_a.split()[1])
+        touch(release_b)
+        touch(os.path.join(self.tmp, 'release-c'))
+        self.assertEqual(b.finish(), 0)
+        self.assertEqual(c.finish(), 0)
+        self.assertEqual(len(c.matching('err', 'slots: waiting for')), 1)
+        self.assertEqual(len(c.matching('err', 'slots: took heavy-')), 1)
+
+    def test_killed_holder_frees_its_slot(self):
+        os.environ['KEO_HEAVY_SLOTS'] = '1'
+        os.environ['KEO_HEAVY_WAIT'] = '0'
+        _, got, _ = self.holder('heavy', self.env())
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), self.assertRaises(slots.SlotTimeout):
+            with slots.heavy('before kill'):
+                pass
+        self.assertIn('slots: FAILED: no heavy slot within 0 s (held: pid %d holder' % pid_of(got),
+                      err.getvalue())
+        subprocess.run(['taskkill', '/F', '/PID', str(pid_of(got))], stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, check=True)
+        t0 = time.monotonic()
+        os.environ['KEO_HEAVY_WAIT'] = '5'
+        with contextlib.redirect_stderr(io.StringIO()):
+            with slots.heavy('after kill') as sid:
+                freed = time.monotonic() - t0
+        self.assertEqual(sid, 'heavy-0')
+        self.assertLess(freed, 1.0)
+
+    def test_heavy_marker_passes_to_children(self):
+        os.environ['KEO_HEAVY_SLOTS'] = '1'
+        with slots.heavy('outer') as sid:
+            self.assertEqual(sid, 'heavy-0')
+            self.assertEqual(os.environ.get('KEO_HEAVY_HELD'), 'heavy-0')
+            c, rc = self.take('heavy', dict(os.environ, KEO_HEAVY_WAIT='0'))
+            self.assertEqual((rc, c.lines['out']), (0, ['got None']))
+            c, rc = self.take('heavy', self.env(KEO_HEAVY_WAIT=0))
+            self.assertEqual(rc, 3)
+            self.assertEqual(len(c.matching('err', 'slots: FAILED: no heavy slot within 0 s (held: '
+                                            'pid %d outer' % os.getpid())), 1)
+        self.assertNotIn('KEO_HEAVY_HELD', os.environ)
+
+    def test_inherited_markers_take_nothing(self):
+        os.environ['KEO_HEAVY_HELD'] = 'heavy-9'
+        with slots.heavy('h') as sid:
+            self.assertIsNone(sid)
+        self.assertEqual(os.environ['KEO_HEAVY_HELD'], 'heavy-9')
+        del os.environ['KEO_HEAVY_HELD']
+        os.environ['KEO_CPU_HELD'] = '1'
+        with slots.cpu_token('c') as cid, slots.heavy('h') as hid:
+            self.assertEqual((cid, hid), (None, None))
+        del os.environ['KEO_CPU_HELD']
+        with slots.heavy('h') as hid, slots.cpu_token('c') as cid:
+            self.assertEqual((hid, cid), ('heavy-0', 'cpu-0'))
+
+    def test_cpu_marker_passes_to_children(self):
+        os.environ['KEO_CPU_SLOTS'] = '1'
+        with slots.cpu_token('outer') as sid:
+            self.assertEqual(sid, 'cpu-0')
+            self.assertNotIn('KEO_CPU_HELD', os.environ)
+            with slots.cpu_token('nested') as inner, slots.heavy('under cpu') as hid:
+                self.assertEqual((inner, hid), (None, None))
+            c, rc = self.take('cpu', slots.child_env(self.env(KEO_CPU_WAIT=0)))
+            self.assertEqual((rc, c.lines['out']), (0, ['got None']))
+            c, rc = self.take('cpu', self.env(KEO_CPU_WAIT=0))
+            self.assertEqual(rc, 3)
+            self.assertEqual(len(c.matching('err', 'slots: FAILED: no cpu slot within 0 s')), 1)
+
+    def test_run_holds_a_token_and_marks_the_child(self):
+        os.environ['KEO_CPU_SLOTS'] = '1'
+        code = ('import os, sys; sys.path.insert(0, sys.argv[1]); import slots; '
+                'print(os.environ.get("KEO_CPU_HELD")); '
+                'print(" ".join(s["id"] for s in slots.status() if not s["mine"]))')
+        r = slots.run([PY, '-c', code, HERE], env=self.env(), stdout=subprocess.PIPE,
+                      universal_newlines=True)
+        self.assertEqual(r.stdout.split(), ['1', 'cpu-0'])
+        self.assertEqual(slots.status(), [])
+        base = {'A': 'b'}
+        self.assertEqual(slots.child_env(base), {'A': 'b', 'KEO_CPU_HELD': '1'})
+        self.assertEqual(base, {'A': 'b'})
+
+    def test_slots_off_takes_nothing_and_says_so_once(self):
+        os.environ['KEO_HEAVY_SLOTS'] = '1'
+        os.environ['KEO_CPU_SLOTS'] = '1'
+        with slots.heavy('h') as hid, slots.cpu_token('c') as cid:
+            self.assertEqual((hid, cid), ('heavy-0', 'cpu-0'))
+            e = self.env(KEO_SLOTS='off', KEO_HEAVY_WAIT=0, KEO_CPU_WAIT=0)
+            for pool in ('heavy', 'cpu'):
+                c, rc = self.take(pool, e, times=2)
+                self.assertEqual((rc, c.lines['out']), (0, ['got None', 'got None']))
+                self.assertEqual(c.lines['err'],
+                                 ['slots: KEO_SLOTS=off, the host-wide slot pools are off'])
+
+    def _count_concurrent(self, threads, rounds):
+        state = {'now': 0, 'max': 0, 'done': 0, 'ids': set()}
+        guard = threading.Lock()
+        errors = []
+
+        def work():
+            try:
+                for _ in range(rounds):
+                    with slots.cpu_token('thread') as sid:
+                        with guard:
+                            if sid is None or sid in state['ids']:
+                                errors.append('token %r taken twice or not at all' % sid)
+                            state['ids'].add(sid)
+                            state['now'] += 1
+                            state['max'] = max(state['max'], state['now'])
+                        time.sleep(0.03)
+                        with guard:
+                            state['ids'].discard(sid)
+                            state['now'] -= 1
+                            state['done'] += 1
+            except BaseException as ex:  # reported below; a thread cannot fail the test itself
+                errors.append(repr(ex))
+
+        pool = [threading.Thread(target=work) for _ in range(threads)]
+        for t in pool:
+            t.start()
+        for t in pool:
+            t.join(WAIT * 2)
+        self.assertEqual(errors, [])
+        self.assertEqual(state['done'], threads * rounds)
+        return state['max']
+
+    def test_cpu_tokens_from_many_threads_never_exceed_capacity(self):
+        os.environ['KEO_CPU_SLOTS'] = '3'
+        self.assertEqual(self._count_concurrent(10, 2), 3)
+        _, got, release = self.holder('cpu', self.env())
+        self.assertEqual(self._count_concurrent(10, 2), 2)
+        touch(release)
+
+    def test_threads_take_their_own_heavy_slots(self):
+        os.environ['KEO_HEAVY_SLOTS'] = '2'
+        release = threading.Event()
+        got, errors = [], []
+
+        def hold():
+            try:
+                with slots.heavy('thread') as sid:
+                    with slots.heavy('nested') as inner:
+                        got.append((sid, inner))
+                    release.wait(WAIT)
+            except BaseException as ex:
+                errors.append(repr(ex))
+
+        pool = [threading.Thread(target=hold) for _ in range(2)]
+        for t in pool:
+            t.start()
+        end = time.monotonic() + WAIT
+        while len(got) < 2 and not errors and time.monotonic() < end:
+            time.sleep(0.01)
+        try:
+            self.assertEqual(errors, [])
+            self.assertEqual(sorted(got), [('heavy-0', None), ('heavy-1', None)])
+            self.assertEqual(sorted(os.environ['KEO_HEAVY_HELD'].split(',')),
+                             ['heavy-0', 'heavy-1'])
+            os.environ['KEO_HEAVY_WAIT'] = '0.2'
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err), self.assertRaises(slots.SlotTimeout):
+                with slots.heavy('third'):
+                    pass
+            self.assertIn('slots: FAILED: no heavy slot within 0.2 s (held: pid %d thread in '
+                          % os.getpid(), err.getvalue())
+        finally:
+            release.set()
+            for t in pool:
+                t.join(WAIT)
+        self.assertNotIn('KEO_HEAVY_HELD', os.environ)
+
+    def test_wait_line_once_then_every_interval(self):
+        e = self.env(KEO_HEAVY_SLOTS=1)
+        _, _, release = self.holder('heavy', e)
+        cmd = ['--', PY, '-c', 'pass']
+        slow = self.spawn([SLOTS_PY, 'heavy', '--label', 'slow'] + cmd, e)
+        fast = self.spawn([SLOTS_PY, 'heavy', '--label', 'fast'] + cmd,
+                          dict(e, KEO_HEAVY_NOTE='0.2'))
+        self.assertIsNotNone(fast.wait_lines('err', 'slots: waiting for a heavy slot', count=3),
+                             fast.lines)
+        self.assertIsNotNone(slow.wait_lines('err', 'slots: waiting for a heavy slot'))
+        touch(release)
+        self.assertEqual((slow.finish(), fast.finish()), (0, 0))
+        self.assertEqual(len(slow.matching('err', 'slots: waiting for')), 1)
+
+    def test_heavy_wait_timeout_is_named_and_skips_the_command(self):
+        os.environ['KEO_HEAVY_SLOTS'] = '1'
+        marker = os.path.join(self.tmp, 'ran')
+        with slots.heavy('holder'):
+            c = self.spawn([SLOTS_PY, 'heavy', '--label', 'late', '--', PY, '-c',
+                            'open(%r, "w").close()' % marker], self.env(KEO_HEAVY_WAIT='0.3'))
+            rc = c.finish()
+        self.assertEqual(rc, slots.EXIT_TIMEOUT)
+        self.assertEqual(len(c.matching('err', 'slots: FAILED: no heavy slot within 0.3 s (held: '
+                                        'pid %d holder in ' % os.getpid())), 1)
+        self.assertFalse(os.path.exists(marker))
+
+    def test_stale_owner_does_not_block(self):
+        os.environ['KEO_HEAVY_SLOTS'] = '1'
+        os.environ['KEO_HEAVY_WAIT'] = '0'
+        dead = subprocess.Popen([PY, '-c', 'pass'])
+        dead.wait()
+        owner = os.path.join(self.tmp, 'heavy-0.owner')
+        touch(os.path.join(self.tmp, 'heavy-0.lock'))
+        with open(owner, 'w') as f:
+            json.dump({'pid': dead.pid, 'start': 0, 'label': 'crashed', 'cwd': 'C:\\gone'}, f)
+        self.assertEqual(slots.status(), [])
+        with slots.heavy('fresh') as sid:
+            self.assertEqual(sid, 'heavy-0')
+            [s] = slots.status()
+            self.assertTrue(s['mine'])
+            self.assertEqual((s['owner']['pid'], s['owner']['label']), (os.getpid(), 'fresh'))
+        self.assertFalse(os.path.exists(owner))
+
+    def test_cli_status_and_exit_codes(self):
+        e = self.env(KEO_HEAVY_SLOTS=1)
+        _, got, release = self.holder('heavy', e)
+        s = subprocess.run([PY, SLOTS_PY, 'status'], env=e, stdout=subprocess.PIPE,
+                           universal_newlines=True)
+        self.assertEqual(s.returncode, 0)
+        self.assertIn('heavy 1/1 held', s.stdout)
+        self.assertIn('heavy-0: pid %d holder in ' % pid_of(got), s.stdout)
+        touch(release)
+        check = 'import os, sys; sys.exit(7 if os.environ.get("KEO_HEAVY_HELD") == "heavy-0" else 1)'
+        r = subprocess.run([PY, SLOTS_PY, 'heavy', '--label', 'x', '--', PY, '-c', check], env=e)
+        self.assertEqual(r.returncode, 7)
+        r = subprocess.run([PY, SLOTS_PY, 'heavy', '--', PY, '-c',
+                            'import sys; sys.exit(-1073741819)'], env=e)
+        self.assertEqual(r.returncode, 0xC0000005)
+
+    def test_bad_settings_are_refused(self):
+        for name, value in (('KEO_HEAVY_SLOTS', '0'), ('KEO_CPU_SLOTS', 'many'),
+                            ('KEO_HEAVY_WAIT', 'nan'), ('KEO_SLOTS', 'maybe')):
+            os.environ[name] = value
+            with self.assertRaises(ValueError, msg=name):
+                with slots.heavy('bad'), slots.cpu_token('bad'):
+                    pass
+            del os.environ[name]
+
+
+if __name__ == '__main__':
+    unittest.main()

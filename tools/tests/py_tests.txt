@@ -5,3 +5,4 @@
 40 tools\kenshilib\test_check_headers_pin.py
 50 tools\kenshilib\test_resources_root.py
 90 tools\build\test_hook_sites.py
+95 tools\build\test_slots.py
