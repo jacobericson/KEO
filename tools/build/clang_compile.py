@@ -35,9 +35,26 @@ the failures named.
 Usage:
   clang_compile.py --clang <clang-cl.exe> --flags <file.rsp> --sources <list.txt>
                    --objdir <dir> --log <file> [--ehsc <source> ...] [--syntax-only]
+  clang_compile.py --syntax-only --clang <clang-cl.exe>
+                   --pass NAME FLAGS SOURCES LOG [--ehsc <source> ...] [--pass ...]
     --sources  a text file, one source path per line (tools\\build\\coresrc.txt)
     --syntax-only  clang-cl /Zs: parse and type-check, write no object, leave
                    --objdir out. Every source is fresh by definition.
+    --pass     one syntax-only pass: its name, flags file, source list and log,
+               then its own --ehsc sources. Repeatable; the single-pass form is
+               one pass.
+
+A syntax-only run puts every pass through one queue: the passes' /E checks
+first, then all their sources longest first (by the time the pass's previous
+log recorded, else by file size scaled to the median recorded seconds per
+byte). Every pass's checks above run before anything starts, and every pass's
+log is deleted before the queue starts, so a run that stops leaves no log that
+reads as clean. Each log is written once the queue is done, in its list's
+order, exactly as one pass alone writes it; a pass refused by its /E check
+writes no log. A pass's summary line times it from the queue's start to its
+last process's end. The run holds one host-wide heavy slot and each clang-cl
+one cpu token (tools\\build\\slots.py); started under a cpu token, it runs
+one process at a time.
 
 Environment: BUILD_MP = processes at once (unset = logical cores, 0 = one).
 """
@@ -53,6 +70,7 @@ sys.dont_write_bytecode = True
 
 ERROR_RE = re.compile(r': (fatal )?error:')
 WARNING_RE = re.compile(r': warning:')
+LOG_HEADER_RE = re.compile(r'^=== (\S+)  rc=-?\d+  ([0-9.]+)s\r?$')
 FIRST_ERRORS = 8
 
 
@@ -132,6 +150,35 @@ def clang_child_env():
     return env, sorted(dropped)
 
 
+def check_sources(flags, sources_path, ehsc_args):
+    """(sources, normcased --ehsc set) of one source list; ValueError naming the
+    first problem: an empty list, a missing source, two sources with one object
+    name, an --ehsc source not listed, or a unit the flags leave without /EHa."""
+    sources = read_list(sources_path)
+    if not sources:
+        raise ValueError('%s lists no sources' % sources_path)
+    missing = [s for s in sources if not os.path.isfile(s)]
+    if missing:
+        raise ValueError('listed source(s) not found: ' + ', '.join(missing))
+    stems = {}
+    for s in sources:
+        stem = os.path.splitext(os.path.basename(s))[0].lower()
+        if stem in stems:
+            raise ValueError('two sources would share one object name: %s and %s' % (stems[stem], s))
+        stems[stem] = s
+    ehsc = set(os.path.normcase(s) for s in ehsc_args)
+    unknown = [s for s in ehsc_args if os.path.normcase(s) not in set(os.path.normcase(x) for x in sources)]
+    if unknown:
+        raise ValueError('--ehsc names a source not in the list: ' + ', '.join(unknown))
+    flag_tokens = read_flag_tokens(flags)
+    no_eha = [s for s in sources
+              if os.path.normcase(s) not in ehsc and not eh_async(flag_tokens)]
+    if no_eha:
+        raise ValueError('%d source(s) would compile without /EHa (flags file %s), e.g. %s; every unit '
+                         'builds /EHa except those named by --ehsc' % (len(no_eha), flags, no_eha[0]))
+    return sources, ehsc
+
+
 def preprocessed_try_count(clang, flags, source, env):
     """__try occurrences in the source as clang-cl /EHsc would see it, headers
     included and comments removed."""
@@ -157,19 +204,24 @@ def compile_one(clang, flags, source, obj, ehsc, env, syntax_only=False):
     return source, cmd, proc.returncode, proc.stdout.decode('mbcs', 'replace'), time.time() - start
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--clang', required=True)
-    parser.add_argument('--flags', required=True)
-    parser.add_argument('--sources', required=True)
-    parser.add_argument('--objdir')
-    parser.add_argument('--log', required=True)
-    parser.add_argument('--ehsc', action='append', default=[])
-    parser.add_argument('--syntax-only', action='store_true')
-    args = parser.parse_args()
-    if not args.syntax_only and not args.objdir:
-        parser.error('--objdir is required unless --syntax-only')
+def log_entry(source, rc, seconds, cmd, output):
+    """One source's bytes in a log: its header line, its command, its messages."""
+    data = ('=== %s  rc=%d  %.1fs\n%s\n' % (source, rc, seconds, ' '.join(cmd))).encode('mbcs', 'replace')
+    if output:
+        data += output.replace('\r\n', '\n').encode('mbcs', 'replace')
+    return data
 
+
+def print_failures(failed):
+    for s, rc, fresh, errors in failed:
+        reason = 'rc=%d' % rc if rc != 0 else 'exit 0 but no fresh object'
+        print('FAILED %s (%s, %d error line(s))' % (s, reason, len(errors)))
+        for line in errors[:FIRST_ERRORS]:
+            print('    ' + line.strip()[:300])
+
+
+def compile_main(args):
+    """The object build: one pass, every source to an object in --objdir."""
     child_env, dropped = clang_child_env()
     if dropped:
         print('clang_compile: left out of clang-cl\'s environment (it would add them to every command line): %s'
@@ -177,28 +229,7 @@ def main():
     try:
         check_vs2010_environment()
         jobs = job_count()
-        sources = read_list(args.sources)
-        if not sources:
-            raise ValueError('%s lists no sources' % args.sources)
-        missing = [s for s in sources if not os.path.isfile(s)]
-        if missing:
-            raise ValueError('listed source(s) not found: ' + ', '.join(missing))
-        stems = {}
-        for s in sources:
-            stem = os.path.splitext(os.path.basename(s))[0].lower()
-            if stem in stems:
-                raise ValueError('two sources would share one object name: %s and %s' % (stems[stem], s))
-            stems[stem] = s
-        ehsc = set(os.path.normcase(s) for s in args.ehsc)
-        unknown = [s for s in args.ehsc if os.path.normcase(s) not in set(os.path.normcase(x) for x in sources)]
-        if unknown:
-            raise ValueError('--ehsc names a source not in the list: ' + ', '.join(unknown))
-        flag_tokens = read_flag_tokens(args.flags)
-        no_eha = [s for s in sources
-                  if os.path.normcase(s) not in ehsc and not eh_async(flag_tokens)]
-        if no_eha:
-            raise ValueError('%d source(s) would compile without /EHa (flags file %s), e.g. %s; every unit '
-                             'builds /EHa except those named by --ehsc' % (len(no_eha), args.flags, no_eha[0]))
+        sources, ehsc = check_sources(args.flags, args.sources, args.ehsc)
         if not os.path.isfile(args.clang):
             raise ValueError('clang-cl not found: ' + args.clang)
         ehsc_tries = [(s, preprocessed_try_count(args.clang, args.flags, s, child_env)) for s in args.ehsc]
@@ -210,18 +241,16 @@ def main():
         print('clang_compile.py: ERROR: %s' % error)
         return 1
 
-    if args.objdir:
-        os.makedirs(args.objdir, exist_ok=True)
+    os.makedirs(args.objdir, exist_ok=True)
     jobs = max(1, min(jobs, len(sources)))
     start = time.time()
     results = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
         futures = []
         for s in sources:
-            obj = (os.path.join(args.objdir, os.path.splitext(os.path.basename(s))[0] + '.obj')
-                  if args.objdir else None)
+            obj = os.path.join(args.objdir, os.path.splitext(os.path.basename(s))[0] + '.obj')
             futures.append(pool.submit(compile_one, args.clang, args.flags, s, obj,
-                                       os.path.normcase(s) in ehsc, child_env, args.syntax_only))
+                                       os.path.normcase(s) in ehsc, child_env))
         for fut in concurrent.futures.as_completed(futures):
             source, cmd, rc, output, seconds = fut.result()
             results[source] = (cmd, rc, output, seconds)
@@ -232,16 +261,11 @@ def main():
     with open(args.log, 'wb') as log:
         for s in sources:
             cmd, rc, output, seconds = results[s]
-            if args.syntax_only:
-                fresh = True
-            else:
-                obj = cmd[-1][len('/Fo'):]
-                fresh = os.path.isfile(obj) and os.path.getmtime(obj) >= start - 2
+            obj = cmd[-1][len('/Fo'):]
+            fresh = os.path.isfile(obj) and os.path.getmtime(obj) >= start - 2
             lines = output.splitlines()
             warnings += sum(1 for line in lines if WARNING_RE.search(line))
-            log.write(('=== %s  rc=%d  %.1fs\n%s\n' % (s, rc, seconds, ' '.join(cmd))).encode('mbcs', 'replace'))
-            if output:
-                log.write(output.replace('\r\n', '\n').encode('mbcs', 'replace'))
+            log.write(log_entry(s, rc, seconds, cmd, output))
             if rc != 0 or not fresh:
                 failed.append((s, rc, fresh, [line for line in lines if ERROR_RE.search(line)]))
 
@@ -251,13 +275,228 @@ def main():
         print('clang_compile: /EHsc for %s (preprocessed __try count: %s)'
               % (', '.join(args.ehsc), ', '.join(str(n) for _, n in ehsc_tries)))
     if failed:
-        for s, rc, fresh, errors in failed:
-            reason = 'rc=%d' % rc if rc != 0 else 'exit 0 but no fresh object'
-            print('FAILED %s (%s, %d error line(s))' % (s, reason, len(errors)))
-            for line in errors[:FIRST_ERRORS]:
-                print('    ' + line.strip()[:300])
+        print_failures(failed)
         return 1
     return 0
+
+
+class Pass(object):
+    """One syntax-only pass and, once the queue is done, its results."""
+
+    def __init__(self, name, flags, sources_path, log, ehsc):
+        self.name = name
+        self.flags = flags
+        self.sources_path = sources_path
+        self.log = log
+        self.ehsc = list(ehsc)
+        self.sources = []
+        self.ehsc_set = set()
+        self.previous = {}  # source -> seconds, from the pass's previous log
+        self.results = {}   # source -> compile_one's result
+        self.tries = {}     # --ehsc source -> __try count, or the /E failure text
+        self.end = 0.0      # seconds from the queue's start to this pass's last process
+
+    def prefix(self, multi):
+        return '%s: ' % self.name if multi else ''
+
+
+def split_passes(argv):
+    """(arguments before the first --pass, one argument list per --pass)."""
+    head, groups = [], []
+    for tok in argv:
+        if tok == '--pass':
+            groups.append([])
+        elif groups:
+            groups[-1].append(tok)
+        else:
+            head.append(tok)
+    return head, groups
+
+
+def parse_pass(tokens):
+    parser = argparse.ArgumentParser(prog='clang_compile.py --pass')
+    parser.add_argument('name')
+    parser.add_argument('flags')
+    parser.add_argument('sources')
+    parser.add_argument('log')
+    parser.add_argument('--ehsc', action='append', default=[])
+    a = parser.parse_args(tokens)
+    return Pass(a.name, a.flags, a.sources, a.log, a.ehsc)
+
+
+def previous_times(log_path):
+    """{source: seconds} from a log's header lines; empty when there is no log."""
+    try:
+        with open(log_path, 'rb') as f:
+            text = f.read().decode('mbcs', 'replace')
+    except FileNotFoundError:
+        return {}
+    times = {}
+    for line in text.split('\n'):
+        m = LOG_HEADER_RE.match(line)
+        if m:
+            times[m.group(1)] = float(m.group(2))
+    return times
+
+
+def queue_order(passes):
+    """Every (pass index, source), longest expected first; ties keep pass and list order."""
+    entries = []
+    for pi, p in enumerate(passes):
+        for li, s in enumerate(p.sources):
+            entries.append((pi, li, s, p.previous.get(s), os.path.getsize(s)))
+    ratios = sorted(t / size for _, _, _, t, size in entries if t is not None and size > 0)
+    scale = ratios[len(ratios) // 2] if ratios else 1.0
+    entries.sort(key=lambda e: (-(e[3] if e[3] is not None else e[4] * scale), e[0], e[1]))
+    return [(pi, s) for pi, _, s, _, _ in entries]
+
+
+def load_slots():
+    here = os.path.dirname(os.path.abspath(__file__))
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    import slots
+    return slots
+
+
+def run_task(slots, clang, p, kind, source, env):
+    """One clang-cl under one cpu token: an /E check's __try count (or its
+    failure text), or compile_one's /Zs result."""
+    with slots.cpu_token('clang-cl'):
+        if kind == 'E':
+            try:
+                return preprocessed_try_count(clang, p.flags, source, env)
+            except ValueError as error:
+                return str(error)
+        return compile_one(clang, p.flags, source, None, os.path.normcase(source) in p.ehsc_set, env,
+                           syntax_only=True)
+
+
+def report_pass(p, multi, jobs):
+    """Writes p's log and prints its lines; True when the pass failed."""
+    for s in p.ehsc:
+        if not isinstance(p.tries[s], int):
+            print('clang_compile.py: ERROR: %s%s' % (p.prefix(multi), p.tries[s]))
+            return True
+    seh = ['%s (%d)' % (s, p.tries[s]) for s in p.ehsc if p.tries[s]]
+    if seh:
+        print('clang_compile.py: ERROR: %s--ehsc refused for a source whose preprocessed text holds __try '
+              '(its handlers would be dropped): %s' % (p.prefix(multi), ', '.join(seh)))
+        return True
+
+    warnings = 0
+    failed = []
+    with open(p.log, 'wb') as log:
+        for s in p.sources:
+            _, cmd, rc, output, seconds = p.results[s]
+            lines = output.splitlines()
+            warnings += sum(1 for line in lines if WARNING_RE.search(line))
+            log.write(log_entry(s, rc, seconds, cmd, output))
+            if rc != 0:
+                failed.append((s, rc, True, [line for line in lines if ERROR_RE.search(line)]))
+    print('clang_compile: %d source(s) in %.1f s, %d at a time; %d warning line(s); %d failed; messages: %s'
+          % (len(p.sources), p.end, jobs, warnings, len(failed), p.log))
+    if p.ehsc:
+        print('clang_compile: /EHsc for %s (preprocessed __try count: %s)'
+              % (', '.join(p.ehsc), ', '.join(str(p.tries[s]) for s in p.ehsc)))
+    print_failures(failed)
+    return bool(failed)
+
+
+def syntax_main(clang, passes, multi):
+    """The syntax-only run: every pass through one queue (see the module text)."""
+    child_env, dropped = clang_child_env()
+    if dropped:
+        print('clang_compile: left out of clang-cl\'s environment (it would add them to every command line): %s'
+              % ', '.join(dropped))
+    try:
+        slots = load_slots()
+        check_vs2010_environment()
+        jobs = job_count()
+        for p in passes:
+            try:
+                p.sources, p.ehsc_set = check_sources(p.flags, p.sources_path, p.ehsc)
+            except (OSError, ValueError) as error:
+                raise ValueError(p.prefix(multi) + str(error))
+        if not os.path.isfile(clang):
+            raise ValueError('clang-cl not found: ' + clang)
+        for p in passes:
+            p.previous = previous_times(p.log)
+        for p in passes:
+            if os.path.exists(p.log):
+                os.remove(p.log)
+        if slots.cpu_held():
+            jobs = 1
+    except (OSError, ValueError) as error:
+        print('clang_compile.py: ERROR: %s' % error)
+        return 1
+
+    tasks = [('E', pi, s) for pi, p in enumerate(passes) for s in p.ehsc]
+    tasks += [('Z', pi, s) for pi, s in queue_order(passes)]
+    jobs = max(1, min(jobs, len(tasks)))
+    sys.stdout.flush()
+    try:
+        with slots.heavy('clang_check'):
+            env = slots.child_env(child_env)
+            start = time.time()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
+                futures = {}
+                for kind, pi, s in tasks:
+                    futures[pool.submit(run_task, slots, clang, passes[pi], kind, s, env)] = (kind, pi, s)
+                for fut in concurrent.futures.as_completed(futures):
+                    kind, pi, s = futures[fut]
+                    p = passes[pi]
+                    if kind == 'E':
+                        p.tries[s] = fut.result()
+                    else:
+                        p.results[s] = fut.result()
+                    p.end = max(p.end, time.time() - start)
+            elapsed = time.time() - start
+    except slots.SlotTimeout:
+        return 1
+    except ValueError as error:
+        print('clang_compile.py: ERROR: %s' % error)
+        return 1
+
+    failed = False
+    for p in passes:
+        failed = report_pass(p, multi, jobs) or failed
+    if multi:
+        print('clang_compile: %d passes, %d clang-cl run(s) in %.1f s, %d at a time'
+              % (len(passes), len(tasks), elapsed, jobs))
+    return 1 if failed else 0
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    head, groups = split_passes(argv)
+    single = not groups
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('--clang', required=True)
+    parser.add_argument('--flags', required=single)
+    parser.add_argument('--sources', required=single)
+    parser.add_argument('--objdir')
+    parser.add_argument('--log', required=single)
+    parser.add_argument('--ehsc', action='append', default=[])
+    parser.add_argument('--syntax-only', action='store_true')
+    args = parser.parse_args(head)
+    if single:
+        if not args.syntax_only and not args.objdir:
+            parser.error('--objdir is required unless --syntax-only')
+        if not args.syntax_only:
+            return compile_main(args)
+        return syntax_main(args.clang, [Pass('', args.flags, args.sources, args.log, args.ehsc)], False)
+
+    if not args.syntax_only:
+        parser.error('--pass needs --syntax-only')
+    if args.flags or args.sources or args.log or args.ehsc or args.objdir:
+        parser.error('--pass replaces --flags, --sources, --log, --ehsc and --objdir')
+    passes = [parse_pass(g) for g in groups]
+    names = [p.name for p in passes]
+    logs = [os.path.normcase(os.path.abspath(p.log)) for p in passes]
+    if len(set(names)) != len(names) or len(set(logs)) != len(logs):
+        parser.error('two passes share one name or one log')
+    return syntax_main(args.clang, passes, True)
 
 
 if __name__ == '__main__':
