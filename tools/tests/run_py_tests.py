@@ -6,7 +6,8 @@ Each list line is "<order> <repo-relative path> [shards=N] [when=<glob>[,<glob>.
 py_tests_private.txt beside py_tests.txt, where the tree has one, adds more lines in the same
 form; the two lists are merged and ordered by <order>, so a module keeps its place in the output
 whichever list names it. --list replaces both with the named files (repeatable). A listed module
-that is missing, a malformed line, or an order or path named twice fails the run.
+that is missing, a malformed line, an order or path named twice, or lists naming no module at all
+fail the run.
 
 Every module runs through py_shard.py beside this file, as N processes when the row says
 shards=N (1 to 32; default 1), each running the tests whose loader index i has i % N == K-1.
@@ -452,6 +453,8 @@ def main(argv=None):
 
     errors = []
     rows = collect(lists, errors)
+    if not rows and not errors:
+        errors.append('no modules listed')
     if errors:
         for e in errors:
             print('python tests FAILED: bad list: %s' % e)
