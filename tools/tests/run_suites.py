@@ -38,14 +38,18 @@ that source. Each suite's log holds the command and output of each of its
 compiles in source order, then the link's, then a "RUN" line and the .exe's
 output. A failed suite is recorded and the run continues -- no suite is
 skipped because another failed -- so one run reports every failure at once.
-A job that cannot be carried out at all (no cpu token within KEO_CPU_WAIT,
-cl missing, a log that cannot be written) stops the run instead: no further
-job starts, and every suite left unfinished is reported "NOT RUN" and
-counts as failed. The script exits 1 if any suite failed or if the suite list named a source
-that does not exist, printing each failed suite's name and its log's tail;
-it exits 0, printing "N suites, all passed", only when every suite compiled,
-ran and returned 0. A suite's "[x.xs]" runs from the start of the first
-compile it needs (a shared one included) to the end of its last job.
+A job that cannot start its process (cl missing, an output or log locked by
+another process) fails that job's suite the same way. Only a cpu token that
+does not come within KEO_CPU_WAIT stops the run: no job starts its process
+after it, and every suite left unfinished is reported "NOT RUN" and counts
+as failed.
+
+The script exits 1 if any suite failed or if the suite list named a source
+that does not exist, printing each failed suite's name and the output of the
+step that failed it (the failing compiles, the link, or the run's last
+lines); it exits 0, printing "N suites, all passed", only when every suite
+compiled, ran and returned 0. A suite's "[x.xs]" runs from the start of the
+first compile it needs (a shared one included) to the end of its last job.
 
 Usage: python tools\\tests\\run_suites.py [--suites PATH]
 Environment: TEST_JOBS (default: os.cpu_count()).
@@ -54,6 +58,7 @@ Environment: TEST_JOBS (default: os.cpu_count()).
   nothing; both must fail the run.
 """
 import argparse
+import contextlib
 import hashlib
 import heapq
 import os
@@ -67,7 +72,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.p
 import slots  # noqa: E402
 
 SUITES_TXT = r'tools\tests\suites.txt'
-TAIL_LINES = 30
+TAIL_LINES = 30          # a failed run's output: its last lines carry the summary
+HEAD_LINES = 60          # failed compiles or link: the first errors are the cause
 TESTS_DIR = os.path.join('build', 'tests')
 OBJ_DIR = os.path.join(TESTS_DIR, 'obj')
 SHARED_DIR = os.path.join(OBJ_DIR, '_shared')
@@ -125,7 +131,9 @@ class Suite(object):
         self.ran = None        # returncode, once known
         self.seconds = 0.0
         self.reported = False
-        self.stopped = False   # a job it needs never ran: the run stopped first
+        self.not_run = None    # why a job it needs never started its process
+        self.link_at = None    # log offsets where the link's and the run's
+        self.run_at = None     # sections start, once written
 
 
 class Job(object):
@@ -248,11 +256,25 @@ def remove_if_present(path):
         os.remove(path)
 
 
-def do_compile(job):
+class Skipped(Exception):
+    """The run stopped before this job started its process."""
+
+
+@contextlib.contextmanager
+def cpu_token(label, stop):
+    """One cpu token for the block, unless the run stopped while this job
+    waited for it: then the job starts nothing."""
+    with slots.cpu_token(label):
+        if stop.is_set():
+            raise Skipped()
+        yield
+
+
+def do_compile(job, stop):
     os.makedirs(os.path.dirname(job.obj), exist_ok=True)
     remove_if_present(job.obj)
     command, note = test_command('TEST_SUITES_NOOP_CL', job.cmd)
-    with slots.cpu_token('suite compile %s' % job.source):
+    with cpu_token('suite compile %s' % job.source, stop):
         proc = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               stdin=subprocess.DEVNULL, env=slots.child_env(leaf=True))
     job.output = note + proc.stdout
@@ -272,16 +294,17 @@ def write_compile_sections(log, suite):
         log.write(job.output)
 
 
-def do_link(job):
+def do_link(job, stop):
     suite = job.suite
     cmd = ['cl', '/nologo'] + [c.obj for c in suite.compiles] + ['/Fe' + suite.exe]
     command, note = test_command('TEST_SUITES_NOOP_LINK', cmd)
     with open(suite.log, 'wb') as log:
         write_compile_sections(log, suite)
+        suite.link_at = log.tell()
         log.write(('LINK: %s\n' % ' '.join(cmd)).encode('utf-8') + note)
         log.flush()
         remove_if_present(suite.exe)
-        with slots.cpu_token('suite link %s' % suite.name):
+        with cpu_token('suite link %s' % suite.name, stop):
             rc = subprocess.call(command, stdout=log, stderr=subprocess.STDOUT,
                                  stdin=subprocess.DEVNULL, env=slots.child_env(leaf=True))
         if rc != 0:
@@ -293,12 +316,13 @@ def do_link(job):
     return 0
 
 
-def do_run(job):
+def do_run(job, stop):
     suite = job.suite
     with open(suite.log, 'ab') as log:
+        suite.run_at = log.tell()
         log.write(b'RUN\n')
         log.flush()
-        with slots.cpu_token('suite run %s' % suite.name):
+        with cpu_token('suite run %s' % suite.name, stop):
             return subprocess.call([suite.exe], stdout=log, stderr=subprocess.STDOUT,
                                    stdin=subprocess.DEVNULL, env=slots.child_env(leaf=True))
 
@@ -317,9 +341,10 @@ def note_failure(job, message):
 
 
 class Stop(object):
-    """Set by the first job that raises (no cpu token in time, cl missing, a
-    log that cannot be written): no job starts after it, so a jammed slot pool
-    costs one token wait, not one per remaining job."""
+    """Set by the first job whose cpu token did not come within KEO_CPU_WAIT:
+    no job starts a process after it, so a jammed slot pool costs one token
+    wait, not one per remaining job. Any other launch error fails only its
+    own job."""
 
     def __init__(self):
         self._event = threading.Event()
@@ -345,27 +370,30 @@ def execute(job, results, stop):
     what = job.source if job.kind == 'compile' else job.suite.name
     try:
         if stop.is_set():
-            job.rc = 1
-            job.skipped = True
-            note_failure(job, 'run_suites.py: %s %s not started: the run stopped' % (job.kind, what))
-        elif job.kind == 'compile':
-            job.rc = do_compile(job)
+            raise Skipped()
+        if job.kind == 'compile':
+            job.rc = do_compile(job, stop)
         elif job.kind == 'link':
-            job.rc = do_link(job)
+            job.rc = do_link(job, stop)
         else:
-            job.rc = do_run(job)
-    except (OSError, ValueError, slots.SlotTimeout) as error:
+            job.rc = do_run(job, stop)
+    except Skipped:
+        job.rc = 1
+        job.skipped = True
+        note_failure(job, 'run_suites.py: %s %s not started: the run stopped' % (job.kind, what))
+    except slots.SlotTimeout as error:
         job.rc = 1
         message = 'run_suites.py: could not %s %s: %s' % (job.kind, what, error)
         stop.set(message)
         note_failure(job, message)
+    except (OSError, ValueError) as error:
+        job.rc = 1
+        note_failure(job, 'run_suites.py: could not %s %s: %s' % (job.kind, what, error))
     except Exception as error:  # never leave the main loop waiting for this job
         job.rc = 1
-        message = 'run_suites.py: unexpected error in %s %s: %r' % (job.kind, what, error)
-        stop.set(message)
         print('%s: run_suites.py: unexpected error: %r' % (what, error))
         sys.stdout.flush()
-        note_failure(job, message)
+        note_failure(job, 'run_suites.py: unexpected error in %s %s: %r' % (job.kind, what, error))
     finally:
         job.end = time.time()
         results.put(job)
@@ -376,8 +404,8 @@ def report(suite, finished):
     starts = [c.start for c in suite.compiles if c.start is not None]
     suite.seconds = (time.time() - min(starts)) if starts else 0.0
     finished.append(suite)
-    if suite.stopped:
-        print('%s: NOT RUN (the run stopped) after %.1fs' % (suite.name, suite.seconds))
+    if suite.not_run:
+        print('%s: NOT RUN (%s) after %.1fs' % (suite.name, suite.not_run, suite.seconds))
     elif suite.compiled != 0:
         print('%s: COMPILE FAILED (exit %s) after %.1fs' % (suite.name, suite.compiled, suite.seconds))
     elif suite.ran != 0:
@@ -412,16 +440,56 @@ def note_not_run(suite):
         with open(suite.log, 'ab') as log:
             if log.tell() == 0:
                 log.write(('=== %s ===\n' % suite.name).encode('utf-8'))
-            log.write(b'run_suites.py: not run: the run stopped\n')
+            log.write(('run_suites.py: not run: %s\n' % suite.not_run).encode('utf-8'))
     except OSError as error:
         print('%s: run_suites.py: could not write %s: %s' % (suite.name, suite.log, error))
+
+
+def read_from(path, offset):
+    try:
+        with open(path, 'rb') as f:
+            f.seek(offset)
+            return f.read().decode('mbcs', errors='replace').splitlines()
+    except OSError:
+        return []
+
+
+def capped(lines, path, head):
+    """At most HEAD_LINES of `lines` from the start, or TAIL_LINES from the end."""
+    limit = HEAD_LINES if head else TAIL_LINES
+    if len(lines) <= limit:
+        return lines
+    more = '... %d more line(s) in %s' % (len(lines) - limit, path)
+    return lines[:limit] + [more] if head else [more] + lines[-limit:]
+
+
+def failure_output(suite):
+    """(title, lines) of the step that failed `suite`: its failed compiles,
+    its link, or the end of its run; the log's tail when none of those
+    applies (a suite that never ran a step)."""
+    failed = []
+    for job in suite.compiles:
+        if job.rc not in (0, None) and not job.skipped and job not in failed:
+            failed.append(job)
+    if not suite.not_run and failed:
+        lines = []
+        for job in failed:
+            lines.append('CL: %s' % ' '.join(job.cmd))
+            lines += job.output.decode('mbcs', errors='replace').splitlines()
+        return 'failed compile(s), from %s' % suite.log, capped(lines, suite.log, True)
+    if not suite.not_run and suite.compiled not in (0, None) and suite.link_at is not None:
+        return 'link, from %s' % suite.log, capped(read_from(suite.log, suite.link_at), suite.log, True)
+    if not suite.not_run and suite.ran not in (0, None) and suite.run_at is not None:
+        lines = capped(read_from(suite.log, suite.run_at), suite.log, False)
+        return 'run, last %d lines of %s' % (TAIL_LINES, suite.log), lines
+    return 'last %d lines of %s' % (TAIL_LINES, suite.log), read_log(suite.log)[-TAIL_LINES:]
 
 
 def run_jobs(compiles, jobs, finished):
     """Runs the job graph from `compiles`, at most `jobs` at once, reporting
     each suite into `finished` as it settles. Returns the run's Stop: once a
-    job raises, nothing new starts, and the suites left unsettled are the
-    caller's to report."""
+    cpu token wait runs out, nothing new starts, and the suites left
+    unsettled are the caller's to report."""
     results = queue.Queue()
     stop = Stop()
     ready = []
@@ -445,21 +513,21 @@ def run_jobs(compiles, jobs, finished):
             announced = True
             print('run_suites.py: stopping, no further job starts: %s' % stop.reason)
             sys.stdout.flush()
+        if job.skipped:
+            for s in (job.users if job.kind == 'compile' else [job.suite]):
+                s.not_run = 'the run stopped'
         if job.kind == 'compile':
             for s in job.users:
-                s.stopped = s.stopped or job.skipped
                 s.waiting -= 1
                 if s.waiting == 0:
                     settle_compiles(s, ready, finished)
         elif job.kind == 'link':
-            job.suite.stopped = job.skipped
             job.suite.compiled = job.rc
             if job.rc == 0:
                 push(ready, SuiteJob('run', PRIORITY_RUN, job.suite))
             else:
                 report(job.suite, finished)
         else:
-            job.suite.stopped = job.skipped
             job.suite.ran = job.rc
             report(job.suite, finished)
     for t in threads:
@@ -524,24 +592,27 @@ def main():
     stop = run_jobs(compiles, jobs, finished)
 
     unreported = [s for s in suites if not s.reported]
-    if unreported and stop.is_set():
-        for s in unreported:
-            s.stopped = True
-            note_not_run(s)
-            report(s, finished)
-    elif unreported or len(finished) != len(suites):
+    lost = unreported and not stop.is_set()
+    if lost:
         print('ERROR: run_suites.py stopped with %d suite(s) never reported: %s'
               % (len(unreported), ', '.join(s.name for s in unreported)))
-        return 1
+    for s in unreported:
+        s.not_run = s.not_run or ('the run stopped' if stop.is_set() else 'never reported')
+        note_not_run(s)
+        report(s, finished)
+    consistent = len(finished) == len(suites) and not lost
+    if not consistent and not lost:
+        print('ERROR: run_suites.py reported %d suite result(s) for %d suite(s)' % (len(finished), len(suites)))
 
-    failed = [s for s in finished if s.stopped or s.compiled != 0 or s.ran != 0]
-    if failed:
+    failed = [s for s in finished if s.not_run or s.compiled != 0 or s.ran != 0]
+    if failed or not consistent:
         print('')
         print('%d of %d suite(s) FAILED: %s' % (len(failed), len(suites), ', '.join(s.name for s in failed)))
         for s in failed:
+            title, lines = failure_output(s)
             print('')
-            print('--- %s: last %d lines of %s ---' % (s.name, TAIL_LINES, s.log))
-            for line in read_log(s.log)[-TAIL_LINES:]:
+            print('--- %s: %s ---' % (s.name, title))
+            for line in lines:
                 print('    ' + line)
         return 1
 
