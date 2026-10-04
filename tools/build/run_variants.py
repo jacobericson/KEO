@@ -8,8 +8,9 @@ Each variant compiles every source of its list in its own
     cl <cl_args()> /showIncludes /c <source> /Fo<OBJDIR>\\<stem>.obj
 process; cl_args() is the one definition of the compile flags. Then, unless --compile-only, it
 links through tools\\build\\variant.bat link. A variant's whole output goes to <OBJDIR>\\build.log:
-a header, each source's cl output in list order without its "Note: including file:" lines (so the
-log reads as a single cl run's would), then the link's. The console gets the list check's line
+a header, each source's cl output in list order without its "Note: including file:" lines and
+with each distinct command-line warning (D9xxx) only the first time (so the log reads as a single
+cl run's would), then the link's. The console gets the list check's line
 (--kind opt), one line per finished variant, any compiler/linker warning lines, and on failure the tail of the
 failing variant's log.
 
@@ -91,6 +92,7 @@ WARNING_RE = re.compile(r'\bwarning [A-Z]+\d+', re.IGNORECASE)
 ERROR_RE = re.compile(r'\berror\b|was not compiled', re.IGNORECASE)
 FAILED_LISTED = 10
 NOTE = b'Note: including file:'
+COMMAND_LINE_WARNING_RE = re.compile(br'^cl : Command line warning D\d+ :')
 TAMPER = b'TEST_OBJ_TAMPER!'
 
 FLAVOURS = {
@@ -206,6 +208,24 @@ def split_notes(output):
     if text and not text.endswith(b'\n'):
         text += b'\r\n'
     return text, includes
+
+
+def drop_repeated_command_line_warnings(outputs):
+    """cl prints a command-line warning (a flag from CL overriding one of ours, say) once per
+    process, so one process per source would repeat it per source: each distinct one is kept the
+    first time it appears in the variant, as a single cl run would print it."""
+    seen = set()
+    kept_outputs = []
+    for output in outputs:
+        kept = []
+        for line in output.splitlines(True):
+            if COMMAND_LINE_WARNING_RE.match(line):
+                if line.rstrip() in seen:
+                    continue
+                seen.add(line.rstrip())
+            kept.append(line)
+        kept_outputs.append(b''.join(kept))
+    return kept_outputs
 
 
 def timings_path():
@@ -428,8 +448,8 @@ def finish_variant(v, done):
     rc = 1
     try:
         with open(v.log, 'ab') as log:
-            for i in range(len(v.sources)):
-                log.write(v.results[i][1])
+            for output in drop_repeated_command_line_warnings(v.results[i][1] for i in range(len(v.sources))):
+                log.write(output)
         failed = [i for i in range(len(v.sources)) if v.results[i][0] != 0]
         if failed:
             # The console shows only the log's tail, so each failed source's first error is
