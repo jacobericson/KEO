@@ -14,9 +14,12 @@ static TraceResult     s_out;
 
 static void CheckSampling()
 {
-	CHECK(TraceSampleDue(false, 0.0f, 0.0f, 0.0f, 0.0f), "trace: a member with no sample is sampled");
-	CHECK(!TraceSampleDue(true, 0.0f, 0.0f, 2.0f, 0.0f), "trace: a member 2 units on is not sampled");
-	CHECK(TraceSampleDue(true, 0.0f, 0.0f, 3.0f, 0.0f), "trace: a member 3 units on is sampled");
+	CHECK(TraceSampleDue(false, 0.0f, 0.0f, 0.0f, 0.0f, false), "trace: a member with no sample is sampled");
+	CHECK(!TraceSampleDue(true, 0.0f, 0.0f, 74.0f, 0.0f, false), "trace: a member 74 units on is not sampled");
+	CHECK(TraceSampleDue(true, 0.0f, 0.0f, 75.0f, 0.0f, false), "trace: a member 75 units on is sampled");
+	CHECK(TraceSampleDue(true, 0.0f, 0.0f, 0.0f, 0.0f, true), "trace: a state change samples a member that has not moved");
+	CHECK((double)TRACE_RING * TRACE_SAMPLE_UNITS >= 250000.0,
+	      "trace: the ring holds a whole long order at the sample spacing");
 	memset(&s_ring, 0, sizeof(s_ring));
 	TraceSample s;
 	memset(&s, 0, sizeof(s));
@@ -27,7 +30,7 @@ static void CheckSampling()
 	}
 	int n = TraceRingCopy(s_ring, s_copy);
 	CHECK(n == TRACE_RING && s_copy[0].t == 5.0 && s_copy[TRACE_RING - 1].t == (double)(TRACE_RING + 4)
-	      && s_ring.drops == 5, "trace: the ring keeps the newest 1024");
+	      && s_ring.drops == 5, "trace: the ring keeps the newest TRACE_RING");
 }
 
 static void Publish(int count)
@@ -67,18 +70,46 @@ static void CheckResultRing()
 	      "trace ring: a reader 20 behind skips 4 and counts them");
 }
 
+static TraceRing s_attrib[3];
+
+static void PushAt(TraceRing* r, double t, float x, float z)
+{
+	TraceSample s;
+	memset(&s, 0, sizeof(s));
+	s.t = t;
+	s.x = x;
+	s.z = z;
+	TraceRingPush(r, s);
+}
+
 static void CheckAttribution()
 {
-	const float last[6] = { 0.0f, 0.0f, 100.0f, 0.0f, 0.0f, 300.0f };
-	const int have[3] = { 1, 1, 0 };
+	memset(s_attrib, 0, sizeof(s_attrib));
+	PushAt(&s_attrib[0], 10.0, 0.0f, 0.0f);
+	PushAt(&s_attrib[1], 10.0, 100.0f, 0.0f);
+	const TraceRing* rings[3] = { &s_attrib[0], &s_attrib[1], NULL };
 	const float near40[2] = { 40.0f, 0.0f };
 	const float far60[2] = { -60.0f, 0.0f };
 	const float onAbsent[2] = { 0.0f, 300.0f };
-	CHECK(TraceAttribute(near40, last, have, 3) == 0, "trace: a result 40 units from a member is its");
-	CHECK(TraceAttribute(far60, last, have, 3) == -1, "trace: a result 60 units from every member is unmatched");
-	CHECK(TraceAttribute(onAbsent, last, have, 3) == -1, "trace: a member with no sample takes no result");
+	CHECK(TraceAttribute(near40, 10.5, rings, 3) == 0, "trace: a result 40 units from a member is its");
+	CHECK(TraceAttribute(far60, 10.5, rings, 3) == -1, "trace: a result 60 units from every member is unmatched");
+	CHECK(TraceAttribute(onAbsent, 10.5, rings, 3) == -1, "trace: a member with no sample takes no result");
 	const float mid[2] = { 55.0f, 0.0f };
-	CHECK(TraceAttribute(mid, last, have, 3) == 1, "trace: the nearest member within the bound takes the result");
+	CHECK(TraceAttribute(mid, 10.5, rings, 3) == 1, "trace: the nearest member within the bound takes the result");
+
+	memset(s_attrib, 0, sizeof(s_attrib));
+	PushAt(&s_attrib[0], 10.0, 0.0f, 0.0f);
+	PushAt(&s_attrib[0], 10.5, 900.0f, 0.0f);
+	PushAt(&s_attrib[0], 11.0, 1800.0f, 0.0f);
+	const float start[2] = { 10.0f, 0.0f };
+	CHECK(TraceAttribute(start, 11.2, rings, 3) == 0,
+	      "trace: a result whose member walked on during the latency attributes to its earlier sample");
+	CHECK(TraceAttribute(start, 14.0, rings, 3) == -1, "trace: a sample older than the window does not attribute");
+	memset(s_attrib, 0, sizeof(s_attrib));
+	PushAt(&s_attrib[1], 1.0, 500.0f, 0.0f);
+	const float standing[2] = { 510.0f, 0.0f };
+	CHECK(TraceAttribute(standing, 20.0, rings, 3) == 1, "trace: a member standing still attributes by its newest sample");
+
 	const float h[3] = { 12.5f, 1.0f, -3.0f };
 	const float shift[3] = { 2.5f, 0.0f, 1.0f };
 	float w[3];

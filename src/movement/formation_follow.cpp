@@ -395,7 +395,9 @@ static void PollRecord(int ri, double now, const uintptr_t* stuff, unsigned coun
 		FollowerState s;
 		s.live = live ? 1 : 0;
 		s.grouped = (live && Grouped(f.cm)) ? 1 : 0;
-		s.taskNow = (live && order_tracker_detail::ReadCharOrderType(f.character) == FOLLOW_TASK_TYPE) ? 1 : 0;
+		int task = live ? order_tracker_detail::ReadCharOrderType(f.character) : -1;
+		s.taskNow = task == FOLLOW_TASK_TYPE ? 1 : 0;
+		s.preempted = FollowPreemptionTask(task) ? 1 : 0;
 		if (s.taskNow)
 			f.seenTask = 1;
 		s.seenTask = f.seenTask;

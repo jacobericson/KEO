@@ -1,7 +1,7 @@
-// movement_trace.cpp - The movement trace: per-member samples by distance moved, the path results the
-// path thread copied attributed to the nearest member, and each closed order's lines appended to the
-// trace file beside the log in one write. Main thread; the path-thread half is path_result_trace.cpp.
-// The release build compiles the whole body out.
+// movement_trace.cpp - The movement trace: per-member samples by distance moved and at every state
+// change, the path results the path thread copied attributed to the nearest member, and each closed
+// order's lines appended to the trace file beside the log in one write. Main thread; the path-thread
+// half is path_result_trace.cpp. The release build compiles the whole body out.
 #include "movement/movement_trace.h"
 #ifdef KEO_DEBUG
 #include "movement/movement_config.h"
@@ -26,6 +26,7 @@ struct TraceMember
 	TraceRing* ring;        // made at its first sample
 	float      lastX, lastZ;
 	int        haveLast;
+	int        lastPs, lastCs, lastLeg;   // the states of its last sample
 };
 
 struct TraceOrder
@@ -150,7 +151,10 @@ void MovementTraceSample(uintptr_t character, uintptr_t cm, uintptr_t hc, int ch
 		++s_drops;
 		return;
 	}
-	if (!TraceSampleDue(m->haveLast != 0, m->lastX, m->lastZ, x, z))
+	int ps = *(int*)(KLIB_MEMBER(3, hc, HavokCharacter_pathState, OFF_HC_PATH_STATE));
+	int leg = LegOf(cm);
+	bool changed = m->haveLast && (ps != m->lastPs || characterState != m->lastCs || leg != m->lastLeg);
+	if (!TraceSampleDue(m->haveLast != 0, m->lastX, m->lastZ, x, z, changed))
 		return;
 	if (!m->ring)
 	{
@@ -169,16 +173,19 @@ void MovementTraceSample(uintptr_t character, uintptr_t cm, uintptr_t hc, int ch
 	s.x = x;
 	s.y = y;
 	s.z = z;
-	s.pathState = *(int*)(KLIB_MEMBER(3, hc, HavokCharacter_pathState, OFF_HC_PATH_STATE));
+	s.pathState = ps;
 	s.characterState = characterState;
 	planner::PlanCellOf(x, z, &s.cellX, &s.cellY);
-	s.leg = LegOf(cm);
+	s.leg = leg;
 	long before = m->ring->drops;
 	TraceRingPush(m->ring, s);
 	s_drops += m->ring->drops - before;
 	m->lastX = x;
 	m->lastZ = z;
 	m->haveLast = 1;
+	m->lastPs = ps;
+	m->lastCs = characterState;
+	m->lastLeg = leg;
 	++s_samples;
 }
 
@@ -192,16 +199,11 @@ static void Attribute(const TraceResult& r)
 		return;
 	float first[3];
 	TraceHavokToWorld(r.mid[0], r.shift, first);
-	float last[2 * TRACE_MEMBERS];
-	int have[TRACE_MEMBERS];
+	const TraceRing* rings[TRACE_MEMBERS];
 	for (int i = 0; i < TRACE_MEMBERS; ++i)
-	{
-		last[2 * i] = s_members[i].lastX;
-		last[2 * i + 1] = s_members[i].lastZ;
-		have[i] = s_members[i].character && s_members[i].haveLast;
-	}
+		rings[i] = s_members[i].character ? s_members[i].ring : NULL;
 	const float firstXz[2] = { first[0], first[2] };
-	int who = TraceAttribute(firstXz, last, have, TRACE_MEMBERS);
+	int who = TraceAttribute(firstXz, r.t, rings, TRACE_MEMBERS);
 	TraceOrder* o = who >= 0 ? FindOrder(s_members[who].order) : NULL;
 	if (!o)
 	{

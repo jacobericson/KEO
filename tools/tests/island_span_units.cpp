@@ -3,6 +3,15 @@
 
 #include "check.h"
 
+static void CheckEdgeLegStarts()
+{
+	Check(!IslandEdgeLegStarts(false, true, true, 100.0f, 1.0f), "edge legs: no leg outside edge mode");
+	Check(IslandEdgeLegStarts(true, false, true, 0.0f, 1.0f) && IslandEdgeLegStarts(true, true, false, 0.0f, 1.0f),
+	      "edge legs: entering edge mode or a first waypoint starts a leg");
+	Check(IslandEdgeLegStarts(true, true, true, 1.5f, 1.0f) && !IslandEdgeLegStarts(true, true, true, 1.0f, 1.0f),
+	      "edge legs: a waypoint moved more than the move distance starts a leg, one no farther does not");
+}
+
 int main()
 {
 	// Span is the Chebyshev distance, symmetric, 0 for one cell.
@@ -69,5 +78,6 @@ int main()
 	Check(IslandClassifyEdgePark(true, true, 10.0f, 5.0f, 5000.0f) == EDGEPARK_AT_EDGE, "10 units from the destination is not a halt");
 	Check(IslandClassifyEdgePark(false, true, 0.0f, 0.0f, 5000.0f) == EDGEPARK_NONE, "a halt out of edge mode is not an edge park");
 
+	CheckEdgeLegStarts();
 	return CheckExit("island_span_units");
 }

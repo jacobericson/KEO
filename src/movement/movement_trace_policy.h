@@ -9,20 +9,21 @@
 #include <string>
 #include <vector>
 
-const float  TRACE_SAMPLE_UNITS  = 3.0f;    // a member this far (x-z) from its last sample is sampled
-const int    TRACE_RING          = 1024;    // samples one member keeps, the newest
+const float  TRACE_SAMPLE_UNITS  = 75.0f;   // a member this far (x-z) from its last sample is sampled
+const int    TRACE_RING          = 4096;    // samples one member keeps, the newest: a long order at the spacing
 const int    TRACE_MEMBERS       = 64;      // members traced at once
 const int    TRACE_RESULT_NODES  = 256;     // nodes a path result keeps; a longer chain is cut
 const int    TRACE_RESULT_RING   = 16;      // results in flight from the path thread to the main thread
 const float  TRACE_ATTRIB_UNITS  = 50.0f;   // a result's first point this near a member's last sample
+const double TRACE_ATTRIB_SECONDS = 3.0;     // a result's member is sought among samples this recent, and its newest
 const int    TRACE_ORDER_RESULTS = 1024;    // results one order keeps
 const double TRACE_LINE_SECONDS  = 30.0;    // the Trace: line's period
 
 enum TraceMode { TRACE_OFF = 0, TRACE_ON };
 
-// Whether a member at (x, z) is sampled: no sample yet, or TRACE_SAMPLE_UNITS or more (x-z) from
-// its last one.
-bool TraceSampleDue(bool haveLast, float lastX, float lastZ, float x, float z);
+// Whether a member at (x, z) is sampled: no sample yet, its path state, character state or leg
+// changed since its last sample (stateChanged), or TRACE_SAMPLE_UNITS or more (x-z) from its last one.
+bool TraceSampleDue(bool haveLast, float lastX, float lastZ, float x, float z, bool stateChanged);
 
 struct TraceSample
 {
@@ -70,9 +71,11 @@ void         TraceResultEnd(TraceResultRing* r);
 // rewritten during the copy, is skipped and counted in *torn. False when nothing is left.
 bool         TraceResultTake(TraceResultRing* r, long* taken, TraceResult* out, long* overruns, long* torn);
 
-// The member a result belongs to: of the n members whose have[i] is set, the one whose last sample
-// (lastXz[2i], lastXz[2i + 1]) lies nearest firstXz and within TRACE_ATTRIB_UNITS; -1 when none.
-int  TraceAttribute(const float firstXz[2], const float* lastXz, const int* have, int n);
+// The member a result belongs to: of the n members whose rings[i] is set, the one with a sample lying
+// nearest firstXz and within TRACE_ATTRIB_UNITS, among its newest sample and every sample taken no
+// earlier than resultT - TRACE_ATTRIB_SECONDS (the path latency it walked on through); -1 when none.
+// Each ring is read newest first, stopping at the first sample older than the window.
+int  TraceAttribute(const float firstXz[2], double resultT, const TraceRing* const* rings, int n);
 // A shifted Havok point in world units: (h - shift) * 10, per axis.
 void TraceHavokToWorld(const float h[3], const float shift[3], float out[3]);
 

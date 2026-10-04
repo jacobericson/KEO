@@ -22,13 +22,19 @@ static void CheckOrderAndCapture()
 
 static void CheckRelease()
 {
-	FollowerState s = { 1, 1, 0, 0 };
+	FollowerState s = { 1, 1, 0, 0, 0 };
 	CHECK(FollowerStep(s) == FFR_NONE, "follow: a follower whose task has not switched yet keeps following");
 	s.seenTask = 1;
 	s.taskNow = 1;
 	CHECK(FollowerStep(s) == FFR_NONE, "follow: a follower on the follow task keeps following");
 	s.taskNow = 0;
 	CHECK(FollowerStep(s) == FFR_DROPPED, "follow: a follow task that ended without a release is dropped");
+	s.preempted = 1;
+	CHECK(FollowerStep(s) == FFR_NONE, "follow: a follower in a stumble or a stand-still keeps following");
+	s.preempted = 0;
+	CHECK(FollowPreemptionTask(147) && FollowPreemptionTask(62) && FollowPreemptionTask(32)
+	      && !FollowPreemptionTask(FOLLOW_TASK_TYPE) && !FollowPreemptionTask(31) && !FollowPreemptionTask(-1),
+	      "follow: a stumble, a stand-still and self-preservation are preemptions, the follow tasks are not");
 	s.grouped = 0;
 	CHECK(FollowerStep(s) == FFR_SPEED, "follow: a follower that changed speed mode is released");
 	s.live = 0;

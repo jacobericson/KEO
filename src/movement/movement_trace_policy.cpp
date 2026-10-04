@@ -7,9 +7,9 @@
 
 #pragma intrinsic(_ReadWriteBarrier, _InterlockedIncrement)
 
-bool TraceSampleDue(bool haveLast, float lastX, float lastZ, float x, float z)
+bool TraceSampleDue(bool haveLast, float lastX, float lastZ, float x, float z, bool stateChanged)
 {
-	if (!haveLast)
+	if (!haveLast || stateChanged)
 		return true;
 	float dx = x - lastX, dz = z - lastZ;
 	return dx * dx + dz * dz >= TRACE_SAMPLE_UNITS * TRACE_SAMPLE_UNITS;
@@ -76,20 +76,27 @@ bool TraceResultTake(TraceResultRing* r, long* taken, TraceResult* out, long* ov
 	}
 }
 
-int TraceAttribute(const float firstXz[2], const float* lastXz, const int* have, int n)
+int TraceAttribute(const float firstXz[2], double resultT, const TraceRing* const* rings, int n)
 {
 	int best = -1;
 	float bestSq = TRACE_ATTRIB_UNITS * TRACE_ATTRIB_UNITS;
-	for (int i = 0; lastXz && have && i < n; ++i)
+	for (int i = 0; rings && i < n; ++i)
 	{
-		if (!have[i])
+		const TraceRing* r = rings[i];
+		if (!r)
 			continue;
-		float dx = lastXz[2 * i] - firstXz[0], dz = lastXz[2 * i + 1] - firstXz[1];
-		float d2 = dx * dx + dz * dz;
-		if (d2 <= bestSq)
+		for (int k = 0; k < r->count; ++k)
 		{
-			bestSq = d2;
-			best = i;
+			const TraceSample& s = r->s[(r->head - 1 - k + TRACE_RING) % TRACE_RING];
+			if (k > 0 && s.t < resultT - TRACE_ATTRIB_SECONDS)
+				break;
+			float dx = s.x - firstXz[0], dz = s.z - firstXz[1];
+			float d2 = dx * dx + dz * dz;
+			if (d2 <= bestSq)
+			{
+				bestSq = d2;
+				best = i;
+			}
 		}
 	}
 	return best;

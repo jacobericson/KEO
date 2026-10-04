@@ -15,6 +15,10 @@ const int   PACE_TABLE_MAX  = 64;     // characters one publish carries; a membe
 // member's; gatherRadiusSq: the group's completion radius, squared. 1 inside the radius or with no
 // positive farthest distance; otherwise sqrt(distSq / maxDistSq), clamped to [PACE_MIN_FACTOR, 1].
 float FormationPaceFactor(float distSq, float maxDistSq, float gatherRadiusSq);
+// Whether a gathering member walks to its gather point: its movement destination within
+// PACE_GATHER_MATCH (x-z) of the group's gather point. A member walking another order is never paced.
+const float PACE_GATHER_MATCH = 30.0f;
+bool FormationPaceWalksGather(float destX, float destZ, float gatherX, float gatherZ);
 // The largest of distSq[0..n) at or above 0 (a negative entry is a member this poll does not pace);
 // -1 when there is none.
 float FormationPaceMaxDistSq(const float* distSq, int n);

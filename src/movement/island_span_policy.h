@@ -16,6 +16,9 @@ int IslandCellSpan(int ax, int ay, int bx, int by);
 // off; span < 0 (not resolvable) and label 0 (neither cell in an island) never
 // flip.
 bool IslandFarSpanFlips(bool vanilla, int labelA, int span, int farSpan);
+// Whether an edge-mode leg starts this frame: in edge mode, and either just entered it, with no leg
+// seen yet, or its waypoint moved more than moveDist since the last leg began (x-z, squared distance).
+bool IslandEdgeLegStarts(bool edge, bool edgePrev, bool haveLeg, float wpMovedSq, float moveDist);
 
 // Flipped-answer span buckets: 1, 2, 3, 4, 5, 6 and wider. Every span the
 // rule can flip (farSpan >= 1) has one, so the buckets sum to the flips.

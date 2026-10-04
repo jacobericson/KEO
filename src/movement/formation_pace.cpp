@@ -112,6 +112,18 @@ void FormationPaceFrameBegin()
 	s_stagedCount = 0;
 }
 
+// Whether the member's movement destination is the group's gather point; a member a later order sent
+// elsewhere is not. Main thread, on a member the gather loop found alive this poll.
+static bool MemberWalksGather(uintptr_t character, const FormationGroup& grp)
+{
+	uintptr_t cm = *(uintptr_t*)(KLIB_MEMBER(3, character, Character_movement, OFF_CHAR_MOVEMENT));
+	if (!cm)
+		return false;
+	float x = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_destination_x, OFF_CMOV_LAST_DEST));
+	float z = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_destination_z, OFF_CMOV_LAST_DEST + 8));
+	return FormationPaceWalksGather(x, z, grp.startX, grp.startZ);
+}
+
 void FormationPaceStageGroup(int g, const FormationGroup& grp)
 {
 	if (!s_armed)
@@ -121,7 +133,11 @@ void FormationPaceStageGroup(int g, const FormationGroup& grp)
 	int n = grp.count < MAX_FORMATION_MEMBERS_LIMIT ? grp.count : MAX_FORMATION_MEMBERS_LIMIT;
 	float distSq[MAX_FORMATION_MEMBERS_LIMIT];
 	for (int m = 0; m < n; ++m)
+	{
 		distSq[m] = grp.members[m].character ? s_pace[g][m].distSq : -1.0f;
+		if (distSq[m] >= 0.0f && !MemberWalksGather(grp.members[m].character, grp))
+			distSq[m] = -1.0f;
+	}
 	float maxSq = FormationPaceMaxDistSq(distSq, n);
 	for (int m = 0; m < n; ++m)
 	{

@@ -15,6 +15,12 @@ bool IslandFarSpanFlips(bool vanilla, int labelA, int span, int farSpan)
 	return span >= farSpan;
 }
 
+bool IslandEdgeLegStarts(bool edge, bool edgePrev, bool haveLeg, float wpMovedSq, float moveDist)
+{
+	if (!edge) return false;
+	return !edgePrev || !haveLeg || wpMovedSq > moveDist * moveDist;
+}
+
 int IslandSpanBucket(int span)
 {
 	if (span < 1) return -1;

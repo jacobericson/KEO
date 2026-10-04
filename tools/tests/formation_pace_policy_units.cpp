@@ -23,6 +23,13 @@ static void CheckFactor()
 	CHECK(FormationPaceFactor(50.0f * 50.0f, -1.0f, r2) == 1.0f, "pace: no paced member reads full speed");
 }
 
+static void CheckWalksGather()
+{
+	CHECK(FormationPaceWalksGather(129.0f, 200.0f, 100.0f, 200.0f), "pace: a member walking to its gather point walks the gather");
+	CHECK(!FormationPaceWalksGather(131.0f, 200.0f, 100.0f, 200.0f), "pace: a member walking another order is not the gather's");
+	CHECK(FormationPaceWalksGather(100.0f, 230.0f, 100.0f, 200.0f), "pace: a member at the bound walks the gather");
+}
+
 static void CheckFarthestAndSpread()
 {
 	const float d[4] = { -1.0f, 900.0f, 2500.0f, -1.0f };
@@ -67,6 +74,7 @@ static void CheckTable()
 int main()
 {
 	CheckFactor();
+	CheckWalksGather();
 	CheckFarthestAndSpread();
 	CheckTable();
 	return CheckExit("formation_pace_policy_units");

@@ -38,6 +38,8 @@ struct EdgeLegSlot
 	double parkSince;
 	bool   parkCounted;
 	int    parks[ISLAND_EDGE_PARK_KINDS];   // counted episodes per IslandEdgePark
+	bool   walkEdgePrev, walkHave;   // every order's own edge-leg state
+	float  walkWpX, walkWpZ;
 };
 
 EdgeLegSlot g_slots[MAX_TRACKED_PLAYERS];
@@ -51,6 +53,7 @@ int   g_ladderMax = 0;
 long  g_ladderOut = 0;
 long  g_handover = 0, g_edgeDrop = 0;
 long  g_arrNear = 0, g_arrFar = 0;
+long  g_walkLegs = 0;   // edge legs of every tracked order
 long  g_legLen[ISLAND_LEGLEN_BUCKETS] = { 0 };   // leg length in cells at leg start
 
 int Threshold() { return IslandFarSpanArmed() ? movement::g_movementCfg.cfg_islandFarSpan : WOULD_SPAN; }
@@ -80,6 +83,19 @@ void EdgeLegsSample(int slot, uintptr_t cm, int hc136, bool moving, bool edge,
 	{
 		e.inSet = true;
 		g_ordSet++;
+	}
+	{
+		float wx = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_pathDestination_x, OFF_CMOV_PATH_DEST));
+		float wz = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_pathDestination_z, OFF_CMOV_PATH_DEST + 8));
+		float mx = wx - e.walkWpX, mz = wz - e.walkWpZ;
+		if (IslandEdgeLegStarts(edge, e.walkEdgePrev, e.walkHave, mx * mx + mz * mz, LEG_MOVE_DIST))
+		{
+			g_walkLegs++;
+			e.walkHave = true;
+			e.walkWpX = wx;
+			e.walkWpZ = wz;
+		}
+		e.walkEdgePrev = edge;
 	}
 	if (!e.inSet)
 		return;
@@ -191,6 +207,6 @@ void EdgeLegsAppendSummary(std::ostringstream& ss)
 	   << " legLen=<1:" << g_legLen[LEGLEN_LT1]
 	   << "/1-2:" << g_legLen[LEGLEN_1TO2]
 	   << "/2-3:" << g_legLen[LEGLEN_2TO3]
-	   << "/3+:" << g_legLen[LEGLEN_3PLUS] << ">";
+	   << "/3+:" << g_legLen[LEGLEN_3PLUS] << ">" << " walkLegs=" << g_walkLegs;
 }
 

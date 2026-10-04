@@ -16,6 +16,12 @@ float FormationPaceFactor(float distSq, float maxDistSq, float gatherRadiusSq)
 	return f > 1.0f ? 1.0f : f;
 }
 
+bool FormationPaceWalksGather(float destX, float destZ, float gatherX, float gatherZ)
+{
+	float dx = destX - gatherX, dz = destZ - gatherZ;
+	return dx * dx + dz * dz <= PACE_GATHER_MATCH * PACE_GATHER_MATCH;
+}
+
 float FormationPaceMaxDistSq(const float* distSq, int n)
 {
 	float best = -1.0f;

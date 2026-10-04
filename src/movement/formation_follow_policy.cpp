@@ -19,13 +19,18 @@ bool FollowMayCapture(bool inGroup, bool dispatched)
 	return inGroup && !dispatched;
 }
 
+bool FollowPreemptionTask(int taskType)
+{
+	return taskType == 147 || taskType == 62 || taskType == 32;
+}
+
 int FollowerStep(const FollowerState& s)
 {
 	if (!s.live)
 		return FFR_GONE;
 	if (!s.grouped)
 		return FFR_SPEED;
-	if (s.seenTask && !s.taskNow)
+	if (s.seenTask && !s.taskNow && !s.preempted)
 		return FFR_DROPPED;
 	return FFR_NONE;
 }

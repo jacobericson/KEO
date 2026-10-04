@@ -33,11 +33,15 @@ bool FollowCaptureDue(float distSqToLeader, float gatherRadiusSq, double now, do
 // and a new order take the member off the group, and the arrival scatter dispatches it.
 bool FollowMayCapture(bool inGroup, bool dispatched);
 
+// The current tasks a move resumes after rather than ends on: a forced stumble (147), a stand-still a
+// passer-by posts (62) and self-preservation (32).
+bool FollowPreemptionTask(int taskType);
 // One follower this poll: in the player list, its speed mode GROUPED, whether its current task has read
-// the follow task since its capture (seenTask) and reads it now (taskNow).
-struct FollowerState { int live; int grouped; int seenTask; int taskNow; };
-// FFR_GONE (not live), FFR_SPEED (not grouped), FFR_DROPPED (seen, and its task no longer the follow
-// task: the engine ended it without a release), else FFR_NONE: still following.
+// the follow task since its capture (seenTask), reads it now (taskNow), or reads a preemption the
+// follow task resumes after (preempted).
+struct FollowerState { int live; int grouped; int seenTask; int taskNow; int preempted; };
+// FFR_GONE (not live), FFR_SPEED (not grouped), FFR_DROPPED (seen, and its task neither the follow task
+// nor a preemption: the engine ended it without a release), else FFR_NONE: still following.
 int FollowerStep(const FollowerState& s);
 
 // One record this poll.
