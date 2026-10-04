@@ -45,8 +45,9 @@ void OOT_ResetForTest();
 
 // A new player move order for chars[0..n). Any of these characters' current
 // membership closes first (end=supersede if that empties its record); an
-// open stall there resolves as a user re-order.
-void OOT_Begin(const size_t* chars, int n, int cellSpan, double now, bool paused = false);
+// open stall there resolves as a user re-order. fromXz and toXz, when both
+// are given, are the order's origin and destination (x, z), printed on its line.
+void OOT_Begin(const size_t* chars, int n, int cellSpan, double now, bool paused = false, const float* fromXz = NULL, const float* toXz = NULL);
 
 // The per-poll motion sample for `c` (main-thread poll, every poll whether
 // moving or not). `post` is a pure position test against the order's own
@@ -115,5 +116,15 @@ OotTotals OOT_GetTotals();
 
 // Open (not yet closed) records, for tests and diagnostics.
 int OOT_OpenRecords();
+
+// The open record whose members include c, by its number; 0 when c is in none.
+int OOT_OrderOf(size_t c);
+// The open record numbered orderNum's coordinates as fromX, fromZ, toX, toZ; false when it is not
+// open or was begun without them.
+bool OOT_OrderCoords(int orderNum, float out[4]);
+// Called with a record's number as it closes and prints (every close but a save-load reset's);
+// NULL calls nothing.
+typedef void (*OotCloseNote)(int orderNum);
+void OOT_SetCloseNote(OotCloseNote fn);
 
 #endif // KEO_ORDER_OUTCOME_TABLE_H

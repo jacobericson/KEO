@@ -63,7 +63,8 @@ std::string OrderOutcomeStuckSuffix(bool ko, bool haveHc136, int hc136, bool pos
 
 // One "OrderOutcome:" line. `end` is one of done/cancel/supersede/timeout/
 // evict/reset -- why the record closed, not what happened to any one member.
-std::string OrderOutcomeFormatLine(int orderNum, double issueTime, int cellSpan,
+// coords is OrderOutcomeFormatCoords' text, written after cells=.
+std::string OrderOutcomeFormatLine(int orderNum, double issueTime, int cellSpan, const std::string& coords,
                                     int members, int walked, int arrived, int ko,
                                     int k7rec, int userRec, int unrec, int selfRec,
                                     double stallCharS, double maxStallS,
@@ -79,5 +80,9 @@ std::string OrderOutcomeFormatSpanTotals(long orders, long longOrders, long long
 // The planner column appended to an "OrderOutcome:" line while the route planner is armed: stalls
 // whose wait the planner owned, counted there instead of as stops.
 std::string OrderOutcomePlannerSuffix(int plannerWait);   // " plannerWait=<n>"
+
+// The order's coordinates for an "OrderOutcome:" line: " from=(<x>,<z>) to=(<x>,<z>)", world units
+// rounded to the unit, or " from=- to=-" for a record begun without them.
+std::string OrderOutcomeFormatCoords(bool have, float fromX, float fromZ, float toX, float toZ);
 
 #endif // KEO_ORDER_OUTCOME_POLICY_H

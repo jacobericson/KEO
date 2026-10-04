@@ -40,6 +40,7 @@ k7DestReadyGate=true
 k7PostDeathHold=1
 meshFaceGuard=true
 movementAware=true
+movementTrace=0
 navMeshLife=true
 navMeshUpdateGuard=true
 navmeshAdjExclusion=true

@@ -10,6 +10,7 @@
 #include "movement/island_edge_legs.h"
 #include "movement/order_outcome.h"
 #include "movement/order_outcome_policy.h"   // OrderOutcomeStuckSuffix (PLAYER STUCK ko=/hc=/post=)
+#include "movement/movement_trace.h"
 #include "zone/zone_pause.h"             // ZonePauseIsPaused (PLAYER STUCK print suppression)
 
 // =========================================================================
@@ -439,6 +440,7 @@ void SamplePlayerArrivals()
 		float posX = *(float*)(KLIB_MEMBER(3, tp.character, RootObjectBase_pos_x, OFF_CHAR_POS_X));
 		float posZ = *(float*)(KLIB_MEMBER(3, tp.character, RootObjectBase_pos_z, OFF_CHAR_POS_Z));
 		EdgeLegsSample(i, cm, hc136, moving, edge, posX, posZ, tp.destX, tp.destZ, ElapsedSec());
+		MovementTraceSample(tp.character, cm, hc, hc136);
 
 		if (arrived && !tp.arrivedPrev)
 		{

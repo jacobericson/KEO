@@ -97,6 +97,10 @@ struct MovementConfig
 	// formationGatherPace: while a run-together group gathers, the members nearer the gather point
 	// walk slower (no slower than half speed) so the group arrives together. On by default.
 	bool formationGatherPaceEnabled;
+
+	// movementTrace: off or on (TraceMode); read by the session build alone. on writes each player order's
+	// movement samples and path results to a file beside the log, for the offline harness.
+	int cfg_movementTrace;
 };
 
 extern MovementConfig g_movementCfg;

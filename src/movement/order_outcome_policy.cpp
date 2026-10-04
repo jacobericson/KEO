@@ -45,7 +45,7 @@ std::string OrderOutcomeStuckSuffix(bool ko, bool haveHc136, int hc136, bool pos
 	return ss.str();
 }
 
-std::string OrderOutcomeFormatLine(int orderNum, double issueTime, int cellSpan,
+std::string OrderOutcomeFormatLine(int orderNum, double issueTime, int cellSpan, const std::string& coords,
                                     int members, int walked, int arrived, int ko,
                                     int k7rec, int userRec, int unrec, int selfRec,
                                     double stallCharS, double maxStallS,
@@ -55,7 +55,7 @@ std::string OrderOutcomeFormatLine(int orderNum, double issueTime, int cellSpan,
 	ss << std::fixed << std::setprecision(1);
 	ss << "OrderOutcome: order=#" << orderNum
 	   << " t=" << issueTime
-	   << " cells=" << cellSpan
+	   << " cells=" << cellSpan << coords
 	   << " members=" << members
 	   << " walked=" << walked
 	   << " arrived=" << arrived
@@ -88,5 +88,15 @@ std::string OrderOutcomePlannerSuffix(int plannerWait)
 {
 	std::ostringstream ss;
 	ss << " plannerWait=" << plannerWait;
+	return ss.str();
+}
+
+std::string OrderOutcomeFormatCoords(bool have, float fromX, float fromZ, float toX, float toZ)
+{
+	if (!have)
+		return " from=- to=-";
+	std::ostringstream ss;
+	ss << std::fixed << std::setprecision(0) << " from=(" << fromX << "," << fromZ << ") to=(" << toX << ","
+	   << toZ << ")";
 	return ss.str();
 }

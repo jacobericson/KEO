@@ -11,6 +11,7 @@
 #include "movement/island_span_policy.h"
 #include "zone/zone_pause.h"
 #include "planner/plan_store.h"
+#include "movement/movement_trace.h"
 #include "movement/formation_follow.h"
 
 namespace order_outcome_detail {
@@ -25,6 +26,7 @@ using namespace order_outcome_detail;
 
 void OrderOutcomeReset()
 {
+	MovementTraceReset();
 	OOT_Reset(Sink);
 	OOT_SetPlannerColumn(planner::PlanStoreMode() != planner::PLANNER_OFF);
 }
@@ -32,6 +34,7 @@ void OrderOutcomeReset()
 void OrderOutcomeBegin(const uintptr_t* chars, int count, float destX, float destZ, double now)
 {
 	if (count <= 0 || !chars) return;
+	OOT_SetCloseNote(MovementTraceOnOrderClose);
 
 	int cellSpan = -1;
 	int gx, gy, dgx, dgy;
@@ -41,7 +44,9 @@ void OrderOutcomeBegin(const uintptr_t* chars, int count, float destX, float des
 
 	// size_t and uintptr_t are the same width everywhere this mod builds
 	// (x64); the table is pure and knows characters only as opaque handles.
-	OOT_Begin(reinterpret_cast<const size_t*>(chars), count, cellSpan, now, ZonePauseIsPaused());
+	const float from[2] = { GetCharPosX(chars[0]), GetCharPosZ(chars[0]) };
+	const float to[2] = { destX, destZ };
+	OOT_Begin(reinterpret_cast<const size_t*>(chars), count, cellSpan, now, ZonePauseIsPaused(), from, to);
 }
 
 void OrderOutcomeNoteMotion(uintptr_t character, bool moving, bool post, double now)
@@ -102,6 +107,7 @@ void OrderOutcomePoll(double now)
 		haveList = (scStuff != NULL && scCount > 0 && scCount <= 256);
 	}
 	OOT_Poll(reinterpret_cast<const size_t*>(scStuff), (int)scCount, haveList, now, ZonePauseIsPaused());
+	MovementTraceFrame(now);
 }
 
 void OrderOutcomeNoteStopGuess(uintptr_t character, const char* guess, double now)

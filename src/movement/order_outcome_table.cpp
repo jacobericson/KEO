@@ -36,6 +36,8 @@ struct OrderRecord
 	int         orderNum;
 	double      issueTime;
 	int         cellSpan;
+	bool        haveCoords;      // the order's origin and destination below are set
+	float       fromX, fromZ, toX, toZ;
 	int         memberCount;
 	OOMember    members[MAX_ORDER_MEMBERS];
 
@@ -51,6 +53,7 @@ OrderRecord g_records[MAX_ORDER_RECORDS];
 int         g_nextOrderNum = 0;
 OotSink     g_sink = NULL;
 bool        g_plannerColumn = false;
+OotCloseNote g_closeNote = NULL;
 
 long g_totalOrders     = 0;
 long g_totalLongOrders = 0;
@@ -184,13 +187,14 @@ void PrintAndClose(OrderRecord& rec, double now, const char* endReason,
 		if (rec.members[m].departed) walked++;
 
 	if (g_sink)
-		g_sink(OrderOutcomeFormatLine(rec.orderNum, rec.issueTime, rec.cellSpan,
+		g_sink(OrderOutcomeFormatLine(rec.orderNum, rec.issueTime, rec.cellSpan, OrderOutcomeFormatCoords(rec.haveCoords, rec.fromX, rec.fromZ, rec.toX, rec.toZ),
 		                               rec.memberCount, walked, rec.arrived, rec.ko,
 		                               rec.k7rec, rec.userRec, rec.unrec, rec.selfRec,
 		                               rec.stallCharS, rec.maxStallS, rec.stopsGuess, endReason)
 		       + (g_plannerColumn ? OrderOutcomePlannerSuffix(rec.plannerWait) : std::string()));
 
 	FoldIntoTotals(rec, finalRes);
+	if (g_closeNote) g_closeNote(rec.orderNum);
 	rec.active = false;
 }
 
@@ -260,7 +264,7 @@ void OOT_Reset(OotSink sink)
 		for (int m = 0; m < rec.memberCount; ++m)
 			if (rec.members[m].departed) walked++;
 		if (g_sink)
-			g_sink(OrderOutcomeFormatLine(rec.orderNum, rec.issueTime, rec.cellSpan,
+			g_sink(OrderOutcomeFormatLine(rec.orderNum, rec.issueTime, rec.cellSpan, OrderOutcomeFormatCoords(rec.haveCoords, rec.fromX, rec.fromZ, rec.toX, rec.toZ),
 			                               rec.memberCount, walked, rec.arrived, rec.ko,
 			                               rec.k7rec, rec.userRec, rec.unrec, rec.selfRec,
 			                               rec.stallCharS, rec.maxStallS, rec.stopsGuess, "reset")
@@ -279,7 +283,7 @@ void OOT_ResetForTest()
 	g_activeClockPausedAccum = 0.0;
 }
 
-void OOT_Begin(const size_t* chars, int n, int cellSpan, double now, bool paused)
+void OOT_Begin(const size_t* chars, int n, int cellSpan, double now, bool paused, const float* fromXz, const float* toXz)
 {
 	now = ActiveTime(now, paused);
 	// A new order for a character already in a record closes that record's
@@ -333,6 +337,11 @@ void OOT_Begin(const size_t* chars, int n, int cellSpan, double now, bool paused
 	rec.issueTime   = now;
 	rec.cellSpan    = cellSpan;
 	rec.memberCount = (n > MAX_ORDER_MEMBERS) ? MAX_ORDER_MEMBERS : n;
+	rec.haveCoords = fromXz && toXz;
+	rec.fromX = fromXz ? fromXz[0] : 0.0f;
+	rec.fromZ = fromXz ? fromXz[1] : 0.0f;
+	rec.toX   = toXz ? toXz[0] : 0.0f;
+	rec.toZ   = toXz ? toXz[1] : 0.0f;
 	for (int i = 0; i < rec.memberCount; ++i)
 	{
 		OOMember& m = rec.members[i];
@@ -571,4 +580,32 @@ int OOT_OpenRecords()
 	for (int r = 0; r < MAX_ORDER_RECORDS; ++r)
 		if (g_records[r].active) n++;
 	return n;
+}
+
+int OOT_OrderOf(size_t c)
+{
+	OrderRecord* rec;
+	OOMember* m = FindMember(c, &rec);
+	return m ? rec->orderNum : 0;
+}
+
+bool OOT_OrderCoords(int orderNum, float out[4])
+{
+	for (int r = 0; r < MAX_ORDER_RECORDS; ++r)
+	{
+		const OrderRecord& rec = g_records[r];
+		if (!rec.active || rec.orderNum != orderNum || !rec.haveCoords)
+			continue;
+		out[0] = rec.fromX;
+		out[1] = rec.fromZ;
+		out[2] = rec.toX;
+		out[3] = rec.toZ;
+		return true;
+	}
+	return false;
+}
+
+void OOT_SetCloseNote(OotCloseNote fn)
+{
+	g_closeNote = fn;
 }

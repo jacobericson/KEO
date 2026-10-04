@@ -520,5 +520,28 @@ int main()
 	      "outcome: a planner wait open at a reset is not unrec");
 	OOT_SetPlannerColumn(false);
 
+	// The coordinates and the trace's queries: the line carries the order's coordinates, the open record
+	// answers its number and its coordinates, and the close note fires once, at the close.
+	{
+		Fresh();
+		static int s_notes = 0, s_noted = 0;
+		struct NoteSink { static void Note(int n) { ++s_notes; s_noted = n; } };
+		OOT_SetCloseNote(&NoteSink::Note);
+		const float from[2] = { 10.0f, 20.0f }, to[2] = { 30.0f, 40.0f };
+		OOT_Begin(&A, 1, 29, 0.0, false, from, to);
+		int num = OOT_OrderOf(A);
+		float xy[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+		Check(num > 0 && OOT_OrderOf(B) == 0 && OOT_OrderCoords(num, xy) && xy[0] == 10.0f && xy[3] == 40.0f,
+		      "trace query: the open record answers its number and coordinates");
+		OOT_Cancel(A, 5.0);
+		Check(g_lines.size() == 1 && Has(g_lines[0], " cells=29 from=(10,20) to=(30,40) members=1")
+		      && s_notes == 1 && s_noted == num && OOT_OrderOf(A) == 0,
+		      "coords: the closed line carries them and the close note fires once");
+		OOT_Begin(&B, 1, 29, 6.0);
+		OOT_Cancel(B, 7.0);
+		Check(g_lines.size() == 2 && Has(g_lines[1], " from=- to=-"), "coords: a record begun without them reads from=- to=-");
+		OOT_SetCloseNote(NULL);
+	}
+
 	return CheckExit("order_outcome_table_units");
 }

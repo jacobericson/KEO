@@ -77,5 +77,16 @@ int main()
 	Check(OrderOutcomePlannerSuffix(0) == " plannerWait=0" && OrderOutcomePlannerSuffix(3) == " plannerWait=3",
 	      "suffix: plannerWait=<n>");
 
+	// The order's coordinates, written after cells=.
+	Check(OrderOutcomeFormatCoords(true, -1234.4f, 567.6f, 89.0f, -10.0f) == " from=(-1234,568) to=(89,-10)",
+	      "coords: from=(x,z) to=(x,z) rounded to the unit");
+	Check(OrderOutcomeFormatCoords(false, 1.0f, 2.0f, 3.0f, 4.0f) == " from=- to=-", "coords: none reads from=- to=-");
+	{
+		std::string line = OrderOutcomeFormatLine(1, 2.0, 9, OrderOutcomeFormatCoords(true, 10.0f, 20.0f, 30.0f, 40.0f),
+		                                          2, 2, 2, 0, 0, 0, 0, 0, 0.0, 0.0, "", "done");
+		Check(line.find("OrderOutcome: order=#1 t=2.0 cells=9 from=(10,20) to=(30,40) members=2 ") == 0,
+		      "outcome line: from= and to= follow cells=");
+	}
+
 	return CheckExit("order_outcome_units");
 }

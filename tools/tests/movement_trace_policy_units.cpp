@@ -1,0 +1,128 @@
+// The movement trace's rules: the sample distance, the ring keeping the newest, the result ring's
+// publish, take, torn slot and overrun, the attribution distance, the move out of the Havok frame,
+// and each trace line round-tripping through the parser.
+#include <cstdio>
+#include <string.h>
+#include "movement/movement_trace_policy.h"
+
+#include "check.h"
+
+static TraceRing       s_ring;
+static TraceSample     s_copy[TRACE_RING];
+static TraceResultRing s_results;
+static TraceResult     s_out;
+
+static void CheckSampling()
+{
+	CHECK(TraceSampleDue(false, 0.0f, 0.0f, 0.0f, 0.0f), "trace: a member with no sample is sampled");
+	CHECK(!TraceSampleDue(true, 0.0f, 0.0f, 2.0f, 0.0f), "trace: a member 2 units on is not sampled");
+	CHECK(TraceSampleDue(true, 0.0f, 0.0f, 3.0f, 0.0f), "trace: a member 3 units on is sampled");
+	memset(&s_ring, 0, sizeof(s_ring));
+	TraceSample s;
+	memset(&s, 0, sizeof(s));
+	for (int i = 0; i < TRACE_RING + 5; ++i)
+	{
+		s.t = (double)i;
+		TraceRingPush(&s_ring, s);
+	}
+	int n = TraceRingCopy(s_ring, s_copy);
+	CHECK(n == TRACE_RING && s_copy[0].t == 5.0 && s_copy[TRACE_RING - 1].t == (double)(TRACE_RING + 4)
+	      && s_ring.drops == 5, "trace: the ring keeps the newest 1024");
+}
+
+static void Publish(int count)
+{
+	TraceResult* r = TraceResultBegin(&s_results);
+	r->count = count;
+	r->copied = count;
+	TraceResultEnd(&s_results);
+}
+
+static void CheckResultRing()
+{
+	memset(&s_results, 0, sizeof(s_results));
+	long taken = 0, overruns = 0, torn = 0;
+	CHECK(!TraceResultTake(&s_results, &taken, &s_out, &overruns, &torn), "trace ring: nothing published reads nothing");
+	Publish(7);
+	CHECK(TraceResultTake(&s_results, &taken, &s_out, &overruns, &torn) && s_out.count == 7 && taken == 1,
+	      "trace ring: a published result is taken once");
+	Publish(8);
+	s_results.slotSeq[1] += 1;   // a write in progress on the slot about to be read
+	CHECK(!TraceResultTake(&s_results, &taken, &s_out, &overruns, &torn) && torn == 1,
+	      "trace ring: a slot caught mid-write is skipped");
+	s_results.slotSeq[1] += 1;
+	memset(&s_results, 0, sizeof(s_results));
+	taken = overruns = torn = 0;
+	for (int i = 0; i < TRACE_RESULT_RING + 4; ++i)
+		Publish(100 + i);
+	int got = 0;
+	int first = -1;
+	while (TraceResultTake(&s_results, &taken, &s_out, &overruns, &torn))
+	{
+		if (first < 0)
+			first = s_out.count;
+		++got;
+	}
+	CHECK(got == TRACE_RESULT_RING && overruns == 4 && first == 104 && torn == 0,
+	      "trace ring: a reader 20 behind skips 4 and counts them");
+}
+
+static void CheckAttribution()
+{
+	const float last[6] = { 0.0f, 0.0f, 100.0f, 0.0f, 0.0f, 300.0f };
+	const int have[3] = { 1, 1, 0 };
+	const float near40[2] = { 40.0f, 0.0f };
+	const float far60[2] = { -60.0f, 0.0f };
+	const float onAbsent[2] = { 0.0f, 300.0f };
+	CHECK(TraceAttribute(near40, last, have, 3) == 0, "trace: a result 40 units from a member is its");
+	CHECK(TraceAttribute(far60, last, have, 3) == -1, "trace: a result 60 units from every member is unmatched");
+	CHECK(TraceAttribute(onAbsent, last, have, 3) == -1, "trace: a member with no sample takes no result");
+	const float mid[2] = { 55.0f, 0.0f };
+	CHECK(TraceAttribute(mid, last, have, 3) == 1, "trace: the nearest member within the bound takes the result");
+	const float h[3] = { 12.5f, 1.0f, -3.0f };
+	const float shift[3] = { 2.5f, 0.0f, 1.0f };
+	float w[3];
+	TraceHavokToWorld(h, shift, w);
+	CHECK(w[0] == 100.0f && w[1] == 10.0f && w[2] == -40.0f, "trace: a Havok point moves to the world frame");
+}
+
+static void CheckLines()
+{
+	TraceLine line;
+	TraceOrderLine o = { 3, -1234.5f, 567.0f, 89.5f, -10.0f, 2, 12.25 };
+	std::string ot = TraceFormatOrder(o);
+	CHECK(ot == "o order=3 from=(-1234.5,567.0) to=(89.5,-10.0) members=2 t0=12.250", "trace line: the order line's text");
+	CHECK(TraceParseLine(ot.c_str(), &line) == TLK_ORDER && line.o.order == 3 && line.o.fromX == -1234.5f
+	      && line.o.toZ == -10.0f && line.o.members == 2 && line.o.t0 == 12.25, "trace line: an order round-trips");
+	TraceSample s = { 3, 1, 13.5, 100.5f, -2.5f, 300.0f, 3, 1, 31, 30, -1 };
+	std::string st = TraceFormatSample(s);
+	CHECK(TraceParseLine(st.c_str(), &line) == TLK_SAMPLE && line.s.order == 3 && line.s.member == 1 && line.s.t == 13.5
+	      && line.s.x == 100.5f && line.s.y == -2.5f && line.s.z == 300.0f && line.s.pathState == 3
+	      && line.s.characterState == 1 && line.s.cellX == 31 && line.s.cellY == 30 && line.s.leg == -1,
+	      "trace line: a sample round-trips");
+	TraceResultLine p;
+	p.order = 3;
+	p.member = 1;
+	p.t = 14.75;
+	p.cut = 1;
+	p.count = 300;
+	TraceNode a = { 4194305u, 10.5f, 2.0f, -20.5f };
+	TraceNode b = { 7u, 11.0f, 2.5f, -21.0f };
+	p.nodes.push_back(a);
+	p.nodes.push_back(b);
+	std::string pt = TraceFormatResult(p);
+	CHECK(TraceParseLine(pt.c_str(), &line) == TLK_RESULT && line.p.count == 300 && line.p.cut == 1
+	      && line.p.nodes.size() == 2 && line.p.nodes[0].face == 4194305u && line.p.nodes[1].z == -21.0f,
+	      "trace line: a result round-trips");
+	CHECK(TraceParseLine("", &line) == TLK_NONE && TraceParseLine("s order=x", &line) == TLK_NONE
+	      && TraceParseLine((pt + " junk").c_str(), &line) == TLK_NONE, "trace line: a blank or malformed line reads none");
+}
+
+int main()
+{
+	CheckSampling();
+	CheckResultRing();
+	CheckAttribution();
+	CheckLines();
+	return CheckExit("movement_trace_policy_units");
+}
