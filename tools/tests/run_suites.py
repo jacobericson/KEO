@@ -1,10 +1,10 @@
 """Compile and run every host unit-test suite as concurrent processes
-(Python 3, stdlib only), modelled on tools\\build\\run_variants.py. Each
-process it starts holds one host-wide cpu token from tools\\build\\slots.py
-(KEO_SLOTS=off turns the pools off); started under a token itself
-(KEO_CPU_HELD=1), it runs one job at a time.
+(Python 3, stdlib only). Each process it starts holds one host-wide cpu
+token from tools\\build\\slots.py (KEO_SLOTS=off turns the pools off);
+started under a token itself (KEO_CPU_HELD=1), it runs one job at a time.
 
-Called by build_tests.bat after it has set up the VS 2010 x64 environment.
+Run by tools\\tests\\test_gate.py, which build_tests.bat calls once it has
+set up the VS 2010 x64 environment.
 Suites are data, not code: tools\\tests\\suites.txt lists one per line as
 
     name | unit .cpp | extra sources | defines
@@ -241,7 +241,8 @@ def plan(suites):
 
 def stale_output(path, start, what):
     """None when `path` exists with an mtime no earlier than `start`, else why
-    not (the same test run_variants.py applies to its objects)."""
+    not. Each step deletes its output before it starts, so one left from an
+    earlier run cannot pass."""
     try:
         mtime = os.stat(path).st_mtime
     except OSError:
@@ -317,12 +318,14 @@ def do_link(job, stop):
 
 
 def do_run(job, stop):
+    # RUN is written only once the token is held, so a run the stop skips
+    # leaves no RUN line with no output after it.
     suite = job.suite
-    with open(suite.log, 'ab') as log:
-        suite.run_at = log.tell()
-        log.write(b'RUN\n')
-        log.flush()
-        with cpu_token('suite run %s' % suite.name, stop):
+    with cpu_token('suite run %s' % suite.name, stop):
+        with open(suite.log, 'ab') as log:
+            suite.run_at = log.tell()
+            log.write(b'RUN\n')
+            log.flush()
             return subprocess.call([suite.exe], stdout=log, stderr=subprocess.STDOUT,
                                    stdin=subprocess.DEVNULL, env=slots.child_env(leaf=True))
 
