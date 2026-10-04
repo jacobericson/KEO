@@ -1,4 +1,5 @@
 #include "gui/settings_rows.h"
+#include "gui/settings_layout.h"
 #include "render/render_keys.h"
 #include <cstdio>
 #include <cstring>
@@ -132,8 +133,13 @@ RenderConfig& StagedRender(SettingsStaging* s)
 void BuildSettingsRows(SettingsStaging* staging, bool devBuild, const SettingsBench* bench,
                        std::vector<SettingsRow>* out)
 {
-	for (int m = 0; m < kConfigModuleCount && m < CONFIG_MODULE_MAX; ++m)
-		AddModuleRows(kConfigModules[m], &staging->module[m], devBuild, out);
+	if (devBuild)
+	{
+		for (int m = 0; m < kConfigModuleCount && m < CONFIG_MODULE_MAX; ++m)
+			AddModuleRows(kConfigModules[m], &staging->module[m], true, out);
+	}
+	else
+		AddPlayerSections(staging, out);
 
 	for (size_t i = 0; i < out->size(); ++i)
 	{

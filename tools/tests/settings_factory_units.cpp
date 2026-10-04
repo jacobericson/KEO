@@ -4,6 +4,7 @@
 
 #include "gui/settings_factory.h"
 #include "gui/settings_rows.h"
+#include "gui/settings_layout.h"
 #include "render/render_config.h"
 #include "render/render_keys.h"
 #include "base/config_table.h"
@@ -40,13 +41,23 @@ static const char* const SUITE_NAME = "settings_factory_prod_units";
 static const size_t CORE_ROWS_DEV = 72;
 static const int DEV_ONLY_ROWS = 84;
 
-// The PROD page's rows, by key: the settings an end user changes in game.
-static const char* const kProdPage[] =
+// The PROD page's rows in display order, by key and section: the settings an
+// end user changes in game, live rows before startup-only ones in a section.
+struct ProdRow
 {
-	"renderLevers", "particleStepCap", "foliagePageBudgetMs", "preload", "zoneLifeRetainRadius",
-	"navmeshWorkerCount", "navmeshDiskCacheMaxMB", "groupCohesion", "k7PostDeathHold", NULL
+	const char* key;
+	const char* section;
+};
+static const ProdRow kProdPage[] =
+{
+	{ "preload", "Zone loading" }, { "zoneLifeRetainRadius", "Zone loading" },
+	{ "navmeshWorkerCount", "Zone loading" }, { "navmeshDiskCacheMaxMB", "Zone loading" },
+	{ "particleStepCap", "Performance" }, { "foliagePageBudgetMs", "Performance" }, { "renderLevers", "Performance" },
+	{ "groupCohesion", "Squad movement" }, { "k7PostDeathHold", "Squad movement" },
+	{ NULL, NULL }
 };
 static const int PROD_PAGE_ROWS = 9;
+static const char* const PROD_SECTIONS[] = { "Zone loading", "Performance", "Squad movement" };
 
 static void CheckNamed(bool ok, const std::string& what)
 {
@@ -138,6 +149,23 @@ static std::vector<const SettingsRow*> Section(const std::vector<SettingsRow>& r
 	return out;
 }
 
+static const char* ProdSection(const char* key)
+{
+	for (int i = 0; kProdPage[i].key; ++i)
+	{
+		if (strcmp(kProdPage[i].key, key) == 0)
+			return kProdPage[i].section;
+	}
+	return "";
+}
+
+// The heading a shown key's row sits under: its module's title in DEV, its
+// player section in PROD.
+static const char* SectionOf(const ConfigModule& mod, const ConfigKey& k, bool devBuild)
+{
+	return devBuild ? mod.title : ProdSection(k.name);
+}
+
 static std::vector<const SettingsRow*> ModuleSections(const std::vector<SettingsRow>& rows)
 {
 	std::vector<const SettingsRow*> out;
@@ -220,16 +248,32 @@ static void CheckSections()
 	// PROD: only the sections that keep a row, and no Benchmark.
 	std::vector<SettingsRow> rows = Rows(&st, false, &bench);
 	std::vector<std::string> prod = Headers(rows);
-	const char* const want[] = { RENDER_TITLE, "Zone loading", "Navmesh", "Movement and orders" };
-	sections = prod.size() == 4;
-	for (int i = 0; sections && i < 4; ++i) sections = prod[i] == want[i];
+	sections = prod.size() == 3;
+	for (int i = 0; sections && i < 3; ++i) sections = prod[i] == PROD_SECTIONS[i];
 	Check(sections, "Sections: PROD");
-	Check(!rows.empty() && rows[0].kind == SR_HEADER && rows[0].label == want[0],
+	Check(!rows.empty() && rows[0].kind == SR_HEADER && rows[0].label == PROD_SECTIONS[0],
 	      "the page opens with its first section's heading");
 
-	// The render section: its live rows in table order, then its startup-only
-	// ones, label for label and kind for kind.
-	std::vector<const SettingsRow*> render = Section(rows, RENDER_TITLE);
+	// PROD's rows, in order, each under its section's heading.
+	bool order = true;
+	std::string heading;
+	int next = 0;
+	for (size_t i = 0; order && i < rows.size(); ++i)
+	{
+		if (rows[i].kind == SR_HEADER)
+			heading = rows[i].label;
+		if (rows[i].kind == SR_HEADER || rows[i].kind == SR_NOTE)
+			continue;
+		const ConfigModule* mod = NULL;
+		const ConfigKey* k = kProdPage[next].key ? FindConfigKey(kProdPage[next].key, &mod) : NULL;
+		order = k && k->label && rows[i].label == RowLabel(*k) && heading == kProdPage[next].section;
+		++next;
+	}
+	Check(order && next == PROD_PAGE_ROWS, "Sections: PROD rows in order under their headings");
+
+	// Performance holds the render module's PROD rows: the live ones in table
+	// order, then the startup-only ones, label for label and kind for kind.
+	std::vector<const SettingsRow*> render = Section(rows, "Performance");
 	std::vector<std::string> wantLabel;
 	std::vector<SettingsRowKind> wantKind;
 	for (int pass = 0; pass < 2; ++pass)
@@ -258,26 +302,27 @@ static void CheckShownKeys(bool devBuild)
 	StageAll(&st);
 	std::vector<SettingsRow> rows = Rows(&st, devBuild, NULL);
 	bool ok = true;
+	size_t shown = 0, keyRows = 0;
 	for (int m = 0; m < kConfigModuleCount; ++m)
 	{
 		const ConfigModule& mod = kConfigModules[m];
-		std::vector<const SettingsRow*> sec = Section(rows, mod.title);
-		size_t shown = 0;
 		for (int i = 0; mod.keys[i].name; ++i)
 		{
 			const ConfigKey& k = mod.keys[i];
 			if (!Shown(k, devBuild))
 				continue;
 			++shown;
-			if (CountLabel(sec, RowLabel(k)) != 1)
+			if (CountLabel(Section(rows, SectionOf(mod, k, devBuild)), RowLabel(k)) != 1)
 			{
 				ok = false;
 				printf("  not shown once: %s\n", k.name);
 			}
 		}
-		if (sec.size() != shown)
-			ok = false;
 	}
+	for (size_t i = 0; i < rows.size(); ++i)
+		keyRows += rows[i].kind == SR_HEADER || rows[i].kind == SR_NOTE ? 0 : 1;
+	if (keyRows != shown)
+		ok = false;
 	for (size_t i = 0; i < rows.size(); ++i)
 		for (size_t j = i + 1; j < rows.size(); ++j)
 			if (rows[i].label == rows[j].label)
@@ -305,9 +350,9 @@ static void CheckRowCounts()
 	StageAll(&st);
 	std::vector<SettingsRow> dev = Rows(&st, true, NULL), prod = Rows(&st, false, NULL);
 	Check(ModuleSections(dev).size() == CORE_ROWS_DEV, "core rows dev");
-	Check(ModuleSections(prod).size() == 6, "core rows prod");
 	Check(Section(dev, RENDER_TITLE).size() == 21, "render rows dev");
-	Check(Section(prod, RENDER_TITLE).size() == 3, "render rows prod");
+	Check(Section(prod, "Zone loading").size() == 4 && Section(prod, "Performance").size() == 3
+	      && Section(prod, "Squad movement").size() == 2, "player section rows prod");
 }
 
 // ---- Restart and devOnly ---------------------------------------------------
@@ -384,14 +429,35 @@ static void CheckRestartOrder()
 	}
 }
 
+// The tab's own table places every PROD row once, in a section matching
+// this suite's, each section's places together; a key it missed would land
+// in a module-titled section after the player ones.
+static void CheckLayoutTable()
+{
+	using keo_gui::kSettingsPlaces;
+	bool ok = true;
+	int n = 0;
+	for (; kSettingsPlaces[n].section; ++n)
+	{
+		const keo_gui::SettingsPlace& p = kSettingsPlaces[n];
+		const ConfigModule* mod = NULL;
+		const ConfigKey* k = FindConfigKey(p.key, &mod);
+		bool here = k && mod && strcmp(mod->name, p.module) == 0 && Shown(*k, false)
+		         && strcmp(ProdSection(p.key), p.section) == 0;
+		for (int j = 0; here && j < n; ++j)
+			here = strcmp(kSettingsPlaces[j].key, p.key) != 0;
+		// A section seen before must be the one just before this place.
+		for (int j = 0; here && j + 1 < n; ++j)
+			here = strcmp(kSettingsPlaces[j].section, p.section) != 0 || strcmp(kSettingsPlaces[n - 1].section, p.section) == 0;
+		CheckNamed(here, std::string("layout place ") + p.key);
+		ok = ok && here;
+	}
+	Check(ok && n == PROD_PAGE_ROWS, "layout table: every PROD row placed once");
+}
+
 static bool OnProdPage(const char* name)
 {
-	for (int i = 0; kProdPage[i]; ++i)
-	{
-		if (strcmp(kProdPage[i], name) == 0)
-			return true;
-	}
-	return false;
+	return ProdSection(name)[0] != 0;
 }
 
 static void CheckDevOnly()
@@ -1100,7 +1166,7 @@ static void CheckEveryLabelledRowShows()
 		{
 			const ConfigKey& k = kConfigModules[m].keys[i];
 			if (!Shown(k, view != 0)) continue;
-			CheckNamed(CountLabel(Section(rows, kConfigModules[m].title), RowLabel(k)) == 1,
+			CheckNamed(CountLabel(Section(rows, SectionOf(kConfigModules[m], k, view != 0)), RowLabel(k)) == 1,
 			           std::string("not shown once: ") + k.name);
 		}
 	}
@@ -1171,6 +1237,7 @@ int main()
 	CheckRowCounts();
 	CheckRestart();
 	CheckRestartOrder();
+	CheckLayoutTable();
 	CheckDevOnly();
 	CheckNumericRows();
 	CheckStagePerModule();

@@ -77,12 +77,14 @@ struct SettingsBench
 // while one runs.
 std::string SweepCaption(int leg, int legs);
 
-// The rows in display order: each module's section in kConfigModules[] order,
-// bound into its own staged copy (DEV-only keys only when devBuild;
-// startup-only ones marked RESTART_MARK and listed after the live ones), the
-// RESTART_NOTE footnote when a marked row shows, then, when devBuild holds
-// and bench is set, the Benchmark section: four rows per slot, then the sweep
-// button. Every row's label is unique: the panel keys its lines by label.
+// The rows in display order: with devBuild, each module's section in
+// kConfigModules[] order, DEV-only keys included; without it, the player
+// sections (AddPlayerSections). Each row is bound into its module's staged
+// copy; startup-only ones are marked RESTART_MARK and listed after a
+// section's live ones. Then the RESTART_NOTE footnote when a marked row
+// shows, then, when devBuild holds and bench is set, the Benchmark section:
+// four rows per slot, then the sweep button. Every row's label is unique: the
+// panel keys its lines by label.
 void BuildSettingsRows(SettingsStaging* staging, bool devBuild, const SettingsBench* bench,
                        std::vector<SettingsRow>* out);
 
