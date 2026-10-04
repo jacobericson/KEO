@@ -405,6 +405,9 @@ const size_t RVA_SETDEST_RET_EDGE_COMPUTE  = 0x660F43;  // returns from its call
 const size_t RVA_NAVMESH_GET_CLOSEST_POINT = 0x3A21C0;  // NavMesh::getClosestPoint(point, radius, inset, filter, out, key)
 const size_t RVA_CHARSTATS_CALC_SWIM_SPEED = 0x884FE0; // CharStats::calculateSwimSpeed(): pure reads; the GUI calls it on the main thread
 const size_t RVA_CHARACTER_GET_WATER_LEVEL = 0x5C7540; // Character::getWaterLevel(): pure reads; 0 = NO_WATER
+const size_t RVA_RACEDATA_IS_IMMUNE = 0x5E7290;  // RaceData::isImmune(WeatherAffecting): a hash-set find; no lock, no write
+const size_t RVA_SECTIONMGR_LOOKUP_FROM_POSITION = 0x8F48A0;  // SectionManager::lookupFromPosition(pos): the biome record, arithmetic
+const size_t RVA_GLOBAL_AREA_SECTOR_GRID = 0x2133098;  // sectionMgr: KenshiLib's SectionManager, the 64x64 AreaSector grid; not RVA_GLOBAL_SECTION_MGR
 const size_t RVA_DOOR_HIT_FILTER_VTABLE    = 0x16C9188; // DoorHitFilter's vftable, the snap's filter
 const size_t RVA_IS_ZONE_STILL_LOADING  = 0x3AC810; // documented
 

@@ -176,6 +176,11 @@ const size_t OFF_REQ_RESULTBUF_SLOT = 128;
 // submits the request, and the serve passes it to the search.
 const size_t OFF_REQ_WATER_COST_MULT = 0x34;
 
+// A biome record (the engine's AreaBiomeGroup; KenshiLib declares no layout): its acidic-water rate, and
+// its weather region, without which the engine applies no acid.
+const size_t OFF_BIOME_ACID_WATER     = 144;
+const size_t OFF_BIOME_WEATHER_REGION = 152;
+
 
 // Extraction race mitigation: SEH wrap around Havok::contentStreamCallee_0x8869
 // (the path-result-extraction loop). 526 bytes at impl. Called from findPath +

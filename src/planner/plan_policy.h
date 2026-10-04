@@ -38,6 +38,8 @@ struct PlanLeg
 
 // The cell of a world point: floor((x + 147456) / 4608), floor((z + 147456) / 4608).
 void PlanCellOf(float x, float z, int* cx, int* cy);
+// The centre of cell (cx, cy) on PlanCellOf's lattice, world x and z.
+void PlanCellCentre(int cx, int cy, float* x, float* z);
 int  PlanCellSpan(int ax, int ay, int bx, int by);   // Chebyshev
 
 // DIRECT: a route, every leg's far section loaded (loadedMask bit i for leg i) and span < legSpan.
@@ -217,6 +219,16 @@ float PlanWaterRequestValue(int mode, float m, float engineValue);
 // The water mode the planner arms with. Dynamic prices routes the engine's leg searches follow only
 // while the request write runs, so without it dynamic arms as floor; every other mode as given.
 int PlanWaterEffectiveMode(int configured, int engineLive);
+
+const int PLAN_ACID_COST_MAX = 10;   // the acid cost key's bound
+// An arc's weighted cost with acidic water: each end's water byte weighs at m * a when that end's cell
+// is acid (acidFrom, acidTo), at m otherwise: cost * (1 + ((m * aFrom - 1) * wFrom + (m * aTo - 1) * wTo)
+// / 510), with each end's term at least 0. With a <= 1, or neither end acid, PlanWaterArcCost exactly.
+float PlanAcidArcCost(float cost, float m, float a, int wFrom, int wTo, int acidFrom, int acidTo);
+// One member's acid factor: 1 for an immune race, else acidCost held to 1..PLAN_ACID_COST_MAX.
+float PlanAcidFactor(int immune, int acidCost);
+// A run-together order's factor: the largest of factors[0..n), at least 1.
+float PlanAcidGroupFactor(const float* factors, int n);
 
 } // namespace planner
 

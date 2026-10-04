@@ -28,6 +28,7 @@ static const int      LINE_TILES_MAX  = 16;
 // The order capture's own state and per-order scratch. Main thread.
 static int            s_orderSeq      = 0;
 static float          s_orderMult[PLAN_WATER_ORDER_MAX];   // the current order's water multipliers
+static float          s_orderAcid[PLAN_WATER_ORDER_MAX];   // the current order's acid factors
 static unsigned char  s_orderRepeat[PLAN_WATER_ORDER_MAX]; // 1 where the character's plan already answers it
 
 // ---- The order capture ---------------------------------------------------------------------------
@@ -66,10 +67,12 @@ static void ReportOrderPlan(int order, int k, const Located& from, const Located
 	char line[512];
 	_snprintf_s(line, sizeof(line), _TRUNCATE,
 	            "Planner plan: order=%d char=%d from=%x:%d to=%x:%d verdict=%s legs=%d tiles=%s span=%d"
-	            " cost=%.0f expanded=%d ms=%.1f loc=%s indoors=%d road=%.3f m=%.2f water=%.0f%%",
+	            " cost=%.0f expanded=%d ms=%.1f loc=%s indoors=%d road=%.3f m=%.2f water=%.0f%%"
+	            " a=%.0f acid=%.0f%%",
 	            order, k, (unsigned)from.uid, from.node, (unsigned)to.uid, to.node, VerdictName(verdict),
 	            b.found ? b.legCount : 0, tiles, span, b.cost, b.expanded, b.ms,
-	            to.exact ? "exact" : "footprint", indoors ? 1 : 0, road, b.waterMult, b.waterShare * 100.0f);
+	            to.exact ? "exact" : "footprint", indoors ? 1 : 0, road, b.waterMult, b.waterShare * 100.0f,
+	            b.acidMult, b.acidShare * 100.0f);
 	PlannerReportPlan(line);
 	if (verdict == PV_NO_ROUTE || indoors)
 		PlannerReportBorders(order, to.dir);
@@ -166,13 +169,15 @@ void PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void
 		return;
 	}
 	ClearMemo();
-	PlannerOrderWater(chars, n, s_orderMult);
+	PlannerOrderWater(chars, n, s_orderMult, s_orderAcid);
 	for (int k = 0; k < n; ++k)
 	{
 		uintptr_t cm = MovementOf(chars[k]);
 		if (!cm)
 			continue;
-		float m = k < PLAN_WATER_ORDER_MAX ? s_orderMult[k] : 1.0f;
+		PlanSearchParams p;
+		p.m = k < PLAN_WATER_ORDER_MAX ? s_orderMult[k] : 1.0f;
+		p.a = k < PLAN_WATER_ORDER_MAX ? s_orderAcid[k] : 1.0f;
 		if (WasRepeat(k, cm, dest, now))
 			continue;
 		float pos[3];
@@ -184,9 +189,9 @@ void PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void
 			DropPlan(cm, PDW_UNLOCATED);
 			continue;
 		}
-		const Built* b = SearchAndBuild(start, goal, dest, m);
+		const Built* b = SearchAndBuild(start, goal, dest, p);
 		int verdict = PV_NONE;
-		if (WritePlan(cm, pos, goal, dest, *b, now, &verdict, 0, m) < 0)
+		if (WritePlan(cm, pos, goal, dest, *b, now, &verdict, 0, p) < 0)
 			continue;
 		int sx, sy, gx, gy;
 		PlanCellOf(pos[0], pos[2], &sx, &sy);

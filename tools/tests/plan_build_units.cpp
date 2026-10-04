@@ -311,11 +311,14 @@ static void CheckMemo()
 	Check(PlanMemoKey(7, 9) == PlanMemoKey(7, 9), "memo: equal start and goal share a key");
 	Check(PlanMemoKey(8, 9) != PlanMemoKey(7, 9) && PlanMemoKey(9, 7) != PlanMemoKey(7, 9),
 	      "memo: another start does not");
-	Check(PlanMemoSame(PlanMemoKey(7, 9), 5.0f, PlanMemoKey(7, 9), 5.0f), "memo: one multiplier shares a search");
-	Check(!PlanMemoSame(PlanMemoKey(7, 9), 5.0f, PlanMemoKey(7, 9), 10.13f)
-	      && !PlanMemoSame(PlanMemoKey(7, 9), 1.0f, PlanMemoKey(7, 9), 5.0f)
-	      && !PlanMemoSame(PlanMemoKey(8, 9), 5.0f, PlanMemoKey(7, 9), 5.0f),
+	const PlanSearchParams five = { 5.0f, 1.0f }, other = { 10.13f, 1.0f }, one = { 1.0f, 1.0f };
+	const PlanSearchParams acid = { 5.0f, 3.0f };
+	Check(PlanMemoSame(PlanMemoKey(7, 9), five, PlanMemoKey(7, 9), five), "memo: one multiplier shares a search");
+	Check(!PlanMemoSame(PlanMemoKey(7, 9), five, PlanMemoKey(7, 9), other)
+	      && !PlanMemoSame(PlanMemoKey(7, 9), one, PlanMemoKey(7, 9), five)
+	      && !PlanMemoSame(PlanMemoKey(8, 9), five, PlanMemoKey(7, 9), five),
 	      "memo: another multiplier is another search");
+	Check(!PlanMemoSame(PlanMemoKey(7, 9), five, PlanMemoKey(7, 9), acid), "memo: another acid factor is another search");
 }
 
 int main()

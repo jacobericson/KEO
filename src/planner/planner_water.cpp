@@ -1,13 +1,15 @@
 // planner_water.cpp - The per-character water multiplier's game side: the prologue-checked bindings
 // of CharStats::calculateSwimSpeed and Character::getWaterLevel, each member's reads, the order's
-// pre-pass, and the per-player-character water table's refresh and order amend. Main thread only (the
-// order capture, the planner's tick and the arm); no lock, no allocation, no log. The two engine
-// readers write nothing and take no lock; the engine's own GUI calls them on this thread.
+// pre-pass, the per-player-character water table's refresh and order amend, the acid factor's read
+// and the acid cells' lookup. Main thread only (the order capture, the planner's tick and the arm);
+// no lock, no allocation, no log. The two engine readers write nothing and take no lock; the engine's
+// own GUI calls them on this thread.
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #include "planner/planner_water.h"
 #include "planner/plan_policy.h"
+#include "planner/planner_acid.h"
 #include "planner/plan_store.h"
 #include "planner/planner_config.h"
 #include "planner/planner_water_table.h"
@@ -48,6 +50,16 @@ static int s_localCount = 0;
 // The order pre-pass's scratch, one entry per member. Main thread.
 static PlanWaterInputs      s_members[PLAN_WATER_ORDER_MAX];
 
+typedef void* (*lookupFromPosition_t)(void* sectionMgr, const float* pos);
+
+static const unsigned char kLookupFromPositionPrologue[16] =
+	{ 0x48, 0x83, 0xEC, 0x28, 0xE8, 0x67, 0x45, 0x74, 0xFF, 0x48, 0x85, 0xC0, 0x74, 0x09, 0x48, 0x8B };
+
+// Written by the arm, then read by the main thread alone.
+static lookupFromPosition_t fn_lookupFromPosition = NULL;
+static int                  s_acidCost            = 3;
+static const char*          s_acidToken           = "unarmed";
+
 bool PlannerWaterArm(int mode)
 {
 	bool pathRow = HookRowInstalled(HOOK_REQUEST_PATH);
@@ -67,12 +79,24 @@ bool PlannerWaterArm(int mode)
 	fn_calculateSwimSpeed = swimOk ? (calculateSwimSpeed_t)swim : NULL;
 	fn_getWaterLevel = levelOk ? (getWaterLevel_t)level : NULL;
 	s_bindToken = !swimOk ? "refused(calculateSwimSpeed)" : (!levelOk ? "refused(getWaterLevel)" : "ok");
+	s_acidCost = g_plannerCfg.acidCost;
+	const void* immune = GameAddr(RVA_RACEDATA_IS_IMMUNE);
+	const void* lookup = GameAddr(RVA_SECTIONMGR_LOOKUP_FROM_POSITION);
+	bool immuneOk = PlannerAcidBind(immune, (PlanIsImmuneFn)immune);
+	bool lookupOk = memcmp(lookup, kLookupFromPositionPrologue, sizeof(kLookupFromPositionPrologue)) == 0;
+	fn_lookupFromPosition = lookupOk ? (lookupFromPosition_t)lookup : NULL;
+	s_acidToken = !immuneOk ? "refused(isImmune)" : (!lookupOk ? "refused(lookupFromPosition)" : "ok");
 	return swimOk && levelOk;
 }
 
 const char* PlannerWaterBindToken()
 {
 	return s_bindToken;
+}
+
+const char* PlannerWaterAcidToken()
+{
+	return s_acidToken;
 }
 
 static bool PositiveFinite(float v)
@@ -197,17 +221,35 @@ static void PublishOrder(const uintptr_t* chars, int n, const float* mult)
 	PlannerWaterTablePublish(s_local, s_localCount);
 }
 
+// Each member's acid factor into acid: 1 for a race the engine counts immune (or while isImmune is
+// unbound), the configured acid cost otherwise; a run-together order gives every member the largest.
+static void OrderAcid(const uintptr_t* chars, int n, float* acid)
+{
+	for (int k = 0; k < n; ++k)
+	{
+		uintptr_t race = chars[k] ? *(uintptr_t*)(KLIB_MEMBER(3, chars[k], Character_myRace, OFF_CHAR_RACE)) : 0;
+		acid[k] = PlanAcidFactor(PlannerAcidImmune((void*)race), s_acidCost);
+	}
+	if (!RunTogether(chars, n))
+		return;
+	float a = PlanAcidGroupFactor(acid, n);
+	for (int k = 0; k < n; ++k)
+		acid[k] = a;
+}
+
 // Main thread, from the order capture before the original runs; takes no lock and allocates
 // nothing. Calls Character::getWaterLevel and CharStats::calculateSwimSpeed for each member read. In
 // a run-together order an unconscious or carried member is left out of the speeds (its engine value
 // still counts) and is no failure; any other member whose speed read failed counts one waterFail.
 // Engine mode reads no speeds and counts no waterFail. Off reads nothing and gives every member 1.
-int PlannerOrderWater(const uintptr_t* chars, int n, float* mult)
+int PlannerOrderWater(const uintptr_t* chars, int n, float* mult, float* acid)
 {
 	if (!chars || !mult || n <= 0)
 		return 0;
 	if (n > PLAN_WATER_ORDER_MAX)
 		n = PLAN_WATER_ORDER_MAX;
+	if (acid)
+		OrderAcid(chars, n, acid);
 	if (s_waterMode == PWC_OFF)
 	{
 		for (int k = 0; k < n; ++k)
@@ -290,6 +332,31 @@ const char* PlannerWaterModeToken()
 const char* PlannerWaterEngineToken()
 {
 	return s_engineToken;
+}
+
+// The acid cells' lookup: the engine's own biome record at (x, z), and its acidic-water rate when the
+// record's acid applies (its weather region is set, the engine's own damage test). No biome yet: unknown.
+static int AcidLookup(void* ctx, float x, float z, float* acidWater)
+{
+	(void)ctx;
+	void* grid = *(void**)GameAddr(RVA_GLOBAL_AREA_SECTOR_GRID);
+	if (!grid || !fn_lookupFromPosition)
+		return 0;
+	float pos[3] = { x, 0.0f, z };
+	uintptr_t biome = (uintptr_t)fn_lookupFromPosition(grid, pos);
+	if (!biome)
+		return 0;
+	bool applies = *(void**)(biome + OFF_BIOME_WEATHER_REGION) != NULL;
+	float rate = *(float*)(biome + OFF_BIOME_ACID_WATER);
+	*acidWater = (applies && _finite(rate) && rate > 0.0f) ? rate : 0.0f;
+	return 1;
+}
+
+void PlannerWaterAcidFrame(double now)
+{
+	if (PlanStoreMode() == PLANNER_OFF || !fn_lookupFromPosition)
+		return;
+	PlannerAcidFillStep(now, AcidLookup, NULL);
 }
 
 } // namespace planner

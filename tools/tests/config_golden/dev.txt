@@ -66,6 +66,7 @@ pathExtractGuard=true
 pathfindDiag=true
 physPurecallRecord=true
 physQueryGuard=true
+plannerAcidCost=3
 plannerAheadTiles=3
 plannerBaseBuild=1
 plannerLegSpan=2

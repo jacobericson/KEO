@@ -19,6 +19,7 @@ struct PlannerConfig
 	int waitSeconds;   // plannerWaitSeconds: 1..60, default 10; the awaited-section wait
 	int waterCost;     // plannerWaterCost: PlanWaterMode; dynamic by default
 	int waterEngine;   // plannerWaterEngine: PlanWaterEngine; match by default
+	int acidCost;      // plannerAcidCost: 1..10, default 3; 1 prices acidic water as any water
 };
 
 extern PlannerConfig g_plannerCfg;

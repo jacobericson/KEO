@@ -55,10 +55,12 @@ bool PlanIsModSend(const float moveDest[3], const float resend[][3], int resendC
 // the plan's in x-z.
 bool PlanRepeatDue(const float planDest[3], const float newDest[3], double planAge);
 
+// The prices one search runs at: the water multiplier m and the acid factor a (1: acid as any water).
+struct PlanSearchParams { float m; float a; };
 // The memo key of one order's searches: characters whose start and goal nodes match share one.
 unsigned __int64 PlanMemoKey(unsigned startNode, unsigned goalNode);
-// Whether a memoised search answers another: the same node pair and the same water multiplier.
-bool PlanMemoSame(unsigned __int64 keyA, float multA, unsigned __int64 keyB, float multB);
+// Whether a memoised search answers another: the same node pair at the same prices.
+bool PlanMemoSame(unsigned __int64 keyA, const PlanSearchParams& a, unsigned __int64 keyB, const PlanSearchParams& b);
 
 } // namespace planner
 

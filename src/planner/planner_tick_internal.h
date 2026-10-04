@@ -25,6 +25,7 @@ struct Built
 	int      expanded;
 	double   ms;
 	float    waterMult, waterShare;   // the search's water multiplier; the route's wet share, 0..1
+	float    acidMult, acidShare;     // the search's acid factor; the route's share of water in acid cells, 0..1
 	PlanLeg  legs[PLAN_MAX_LEGS];
 };
 
@@ -36,10 +37,10 @@ void TakeSnapshot();
 bool Locate(const float p[3], Located* out);
 // Forgets the memoised searches; each order and each re-plan starts empty.
 void ClearMemo();
-const Built* SearchAndBuild(const Located& start, const Located& goal, const float dest[3], float m);
+const Built* SearchAndBuild(const Located& start, const Located& goal, const float dest[3], const PlanSearchParams& p);
 // Writes the character's plan and feeds its route's next tiles; -1 when the store is full.
 int WritePlan(uintptr_t cm, const float pos[3], const Located& goal, const float dest[3],
-              const Built& b, double now, int* verdictOut, int keepSends, float m);
+              const Built& b, double now, int* verdictOut, int keepSends, const PlanSearchParams& p);
 // Drops the character's plan by reason; its edge-branch consultations, -1 when it had none.
 int DropPlan(uintptr_t cm, PlanDropWhy why);
 // Whether the player list is longer than the tick scans; the tick and the order capture both refuse

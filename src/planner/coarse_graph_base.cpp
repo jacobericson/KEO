@@ -20,6 +20,7 @@
 #include "planner/plan_store.h"
 #include "planner/planner_tick.h"
 #include "planner/planner_water.h"
+#include "planner/planner_acid.h"
 #include "game/game.h"
 #include "base/core.h"
 #include "zone/readiness/readiness_bindings.h"
@@ -540,7 +541,8 @@ void PlannerBaseStartStep(int* installed, int* total)
 	arm << "Planner arm: mode=" << PlannerModeName(g_plannerCfg.mode) << " legSpan=" << g_plannerCfg.legSpan
 	    << " aheadTiles=" << g_plannerCfg.aheadTiles << " waitSeconds=" << g_plannerCfg.waitSeconds
 	    << " baseBuild=" << g_plannerCfg.baseBuild << " water=" << PlannerWaterModeToken()
-	    << " waterBind=" << PlannerWaterBindToken() << " waterEngine=" << PlannerWaterEngineToken();
+	    << " waterBind=" << PlannerWaterBindToken() << " waterEngine=" << PlannerWaterEngineToken()
+	    << " acidBind=" << PlannerWaterAcidToken() << " acidCost=" << g_plannerCfg.acidCost;
 	LogMsg(arm.str());
 	InitializeCriticalSection(&s_requestCS);
 	if (g_plannerCfg.mode == PLANNER_OFF || !g_plannerCfg.baseBuild)
@@ -621,10 +623,13 @@ void PlannerOnFrame(void* zoneMgr, bool saveLoading)
 	{
 		CgStoreNewWorld();
 		PlannerWaterReset();
+		PlannerAcidNewWorld();
 		s_snapshotArmed = true;
 	}
 	s_lastZoneMgr = zoneMgr;
 	s_wasLoading = loading;
+	if (!loading)
+		PlannerWaterAcidFrame(ElapsedSec());
 
 	LONGLONG now = QpcNow();
 	if (zoneMgr && QpcToMs(now - s_lastPollQpc) >= PATHS_POLL_MS)

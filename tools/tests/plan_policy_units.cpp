@@ -694,6 +694,38 @@ static void CheckWaterArcs()
 	      "water: the route share weights each step by its two nodes");
 }
 
+static void CheckAcid()
+{
+	const float m = 5.0f;
+	CHECK(PlanAcidArcCost(100.0f, m, 1.0f, 255, 255, 1, 1) == PlanWaterArcCost(100.0f, m, 255, 255)
+	      && PlanAcidArcCost(123.4f, 2.5f, 1.0f, 17, 200, 1, 0) == PlanWaterArcCost(123.4f, 2.5f, 17, 200),
+	      "acid: at a = 1 an arc costs exactly the water rule's cost");
+	CHECK(PlanAcidArcCost(100.0f, m, 3.0f, 255, 255, 0, 0) == PlanWaterArcCost(100.0f, m, 255, 255),
+	      "acid: an arc with neither end in an acid cell costs the water rule's cost");
+	CHECK(Near(PlanAcidArcCost(100.0f, m, 3.0f, 255, 255, 1, 1), 1500.0f, 1e-2f),
+	      "acid: an all-water arc in acid cells costs m times a times its length");
+	CHECK(Near(PlanAcidArcCost(100.0f, m, 3.0f, 255, 255, 1, 0), 1000.0f, 1e-2f),
+	      "acid: an arc with one end in an acid cell weighs that end's water at m times a");
+	CHECK(Near(PlanAcidArcCost(100.0f, 1.0f, 3.0f, 255, 255, 1, 1), 300.0f, 1e-2f),
+	      "acid: with water priced as land an acid swim still costs a times its length");
+	CHECK(PlanAcidArcCost(100.0f, m, 3.0f, 0, 0, 1, 1) == 100.0f, "acid: a dry arc in an acid cell costs its length");
+	CHECK(PlanAcidFactor(1, 3) == 1.0f && PlanAcidFactor(0, 3) == 3.0f && PlanAcidFactor(0, 1) == 1.0f,
+	      "acid factor: an immune race reads 1, a non-immune one the acid cost");
+	CHECK(PlanAcidFactor(0, 0) == 1.0f && PlanAcidFactor(0, 15) == 10.0f, "acid factor: the acid cost is held to 1..10");
+	const float group[3] = { 1.0f, 3.0f, 1.0f };
+	CHECK(PlanAcidGroupFactor(group, 3) == 3.0f && PlanAcidGroupFactor(group, 1) == 1.0f
+	      && PlanAcidGroupFactor(group, 0) == 1.0f,
+	      "acid group: the most vulnerable member sets the order's factor");
+	int cx = -1, cy = -1;
+	float x = 0.0f, z = 0.0f;
+	PlanCellCentre(0, 0, &x, &z);
+	PlanCellOf(x, z, &cx, &cy);
+	bool corner = cx == 0 && cy == 0;
+	PlanCellCentre(63, 17, &x, &z);
+	PlanCellOf(x, z, &cx, &cy);
+	CHECK(corner && cx == 63 && cy == 17, "cell centre: a cell's centre lies in that cell");
+}
+
 static void CheckWaterRequest()
 {
 	CHECK(PlanWaterRequestValue(PWC_OFF, 8.0f, 5.0f) == 0.0f, "water request: off leaves the engine's value");
@@ -734,5 +766,6 @@ int main()
 	CheckWaterGroup();
 	CheckWaterArcs();
 	CheckWaterRequest();
+	CheckAcid();
 	return CheckExit("plan_policy_units");
 }

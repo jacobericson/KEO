@@ -32,6 +32,7 @@ struct PlanWrite
 	int       keepSends;        // 1: a re-plan of the same character keeps the mod's recorded sends and
 	                            //   the slot's destAtPlan
 	float     waterMult;        // the water multiplier the plan was searched at; its re-plans reuse it
+	float     acidMult;         // the acid factor the plan was searched at; its re-plans reuse it
 	PlanLeg   legs[PLAN_MAX_LEGS];
 };
 // A consistent copy for any thread.
@@ -46,6 +47,7 @@ struct PlanView
 	float     destAtPlan[3];
 	float     resend[PLAN_RESEND_POINTS][3]; int resendCount;
 	float     waterMult;
+	float     acidMult;
 	PlanLeg   legs[PLAN_MAX_LEGS];
 };
 // The main thread's own fields for one slot (never read off the main thread).

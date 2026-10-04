@@ -38,6 +38,12 @@ void PlanCellOf(float x, float z, int* cx, int* cy)
 	*cy = (int)std::floor((z + GRID_ORIGIN) / GRID_CELL);
 }
 
+void PlanCellCentre(int cx, int cy, float* x, float* z)
+{
+	*x = ((float)cx + 0.5f) * GRID_CELL - GRID_ORIGIN;
+	*z = ((float)cy + 0.5f) * GRID_CELL - GRID_ORIGIN;
+}
+
 int PlanCellSpan(int ax, int ay, int bx, int by)
 {
 	int sx = ax - bx, sy = ay - by;
@@ -374,6 +380,36 @@ float PlanWaterRequestValue(int mode, float m, float engineValue)
 int PlanWaterEffectiveMode(int configured, int engineLive)
 {
 	return (configured == PWC_DYNAMIC && !engineLive) ? PWC_FLOOR : configured;
+}
+
+float PlanAcidArcCost(float cost, float m, float a, int wFrom, int wTo, int acidFrom, int acidTo)
+{
+	if (!(a > 1.0f) || (!acidFrom && !acidTo))
+		return PlanWaterArcCost(cost, m, wFrom, wTo);
+	float tFrom = m * (acidFrom ? a : 1.0f) - 1.0f;
+	float tTo = m * (acidTo ? a : 1.0f) - 1.0f;
+	if (tFrom < 0.0f)
+		tFrom = 0.0f;
+	if (tTo < 0.0f)
+		tTo = 0.0f;
+	return cost * (1.0f + (tFrom * (float)wFrom + tTo * (float)wTo) / 510.0f);
+}
+
+float PlanAcidFactor(int immune, int acidCost)
+{
+	if (immune)
+		return 1.0f;
+	int c = acidCost < 1 ? 1 : (acidCost > PLAN_ACID_COST_MAX ? PLAN_ACID_COST_MAX : acidCost);
+	return (float)c;
+}
+
+float PlanAcidGroupFactor(const float* factors, int n)
+{
+	float a = 1.0f;
+	for (int k = 0; factors && k < n; ++k)
+		if (factors[k] > a)
+			a = factors[k];
+	return a;
 }
 
 } // namespace planner

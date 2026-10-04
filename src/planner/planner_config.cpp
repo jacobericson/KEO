@@ -109,6 +109,16 @@ static bool ParsePlannerWaterEngine(const std::string& val, ConfigLogFn log)
 	return StoreField(&planner::PlannerConfig::waterEngine, mode);
 }
 
+// plannerAcidCost: 1..10; a value out of range is refused and the default stays.
+static bool ParsePlannerAcidCost(const std::string& val, ConfigLogFn log)
+{
+	(void)log;
+	int v;
+	if (!ParseRanged(val, 1, 10, &v))
+		return false;
+	return StoreField(&planner::PlannerConfig::acidCost, v);
+}
+
 namespace planner {
 
 const PlannerConfig kPlannerDefaults =
@@ -120,6 +130,7 @@ const PlannerConfig kPlannerDefaults =
 	10, // waitSeconds
 	PWC_DYNAMIC, // waterCost
 	PWE_MATCH, // waterEngine
+	3, // acidCost
 };
 
 PlannerConfig g_plannerCfg = kPlannerDefaults;
@@ -157,6 +168,7 @@ const ConfigKey g_plannerConfigKeys[] =
 	CFG_OCUSTOM("plannerWaitSeconds", PlannerConfig, waitSeconds, ParsePlannerWaitSeconds, NDOC),
 	CFG_OCUSTOM("plannerWaterCost", PlannerConfig, waterCost, ParsePlannerWaterCost, NDOC),
 	CFG_OCUSTOM("plannerWaterEngine", PlannerConfig, waterEngine, ParsePlannerWaterEngine, NDOC),
+	CFG_OCUSTOM("plannerAcidCost", PlannerConfig, acidCost, ParsePlannerAcidCost, NDOC),
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }
 };
 

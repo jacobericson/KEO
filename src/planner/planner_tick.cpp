@@ -1,5 +1,5 @@
-// planner_tick.cpp - The route planner's main-thread tick: the store adapter the coarse search walks,
-// the locator, the loaded-set snapshot, the search and the plan write it shares with the order
+// planner_tick.cpp - The route planner's main-thread tick: the locator, the loaded-set snapshot,
+// the search over planner_search_ops.cpp's operations and the plan write it shares with the order
 // capture, and the tick that validates, drops and re-plans each slot and feeds the route's tiles to
 // the preload queue.
 // Main thread only. The one game lock is the section manager's world lock (+0x200), taken
@@ -18,6 +18,8 @@
 #include "planner/coarse_search.h"
 #include "planner/planner_config.h"
 #include "planner/planner_water.h"
+#include "planner/planner_search_ops.h"
+#include "planner/planner_acid.h"
 #include "game/game.h"
 #include "base/core.h"
 #include "zone/readiness/readiness_bindings.h"
@@ -88,6 +90,7 @@ static PlanNodeBox    s_boxes[NODES_PER_SECTION];
 static PlanWrite      s_write;
 static float          s_routeCentres[COARSE_ROUTE_MAX][3];
 static int            s_routeWater[COARSE_ROUTE_MAX];
+static int            s_routeAcid[COARSE_ROUTE_MAX];   // the water byte of nodes in acid cells, 0 elsewhere
 
 static float DistXz(const float a[3], const float b[3])
 {
@@ -113,102 +116,6 @@ static void ReadMoveDest(uintptr_t cm, float out[3])
 	out[0] = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_destination_x, OFF_CMOV_LAST_DEST));
 	out[1] = 0.0f;
 	out[2] = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_destination_z, OFF_CMOV_LAST_DEST + 8));
-}
-
-// ---- The store adapter ---------------------------------------------------------------------------
-
-// A neighbour section's current block, by uid; NULL when it has no index or no readable block.
-static const CgBlock* NeighbourOf(void* ctx, int uid, int* dirIndexOut)
-{
-	(void)ctx;
-	int dir = CgIndexOfUid(uid);
-	CgView v;
-	if (dir < 0 || !CgRead(dir, &v))
-		return NULL;
-	*dirIndexOut = dir;
-	return v.block;
-}
-
-static const CgBlock* BlockOfKey(unsigned key, int* idx)
-{
-	CgView v;
-	if (!CgRead(CgNodeDir(key), &v))
-		return NULL;
-	*idx = CgNodeIndex(key);
-	return (*idx >= 0 && *idx < v.block->nodeCount) ? v.block : NULL;
-}
-
-// The node's intra arcs, then its resolved cross arcs, the first max of them, each weighted by the
-// water under its two nodes at the search's multiplier (ctx points at it; NULL reads 1).
-static int AdapterArcs(void* ctx, unsigned key, CoarseArc* out, int max)
-{
-	float m = ctx ? *(const float*)ctx : 1.0f;
-	int idx;
-	const CgBlock* b = BlockOfKey(key, &idx);
-	if (!b)
-		return -1;
-	int dir = CgNodeDir(key);
-	const CgNode& n = b->nodes[idx];
-	int count = 0;
-	for (int i = 0; i < n.arcCount && count < max; ++i)
-	{
-		const CgArc& a = b->arcs[n.firstArc + i];
-		out[count].to = CgNodeKey(dir, a.to);
-		out[count].cost = PlanWaterArcCost(a.cost, m, n.water, b->nodes[a.to].water);
-		++count;
-	}
-	if (count < max)
-	{
-		CgResolved res[CG_NODE_ARCS_MAX];
-		int r = CgCrossArcs(b, idx, NeighbourOf, NULL, res, max - count);
-		for (int i = 0; i < r; ++i)
-		{
-			out[count].to = CgNodeKey(res[i].dirIndex, res[i].node);
-			out[count].cost = PlanWaterArcCost(res[i].cost, m, n.water, res[i].water);
-			++count;
-		}
-	}
-	return count;
-}
-
-// Whether every arc into the node that its own borders show has its reverse among the node's arcs: no
-// list cut at the cap, and each of the node's borders resolved against a readable far block through a
-// border that block names (read as a save block, the far block's geometry is withheld, so a border it
-// alone resolves reads dropped). Only the node's own borders are read, so two arcs stay unseen: a cross
-// arc into the node from a block whose borders name nothing toward it, and a one-way arc inside the
-// node's own block.
-static int AdapterInboundMirrored(void* ctx, unsigned key)
-{
-	(void)ctx;
-	int idx, dir;
-	const CgBlock* b = BlockOfKey(key, &idx);
-	if (!b || b->nodes[idx].arcCount + b->nodes[idx].borderCount > CG_NODE_ARCS_MAX)
-		return 0;
-	for (int k = 0; k < b->nodes[idx].borderCount; ++k)
-	{
-		int bi = b->nodeBorders[b->nodes[idx].firstBorder + k];
-		if (bi < 0 || bi >= b->borderCount)
-			continue;
-		const CgBlock* nb = NeighbourOf(NULL, b->borders[bi].oppUid, &dir);
-		if (!nb)
-			return 0;
-		CgBlock named = *nb;
-		named.source = CG_SAVE;
-		if (CgClassifyBorder(b, b->borders[bi], &named) == CG_BORDER_DROPPED)
-			return 0;
-	}
-	return 1;
-}
-
-static bool AdapterPosition(void* ctx, unsigned key, float out[3])
-{
-	(void)ctx;
-	int idx;
-	const CgBlock* b = BlockOfKey(key, &idx);
-	if (!b)
-		return false;
-	memcpy(out, b->nodes[idx].centre, sizeof(float) * 3);
-	return true;
 }
 
 // ---- The loaded-set snapshot ---------------------------------------------------------------------
@@ -453,6 +360,7 @@ static void BuildFromRoute(const CoarseRoute& route, const float dest[3], int de
 		if (!AdapterPosition(NULL, route.nodes[i], s_routeCentres[i]))
 			memset(s_routeCentres[i], 0, sizeof(s_routeCentres[i]));
 		s_routeWater[i] = nb ? nb->nodes[idx].water : 0;
+		s_routeAcid[i] = PlannerAcidCellIs(CgNodeDir(route.nodes[i])) ? s_routeWater[i] : 0;
 		PlanRouteStep& s = s_steps[i];
 		memset(&s, 0, sizeof(s));
 		s.dirIndex = CgNodeDir(route.nodes[i]);
@@ -463,25 +371,29 @@ static void BuildFromRoute(const CoarseRoute& route, const float dest[3], int de
 	}
 	out->legCount = PlanBuildLegs(s_steps, n, dest, destSection, out->legs, &out->truncated);
 	out->waterShare = PlanRouteWaterShare(s_routeCentres, s_routeWater, n);
+	out->acidShare = PlanRouteWaterShare(s_routeCentres, s_routeAcid, n);
 }
 
-// One coarse search from start to goal at water multiplier m, memoised within an order by the node
-// pair and m.
-const Built* planner_tick_detail::SearchAndBuild(const Located& start, const Located& goal, const float dest[3], float m)
+// One coarse search from start to goal at the prices p, memoised within an order by the node
+// pair and the prices.
+const Built* planner_tick_detail::SearchAndBuild(const Located& start, const Located& goal, const float dest[3],
+                                                 const PlanSearchParams& p)
 {
 	unsigned __int64 memoKey = PlanMemoKey(start.key, goal.key);
 	for (int i = 0; i < s_memoCount; ++i)
-		if (PlanMemoSame(s_memo[i].memoKey, s_memo[i].waterMult, memoKey, m))
+	{
+		PlanSearchParams q = { s_memo[i].waterMult, s_memo[i].acidMult };
+		if (PlanMemoSame(s_memo[i].memoKey, q, memoKey, p))
 			return &s_memo[i];
+	}
 	Built* b = &s_memo[s_memoCount < MEMO_ENTRIES ? s_memoCount++ : MEMO_ENTRIES - 1];
 	memset(b, 0, sizeof(*b));
 	b->memoKey = memoKey;
-	b->waterMult = m;
+	b->waterMult = p.m;
+	b->acidMult = p.a;
+	PlanSearchParams params = p;
 	CoarseGraphOps ops;
-	ops.ctx = &m;
-	ops.arcs = AdapterArcs;
-	ops.position = AdapterPosition;
-	ops.inboundMirrored = AdapterInboundMirrored;
+	AdapterOps(&params, &ops);
 	LONGLONG t0 = QpcNow();
 	CoarseResult r = CoarseSearch(ops, start.key, goal.key, COARSE_SCRATCH_MAX, s_scratch, &s_route);
 	b->ms = QpcToMs(QpcNow() - t0);
@@ -498,16 +410,17 @@ void planner_tick_detail::ClearMemo()
 	s_memoCount = 0;
 }
 
-// Writes the character's plan, with the water multiplier m its re-plans search at, and feeds its
-// route's next tiles; -1 when the store is full.
+// Writes the character's plan, with the prices p its re-plans search at, and feeds its route's next
+// tiles; -1 when the store is full.
 int planner_tick_detail::WritePlan(uintptr_t cm, const float pos[3], const Located& goal, const float dest[3],
-                                   const Built& b, double now, int* verdictOut, int keepSends, float m)
+                                   const Built& b, double now, int* verdictOut, int keepSends, const PlanSearchParams& p)
 {
 	PlanWrite& w = s_write;
 	memset(&w, 0, sizeof(w));
 	w.cm = cm;
 	w.keepSends = keepSends;
-	w.waterMult = m;
+	w.waterMult = p.m;
+	w.acidMult = p.a;
 	w.legCount = b.found ? b.legCount : 0;
 	memcpy(w.legs, b.legs, sizeof(PlanLeg) * w.legCount);
 	w.routeTruncated = b.truncated;
@@ -710,9 +623,10 @@ static bool Replan(const PlanView& v, uintptr_t character, double now, PlanRepla
 	if (!Locate(v.finalDest, &goal) || !Locate(pos, &start))
 		return false;
 	s_memoCount = 0;
-	const Built* b = SearchAndBuild(start, goal, v.finalDest, v.waterMult);
+	PlanSearchParams p = { v.waterMult, v.acidMult };
+	const Built* b = SearchAndBuild(start, goal, v.finalDest, p);
 	int verdict = PV_NONE;
-	int slot = WritePlan(v.cm, pos, goal, v.finalDest, *b, now, &verdict, 1, v.waterMult);
+	int slot = WritePlan(v.cm, pos, goal, v.finalDest, *b, now, &verdict, 1, p);
 	if (slot < 0)
 		return false;
 	if (why == PRW_GOAL_LOADED && !goal.exact)
