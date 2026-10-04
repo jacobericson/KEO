@@ -139,7 +139,7 @@ void BuildSettingsRows(SettingsStaging* staging, bool devBuild, const SettingsBe
 			AddModuleRows(kConfigModules[m], &staging->module[m], true, out);
 	}
 	else
-		AddPlayerSections(staging, out);
+		keo_gui::AddPlayerSections(keo_gui::kSettingsPlaces, staging, out);
 
 	for (size_t i = 0; i < out->size(); ++i)
 	{

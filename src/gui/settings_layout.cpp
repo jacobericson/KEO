@@ -17,7 +17,7 @@ const SettingsPlace kSettingsPlaces[] =
 	{ NULL, NULL, NULL }
 };
 
-} // namespace keo_gui
+const char* const OTHER_SETTINGS_TITLE = "Other settings";
 
 static int ModuleNamed(const char* name)
 {
@@ -39,20 +39,19 @@ static int KeyNamed(const ConfigModule& m, const char* name)
 	return -1;
 }
 
-void AddPlayerSections(SettingsStaging* staging, std::vector<SettingsRow>* out)
+void AddPlayerSections(const SettingsPlace* places, SettingsStaging* staging, std::vector<SettingsRow>* out)
 {
-	using keo_gui::kSettingsPlaces;
 	bool placed[CONFIG_MODULE_MAX][CONFIG_STAGE_MAX];
 	memset(placed, 0, sizeof(placed));
 
-	for (int p = 0; kSettingsPlaces[p].section;)
+	for (int p = 0; places[p].section;)
 	{
-		const char* title = kSettingsPlaces[p].section;
+		const char* title = places[p].section;
 		std::vector<SettingsKeyRef> keys;
-		for (; kSettingsPlaces[p].section && strcmp(kSettingsPlaces[p].section, title) == 0; ++p)
+		for (; places[p].section && strcmp(places[p].section, title) == 0; ++p)
 		{
-			int m = ModuleNamed(kSettingsPlaces[p].module);
-			int k = m >= 0 ? KeyNamed(kConfigModules[m], kSettingsPlaces[p].key) : -1;
+			int m = ModuleNamed(places[p].module);
+			int k = m >= 0 ? KeyNamed(kConfigModules[m], places[p].key) : -1;
 			if (k < 0 || placed[m][k])
 				continue;
 			placed[m][k] = true;
@@ -62,16 +61,18 @@ void AddPlayerSections(SettingsStaging* staging, std::vector<SettingsRow>* out)
 		AddSectionRows(title, keys, false, out);
 	}
 
+	std::vector<SettingsKeyRef> others;
 	for (int m = 0; m < kConfigModuleCount && m < CONFIG_MODULE_MAX; ++m)
 	{
-		std::vector<SettingsKeyRef> keys;
 		for (int i = 0; i < CONFIG_STAGE_MAX && kConfigModules[m].keys[i].name; ++i)
 		{
 			if (placed[m][i])
 				continue;
 			SettingsKeyRef ref = { &kConfigModules[m], i, &staging->module[m] };
-			keys.push_back(ref);
+			others.push_back(ref);
 		}
-		AddSectionRows(kConfigModules[m].title, keys, false, out);
 	}
+	AddSectionRows(OTHER_SETTINGS_TITLE, others, false, out);
 }
+
+} // namespace keo_gui

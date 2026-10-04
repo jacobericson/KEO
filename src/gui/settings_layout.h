@@ -19,9 +19,12 @@ struct SettingsPlace
 // In display order, each section's rows together; a NULL section ends it.
 extern const SettingsPlace kSettingsPlaces[];
 
-} // namespace keo_gui
+// The heading of the shown keys no place names.
+extern const char* const OTHER_SETTINGS_TITLE;
 
-// The PROD rows: each kSettingsPlaces section with its shown keys (live, then
-// startup-only), then any shown key no place names, under its module's title,
-// so a player row missing from the table still reaches the tab.
-void AddPlayerSections(SettingsStaging* staging, std::vector<SettingsRow>* out);
+// The PROD rows: each section of places with its shown keys (live, then
+// startup-only), then every shown key places does not name under
+// OTHER_SETTINGS_TITLE, so a row missing from the table still reaches the tab.
+void AddPlayerSections(const SettingsPlace* places, SettingsStaging* staging, std::vector<SettingsRow>* out);
+
+} // namespace keo_gui

@@ -137,7 +137,8 @@ static void AddRows(DatapanelGUI* panel, const std::vector<SettingsRow>& rows, i
 		switch (r.kind)
 		{
 		case SR_HEADER:
-			if (i)
+			// A note already brings its own space.
+			if (i && rows[i - 1].kind != SR_NOTE)
 				panel->addSpace(cat, 1.0f);
 			panel->setLine(std::string(HEADING_COLOUR) + "[" + r.label + "]", std::string(), cat, false, true);
 			break;

@@ -1742,7 +1742,7 @@ static void SettingsRowsTests()
 		if (defSteps != floor(defSteps) || hiSteps != floor(hiSteps))
 			printf("  slider grid: %s\n", k.name);
 	}
-	Check(prod[0].kind == SR_HEADER, "a section heading comes first");
+	Check(prod[0].kind == SR_HEADER && prod[0].label == "Zone loading", "the first player section comes first");
 
 	const SettingsRow* wp = FindRow(prod, "Background navmesh threads");
 	Check(wp != NULL, "the worker drop box is shown");
