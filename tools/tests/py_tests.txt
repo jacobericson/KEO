@@ -4,6 +4,8 @@
 # reads "# excluded: <path> - <reason>" lines for test modules that are not run. Where a
 # py_tests_private.txt sits beside this file, the runner merges its lines with these and orders
 # every module by <order>.
+#
+# excluded: tools/tests/test_gate.py - the test gate build_tests.bat runs, not a unittest module
 40 tools\kenshilib\test_check_headers_pin.py
 50 tools\kenshilib\test_resources_root.py
 90 tools\build\test_hook_sites.py
