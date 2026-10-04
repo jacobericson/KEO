@@ -16,9 +16,13 @@ private list's bytes.
     python  run_py_tests.py [--since REV]            build\\tests\\gate-python.log
 
 The three start together, the Python tests (the longest) first. Each is a runner that takes its
-own host-wide cpu tokens (tools\\build\\slots.py), so none starts under one; the gate holds one
-heavy slot for the whole run unless it already runs under one. PY_TESTS_SINCE and every other
-setting reach the children through the environment.
+own host-wide cpu tokens (tools\\build\\slots.py), so none starts under one. A gate started under
+someone else's cpu token (KEO_CPU_HELD=1) passes that on, so each runner runs one job at a time,
+and runs the three one after another instead, in the printed order. The gate holds one heavy slot
+for the whole run unless it already runs under one. Children write UTF-8 (PYTHONIOENCODING=utf-8;
+PYTHONUTF8 as inherited) and the gate prints their logs as those bytes, its own lines in UTF-8 too.
+PY_TESTS_SINCE and every other setting reach the children through the environment. On an
+interrupt or an error of its own, the gate kills each phase's whole process tree.
 
 When all three have finished, the guards log is printed, then "build_tests: merging the private
 suite list suites_private.txt" when the lists were merged, then the suites log and the Python log,
@@ -154,13 +158,22 @@ def wait_all(phases):
 
 
 def stop_all(phases):
+    """Kills each running phase with its descendants (compilers, test executables, shards)."""
     for p in phases:
-        if p.proc is not None and p.proc.poll() is None:
-            try:
+        if p.proc is None or p.proc.poll() is not None:
+            continue
+        try:
+            subprocess.call(['taskkill', '/T', '/F', '/PID', str(p.proc.pid)],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                            stdin=subprocess.DEVNULL)
+        except OSError:
+            pass
+        try:
+            if p.proc.poll() is None:
                 p.proc.kill()
-                p.proc.wait(timeout=10)
-            except (OSError, subprocess.TimeoutExpired):
-                pass
+            p.proc.wait(timeout=30)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
 
 
 def read_log(phase):
@@ -224,10 +237,16 @@ def run(since, forced, no_close):
     by_name = dict((name, Phase(name, cmds[name])) for name in PHASES)
     phases = [by_name[name] for name in PHASES]
     env = slots.child_env(leaf=False)
+    env['PYTHONIOENCODING'] = 'utf-8'
     try:
-        for name in START_ORDER:
-            start(by_name[name], env)
-        wait_all(phases)
+        if slots.cpu_held():
+            for p in phases:
+                start(p, env)
+                wait_all([p])
+        else:
+            for name in START_ORDER:
+                start(by_name[name], env)
+            wait_all(phases)
     except BaseException:
         stop_all(phases)
         raise
@@ -257,6 +276,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description='Run the host test gate.')
     ap.add_argument('--since', metavar='REV', help='passed on to run_py_tests.py')
     args = ap.parse_args(argv)
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     try:
         forced = test_phases('TEST_GATE_FORCE_FAIL')
         no_close = test_phases('TEST_GATE_NO_CLOSE')

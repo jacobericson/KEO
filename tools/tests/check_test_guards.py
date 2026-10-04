@@ -150,7 +150,8 @@ def _run_scratch_suite(name, body, extra_files=(), env=None):
     `extra_files` are repo-root-relative paths copied into the scratch
     directory before compiling, so a quoted #include next to the scratch
     .cpp resolves the way it would next to any real tools\\tests\\*.cpp.
-    `env` is the runner's environment (default: this process's)."""
+    `env` is the runner's environment (default: this process's); the runner
+    writes UTF-8, read back with replacement, so no output byte can fail it."""
     scratch_dir = tempfile.mkdtemp(prefix="check_test_guards_")
     cpp = os.path.join(scratch_dir, name + ".cpp")
     suites_path = os.path.join(scratch_dir, "suites.txt")
@@ -160,10 +161,13 @@ def _run_scratch_suite(name, body, extra_files=(), env=None):
         f.write(body)
     with open(suites_path, "w", encoding="utf-8", newline="\n") as f:
         f.write("%s | %s | | \n" % (name, cpp))
+    env = dict(os.environ if env is None else env)
+    env["PYTHONIOENCODING"] = "utf-8"
     try:
         return subprocess.run(
             [sys.executable, RUN_SUITES, "--suites", suites_path],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env,
+            encoding="utf-8", errors="replace")
     finally:
         # run_suites.py gives each suite its own build\tests\obj\<name>\
         # (so suites never race on a shared object name); clean up both that
@@ -281,7 +285,7 @@ def check_runner_refuses_noops():
     return ok
 
 
-RUN_PY_TESTS ="tools/tests/run_py_tests.py"
+RUN_PY_TESTS = "tools/tests/run_py_tests.py"
 PY_LISTS = ("tools/tests/py_tests.txt", "tools/tests/py_tests_private.txt")
 SKIP_DIRS = {"build", "__pycache__"}  # and every folder whose name starts with "."
 
