@@ -11,7 +11,8 @@ unset):
 
 Slot k of pool p is the file "<p>-<k>.lock". Holding a slot is holding a lock on its first byte
 (msvcrt.locking, non-blocking); the OS drops the lock when the holder exits or is killed, so no slot
-is ever left stale. A process opens each lock file once and keeps it open. "<p>-<k>.owner" (JSON:
+is ever left stale. A process opens each lock file once and keeps it open until it exits, so the
+directory cannot be cleaned while one runs. "<p>-<k>.owner" (JSON:
 pid, start, label, cmd, cwd, worktree) is written beside it for messages only and is ignored
 whenever its lock is free.
 
@@ -420,16 +421,17 @@ def _set_heavy_marker():
 def _inherited_heavy_live():
     """True when this process holds no heavy slot and its inherited KEO_HEAVY_HELD names a slot
     that is held; a marker naming only free slots is stale and says so once."""
-    value = os.environ.get('KEO_HEAVY_HELD', '').strip()
-    if not value:
-        return False
-    ids = value.split(',')
-    if not all(HEAVY_ID_RE.match(i) for i in ids):
-        raise ValueError('slots: KEO_HEAVY_HELD=%r is not a list of heavy slot ids' % value)
     d = slots_dir()
     with _lock:
+        # Read under _lock: _heavy_ids and the variable change together under it.
         if _heavy_ids:  # the variable is this process's own
             return False
+        value = os.environ.get('KEO_HEAVY_HELD', '').strip()
+        if not value:
+            return False
+        ids = value.split(',')
+        if not all(HEAVY_ID_RE.match(i) for i in ids):
+            raise ValueError('slots: KEO_HEAVY_HELD=%r is not a list of heavy slot ids' % value)
         live = any(_probe_busy(_lock_path(d, 'heavy', int(HEAVY_ID_RE.match(i).group(1))))
                    for i in ids)
     if not live:
@@ -514,7 +516,7 @@ def heavy(label=None):
         yield None
         return
     wait_s = _env_number('KEO_HEAVY_WAIT', 1800.0, float, 0.0)
-    note_s = _env_number('KEO_HEAVY_NOTE', 60.0, float, 0.0)
+    note_s = _env_number('KEO_HEAVY_NOTE', 60.0, float, 0.1)
     with _hold('heavy', label, wait_s, note_s) as sid:
         yield sid
 
@@ -526,7 +528,7 @@ def cpu_token(label=None):
         yield None
         return
     wait_s = _env_number('KEO_CPU_WAIT', 1800.0, float, 0.0)
-    note_s = _env_number('KEO_HEAVY_NOTE', 60.0, float, 0.0)
+    note_s = _env_number('KEO_HEAVY_NOTE', 60.0, float, 0.1)
     with _hold('cpu', label, wait_s, note_s) as sid:
         yield sid
 
