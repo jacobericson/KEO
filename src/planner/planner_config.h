@@ -22,6 +22,8 @@ struct PlannerConfig
 	int acidCost;      // plannerAcidCost: 1..10, default 3; 1 prices acidic water as any water
 	int advanceSection;   // plannerAdvanceSection: 1 arrives at a portal on entering its exterior far section; default 1
 	int legAim;           // plannerLegAim: 1 aims each portal along the line to the next leg; default 1
+	int mergeBias;     // plannerMergeBias: 1..10, default 3; an arc onto the anchor's route costs 1/k
+	int mergeDetour;   // plannerMergeDetour: 0..100 per cent, default 15; a member's detour cap
 };
 
 extern PlannerConfig g_plannerCfg;

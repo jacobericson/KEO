@@ -8,6 +8,7 @@
 #include "movement/order_outcome.h"
 #include "movement/order_outcome_table.h"
 #include "planner/plan_store.h"
+#include "planner/planner_merge.h"
 #include "zone/zone_pause.h"
 
 FormationGroup formationGroups[MAX_FORMATION_GROUPS];
@@ -58,6 +59,20 @@ void ClearFormationGroups()
 		formationGroups[i].count = 0;
 		formationGroups[i].lastReissueTime = 0.0;
 	}
+}
+
+// A run-together order the route planner merged gathers at its gather point, and a member the merge
+// left alone (alone[i] for chars[i]) walks its own route to the destination; when the planner did not
+// merge this order nothing is written and every member gathers at the leader.
+static void ReadPlannerMerge(FormationGroup& grp, const uintptr_t* chars, int charCount, unsigned char* alone)
+{
+	float gather[3];
+	int n = charCount < MAX_FORMATION_MEMBERS ? charCount : MAX_FORMATION_MEMBERS;
+	if (!planner::PlannerMergeGather(chars, n, gather, alone))
+		return;
+	grp.startX = gather[0];
+	grp.startY = gather[1];
+	grp.startZ = gather[2];
 }
 
 void CreateFormationGroup(const float* dest, uintptr_t* chars, int charCount)
@@ -170,6 +185,8 @@ void CreateFormationGroup(const float* dest, uintptr_t* chars, int charCount)
 	grp.startX = *(float*)(KLIB_MEMBER(3, chars[0], RootObjectBase_pos_x, OFF_CHAR_POS_X));
 	grp.startY = *(float*)(KLIB_MEMBER(3, chars[0], RootObjectBase_pos_y, OFF_CHAR_POS_Y));
 	grp.startZ = *(float*)(KLIB_MEMBER(3, chars[0], RootObjectBase_pos_z, OFF_CHAR_POS_Z));
+	unsigned char alone[MAX_FORMATION_MEMBERS_LIMIT] = { 0 };   // the merge's members left alone
+	ReadPlannerMerge(grp, chars, charCount, alone);
 
 	unsigned int groupId = nextFormationGroupId++;
 	grp.groupId = groupId;
@@ -186,7 +203,7 @@ void CreateFormationGroup(const float* dest, uintptr_t* chars, int charCount)
 		if (!cm) continue;
 
 		// Check if this member is already near the leader (gather point)
-		if (allAlreadyNear)
+		if (allAlreadyNear && !alone[i])
 		{
 			float gdx = *(float*)(KLIB_MEMBER(3, ch, RootObjectBase_pos_x, OFF_CHAR_POS_X)) - grp.startX;
 			float gdz = *(float*)(KLIB_MEMBER(3, ch, RootObjectBase_pos_z, OFF_CHAR_POS_Z)) - grp.startZ;
@@ -201,6 +218,7 @@ void CreateFormationGroup(const float* dest, uintptr_t* chars, int charCount)
 		m.gatherSent = false;
 		m.holdAtCreation        = CharacterIsHolding(ch);
 		m.inSomethingAtCreation = CharacterIsInSomething(ch);
+		m.alone = alone[i] != 0;
 
 		if (grp.count == 0)
 		{
@@ -385,6 +403,18 @@ bool PollFormationSpeed(FormationGroup& grp, PollFormationGroupCtx& c)
 	return false;
 }
 
+// The route planner re-plans each gathered member (every live one the merge did not leave alone) from
+// where it stands, before the travel send.
+static void ResumePlannedMembers(const FormationGroup& grp, double now)
+{
+	uintptr_t gathered[MAX_FORMATION_MEMBERS_LIMIT];
+	int n = 0;
+	for (int m = 0; m < grp.count; ++m)
+		if (grp.members[m].character && !grp.members[m].alone)
+			gathered[n++] = grp.members[m].character;
+	planner::PlannerResumeFromGather(gathered, n, now);
+}
+
 bool PollFormationGather(FormationGroup& grp, PollFormationGroupCtx& c)
 {
 	// ============================================================
@@ -410,6 +440,8 @@ bool PollFormationGather(FormationGroup& grp, PollFormationGroupCtx& c)
 				}
 			}
 			if (!alive) { mem.character = 0; continue; }
+			// A member the merge left alone walks its own route: no gather order, no gather test.
+			if (mem.alone) continue;
 
 			// Send gather order once per member
 			if (!mem.gatherSent)
@@ -452,12 +484,14 @@ bool PollFormationGather(FormationGroup& grp, PollFormationGroupCtx& c)
 			if (pathfind::g_pathfindCfg.pathfindDiagEnabled)
 				ArmPathProbe();
 
+			ResumePlannedMembers(grp, c.now);
 			// Send all alive members to the destination
 			int departed = 0;
 			for (int m = 0; m < grp.count; ++m)
 			{
 				FormationMember& mem = grp.members[m];
 				if (!mem.character) continue;
+				if (mem.alone) continue;   // already walking its own route to the destination
 
 				if (CharacterNewlyHeld(mem.character, mem.holdAtCreation, mem.inSomethingAtCreation))
 				{

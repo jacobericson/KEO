@@ -4,6 +4,7 @@
 #include "movement/islands_internal.h"
 #include "zone/preload/preload.h"
 #include "movement/formation.h"
+#include "movement/formation_gather_policy.h"
 #include "pathfind/player_task_policy.h"   // PT_OFF_* task-system offsets (for K7)
 #include "movement/k7_swap_policy.h"       // K7ClassifySwap / K7SigOnsetStep
 #include "movement/k7_arrival_policy.h"    // K7ArrivalShouldArm / K7ArrivalPoll
@@ -242,7 +243,7 @@ void K7SampleSignatures(double now, bool paused)
 		if (o.k7ArrivalWaitSince <= 0.0 && sigNow && !o.k7ArrivalPrevSig)
 		{
 			int fslot = FormationSlotForCharacter(o.character);
-			bool gathering = fslot >= 0 && !formationGroups[fslot].gathered;
+			bool gathering = fslot >= 0 && FormationSkipWhileGathering(formationGroups[fslot].gathered, FormationMemberAlone(o.character));
 			float dDestSq = Dist2(posX, posZ, o.destX, o.destZ);
 			if (!gathering && dDestSq > K7_ARRIVAL_MIN_DIST_SQ)
 			{

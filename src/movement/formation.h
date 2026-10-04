@@ -32,6 +32,7 @@ struct FormationMember {
 	bool gatherSent;
 	bool holdAtCreation;         // CharStats::_holdPositionMode when the group formed
 	bool inSomethingAtCreation;  // Character::inSomething != 0 when the group formed
+	bool alone;                  // the route planner's merge left it out of the gather: it walks its own route
 };
 
 struct FormationGroup {
@@ -68,6 +69,9 @@ void ClearFormationGroups();
 // Island re-issue helpers (formation_query.cpp). Main thread only.
 // Slot of the active formation group containing `character` (-1 = none).
 int       FormationSlotForCharacter(uintptr_t character);
+// True when `character` is a member of an active group that the route planner's merge left alone (it
+// walks its own route to the destination while the group gathers); false in no group.
+bool      FormationMemberAlone(uintptr_t character);
 // First member of the group that is still in the player squad (0 = none).
 uintptr_t FormationFirstAliveMember(int slot);
 // Re-dispatch the travel order (grp.dest) to every alive member, once per

@@ -411,6 +411,21 @@ void planner_tick_detail::ClearMemo()
 	s_memoCount = 0;
 }
 
+// ---- What the merge searches through -------------------------------------------------------------
+
+CoarseScratch* planner_tick_detail::SearchScratch()
+{
+	return s_scratch;
+}
+
+void planner_tick_detail::CrossingPoint(unsigned from, unsigned to, float out[3])
+{
+	PlanRouteStep step;
+	memset(&step, 0, sizeof(step));
+	ResolveCrossing(from, to, &step);
+	memcpy(out, step.portal, sizeof(step.portal));
+}
+
 // Writes the character's plan, with the prices p its re-plans search at, and feeds its route's next
 // tiles; -1 when the store is full.
 int planner_tick_detail::WritePlan(uintptr_t cm, const float pos[3], const Located& goal, const float dest[3],
@@ -734,6 +749,7 @@ void PlannerTick(void* zoneMgr, double now)
 			++replans;
 	}
 	PlannerWaterRefresh();
+	MergeTick(now);
 	PlannerReportTick(now);
 }
 

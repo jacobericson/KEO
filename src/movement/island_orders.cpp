@@ -4,6 +4,7 @@
 #include "movement/islands_internal.h"
 #include "zone/preload/preload.h"
 #include "movement/formation.h"
+#include "movement/formation_gather_policy.h"
 #include "pathfind/player_task_policy.h"   // PT_OFF_* task-system offsets (for K7)
 #include "movement/k7_swap_policy.h"       // K7ClassifySwap / K7SigOnsetStep
 #include "movement/k7_arrival_policy.h"    // K7ArrivalShouldArm / K7ArrivalPoll
@@ -305,7 +306,8 @@ static bool PollOrderFormation(IslandOrder& o, PollOrdersCtx& c)
 	// is the formation's, not the engine's: no deleted form, for the
 	// representative too. The travel dispatch re-creates every member's
 	// order after the gather.
-	if (k7On && slot >= 0 && !formationGroups[slot].gathered)
+	// A member the route planner's merge left alone walks the player's own order: it keeps its forms.
+	if (k7On && slot >= 0 && FormationSkipWhileGathering(formationGroups[slot].gathered, FormationMemberAlone(o.character)))
 	{
 		k7Deleted = false;
 		o.k7DeletedSince = 0.0;
@@ -330,8 +332,15 @@ static bool PollOrderFormation(IslandOrder& o, PollOrdersCtx& c)
 		if (rep && rep != o.character)
 		{
 			// Still gathering: this member is mid-approach to the leader,
-			// not stranded en route. Leave it to the group logic.
-			if (!formationGroups[slot].gathered) return true;
+			// not stranded en route. Leave it to the group logic. A member the
+			// route planner's merge left alone walks the player's own order to
+			// the destination: it is evaluated on its own, never through the group.
+			if (FormationSkipWhileGathering(formationGroups[slot].gathered, FormationMemberAlone(o.character))) return true;
+			if (!formationGroups[slot].gathered)
+			{
+				c.forceCharacterOnly = true;
+				return false;
+			}
 
 			// Read the representative's
 			// CURRENT CharMovement state directly instead of its

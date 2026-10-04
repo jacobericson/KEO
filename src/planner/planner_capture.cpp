@@ -133,18 +133,18 @@ static int MarkRepeats(const uintptr_t* chars, int n, const float dest[3], doubl
 // The engine's move branch applies the destination at once whatever the order's two flags carry
 // (a plain click sends the add flag set; the flags matter only to the engine's other orders), so
 // every captured move order is planned.
-void PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void* destIndoors, bool shift, bool addDontClear)
+int PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void* destIndoors, bool shift, bool addDontClear)
 {
-	if (PlanStoreMode() == PLANNER_OFF) return;
+	if (PlanStoreMode() == PLANNER_OFF) return 0;
 	(void)shift;
 	(void)addDontClear;
 	if (!location)
 	{
 		InterlockedIncrement(&PlannerCountersGet()->noLocation);
-		return;
+		return 0;
 	}
 	if (n <= 0)
-		return;
+		return 0;
 	if (PlayersOverCap())
 	{
 		// The tick validates no plan while over the cap, so an older plan never outlives a new order.
@@ -154,22 +154,24 @@ void PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void
 			if (cm)
 				DropPlan(cm, PDW_ORDER);
 		}
-		return;
+		return 0;
 	}
 	int order = ++s_orderSeq;
 	float dest[3] = { location[0], location[1], location[2] };
 	double now = ElapsedSec();
 	if (MarkRepeats(chars, n, dest, now) == 0)
-		return;
+		return 0;
 	TakeSnapshot();
 	Located goal;
 	if (!Locate(dest, &goal))
 	{
 		DropOrderPlans(chars, n, dest, now, &PlannerCountersGet()->goalUnlocated);
-		return;
+		return 0;
 	}
 	ClearMemo();
 	PlannerOrderWater(chars, n, s_orderMult, s_orderAcid);
+	PlanSearchParams orderPrices = { s_orderMult[0], s_orderAcid[0] };
+	int lead = MergeOrder(chars, n, goal, dest, orderPrices, order, now);
 	for (int k = 0; k < n; ++k)
 	{
 		uintptr_t cm = MovementOf(chars[k]);
@@ -198,6 +200,7 @@ void PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void
 		PlanCellOf(dest[0], dest[2], &gx, &gy);
 		ReportOrderPlan(order, k, start, goal, verdict, *b, PlanCellSpan(sx, sy, gx, gy), destIndoors != NULL, cm);
 	}
+	return lead;
 }
 
 void PlannerDrop(uintptr_t character)

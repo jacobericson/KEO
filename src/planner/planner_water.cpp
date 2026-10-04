@@ -166,6 +166,11 @@ static bool RunTogether(const uintptr_t* chars, int n)
 	return true;
 }
 
+bool PlannerOrderRunTogether(const uintptr_t* chars, int n)
+{
+	return chars && RunTogether(chars, n);
+}
+
 // The main thread's last published value for a character, 0 when it has none.
 static float LocalFind(uintptr_t hc)
 {

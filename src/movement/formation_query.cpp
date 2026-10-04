@@ -29,6 +29,22 @@ int FormationSlotForCharacter(uintptr_t character)
 	return -1;
 }
 
+// The merge's alone flag of the character's member in its active group, by FormationSlotForCharacter's
+// scan; false in no group.
+bool FormationMemberAlone(uintptr_t character)
+{
+	if (!character) return false;
+	for (int g = 0; g < MAX_FORMATION_GROUPS; ++g)
+	{
+		const FormationGroup& grp = formationGroups[g];
+		if (!grp.active) continue;
+		for (int m = 0; m < grp.count; ++m)
+			if (grp.members[m].character == character)
+				return grp.members[m].alone;
+	}
+	return false;
+}
+
 bool FormationGroupDestNear(int slot, float x, float z, float maxDistSq)
 {
 	if (slot < 0 || slot >= MAX_FORMATION_GROUPS) return false;

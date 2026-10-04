@@ -139,6 +139,26 @@ static bool ParsePlannerLegAim(const std::string& val, ConfigLogFn log)
 	return StoreField(&planner::PlannerConfig::legAim, b ? 1 : 0);
 }
 
+// plannerMergeBias: 1..10; a value out of range is refused and the default stays.
+static bool ParsePlannerMergeBias(const std::string& val, ConfigLogFn log)
+{
+	(void)log;
+	int v;
+	if (!ParseRanged(val, 1, 10, &v))
+		return false;
+	return StoreField(&planner::PlannerConfig::mergeBias, v);
+}
+
+// plannerMergeDetour: 0..100 per cent; a value out of range is refused and the default stays.
+static bool ParsePlannerMergeDetour(const std::string& val, ConfigLogFn log)
+{
+	(void)log;
+	int v;
+	if (!ParseRanged(val, 0, 100, &v))
+		return false;
+	return StoreField(&planner::PlannerConfig::mergeDetour, v);
+}
+
 namespace planner {
 
 const PlannerConfig kPlannerDefaults =
@@ -153,6 +173,8 @@ const PlannerConfig kPlannerDefaults =
 	3, // acidCost
 	1, // advanceSection
 	1, // legAim
+	3, // mergeBias
+	15, // mergeDetour
 };
 
 PlannerConfig g_plannerCfg = kPlannerDefaults;
@@ -193,6 +215,8 @@ const ConfigKey g_plannerConfigKeys[] =
 	CFG_OCUSTOM("plannerAcidCost", PlannerConfig, acidCost, ParsePlannerAcidCost, NDOC),
 	CFG_OCUSTOM("plannerAdvanceSection", PlannerConfig, advanceSection, ParsePlannerAdvanceSection, NDOC),
 	CFG_OCUSTOM("plannerLegAim", PlannerConfig, legAim, ParsePlannerLegAim, NDOC),
+	CFG_OCUSTOM("plannerMergeBias", PlannerConfig, mergeBias, ParsePlannerMergeBias, NDOC),
+	CFG_OCUSTOM("plannerMergeDetour", PlannerConfig, mergeDetour, ParsePlannerMergeDetour, NDOC),
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }
 };
 

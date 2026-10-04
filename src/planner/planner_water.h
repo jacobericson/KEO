@@ -23,6 +23,8 @@ const char* PlannerWaterAcidToken();
 // (n > 1, every member GROUPED) gives every member one multiplier and one factor and returns 1;
 // otherwise each member gets its own and it returns 0.
 int PlannerOrderWater(const uintptr_t* chars, int n, float* mult, float* acid);
+// Main thread: whether chars[0..n) run together (more than one, every member GROUPED).
+bool PlannerOrderRunTogether(const uintptr_t* chars, int n);
 // Main thread, every planner tick: republishes the water table from the player characters, each at
 // its plan's multiplier while it holds a plan, else its own from a read made now, else its last good
 // value. Returns at once while the request write is not armed live.

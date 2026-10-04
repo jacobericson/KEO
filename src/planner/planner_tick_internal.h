@@ -1,12 +1,14 @@
-// planner_tick_internal.h - Names the planner's tick (planner_tick.cpp) and its order capture
-// (planner_capture.cpp) share: the located point, the memoised search, the locator, the snapshot,
-// the search, the plan write and the drop. Main thread only; the locator and the snapshot take the
-// section manager's world lock (+0x200) try-shared and release it on every path.
+// planner_tick_internal.h - Names the planner's tick (planner_tick.cpp), its order capture
+// (planner_capture.cpp) and its merge (planner_merge.cpp) share: the located point, the memoised
+// search, the locator, the snapshot, the search, the plan write and the drop. Main thread only; the
+// locator and the snapshot take the section manager's world lock (+0x200) try-shared and release it
+// on every path.
 #ifndef KEO_PLANNER_PLANNER_TICK_INTERNAL_H
 #define KEO_PLANNER_PLANNER_TICK_INTERNAL_H
 
 #include "planner/plan_build.h"
 #include "planner/plan_policy.h"
+#include "planner/coarse_search.h"
 #include <stdint.h>
 
 namespace planner {
@@ -46,6 +48,17 @@ int DropPlan(uintptr_t cm, PlanDropWhy why);
 // Whether the player list is longer than the tick scans; the tick and the order capture both refuse
 // then, and the session build logs the first time once.
 bool PlayersOverCap();
+// The search scratch, and the point where a route crosses from node from into node to (the cross
+// arc's portal; to's centre when the arc no longer resolves). planner_tick.cpp; the full-price
+// operations themselves are planner_search_ops.h's AdapterOps, and a node's centre its AdapterPosition.
+CoarseScratch* SearchScratch();
+void CrossingPoint(unsigned from, unsigned to, float out[3]);
+// The merge of a run-together order (planner_merge.cpp): from the order capture after the water
+// pre-pass, the index in chars of the member the formation leads with (0 unless on merged the order);
+// from the tick, the gather walks' off-route reading.
+int MergeOrder(const uintptr_t* chars, int n, const Located& goal, const float dest[3],
+               const PlanSearchParams& p, int order, double now);
+void MergeTick(double now);
 
 } // namespace planner_tick_detail
 } // namespace planner

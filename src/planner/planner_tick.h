@@ -8,9 +8,10 @@ namespace planner {
 
 // Main thread, from hook_addOrderSelected's task-29 branch before the original: one plan per
 // selected character chars[0..n) toward location, whatever the order's two flags carry; a repeat
-// of the character's plan inside its first second is counted and skipped.
-void PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void* destIndoors,
-                      bool shift, bool addDontClear);
+// of the character's plan inside its first second is counted and skipped. Returns the index in chars of
+// the member the formation group leads with: the merge's anchor in on for a run-together order, else 0.
+int PlannerNoteOrder(const uintptr_t* chars, int n, const float* location, void* destIndoors,
+                     bool shift, bool addDontClear);
 // Main thread, from a non-move order (order_hook.cpp) or the stop key (island_cancel_hooks.cpp):
 // drop a character's plan.
 void PlannerDrop(uintptr_t character);

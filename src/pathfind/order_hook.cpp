@@ -185,7 +185,7 @@ void hook_addOrderSelected(void* thisPI, void* destIndoors, int task,
 			}
 		}
 
-		planner::PlannerNoteOrder(collectedChars, collectedCount, location, destIndoors, shift, addDontClear);
+		int lead = planner::PlannerNoteOrder(collectedChars, collectedCount, location, destIndoors, shift, addDontClear);
 
 		// One order-outcome record per player move order, for every
 		// selected character (not just the ones movement-aware preload
@@ -239,6 +239,14 @@ void hook_addOrderSelected(void* thisPI, void* destIndoors, int task,
 			}
 			if (allGrouped)
 			{
+				// The route planner's merge names the member the group leads with; only the formation's
+				// member order changes, every per-character record above keeps the selection order.
+				if (lead > 0 && lead < collectedCount)
+				{
+					uintptr_t first = collectedChars[0];
+					collectedChars[0] = collectedChars[lead];
+					collectedChars[lead] = first;
+				}
 				CreateFormationGroup(location, collectedChars, collectedCount);
 				formedGroup = true;
 			}

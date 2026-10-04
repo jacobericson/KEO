@@ -115,6 +115,7 @@ struct PlannerCounters
 	volatile LONG reissuedPlanned, heldPlanned, reissueRefused, snapFar, snapMax;
 	volatile LONG waterFail, waterGroups;   // members whose speed read failed; orders planned run-together
 	volatile LONG arrSection, aimCount, aimShiftSum;   // advances by section entry; aimed recomputes, their summed shift in units
+	volatile LONG merges, mergeJoins, mergeAlone, mergeMoved, mergeWalkOff;   // orders merged; members joined, alone; gathers moved; walks off
 	volatile LONG dropsBy[PLAN_DROP_REASONS], replansBy[PLAN_REPLAN_REASONS];   // by PlanDropWhy / PlanReplanWhy
 };
 PlannerCounters* PlannerCountersGet();   // any thread; the fields are interlocked
