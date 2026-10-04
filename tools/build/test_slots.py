@@ -611,6 +611,25 @@ class SlotsTest(unittest.TestCase):
                            universal_newlines=True)
         self.assertIn('exits 75 (EX_TEMPFAIL)', ' '.join(h.stdout.split()))
 
+    def test_cli_cpu_runs_a_leaf_under_one_token(self):
+        e = self.env(KEO_CPU_SLOTS=1)
+        check = 'import os, sys; sys.exit(7 if os.environ.get("KEO_CPU_HELD") == "1" else 1)'
+        r = subprocess.run([PY, SLOTS_PY, 'cpu', '--label', 'x', '--', PY, '-c', check], env=e)
+        self.assertEqual(r.returncode, 7)
+        os.environ['KEO_CPU_SLOTS'] = '1'
+        marker = os.path.join(self.tmp, 'ran')
+        with slots.cpu_token('holder'):
+            c = self.spawn([SLOTS_PY, 'cpu', '--label', 'late', '--', PY, '-c',
+                            'open(%r, "w").close()' % marker], self.env(KEO_CPU_SLOTS=1, KEO_CPU_WAIT='0.3'))
+            rc = c.finish()
+        self.assertEqual(rc, slots.EXIT_TIMEOUT)
+        self.assertEqual(len(c.matching('err', 'slots: FAILED: no cpu slot within 0.3 s (held: '
+                                        'pid %d holder in ' % os.getpid())), 1)
+        self.assertFalse(os.path.exists(marker))
+        h = subprocess.run([PY, SLOTS_PY, 'cpu', '--help'], stdout=subprocess.PIPE,
+                           universal_newlines=True)
+        self.assertIn('exits 75 (EX_TEMPFAIL)', ' '.join(h.stdout.split()))
+
     def test_temp_fallback_says_so(self):
         e = self.env(TMP=self.tmp, TEMP=self.tmp)
         for name in ('KEO_SLOTS_DIR', 'LOCALAPPDATA'):

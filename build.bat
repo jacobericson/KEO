@@ -54,6 +54,8 @@ REM --- Link ---
 REM /OPT:NOICF keeps the per-probe wrapper templates (CallSiteProbe.cpp) and the
 REM per-class listener thunks (AuditListeners.cpp) distinct.
 REM /MAP writes build\obj\KEOProfiler.map, for tools\build\verify_layout.py.
+REM The link holds one host-wide cpu token (tools\build\slots.py), as the optimizer's links do.
+python tools\build\slots.py cpu --label "link %OUTDIR%" -- ^
 link /nologo /DLL /LTCG /OPT:REF /OPT:NOICF /MACHINE:X64 /SUBSYSTEM:CONSOLE ^
      /LIBPATH:"%KENSHILIB%\Libraries\KenshiLib" ^
      KenshiLib.lib user32.lib ^

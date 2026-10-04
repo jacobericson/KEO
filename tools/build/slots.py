@@ -73,6 +73,9 @@ CLI:
     python tools\\build\\slots.py heavy [--label X] -- <command...>
         runs the command holding a heavy slot and exits with its exit code; when the wait runs
         out it writes the FAILED line and exits 75 (EX_TEMPFAIL) without running the command.
+    python tools\\build\\slots.py cpu [--label X] -- <command...>
+        the same with one cpu token, for a single leaf process such as a link; the command runs
+        with KEO_CPU_HELD=1, as under run().
 """
 import argparse
 import contextlib
@@ -623,6 +626,13 @@ def main(argv=None):
                     'code. When KEO_HEAVY_WAIT runs out first, writes the FAILED line and exits '
                     '%d (EX_TEMPFAIL) without running it.' % EXIT_TIMEOUT)
     run_heavy.add_argument('--label')
+    run_cpu = sub.add_parser(
+        'cpu', help='run a command holding one cpu token',
+        description='Runs the command after -- holding one cpu token (the command gets '
+                    'KEO_CPU_HELD=1) and exits with its exit code. When KEO_CPU_WAIT runs out '
+                    'first, writes the FAILED line and exits %d (EX_TEMPFAIL) without running it.'
+                    % EXIT_TIMEOUT)
+    run_cpu.add_argument('--label')
     args = parser.parse_args(argv)
     if args.action == 'status':
         held = status()
@@ -635,10 +645,14 @@ def main(argv=None):
                                 (' cmd: %s' % owner['cmd']) if owner.get('cmd') else ''))
         return 0
     if not cmd:
-        parser.error('heavy needs a command after --')
+        parser.error('%s needs a command after --' % args.action)
+    label = args.label or os.path.basename(cmd[0])
     try:
-        with heavy(args.label or os.path.basename(cmd[0])):
-            rc = subprocess.call(cmd)
+        if args.action == 'cpu':
+            rc = run(cmd, label).returncode
+        else:
+            with heavy(label):
+                rc = subprocess.call(cmd)
     except SlotTimeout:
         return EXIT_TIMEOUT
     return _signed32(rc)
