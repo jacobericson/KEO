@@ -56,9 +56,12 @@ Environment:
 Failure: a compile error does not stop its variant's other compiles, but once a variant fails no
 new variant is started; a variant already started still finishes (its link runs once its own
 compile succeeded). A failure of the runner itself (no cpu token within KEO_CPU_WAIT, cl not
-started) stops the run at once: no compile starts after it, and every queued one fails its
-variant uncompiled. The script then prints "<fail-prefix> <OUTDIR>" for the first failed variant
-in the order given and exits 1. Exit 0 when every variant built.
+started) stops the run: no compile starts after it, every queued one fails its variant
+uncompiled, and one already waiting for a cpu token gives up uncompiled when that wait ends (it
+gets a token, or KEO_CPU_WAIT runs out). The script then prints "<fail-prefix> <OUTDIR>" for the
+first failed variant in the order given and exits 1; a run refused before it starts (a setting,
+the source list, cl not on PATH, no heavy slot) prints the ERROR line and then the same line for
+the first --variant. Exit 0 when every variant built.
 """
 import argparse
 import hashlib
@@ -579,6 +582,16 @@ def build(variants, jobs, mp, cl):
     return failed
 
 
+def refuse(args, error):
+    """A run that cannot start ends like a failed one: the caller's failure line names the first
+    variant."""
+    print('ERROR: %s' % error)
+    print('')
+    print('%s %s' % (args.fail_prefix, args.variant[0][0]))
+    sys.stdout.flush()
+    return 1
+
+
 def main():
     try:
         sys.stdout.reconfigure(errors='replace')
@@ -635,8 +648,7 @@ def main():
         if os.environ.get('TEST_NOOP_CL') != '1' and not cl:
             raise ValueError('cl.exe is not on PATH (run vcvarsall.bat amd64 first)')
     except (OSError, ValueError) as error:
-        print('ERROR: %s' % error)
-        return 1
+        return refuse(args, error)
 
     print('Building %d variant(s), %d at a time, %d process(es) at once%s, one cl per source; '
           'per-variant logs: <object folder>\\build.log'
@@ -647,8 +659,7 @@ def main():
         with slots.heavy('run_variants ' + ' '.join(v.outdir for v in variants)):
             failed = build(variants, jobs, mp, cl)
     except (slots.SlotTimeout, ValueError) as error:
-        print('ERROR: %s' % error)
-        return 1
+        return refuse(args, error)
 
     unfinished = [v for v in variants if v.returncode is None]
     if failed or unfinished:
