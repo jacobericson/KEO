@@ -7,6 +7,7 @@
 #include "movement/islands.h"
 #include "movement/order_outcome.h"
 #include "planner/plan_store.h"
+#include "movement/formation_follow.h"
 
 // =========================================================================
 // Island re-issue helpers for islands_reissue.cpp. Main thread only.
@@ -82,6 +83,7 @@ void FormationRebaseReissueClocks(double pausedSeconds)
 void FormationDetachCharacters(const uintptr_t* chars, int n)
 {
 	if (!chars || n <= 0) return;
+	FormationFollowRelease(chars, n, FFR_ORDER);
 	for (int g = 0; g < MAX_FORMATION_GROUPS; ++g)
 	{
 		if (!formationGroups[g].active) continue;
@@ -292,6 +294,7 @@ static bool SendReissue(int slot, const char* why, double now, const uintptr_t* 
 		uintptr_t cm = *(uintptr_t*)(KLIB_MEMBER(3, mem.character, Character_movement, OFF_CHAR_MOVEMENT));
 		// A member the route planner holds at a portal is not re-sent.
 		if (cm && PlannerOwnsMember(cm)) { InterlockedIncrement(&planner::PlannerCountersGet()->ownedSkips); continue; }
+		if (cm && FormationOwnsFollower(cm, FFS_TRAVEL)) continue;   // a follower is never re-sent
 
 		uintptr_t charVtable = *(uintptr_t*)mem.character;
 		if (!charVtable) continue;

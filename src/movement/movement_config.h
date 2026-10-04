@@ -89,6 +89,10 @@ struct MovementConfig
 	// only sends nothing itself, so the instrument is never gated behind the
 	// lever (k7Arrive=w/x count regardless of this key; only k7Arrive=s does not).
 	bool k7ArrivalTriggerEnabled;
+
+	// formationFollow: off or probe (FollowMode); read by the session build alone. probe gives a
+	// run-together group's members near the leader the engine's own Follow order and logs Follow:.
+	int cfg_formationFollow;
 };
 
 extern MovementConfig g_movementCfg;

@@ -4,6 +4,7 @@
 #include "movement/islands_internal.h"
 #include "zone/preload/preload.h"
 #include "movement/formation.h"
+#include "movement/formation_follow.h"
 #include "pathfind/player_task_policy.h"   // PT_OFF_* task-system offsets (for K7)
 #include "movement/k7_swap_policy.h"       // K7ClassifySwap / K7SigOnsetStep
 #include "movement/k7_arrival_policy.h"    // K7ArrivalShouldArm / K7ArrivalPoll
@@ -401,6 +402,7 @@ void IslandDetachSelectedFromFormation(uintptr_t pi)
 			uintptr_t character = (uintptr_t)resolved;
 			if (character && resolved != sentinel)
 			{
+				FormationFollowRelease(&character, 1, FFR_STOP);
 				FormationDetachCharacters(&character, 1);
 				// Runs for the stop key and a clearing job order whether or not
 				// K7 is on, so the order-outcome cancel can't be silently

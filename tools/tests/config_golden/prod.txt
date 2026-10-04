@@ -17,6 +17,7 @@ emptyPassSkip=true
 escapePauseGuard=true
 foliageBudgetSpeed=3
 foliagePageBudgetMs=0
+formationFollow=0
 gatePassDiag=false
 gpuParamCache=true
 gpuParamLookupDiag=false

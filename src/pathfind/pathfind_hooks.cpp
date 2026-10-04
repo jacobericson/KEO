@@ -8,6 +8,7 @@
 #include "pathfind/pathfind_diag.h"
 #include "pathfind/pathfind_cache.h"
 #include "movement/formation.h"
+#include "movement/formation_follow.h"
 #include "movement/tracking.h"
 #include "pathfind/path_pool.h"
 #include "pathfind/astar_cost.h"
@@ -636,6 +637,7 @@ void hook_requestPath(void* havokChar, float* destination, int priority)
 	squadBoostTier = decision.tier;
 	squadBoostFromRepathTier = (decision.source == PRT_SOURCE_STATE6 && decision.tier > 0);
 
+	FormationFollowNoteRequest(havokChar);
 	planner::PlannerWaterNoteRequester(havokChar);
 	game::g_hookOrig.orig_requestPath(havokChar, destination, priority);
 

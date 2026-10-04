@@ -11,6 +11,7 @@
 #include "movement/island_span_policy.h"
 #include "zone/zone_pause.h"
 #include "planner/plan_store.h"
+#include "movement/formation_follow.h"
 
 namespace order_outcome_detail {
 
@@ -46,6 +47,16 @@ void OrderOutcomeBegin(const uintptr_t* chars, int count, float destX, float des
 void OrderOutcomeNoteMotion(uintptr_t character, bool moving, bool post, double now)
 {
 	OOT_NoteMotion((size_t)character, moving, post, now, ZonePauseIsPaused());
+	if (FormationFollowArmed())
+	{
+		// A follower's stop beside its leader is the follow task's, never a stall.
+		uintptr_t fcm = *(uintptr_t*)(KLIB_MEMBER(3, character, Character_movement, OFF_CHAR_MOVEMENT));
+		if (fcm && FormationOwnsFollower(fcm, FFS_OUTCOME))
+		{
+			OOT_NotePlannerWait((size_t)character, now, ZonePauseIsPaused());
+			return;
+		}
+	}
 	if (planner::PlanStoreMode() == planner::PLANNER_OFF) return;
 	uintptr_t cm = *(uintptr_t*)(KLIB_MEMBER(3, character, Character_movement, OFF_CHAR_MOVEMENT));
 	if (!cm) return;

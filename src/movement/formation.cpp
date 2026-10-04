@@ -9,6 +9,7 @@
 #include "movement/order_outcome_table.h"
 #include "planner/plan_store.h"
 #include "planner/planner_merge.h"
+#include "movement/formation_follow.h"
 #include "zone/zone_pause.h"
 
 FormationGroup formationGroups[MAX_FORMATION_GROUPS];
@@ -59,6 +60,7 @@ void ClearFormationGroups()
 		formationGroups[i].count = 0;
 		formationGroups[i].lastReissueTime = 0.0;
 	}
+	FormationFollowOnClear();
 }
 
 // A run-together order the route planner merged gathers at its gather point, and a member the merge
@@ -442,6 +444,7 @@ bool PollFormationGather(FormationGroup& grp, PollFormationGroupCtx& c)
 			if (!alive) { mem.character = 0; continue; }
 			// A member the merge left alone walks its own route: no gather order, no gather test.
 			if (mem.alone) continue;
+			if (FormationOwnsFollower(mem.charMovement, FFS_GATHER)) continue;   // a follower walks on its follow task
 
 			// Send gather order once per member
 			if (!mem.gatherSent)
@@ -492,6 +495,7 @@ bool PollFormationGather(FormationGroup& grp, PollFormationGroupCtx& c)
 				FormationMember& mem = grp.members[m];
 				if (!mem.character) continue;
 				if (mem.alone) continue;   // already walking its own route to the destination
+				if (FormationOwnsFollower(mem.charMovement, FFS_SEND)) continue;
 
 				if (CharacterNewlyHeld(mem.character, mem.holdAtCreation, mem.inSomethingAtCreation))
 				{
@@ -614,6 +618,7 @@ bool PollFormationScatter(FormationGroup& grp, PollFormationGroupCtx& c)
 			scatterDest[1] = grp.destY;
 			scatterDest[2] = grp.destZ + mem.scatterZ;
 
+			FormationFollowRelease(&mem.character, 1, FFR_ARRIVAL);
 			KlibDispatchMoveOrder(fn_moveOrder, mem.character, NULL, NULL, scatterDest);
 			mem.dispatched = true;
 			c.doneCount++;
@@ -692,4 +697,5 @@ void PollFormationGroups()
 
 	for (int g = 0; g < MAX_FORMATION_GROUPS; ++g)
 		PollFormationGroup(g, now, scCount, scStuff);
+	FormationFollowPoll(now, scCount, scStuff);
 }

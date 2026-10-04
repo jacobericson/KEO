@@ -17,6 +17,7 @@
 #include "movement/islands_reissue_internal.h"
 #include "movement/islands_reissue_counters.h"
 #include "planner/plan_store.h"
+#include "movement/formation_follow.h"
 namespace island_orders_detail {
 struct PollOrdersCtx {
 	uintptr_t zm;
@@ -133,6 +134,8 @@ bool IsCharacterParkedNow(uintptr_t character, float destX, float destZ, double 
 	float wpX   = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_pathDestination_x, OFF_CMOV_PATH_DEST));
 	float wpZ   = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_pathDestination_z, OFF_CMOV_PATH_DEST + 8));
 	if (planner::PlannerOwnsWait(cm, posX, posZ, wpX, wpZ)) return false;   // the planner's stop at its portal, not a park
+	// A follower is the group's representative here only in the frame between its leader's detach and the next follow poll.
+	if (FormationOwnsFollower(cm, FFS_PARK)) return false;   // a follower on its follow task, not a park
 
 	float lastX = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_destination_x, OFF_CMOV_LAST_DEST));
 	float lastZ = *(float*)(KLIB_MEMBER(3, cm, AbstractMovementBase_destination_z, OFF_CMOV_LAST_DEST + 8));
@@ -573,6 +576,15 @@ static bool PollOrderCrossing(IslandOrder& o, PollOrdersCtx& c)
 static void PollOneOrder(IslandOrder& o, PollOrdersCtx& c)
 {
 	if (PollOrderRead(o, c)) return;
+	// A follower under the follow probe walks on the engine's follow task: no K7 form, park, re-issue or
+	// crossing test runs on it.
+	if (FormationOwnsFollower(c.cm, FFS_POLL))
+	{
+		o.stoppedSince = 0.0;
+		o.parked = false;
+		o.retryArmed = false;
+		return;
+	}
 	if (PollOrderK7(o, c)) return;
 	// A character the route planner is walking leg by leg stops at a portal it gave, waiting for the
 	// next section or before the engine's next advance: that is the planner's stop, not a park, so no

@@ -52,6 +52,7 @@ static const Owner kOwners[] =
 	{ "k7PostDeathHold", "movement" },
 	{ "k7DestReadyGate", "movement" },
 	{ "k7ArrivalTrigger", "movement" },
+	{ "formationFollow", "movement" },
 	{ "navmeshVanillaPruning", "navmesh" },
 	{ "navmeshNeighbourSeeds", "navmesh" },
 	{ "navmeshBuildLockNarrow", "navmesh" },
@@ -160,7 +161,7 @@ int main()
 			if (k.debugOnlyReader)
 			{
 				++debug;
-				if (strcmp(k.name, "unstitchProbe") && strcmp(k.name, "sectionKeyProbe")) Fail(k.name, "unexpected debugOnlyReader");
+				if (strcmp(k.name, "unstitchProbe") && strcmp(k.name, "sectionKeyProbe") && strcmp(k.name, "formationFollow")) Fail(k.name, "unexpected debugOnlyReader");
 			}
 			if (mod.state)
 			{
@@ -187,7 +188,7 @@ int main()
 		}
 		if (i == CONFIG_STAGE_MAX) Fail(mod.name, "no table end within stage capacity");
 	}
-	Check(moduleKeys == 90 && activeCore == 2 && retiredCore == 22 && debug == 2, "module and core row counts");
+	Check(moduleKeys == 91 && activeCore == 2 && retiredCore == 22 && debug == 3, "module and core row counts");
 	for (size_t i = 0; i < sizeof(kOwners) / sizeof(kOwners[0]); ++i)
 	{
 		const ConfigModule* mod = NULL;

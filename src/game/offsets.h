@@ -59,6 +59,8 @@ const size_t OFF_CMOV_EDGE_COUNTER   = 0x368;  // edge-target retry counter (0..
 KLIB_ASSERT_OFFSET(CharMovement_edgeTarget, OFF_CMOV_EDGE_COUNTER);
 const size_t OFF_CMOV_MOVING_TO_EDGE = 0x370;  // BYTE: 1 while routing to an island edge
 KLIB_ASSERT_OFFSET(CharMovement_movingToEdge, OFF_CMOV_MOVING_TO_EDGE);
+const size_t OFF_CMOV_MOVEMENT_MODE = 0x378;  // int MovementMode: 0 path following, 1 combat, 2 direct
+KLIB_ASSERT_OFFSET(CharMovement_movementMode, OFF_CMOV_MOVEMENT_MODE);
 
 // ZoneMap entry (360 bytes each in ZoneManager zone array)
 const int    ZONE_ENTRY_SIZE     = 360;

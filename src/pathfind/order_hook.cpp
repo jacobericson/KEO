@@ -6,6 +6,7 @@
 #include "zone/preload/preload.h"
 #include "movement/tracking.h"
 #include "movement/formation.h"
+#include "movement/formation_follow.h"
 #include "pathfind/pathfinding.h"
 #include "navmesh/scheduling/navmesh_sched.h"
 #include "movement/islands.h"
@@ -105,6 +106,7 @@ void hook_addOrderSelected(void* thisPI, void* destIndoors, int task,
 	// Collect all resolved characters for formation group + pending-order buffer
 	uintptr_t collectedChars[MAX_FORMATION_MEMBERS];
 	int collectedCount = 0;
+	bool formedGroup = false;
 
 	if (task == 29 && location
 	)
@@ -227,7 +229,6 @@ void hook_addOrderSelected(void* thisPI, void* destIndoors, int task,
 		}
 
 		// Group cohesion: create formation group for arrival scatter.
-		bool formedGroup = false;
 		if (movement::g_movementCfg.groupCohesionEnabled && scatterPatchApplied && collectedCount > 1)
 		{
 			bool allGrouped = true;
@@ -274,6 +275,11 @@ void hook_addOrderSelected(void* thisPI, void* destIndoors, int task,
 	}
 
 	game::g_hookOrig.orig_addOrderSelected(thisPI, destIndoors, task, subject, shift, addDontClear, location);
+
+	// The follow probe gives the group's members near the leader the engine's Follow order, after the
+	// original gave them the move order it replaces.
+	if (formedGroup)
+		FormationFollowAfterOrder(collectedChars, collectedCount);
 
 	// Immediate reprio: the player just named one or more route zones, so the
 	// jobs already queued for them float to the top now. Requests the AI task
