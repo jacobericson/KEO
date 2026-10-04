@@ -29,9 +29,11 @@ above apply to it unchanged) and its stored cl output stands in for cl's. Once a
 compiles have all ended, what it compiled is published. Each variant writes one line after its
 compile output, and the console repeats it:
     object cache: <h> restored, <c> compiled, <r> rejected, <u> uncacheable (BUILD_CACHE=<mode>)
-where c counts the cl processes run, r the cache entries refused (and moved aside), u the
+where c counts the cl processes run, r the cache entries refused (and moved aside; a lookup
+racing another build's publish or eviction is refused too, so r > 0 alone is no defect), u the
 compiles not published. objects.json records per source how it was made, its cache entry and,
-when it was not published, why.
+when it was not published, why. Before the link, every restored object's inputs are read afresh;
+one that changed during the build refuses the link.
 
 Usage:
   run_variants.py --fail-prefix PREFIX [--kind opt|prof] [--sources LIST] [--compile-only]
@@ -437,8 +439,8 @@ def not_compiled(source, why):
 def no_cache():
     """A source's object cache record: how it was made (compiled, restored, or None when neither),
     entries refused while looking it up, the compile awaiting publication, the note objects.json
-    keeps, and the cache entry it came from or went to."""
-    return {'how': None, 'rejected': 0, 'compiled': None, 'note': None, 'entry': None}
+    keeps, the cache entry it came from or went to, and a restored object's inputs."""
+    return {'how': None, 'rejected': 0, 'compiled': None, 'note': None, 'entry': None, 'inputs': None}
 
 
 def run_compile(v, position, source, cl, stop, done, cache):
@@ -459,7 +461,7 @@ def run_compile(v, position, source, cl, stop, done, cache):
         if key is not None and cache.lookups:
             hit, cached['rejected'] = cache.restore(key, obj_path)
             if hit is not None:
-                output, includes, cached['entry'] = hit
+                output, includes, cached['entry'], cached['inputs'] = hit
                 rc, cached['how'], cached['note'] = 0, 'restored', 'restored'
                 return
         with slots.cpu_token('cl ' + source):
@@ -474,13 +476,15 @@ def run_compile(v, position, source, cl, stop, done, cache):
         output, includes = split_notes(p.stdout)
         rc = p.returncode
         if key is not None and cache.publishes:
-            obj_sha = None
+            obj_sha, captured, reason = None, None, None
             if rc == 0:
                 try:
                     obj_sha = file_sha256(obj_path)  # publishing refuses an object changed after this
                 except OSError:
                     pass
-            cached['compiled'] = objcache.Compiled(key, t0, rc, obj_path, obj_sha, output, includes)
+                captured, reason = cache.capture(key, t0, includes)
+            cached['compiled'] = objcache.Compiled(key, t0, rc, obj_path, obj_sha, output, includes,
+                                                   captured, reason)
         elif cached['note'] is None:
             cached['note'] = 'uncacheable: TEST_NOOP_CL=1' if cache.noop else 'off'
     except (OSError, ValueError, slots.SlotTimeout) as error:
@@ -539,6 +543,14 @@ def finish_variant(v, done, cache):
             if len(failed) > FAILED_LISTED:
                 lines.append('  ... and %d more, see above' % (len(failed) - FAILED_LISTED))
             append_log(v.log, '\n'.join(lines))
+            return
+        problems = cache.recheck([v.cached[i]['inputs'] for i in range(len(v.sources)) if v.cached[i]['inputs']])
+        if problems:
+            listed = problems[:objcache.LISTED]
+            if len(problems) > objcache.LISTED:
+                listed.append('... and %d more' % (len(problems) - objcache.LISTED))
+            append_log(v.log, 'run_variants.py: the object cache refused the link, %d restored object(s) '
+                              'whose inputs changed during the build:\n  %s' % (len(problems), '\n  '.join(listed)))
             return
         problems = check_objects_fresh(v.objdir, v.sources, v.compile_start)
         if problems:

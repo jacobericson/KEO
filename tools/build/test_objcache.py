@@ -5,8 +5,9 @@ A fake cl (FAKE_CL below, run by this Python) stands in for the compiler: it ech
 name, prints a "Note: including file:" line per include it resolves (the including file's folder,
 then each /I folder), honours the CL variable, and writes an "object" that hashes the source, its
 includes and the defines. Each test builds a small checkout in its own temporary folder, with its
-own cache folder, and drives run_variants.build() on it. Every file and folder is aged by a
-minute first, since a compile does not publish what changed within 2 s of its start.
+own cache folder, and drives run_variants.build() on it. Every file's and folder's times, the
+change time included, are set a minute back first, since a compile does not publish what changed
+within 2 s of its start.
 """
 import contextlib
 import io
@@ -25,7 +26,37 @@ sys.dont_write_bytecode = True
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import objcache  # noqa: E402
+import objstore  # noqa: E402
 import run_variants  # noqa: E402
+
+if os.name == 'nt':
+    import ctypes
+    from ctypes import wintypes
+    _k32 = ctypes.WinDLL('kernel32', use_last_error=True)
+    _k32.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+                                 wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+    _k32.CreateFileW.restype = wintypes.HANDLE
+    _k32.SetFileInformationByHandle.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
+    _k32.SetFileInformationByHandle.restype = wintypes.BOOL
+    _k32.CloseHandle.argtypes = [wintypes.HANDLE]
+
+
+def set_times(path, seconds):
+    """Sets path's write and change times (and the others) to `seconds` since 1970: what a
+    deliberate forgery would do, and the only way to age a fixture's change time."""
+    if os.name != 'nt':
+        os.utime(path, (seconds, seconds))
+        return
+    ticks = int(seconds * 1e7) + objstore.EPOCH_DIFF_100NS
+    info = objstore._BasicInfo(ticks, ticks, ticks, ticks, 0)
+    handle = _k32.CreateFileW(path, 0x100, 7, None, 3, 0x02000000, None)  # FILE_WRITE_ATTRIBUTES
+    if handle is None or handle == objstore._INVALID_HANDLE:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        if not _k32.SetFileInformationByHandle(handle, 0, ctypes.byref(info), ctypes.sizeof(info)):
+            raise ctypes.WinError(ctypes.get_last_error())
+    finally:
+        _k32.CloseHandle(handle)
 
 FAKE_CL = r'''
 import hashlib, os, sys
@@ -69,6 +100,19 @@ if mode == 'touch' and seen:
     os.utime(seen[0])
 if mode == 'editsrc':
     open(src, 'ab').write(b'// edited during the compile\n')
+if mode == 'revert' and os.path.basename(src) == 'a.cpp':
+    # what restoring a backup with Copy-Item, robocopy or cp -p does: old bytes, old mtime
+    for p in seen:
+        if os.path.basename(p) == 'a.h':
+            open(p, 'w').write('// a\n')
+            t = __import__('time').time() - 600
+            os.utime(p, (t, t))
+if mode == 'poke' and os.path.basename(src) == 'c.cpp':
+    # another source's include rewritten in place, its mtime kept
+    p = os.path.join(os.path.dirname(src), 'a.h')
+    st = os.stat(p)
+    open(p, 'w').write('// poked\n')
+    os.utime(p, ns=(st.st_atime_ns, st.st_mtime_ns))
 open(obj, 'wb').write(hashlib.sha256(body + defines).digest() + body)
 '''
 
@@ -93,12 +137,12 @@ def write(path, text, mode='w'):
 
 
 def age(top, seconds=60):
-    """Sets every file's and folder's mtime under top (and top's) back by seconds."""
+    """Sets every file's and folder's times under top (and top's) back by seconds."""
     t = time.time() - seconds
-    for folder, dirs, files in os.walk(top):
+    for folder, dirs, files in os.walk(top, topdown=False):
         for name in files:
-            os.utime(os.path.join(folder, name), (t, t))
-        os.utime(folder, (t, t))
+            set_times(os.path.join(folder, name), t)
+        set_times(folder, t)
 
 
 class Run(object):
@@ -149,8 +193,9 @@ class CacheTestBase(unittest.TestCase):
         age(self.kenshilib)
         return root
 
-    def build(self, root=None, **env):
-        """Builds the checkout's three sources once with the given extra environment."""
+    def build(self, root=None, mp=4, **env):
+        """Builds the checkout's three sources once with the given extra environment, mp processes
+        at once."""
         root = root or self.root
         saved = dict((k, os.environ.get(k)) for k in env)
         os.environ.update(env)
@@ -165,7 +210,7 @@ class CacheTestBase(unittest.TestCase):
             v.cache_desc = cache.describe()
             os.makedirs(v.objdir, exist_ok=True)
             with contextlib.redirect_stdout(io.StringIO()):
-                failed = run_variants.build([v], 1, 4, sys.executable, cache)
+                failed = run_variants.build([v], 1, mp, sys.executable, cache)
             cache.finish()
             with open(v.log, 'rb') as f:
                 log = f.read().decode('mbcs', 'replace')
@@ -365,6 +410,125 @@ class UncacheableTest(CacheTestBase):
         self.assertEqual(len(self.entries()), 2)
 
 
+class StaleInputTest(CacheTestBase):
+    """Inputs rewritten in place with their old mtime kept (a backup restored with Copy-Item,
+    robocopy or cp -p): only their change time shows it."""
+
+    def compile_one(self, cache, source='src\\a.cpp'):
+        """Compiles source in the checkout (the caller's cwd) the way run_compile does; returns
+        the Compiled record publishing needs."""
+        obj = os.path.join('build', 'api', os.path.basename(source)[:-4] + '.obj')
+        os.makedirs(os.path.dirname(obj), exist_ok=True)
+        command = [sys.executable, os.path.join(self.root, 'fake_cl.py'), '/Iinc',
+                   '/I' + os.path.join(self.kenshilib, 'Include'), '/showIncludes', '/c', source, '/Fo' + obj]
+        key = cache.key(command, source)
+        start = time.time()
+        p = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        output, includes = run_variants.split_notes(p.stdout)
+        captured, reason = cache.capture(key, start, includes)
+        return objcache.Compiled(key, start, p.returncode, obj, run_variants.file_sha256(obj), output,
+                                 includes, captured, reason)
+
+    def test_an_include_restored_during_the_compile_is_never_published(self):
+        write(os.path.join(self.root, 'src', 'a.h'), '// a EDITED\n')
+        age(self.root)
+        first = self.build(FAKE_CL_MODE='revert')  # a.cpp compiled from the edit, a.h put back
+        self.assertTrue(first.note('src\\a.cpp').startswith('uncacheable: '), first.note('src\\a.cpp'))
+        self.assertIn('a.h changed during the compile', first.note('src\\a.cpp'))
+        age(self.root)  # a while later
+        warm = self.build()
+        self.assertEqual(warm.how()['src\\a.cpp'], 'compiled')
+        restored = self.build().how()['src\\a.cpp']
+        kept = self.obj('a.obj')
+        self.assertEqual(restored, 'restored')
+        self.build(BUILD_CACHE='off')
+        self.assertEqual(self.obj('a.obj'), kept)
+        self.assertNotIn(b'EDITED', kept)
+
+    def test_an_include_restored_after_the_compile_is_never_published(self):
+        os.chdir(self.root)
+        try:
+            cache = objcache.ObjectCache.from_env(self.root)
+            c = self.compile_one(cache)
+            self.assertIsNone(c.reason)
+            path = os.path.join(self.root, 'src', 'a.h')
+            st = os.stat(path)
+            write(path, '// b\n')  # the same size, and the mtime put back
+            os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns))
+            (state, detail), = cache.publish_all([c])
+            self.assertEqual(state, 'uncacheable')
+            self.assertIn('a.h changed after the compile', detail)
+            self.assertEqual(self.entries(), [])
+            age(self.root)
+            (state, _), = cache.publish_all([self.compile_one(cache)])  # the control: quiet, published
+            self.assertEqual(state, 'published')
+        finally:
+            os.chdir(self.cwd)
+
+    def test_a_restored_input_changed_during_the_build_refuses_the_link(self):
+        self.build()
+        self.edit('src/c.cpp', '// misses\n')
+        write(os.path.join(self.tmp, 'timings', 'compile.json'), json.dumps(
+            {'version': 1, 'seconds': {'src\\a.cpp': 9.0, 'src\\c.cpp': 5.0, 'src\\b.cpp': 1.0}}))
+        run = self.build(mp=1, FAKE_CL_MODE='poke')  # a.cpp restored, then c.cpp's compile rewrites a.h
+        self.assertTrue(run.failed)
+        self.assertIn('the object cache refused the link, 1 restored object(s) whose inputs changed '
+                      'during the build:', run.log)
+        self.assertIn('src\\a.cpp: ', run.log)
+        self.assertIn('a.h changed after its object was restored', run.log)
+        self.assertEqual(run.objects, [])
+
+    def test_write_replaces_a_stale_entry(self):
+        self.build()
+        key = [e['key'] for e in self.build().objects if e['src'] == 'src\\a.cpp'][0]
+        folder = os.path.join(self.cache_dir, 'objects', key[:2], key)
+        stale = b'a stale object that still matches its meta.json'
+        with open(os.path.join(folder, 'meta.json'), 'rb') as f:
+            meta = json.loads(f.read().decode('ascii'))
+        meta['blobs']['obj'] = {'sha256': objstore.digest(stale), 'size': len(stale)}
+        write(os.path.join(folder, 'obj'), stale.decode())
+        write(os.path.join(folder, 'meta.json'), json.dumps(meta))
+        self.assertEqual(self.build().how()['src\\a.cpp'], 'restored')
+        self.assertEqual(self.obj('a.obj'), stale)  # self-consistent, so nothing but write repairs it
+        run = self.build(BUILD_CACHE='write')
+        self.assertEqual(run.note('src\\a.cpp'), 'published')
+        self.assertEqual(self.build().line, self.line(3, 0, 0, 0))
+        good = self.obj('a.obj')
+        self.build(BUILD_CACHE='off')
+        self.assertEqual(good, self.obj('a.obj'))
+        with open(os.path.join(self.cache_dir, 'bad', [n for n in os.listdir(os.path.join(self.cache_dir, 'bad'))
+                                                       if n.startswith(key) and n.endswith('.why.txt')][0])) as f:
+            self.assertIn('BUILD_CACHE=write', f.read())
+
+    def test_the_compiler_folder_and_include_folders_are_in_the_key(self):
+        cc = os.path.join(self.tmp, 'cc')
+        for name in ('cl.exe', 'c1xx.dll', 'cl.exe.config', os.path.join('1033', 'clui.dll'), 'notes.txt'):
+            write(os.path.join(cc, name), name)
+        os.chdir(self.root)
+        try:
+            def key(*tokens):
+                cache = objcache.ObjectCache.from_env(os.getcwd())
+                return cache.key([os.path.join(cc, 'cl.exe')] + list(tokens) + ['/c', 'src\\a.cpp'], 'src\\a.cpp').M
+            first = key('/Iinc')
+            write(os.path.join(cc, 'notes.txt'), 'other')
+            self.assertEqual(key('/Iinc'), first)
+            for name in (os.path.join('1033', 'clui.dll'), 'cl.exe.config', 'c1xx.dll'):
+                write(os.path.join(cc, name), 'changed')
+                changed = key('/Iinc')
+                self.assertNotEqual(changed, first, name)
+                first = changed
+            near = key('/I..\\shared')
+        finally:
+            os.chdir(self.cwd)
+        deep = self.checkout(os.path.join('deep', 'two'))
+        os.chdir(deep)
+        try:
+            self.assertNotEqual(key('/I..\\shared'), near)  # the same token, another folder
+            self.assertEqual(key('/Iinc'), first)            # inside the checkout: shared
+        finally:
+            os.chdir(self.cwd)
+
+
 class ModeTest(CacheTestBase):
 
     def test_write_compiles_and_publishes_off_does_neither(self):
@@ -376,7 +540,10 @@ class ModeTest(CacheTestBase):
         self.assertEqual(run.line, self.line(0, 3, 0, 0, 'BUILD_CACHE=write'))
         self.assertEqual(len(self.entries()), 3)
         run = self.build(BUILD_CACHE='write')
-        self.assertEqual([e['cache'] for e in run.objects], ['exists'] * 3)
+        self.assertEqual([e['cache'] for e in run.objects], ['published'] * 3)  # each entry replaced
+        self.assertEqual(len(self.entries()), 3)
+        why = [n for n in os.listdir(os.path.join(self.cache_dir, 'bad')) if n.endswith('.why.txt')]
+        self.assertEqual(len(why), 3)
         self.assertEqual(self.build(BUILD_CACHE='off').line, self.line(0, 3, 0, 0, 'BUILD_CACHE=off'))
         self.assertEqual(self.build().line, self.line(3, 0, 0, 0))
 
@@ -507,6 +674,25 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(self.store.evict(1)[0], 1)
         self.assertFalse(os.path.exists(self.store.entry_dir(R)))
         self.assertFalse(os.path.exists(self.store.candidate_path(M, R)))
+
+    def test_a_full_walk_runs_hourly_or_when_the_estimate_is_over_the_cap(self):
+        for i in range(4):
+            self.publish(i, 10000)
+        self.assertTrue(self.store.walk_due(10 ** 12))  # never walked
+        removed, before, after = self.store.evict(10 ** 12)
+        self.assertEqual((removed, before), (0, after))
+        self.assertFalse(self.store.walk_due(10 ** 12))  # walked just now, far under the cap
+        self.publish(4, 10000)
+        self.assertTrue(self.store.walk_due(before))      # five entries at the last average > four's bytes
+        self.assertFalse(self.store.walk_due(before * 2))
+        path = self.store.path(objstore.USAGE)
+        with open(path, 'rb') as f:
+            usage = json.loads(f.read().decode('ascii'))
+        usage['walked'] -= objstore.WALK_EVERY
+        write(path, json.dumps(usage))
+        self.assertTrue(self.store.walk_due(10 ** 12))  # an hour since the last walk
+        write(path, '{broken')
+        self.assertTrue(self.store.walk_due(10 ** 12))
 
     def test_load_checks_every_blob_and_the_output(self):
         M, (R, state) = self.publish(3)
