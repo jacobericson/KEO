@@ -1,7 +1,8 @@
 """Compile and run every host unit-test suite as concurrent processes
 (Python 3, stdlib only), modelled on tools\\build\\run_variants.py. Each
 process it starts holds one host-wide cpu token from tools\\build\\slots.py
-(KEO_SLOTS=off turns the pools off).
+(KEO_SLOTS=off turns the pools off); started under a token itself
+(KEO_CPU_HELD=1), it runs one job at a time.
 
 Called by build_tests.bat after it has set up the VS 2010 x64 environment.
 Suites are data, not code: tools\\tests\\suites.txt lists one per line as
@@ -248,7 +249,7 @@ def do_compile(job):
     command, note = test_command('TEST_SUITES_NOOP_CL', job.cmd)
     with slots.cpu_token('suite compile %s' % job.source):
         proc = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                              stdin=subprocess.DEVNULL, env=slots.child_env())
+                              stdin=subprocess.DEVNULL, env=slots.child_env(leaf=True))
     job.output = note + proc.stdout
     if proc.returncode != 0:
         return proc.returncode
@@ -277,7 +278,7 @@ def do_link(job):
         remove_if_present(suite.exe)
         with slots.cpu_token('suite link %s' % suite.name):
             rc = subprocess.call(command, stdout=log, stderr=subprocess.STDOUT,
-                                 stdin=subprocess.DEVNULL, env=slots.child_env())
+                                 stdin=subprocess.DEVNULL, env=slots.child_env(leaf=True))
         if rc != 0:
             return rc
         problem = stale_output(suite.exe, job.start, 'executable')
@@ -294,7 +295,7 @@ def do_run(job):
         log.flush()
         with slots.cpu_token('suite run %s' % suite.name):
             return subprocess.call([suite.exe], stdout=log, stderr=subprocess.STDOUT,
-                                   stdin=subprocess.DEVNULL, env=slots.child_env())
+                                   stdin=subprocess.DEVNULL, env=slots.child_env(leaf=True))
 
 
 def note_failure(job, message):
@@ -413,8 +414,15 @@ def main():
     else:
         jobs = os.cpu_count() or 1
     jobs = min(jobs, len(compiles))
+    # Launched under someone else's cpu token, no child here takes a token of
+    # its own, so only one may run at a time.
+    under_token = slots.cpu_held() and jobs > 1
+    if under_token:
+        jobs = 1
 
     print('Running %d suite(s), %d at a time; per-suite logs: build\\tests\\<name>.log' % (len(suites), jobs))
+    if under_token:
+        print('run_suites.py: running under a cpu token (KEO_CPU_HELD=1), one job at a time')
     sys.stdout.flush()
 
     results = queue.Queue()
