@@ -82,7 +82,7 @@ static bool HasName(const TestRow* rows, int n, const char* name)
 	return false;
 }
 
-// The 22 inputs, each with its field and the config global it is read from; a
+// The 23 inputs, each with its field and the config global it is read from; a
 // NULL global is a key a PROD build does not carry, or an int key
 // CheckInputMapping flips on its own.
 struct InputField
@@ -121,6 +121,7 @@ static const InputField kFields[] =
 	{ "playerHierarchical",  &HookWantInputs::playerHierarchical,  NULL },
 	{ "clusterCrossCost",    &HookWantInputs::clusterCrossCost,    NULL },
 	{ "planner", &HookWantInputs::planner, NULL },
+	{ "gatherPace",          &HookWantInputs::gatherPace,          &movement::g_movementCfg.formationGatherPaceEnabled },
 };
 static const int kFieldCount = (int)(sizeof(kFields) / sizeof(kFields[0]));
 
@@ -297,6 +298,7 @@ static const Flip kFlips[] =
 	    "graphHeuristicClusterCentre", "graphHeuristicCoarseSeed" } },
 	{ "clusterCrossCost", { "clusterCrossCost" }, { NULL } },
 	{ "plannerMode", { "planner" }, { "graphInstanceConnect", "getZoneEdge", "setDestinationVec3" } },
+	{ "gatherPace", { "gatherPace" }, { "getSpeed" } },
 };
 
 static void CheckWantTruthTable()
@@ -434,14 +436,14 @@ int main()
 {
 	CheckInstallAdmit();
 #if ZONEHAND_STEP >= 3
+	CheckVariant(kDevRows, kDevCount, "dev", 72, 57, 56, 25, 32, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 68, 53, 51, 25, 28, ProdDefaults());
+#elif ZONEHAND_STEP == 2
 	CheckVariant(kDevRows, kDevCount, "dev", 71, 56, 55, 25, 31, DevDefaults());
 	CheckVariant(kProdRows, kProdCount, "prod", 67, 52, 50, 25, 27, ProdDefaults());
-#elif ZONEHAND_STEP == 2
-	CheckVariant(kDevRows, kDevCount, "dev", 70, 55, 54, 25, 30, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 66, 51, 49, 25, 26, ProdDefaults());
 #else
-	CheckVariant(kDevRows, kDevCount, "dev", 67, 52, 51, 25, 27, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 63, 48, 46, 25, 23, ProdDefaults());
+	CheckVariant(kDevRows, kDevCount, "dev", 68, 53, 52, 25, 28, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 64, 49, 47, 25, 24, ProdDefaults());
 #endif
 	CheckDevMinusProd();
 	CheckWantTruthTable();

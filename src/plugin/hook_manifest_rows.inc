@@ -77,6 +77,12 @@
 	HOOK_ROW(HOOK_ACTIVEPLATOON_CALC_POS, "calculateCurrentPos", RVA_ACTIVEPLATOON_CALC_POS, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_CORPSE_PIN, HOOK_CAP_NONE,
 	         0x48,0x89,0x5C,0x24,0x20,0x56,0x48,0x83,0xEC,0x40,0x83,0x79,0x58,0x00,0x48,0x8B)
 
+	// SpeedGroup::getSpeed (src/movement/formation_pace.cpp), post-call: `mov [rsp+10h],rdx; push rbx;
+	// push rbp; push r13; sub rsp,60h`, thirteen whole bytes, then a RIP-relative load. Wanted while
+	// formationGatherPace is on. diagnostic = true: a mismatch refuses the gather pacing alone, and the
+	// gather walks at the group's own pace as it did before.
+	HOOK_ROW(HOOK_SPEED_GROUP_GET_SPEED, "getSpeed", RVA_SPEED_GROUP_GET_SPEED, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_GATHER_PACE, HOOK_CAP_NONE,
+	         0x48,0x89,0x54,0x24,0x10,0x53,0x55,0x41,0x55,0x48,0x83,0xEC,0x60,0x48,0x8B,0x05)
 #if ZONEHAND_STEP >= 2
 	// ZoneManager::activateZoneMap (src/zone/handoff/zone_lifecycle_hooks.cpp): seven
 	// register pushes then `sub rsp,0A0h`, so the five bytes a detour takes

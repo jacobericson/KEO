@@ -36,6 +36,7 @@
 #include "pathfind/gate_pass.h"
 #include "bench/bench_runner.h"
 #include "fixes/world/corpse_pin.h"
+#include "movement/formation_pace.h"
 #include "planner/coarse_graph_base.h"
 #if ZONEHAND_STEP >= 2
 #include "fixes/world/nest_validation.h"
@@ -631,6 +632,7 @@ static void (*const kInstallSteps[])(int*, int*) =
 	InstallZonePauseGuard,
 	InstallZoneLifecycleHooks,
 	InstallCorpsePin,
+	InstallFormationPace,
 #if ZONEHAND_STEP >= 2
 	InstallNestValidationGuard,
 #endif

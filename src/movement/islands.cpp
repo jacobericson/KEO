@@ -15,6 +15,7 @@
 #include "movement/islands_internal.h"
 #include "movement/island_overlay_internal.h"
 #include "movement/formation.h"      // FormationCohesionSample (coh= on the diag line)
+#include "movement/formation_pace.h"
 #include "pathfind/pathfinding.h"    // PlayerFarArrivals (farArrive= on the diag line)
 #include "movement/island_span_policy.h"
 #include "movement/island_edge_legs.h"
@@ -364,6 +365,7 @@ void IslandTick(void* zoneMgr, double now)
 			   << "/m" << cohLive
 			   << "/max" << cohWorst
 			   << "/in" << cohWorstId;
+			FormationPaceAppendDiag(ss);
 		}
 		else
 		{

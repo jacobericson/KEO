@@ -30,6 +30,7 @@ bool HookWantEval(HookWant want, const HookWantInputs& in)
 	case HOOK_WANT_FIND_PATH_FULL:    return in.pathfindDiag || in.playerHierarchical;
 	case HOOK_WANT_CLUSTER_CROSS_COST: return in.clusterCrossCost || in.planner;
 	case HOOK_WANT_PLANNER:            return in.planner;
+	case HOOK_WANT_GATHER_PACE:       return in.gatherPace;
 	case HOOK_WANT_UNCOUNTED:         return false;
 	}
 	return false;
@@ -65,6 +66,7 @@ HookWantInputs HookWantInputsFromConfig()
 	in.playerHierarchical  = pathfind::g_pathfindCfg.playerHierarchicalMode != AHIER_OFF;
 	in.clusterCrossCost    = fixes::g_fixesCfg.clusterCrossCostOn != 0;
 	in.planner = planner::g_plannerCfg.mode != planner::PLANNER_OFF;
+	in.gatherPace = movement::g_movementCfg.formationGatherPaceEnabled;
 	return in;
 }
 

@@ -39,6 +39,7 @@ enum HookWant
 	HOOK_WANT_FIND_PATH_FULL,     // pathfindDiag or playerHierarchical != off
 	HOOK_WANT_CLUSTER_CROSS_COST, // clusterCrossCost or plannerMode != off
 	HOOK_WANT_PLANNER,            // plannerMode != off
+	HOOK_WANT_GATHER_PACE,        // formationGatherPace
 	HOOK_WANT_UNCOUNTED
 };
 
@@ -70,6 +71,7 @@ struct HookWantInputs
 	bool playerHierarchical;  // playerHierarchical != off
 	bool clusterCrossCost;
 	bool planner;  // plannerMode != off
+	bool gatherPace;          // formationGatherPace
 };
 
 bool HookWantEval(HookWant want, const HookWantInputs& in);

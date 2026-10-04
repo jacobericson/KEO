@@ -10,6 +10,7 @@
 #include "planner/plan_store.h"
 #include "planner/planner_merge.h"
 #include "movement/formation_follow.h"
+#include "movement/formation_pace.h"
 #include "zone/zone_pause.h"
 
 FormationGroup formationGroups[MAX_FORMATION_GROUPS];
@@ -61,6 +62,7 @@ void ClearFormationGroups()
 		formationGroups[i].lastReissueTime = 0.0;
 	}
 	FormationFollowOnClear();
+	FormationPaceClear();
 }
 
 // A run-together order the route planner merged gathers at its gather point, and a member the merge
@@ -178,6 +180,7 @@ void CreateFormationGroup(const float* dest, uintptr_t* chars, int charCount)
 	grp.active = true;
 	grp.gathered = false;
 	grp.lastReissueTime = 0.0;
+	FormationPaceResetGroup(slot);
 	{
 		float gatherRadius = FormationGatherRadius(charCount);
 		grp.gatherRadiusSq = gatherRadius * gatherRadius;
@@ -430,6 +433,7 @@ bool PollFormationGather(FormationGroup& grp, PollFormationGroupCtx& c)
 		for (int m = 0; m < grp.count; ++m)
 		{
 			FormationMember& mem = grp.members[m];
+			FormationPaceForget(c.g, m);   // noted again below only for a member the gather paces
 			if (!mem.character) continue;
 
 			// Validate alive
@@ -473,7 +477,9 @@ bool PollFormationGather(FormationGroup& grp, PollFormationGroupCtx& c)
 			// Check proximity to gather point
 			float dx = GetCharPosX(mem.character) - grp.startX;
 			float dz = GetCharPosZ(mem.character) - grp.startZ;
-			if (dx * dx + dz * dz > grp.gatherRadiusSq)
+			float distSq = dx * dx + dz * dz;
+			FormationPaceNote(c.g, m, distSq, grp.gatherRadiusSq, c.now);
+			if (distSq > grp.gatherRadiusSq)
 				allNear = false;
 		}
 
@@ -519,11 +525,16 @@ bool PollFormationGather(FormationGroup& grp, PollFormationGroupCtx& c)
 
 			{
 				std::ostringstream ss;
-				ss << "Formation gathered: " << departed << " departing"
-				   << (gatherTimeout ? " (timeout)" : "");
+				ss << "Formation gathered: " << departed << " departing";
+				FormationPaceAppendGathered(c.g, grp, ss);
+				ss << (gatherTimeout ? " (timeout)" : "");
 				LogMsg(ss.str());
 			}
 		}
+		// A group still gathering stages its members' factors; one that completed this poll stages
+		// none, so its travel is never paced.
+		if (!grp.gathered)
+			FormationPaceStageGroup(c.g, grp);
 		return true;  // end this poll even if the group just gathered
 	}
 	return false;
@@ -695,7 +706,9 @@ void PollFormationGroups()
 	if (!scStuff || scCount == 0 || scCount > 200)
 		return;
 
+	FormationPaceFrameBegin();
 	for (int g = 0; g < MAX_FORMATION_GROUPS; ++g)
 		PollFormationGroup(g, now, scCount, scStuff);
 	FormationFollowPoll(now, scCount, scStuff);
+	FormationPaceFramePublish();
 }

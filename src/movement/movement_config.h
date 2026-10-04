@@ -93,6 +93,10 @@ struct MovementConfig
 	// formationFollow: off or probe (FollowMode); read by the session build alone. probe gives a
 	// run-together group's members near the leader the engine's own Follow order and logs Follow:.
 	int cfg_formationFollow;
+
+	// formationGatherPace: while a run-together group gathers, the members nearer the gather point
+	// walk slower (no slower than half speed) so the group arrives together. On by default.
+	bool formationGatherPaceEnabled;
 };
 
 extern MovementConfig g_movementCfg;
