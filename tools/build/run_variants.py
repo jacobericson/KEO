@@ -83,6 +83,7 @@ MANIFEST = 'objects.json'
 TIMINGS = 'compile.json'
 TAIL_LINES = 40
 WARNING_RE = re.compile(r'\bwarning [A-Z]+\d+', re.IGNORECASE)
+ERROR_RE = re.compile(r'\berror\b', re.IGNORECASE)
 NOTE = b'Note: including file:'
 TAMPER = b'TEST_OBJ_TAMPER!'
 
@@ -412,9 +413,16 @@ def finish_variant(v, done):
         with open(v.log, 'ab') as log:
             for i in range(len(v.sources)):
                 log.write(v.results[i][1])
-        failed = [v.sources[i] for i in range(len(v.sources)) if v.results[i][0] != 0]
+        failed = [i for i in range(len(v.sources)) if v.results[i][0] != 0]
         if failed:
-            append_log(v.log, '\n%s COMPILE FAILED (%d source(s): %s)' % (v.label, len(failed), ' '.join(failed)))
+            # The console shows only the log's tail, so each failed source's first error is
+            # repeated here (never a warning line, which would be counted twice).
+            lines = ['', '%s COMPILE FAILED (%d source(s)):' % (v.label, len(failed))]
+            for i in failed:
+                text = v.results[i][1].decode('mbcs', 'replace').splitlines()
+                first = [l.strip() for l in text if ERROR_RE.search(l) and not WARNING_RE.search(l)]
+                lines.append('  %s: %s' % (v.sources[i], first[0] if first else 'exit %s, see above' % v.results[i][0]))
+            append_log(v.log, '\n'.join(lines))
             return
         problems = check_objects_fresh(v.objdir, v.sources, v.compile_start)
         if problems:
