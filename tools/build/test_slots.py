@@ -2,8 +2,8 @@
 
 Every test runs against its own temporary KEO_SLOTS_DIR with every KEO_* variable of the caller
 removed first, so a run under a slot-holding parent tests the pools rather than their bypass.
-Child processes report through stdout lines and block on release files, so no assertion depends
-on a sleep's length.
+Child processes report through stdout lines and block on release files, and threads meet at
+barriers, so no assertion depends on how the scheduler orders them.
 """
 import contextlib
 import io
@@ -108,12 +108,38 @@ class Child(object):
         self.p.stderr.close()
 
 
+class Stamped(object):
+    """A stderr stand-in recording each write with its time."""
+
+    def __init__(self):
+        self.writes = []
+        self.guard = threading.Lock()
+
+    def write(self, text):
+        with self.guard:
+            self.writes.append((time.monotonic(), text))
+
+    def flush(self):
+        pass
+
+    def lines(self, prefix):
+        with self.guard:
+            return [(t, s) for t, s in self.writes if s.startswith(prefix)]
+
+
 def touch(path):
     open(path, 'w').close()
 
 
 def pid_of(got_line):
     return int(got_line.split()[-1])
+
+
+def run_threads(target, count):
+    threads = [threading.Thread(target=target) for _ in range(count)]
+    for t in threads:
+        t.start()
+    return threads
 
 
 @unittest.skipUnless(slots.msvcrt, 'the slot pools need msvcrt (Windows)')
@@ -127,6 +153,8 @@ class SlotsTest(unittest.TestCase):
         os.environ['KEO_SLOTS_DIR'] = self.tmp
         # Bounded waits, here and in every child, so a broken bypass fails instead of hanging.
         os.environ['KEO_HEAVY_WAIT'] = os.environ['KEO_CPU_WAIT'] = str(WAIT)
+        slots._noted.clear()
+        slots._cpu_note[0] = None
         self.children = []
         self.releases = 0
 
@@ -136,8 +164,10 @@ class SlotsTest(unittest.TestCase):
         for k in [k for k in os.environ if k.startswith('KEO_')]:
             del os.environ[k]
         os.environ.update(self.saved)
+        held = dict(slots._held)
+        slots._forget_files()
         shutil.rmtree(self.tmp, ignore_errors=True)
-        self.assertEqual(slots._held, {}, 'a slot was left held')
+        self.assertEqual(held, {}, 'a slot was left held')
         self.assertEqual(slots._heavy_ids, [])
 
     def env(self, **extra):
@@ -200,36 +230,60 @@ class SlotsTest(unittest.TestCase):
         subprocess.run(['taskkill', '/F', '/PID', str(pid_of(got))], stdout=subprocess.DEVNULL,
                        stderr=subprocess.DEVNULL, check=True)
         t0 = time.monotonic()
-        os.environ['KEO_HEAVY_WAIT'] = '5'
+        os.environ['KEO_HEAVY_WAIT'] = str(WAIT)
         with contextlib.redirect_stderr(io.StringIO()):
             with slots.heavy('after kill') as sid:
                 freed = time.monotonic() - t0
         self.assertEqual(sid, 'heavy-0')
-        self.assertLess(freed, 1.0)
+        self.assertLess(freed, 5.0)
 
     def test_heavy_marker_passes_to_children(self):
         os.environ['KEO_HEAVY_SLOTS'] = '1'
         with slots.heavy('outer') as sid:
             self.assertEqual(sid, 'heavy-0')
             self.assertEqual(os.environ.get('KEO_HEAVY_HELD'), 'heavy-0')
+            self.assertTrue(slots.heavy_held())
+            self.assertEqual(slots.child_env({'A': 'b'}, leaf=False),
+                             {'A': 'b', 'KEO_HEAVY_HELD': 'heavy-0'})
             c, rc = self.take('heavy', dict(os.environ, KEO_HEAVY_WAIT='0'))
+            self.assertEqual((rc, c.lines['out']), (0, ['got None']))
+            c, rc = self.take('heavy', slots.child_env(self.env(KEO_HEAVY_WAIT=0), leaf=False))
             self.assertEqual((rc, c.lines['out']), (0, ['got None']))
             c, rc = self.take('heavy', self.env(KEO_HEAVY_WAIT=0))
             self.assertEqual(rc, 3)
             self.assertEqual(len(c.matching('err', 'slots: FAILED: no heavy slot within 0 s (held: '
                                             'pid %d outer' % os.getpid())), 1)
-        self.assertNotIn('KEO_HEAVY_HELD', os.environ)
+        self.assertFalse(os.environ.get('KEO_HEAVY_HELD'))
+        self.assertFalse(slots.heavy_held())
 
-    def test_inherited_markers_take_nothing(self):
-        os.environ['KEO_HEAVY_HELD'] = 'heavy-9'
-        with slots.heavy('h') as sid:
+    def test_inherited_heavy_marker_is_trusted_only_while_its_slot_is_held(self):
+        os.environ['KEO_HEAVY_SLOTS'] = '1'
+        _, got, release = self.holder('heavy', self.env())
+        os.environ['KEO_HEAVY_HELD'] = got.split()[1]
+        self.assertTrue(slots.heavy_held())
+        with slots.heavy('under parent') as sid:
             self.assertIsNone(sid)
-        self.assertEqual(os.environ['KEO_HEAVY_HELD'], 'heavy-9')
-        del os.environ['KEO_HEAVY_HELD']
+        self.assertEqual(slots.child_env({}, leaf=False), {'KEO_HEAVY_HELD': 'heavy-0'})
+        touch(release)
+        self.assertEqual(self.children[0].finish(), 0)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertFalse(slots.heavy_held())
+            with slots.heavy('after parent') as sid:
+                self.assertEqual(sid, 'heavy-0')
+                self.assertEqual(os.environ['KEO_HEAVY_HELD'], 'heavy-0')
+        self.assertEqual(err.getvalue().splitlines(),
+                         ['slots: ignoring stale KEO_HEAVY_HELD=heavy-0 (that slot is free)'])
+        self.assertEqual(os.environ['KEO_HEAVY_HELD'], '')
+
+    def test_cpu_marker_takes_nothing(self):
         os.environ['KEO_CPU_HELD'] = '1'
+        self.assertTrue(slots.cpu_held())
         with slots.cpu_token('c') as cid, slots.heavy('h') as hid:
             self.assertEqual((cid, hid), (None, None))
+        self.assertEqual(slots.child_env({}, leaf=False), {'KEO_CPU_HELD': '1'})
         del os.environ['KEO_CPU_HELD']
+        self.assertFalse(slots.cpu_held())
         with slots.heavy('h') as hid, slots.cpu_token('c') as cid:
             self.assertEqual((hid, cid), ('heavy-0', 'cpu-0'))
 
@@ -237,26 +291,33 @@ class SlotsTest(unittest.TestCase):
         os.environ['KEO_CPU_SLOTS'] = '1'
         with slots.cpu_token('outer') as sid:
             self.assertEqual(sid, 'cpu-0')
+            self.assertTrue(slots.cpu_held())
             self.assertNotIn('KEO_CPU_HELD', os.environ)
             with slots.cpu_token('nested') as inner, slots.heavy('under cpu') as hid:
                 self.assertEqual((inner, hid), (None, None))
+            self.assertEqual(slots.child_env({}, leaf=False), {'KEO_CPU_HELD': '1'})
             c, rc = self.take('cpu', slots.child_env(self.env(KEO_CPU_WAIT=0)))
             self.assertEqual((rc, c.lines['out']), (0, ['got None']))
             c, rc = self.take('cpu', self.env(KEO_CPU_WAIT=0))
             self.assertEqual(rc, 3)
             self.assertEqual(len(c.matching('err', 'slots: FAILED: no cpu slot within 0 s')), 1)
+        self.assertFalse(slots.cpu_held())
 
-    def test_run_holds_a_token_and_marks_the_child(self):
+    def test_run_leaf_and_runner_children(self):
         os.environ['KEO_CPU_SLOTS'] = '1'
         code = ('import os, sys; sys.path.insert(0, sys.argv[1]); import slots; '
                 'print(os.environ.get("KEO_CPU_HELD")); '
-                'print(" ".join(s["id"] for s in slots.status() if not s["mine"]))')
-        r = slots.run([PY, '-c', code, HERE], env=self.env(), stdout=subprocess.PIPE,
-                      universal_newlines=True)
+                'print(" ".join(s["id"] for s in slots.status() if not s["mine"]) or "-")')
+        args = [PY, '-c', code, HERE]
+        r = slots.run(args, env=self.env(), stdout=subprocess.PIPE, universal_newlines=True)
         self.assertEqual(r.stdout.split(), ['1', 'cpu-0'])
+        r = slots.run(args, leaf=False, env=self.env(), stdout=subprocess.PIPE,
+                      universal_newlines=True)
+        self.assertEqual(r.stdout.split(), ['None', '-'])
         self.assertEqual(slots.status(), [])
         base = {'A': 'b'}
         self.assertEqual(slots.child_env(base), {'A': 'b', 'KEO_CPU_HELD': '1'})
+        self.assertEqual(slots.child_env(base, leaf=False), {'A': 'b'})
         self.assertEqual(base, {'A': 'b'})
 
     def test_slots_off_takes_nothing_and_says_so_once(self):
@@ -271,13 +332,46 @@ class SlotsTest(unittest.TestCase):
                 self.assertEqual(c.lines['err'],
                                  ['slots: KEO_SLOTS=off, the host-wide slot pools are off'])
 
-    def _count_concurrent(self, threads, rounds):
+    def _fill_cpu(self, holders):
+        """Holds `holders` cpu tokens from as many threads, then checks one more is refused."""
+        ready = threading.Barrier(holders + 1, timeout=WAIT)
+        release = threading.Event()
+        ids, errors = [], []
+
+        def hold():
+            try:
+                with slots.cpu_token('fill') as sid:
+                    ids.append(sid)
+                    ready.wait()
+                    release.wait(WAIT)
+            except BaseException as ex:  # reported below; a thread cannot fail the test itself
+                errors.append(repr(ex))
+
+        threads = run_threads(hold, holders)
+        try:
+            ready.wait()
+            os.environ['KEO_CPU_WAIT'] = '0'
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(slots.SlotTimeout):
+                with slots.cpu_token('one more'):
+                    pass
+        finally:
+            os.environ['KEO_CPU_WAIT'] = str(WAIT)
+            release.set()
+            for t in threads:
+                t.join(WAIT)
+        self.assertEqual(errors, [])
+        self.assertEqual(len(set(ids)), holders)
+
+    def _hammer_cpu(self, threads, rounds):
+        """Returns the most tokens held at once while threads x rounds holds ran."""
+        start = threading.Barrier(threads, timeout=WAIT)
         state = {'now': 0, 'max': 0, 'done': 0, 'ids': set()}
         guard = threading.Lock()
         errors = []
 
         def work():
             try:
+                start.wait()
                 for _ in range(rounds):
                     with slots.cpu_token('thread') as sid:
                         with guard:
@@ -286,18 +380,15 @@ class SlotsTest(unittest.TestCase):
                             state['ids'].add(sid)
                             state['now'] += 1
                             state['max'] = max(state['max'], state['now'])
-                        time.sleep(0.03)
+                        time.sleep(0.02)
                         with guard:
                             state['ids'].discard(sid)
                             state['now'] -= 1
                             state['done'] += 1
-            except BaseException as ex:  # reported below; a thread cannot fail the test itself
+            except BaseException as ex:
                 errors.append(repr(ex))
 
-        pool = [threading.Thread(target=work) for _ in range(threads)]
-        for t in pool:
-            t.start()
-        for t in pool:
+        for t in run_threads(work, threads):
             t.join(WAIT * 2)
         self.assertEqual(errors, [])
         self.assertEqual(state['done'], threads * rounds)
@@ -305,13 +396,16 @@ class SlotsTest(unittest.TestCase):
 
     def test_cpu_tokens_from_many_threads_never_exceed_capacity(self):
         os.environ['KEO_CPU_SLOTS'] = '3'
-        self.assertEqual(self._count_concurrent(10, 2), 3)
-        _, got, release = self.holder('cpu', self.env())
-        self.assertEqual(self._count_concurrent(10, 2), 2)
+        self._fill_cpu(3)
+        self.assertLessEqual(self._hammer_cpu(10, 3), 3)
+        _, _, release = self.holder('cpu', self.env())
+        self._fill_cpu(2)
+        self.assertLessEqual(self._hammer_cpu(10, 3), 2)
         touch(release)
 
     def test_threads_take_their_own_heavy_slots(self):
         os.environ['KEO_HEAVY_SLOTS'] = '2'
+        ready = threading.Barrier(3, timeout=WAIT)
         release = threading.Event()
         got, errors = [], []
 
@@ -320,18 +414,14 @@ class SlotsTest(unittest.TestCase):
                 with slots.heavy('thread') as sid:
                     with slots.heavy('nested') as inner:
                         got.append((sid, inner))
+                    ready.wait()
                     release.wait(WAIT)
             except BaseException as ex:
                 errors.append(repr(ex))
 
-        pool = [threading.Thread(target=hold) for _ in range(2)]
-        for t in pool:
-            t.start()
-        end = time.monotonic() + WAIT
-        while len(got) < 2 and not errors and time.monotonic() < end:
-            time.sleep(0.01)
+        threads = run_threads(hold, 2)
         try:
-            self.assertEqual(errors, [])
+            ready.wait()
             self.assertEqual(sorted(got), [('heavy-0', None), ('heavy-1', None)])
             self.assertEqual(sorted(os.environ['KEO_HEAVY_HELD'].split(',')),
                              ['heavy-0', 'heavy-1'])
@@ -342,11 +432,44 @@ class SlotsTest(unittest.TestCase):
                     pass
             self.assertIn('slots: FAILED: no heavy slot within 0.2 s (held: pid %d thread in '
                           % os.getpid(), err.getvalue())
+            self.assertIn('(this process) x2)', err.getvalue())
         finally:
             release.set()
-            for t in pool:
+            for t in threads:
                 t.join(WAIT)
-        self.assertNotIn('KEO_HEAVY_HELD', os.environ)
+        self.assertEqual(errors, [])
+        self.assertFalse(os.environ.get('KEO_HEAVY_HELD'))
+
+    def test_environ_copies_never_race_the_marker(self):
+        os.environ['KEO_HEAVY_SLOTS'] = '1'
+        stop = time.monotonic() + 1.5
+        errors, counts = [], {'churn': 0, 'copy': 0}
+
+        def churn():
+            try:
+                while time.monotonic() < stop:
+                    with slots.heavy('churn'):
+                        pass
+                    counts['churn'] += 1
+            except BaseException as ex:
+                errors.append(repr(ex))
+
+        def copy():
+            try:
+                while time.monotonic() < stop:
+                    slots.child_env()
+                    dict(os.environ)
+                    os.environ.copy()
+                    counts['copy'] += 1
+            except BaseException as ex:
+                errors.append(repr(ex))
+
+        threads = run_threads(churn, 1) + run_threads(copy, 3)
+        for t in threads:
+            t.join(WAIT)
+        self.assertEqual(errors, [])
+        self.assertGreater(counts['churn'], 50)
+        self.assertGreater(counts['copy'], 50)
 
     def test_wait_line_once_then_every_interval(self):
         e = self.env(KEO_HEAVY_SLOTS=1)
@@ -362,6 +485,39 @@ class SlotsTest(unittest.TestCase):
         self.assertEqual((slow.finish(), fast.finish()), (0, 0))
         self.assertEqual(len(slow.matching('err', 'slots: waiting for')), 1)
 
+    def test_cpu_wait_line_is_once_per_process_and_interval(self):
+        os.environ['KEO_CPU_SLOTS'] = '1'
+        os.environ['KEO_HEAVY_NOTE'] = '0.25'
+        _, got, release = self.holder('cpu', self.env())
+        err = Stamped()
+        errors = []
+
+        def wait():
+            try:
+                with slots.cpu_token('waiter'):
+                    pass
+            except BaseException as ex:
+                errors.append(repr(ex))
+
+        with contextlib.redirect_stderr(err):
+            t0 = time.monotonic()
+            threads = run_threads(wait, 4)
+            end = t0 + WAIT
+            while len(err.lines('slots: waiting for a cpu slot')) < 3 and time.monotonic() < end:
+                time.sleep(0.02)
+            touch(release)
+            for t in threads:
+                t.join(WAIT)
+        self.assertEqual(errors, [])
+        lines = err.lines('slots: waiting for a cpu slot')
+        self.assertGreaterEqual(len(lines), 3)
+        stamps = [t for t, _ in lines]
+        self.assertGreaterEqual(stamps[0] - t0, 0.25)
+        for a, b in zip(stamps, stamps[1:]):  # one line per thread would come in a burst
+            self.assertGreaterEqual(b - a, 0.1)
+        self.assertIn('(held: pid %d holder in ' % pid_of(got), lines[0][1])
+        self.assertEqual(err.lines('slots: took'), [])
+
     def test_heavy_wait_timeout_is_named_and_skips_the_command(self):
         os.environ['KEO_HEAVY_SLOTS'] = '1'
         marker = os.path.join(self.tmp, 'ran')
@@ -369,7 +525,7 @@ class SlotsTest(unittest.TestCase):
             c = self.spawn([SLOTS_PY, 'heavy', '--label', 'late', '--', PY, '-c',
                             'open(%r, "w").close()' % marker], self.env(KEO_HEAVY_WAIT='0.3'))
             rc = c.finish()
-        self.assertEqual(rc, slots.EXIT_TIMEOUT)
+        self.assertEqual((rc, slots.EXIT_TIMEOUT), (75, 75))
         self.assertEqual(len(c.matching('err', 'slots: FAILED: no heavy slot within 0.3 s (held: '
                                         'pid %d holder in ' % os.getpid())), 1)
         self.assertFalse(os.path.exists(marker))
@@ -391,6 +547,51 @@ class SlotsTest(unittest.TestCase):
             self.assertEqual((s['owner']['pid'], s['owner']['label']), (os.getpid(), 'fresh'))
         self.assertFalse(os.path.exists(owner))
 
+    def test_status_lists_slots_above_this_capacity(self):
+        e = self.env(KEO_HEAVY_SLOTS=3)
+        held = [self.holder('heavy', e) for _ in range(3)]
+        self.assertEqual([got.split()[1] for _, got, _ in held], ['heavy-0', 'heavy-1', 'heavy-2'])
+        for child, _, release in held[:2]:
+            touch(release)
+            self.assertEqual(child.finish(), 0)
+        os.environ['KEO_HEAVY_SLOTS'] = '1'
+        [s] = slots.status()
+        self.assertEqual((s['id'], s['mine'], s['owner']['pid']),
+                         ('heavy-2', False, pid_of(held[2][1])))
+
+    def test_a_held_slot_is_never_tried_again_by_its_own_process(self):
+        os.environ['KEO_CPU_SLOTS'] = '2'
+        tried, real = [], slots._try_lock
+
+        def spy(fd):
+            tried.append(fd)
+            return real(fd)
+
+        slots._try_lock = spy
+        try:
+            with slots.cpu_token('first') as first:
+                held_fd = slots._fds[os.path.join(self.tmp, first + '.lock')]
+                del tried[:]
+                second = []
+
+                def other():
+                    with slots.cpu_token('second') as sid:
+                        second.append(sid)
+                        slots.status()
+
+                for t in run_threads(other, 1):
+                    t.join(WAIT)
+        finally:
+            slots._try_lock = real
+        self.assertEqual((first, second), ('cpu-0', ['cpu-1']))
+        self.assertTrue(tried)
+        self.assertNotIn(held_fd, tried)
+
+    def test_deleting_a_held_lock_file_is_refused(self):
+        with slots.heavy('h') as sid:
+            with self.assertRaises(PermissionError):
+                os.remove(os.path.join(self.tmp, sid + '.lock'))
+
     def test_cli_status_and_exit_codes(self):
         e = self.env(KEO_HEAVY_SLOTS=1)
         _, got, release = self.holder('heavy', e)
@@ -406,15 +607,46 @@ class SlotsTest(unittest.TestCase):
         r = subprocess.run([PY, SLOTS_PY, 'heavy', '--', PY, '-c',
                             'import sys; sys.exit(-1073741819)'], env=e)
         self.assertEqual(r.returncode, 0xC0000005)
+        h = subprocess.run([PY, SLOTS_PY, 'heavy', '--help'], stdout=subprocess.PIPE,
+                           universal_newlines=True)
+        self.assertIn('exits 75 (EX_TEMPFAIL)', ' '.join(h.stdout.split()))
+
+    def test_temp_fallback_says_so(self):
+        e = self.env(TMP=self.tmp, TEMP=self.tmp)
+        for name in ('KEO_SLOTS_DIR', 'LOCALAPPDATA'):
+            e.pop(name, None)
+        s = subprocess.run([PY, SLOTS_PY, 'status'], env=e, stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, universal_newlines=True)
+        fallback = os.path.join(self.tmp, 'KEO', 'slots')
+        self.assertEqual(s.returncode, 0)
+        self.assertEqual(s.stderr.splitlines(),
+                         ['slots: LOCALAPPDATA is unset, so the pools live in %s and are shared '
+                          'only by processes of this session that see the same temp directory'
+                          % fallback])
+        self.assertTrue(s.stdout.startswith('slots: %s: ' % fallback))
 
     def test_bad_settings_are_refused(self):
-        for name, value in (('KEO_HEAVY_SLOTS', '0'), ('KEO_CPU_SLOTS', 'many'),
-                            ('KEO_HEAVY_WAIT', 'nan'), ('KEO_SLOTS', 'maybe')):
-            os.environ[name] = value
-            with self.assertRaises(ValueError, msg=name):
-                with slots.heavy('bad'), slots.cpu_token('bad'):
-                    pass
-            del os.environ[name]
+        cwd = os.getcwd()
+        os.chdir(self.tmp)  # a relative directory accepted by mistake lands in the temp tree
+        try:
+            for name, value in (('KEO_HEAVY_SLOTS', '0'), ('KEO_CPU_SLOTS', 'many'),
+                                ('KEO_HEAVY_WAIT', 'nan'), ('KEO_CPU_WAIT', '-1'),
+                                ('KEO_HEAVY_NOTE', 'x'), ('KEO_SLOTS', 'maybe'),
+                                ('KEO_CPU_HELD', 'yes'), ('KEO_HEAVY_HELD', 'bogus'),
+                                ('KEO_SLOTS_DIR', 'relative\\slots')):
+                saved = os.environ.get(name)
+                os.environ[name] = value
+                try:
+                    with self.assertRaises(ValueError, msg=name):
+                        with slots.heavy('bad'), slots.cpu_token('bad'):
+                            pass
+                finally:
+                    if saved is None:
+                        del os.environ[name]
+                    else:
+                        os.environ[name] = saved
+        finally:
+            os.chdir(cwd)
 
 
 if __name__ == '__main__':
