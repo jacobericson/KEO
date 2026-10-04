@@ -2,6 +2,8 @@
 #include "movement/movement_config.h"
 #include "base/config_rows.h"
 #include "base/ini_text.h"
+#include "movement/formation_follow_policy.h"
+#include "movement/movement_trace_policy.h"
 #include <cstddef>
 #include <string.h>
 
@@ -32,6 +34,32 @@ static bool ParseK7PostDeathHold(const std::string& val, ConfigLogFn log)
 	return false;
 }
 
+// formationFollow: off or probe; anything else is refused.
+static bool ParseFormationFollow(const std::string& val, ConfigLogFn log)
+{
+	(void)log;
+	if (_stricmp(val.c_str(), "off") == 0)
+		movement::g_movementCfg.cfg_formationFollow = FF_OFF;
+	else if (_stricmp(val.c_str(), "probe") == 0)
+		movement::g_movementCfg.cfg_formationFollow = FF_PROBE;
+	else
+		return false;
+	return true;
+}
+
+// movementTrace: off or on; anything else is refused.
+static bool ParseMovementTrace(const std::string& val, ConfigLogFn log)
+{
+	(void)log;
+	if (_stricmp(val.c_str(), "off") == 0)
+		movement::g_movementCfg.cfg_movementTrace = TRACE_OFF;
+	else if (_stricmp(val.c_str(), "on") == 0)
+		movement::g_movementCfg.cfg_movementTrace = TRACE_ON;
+	else
+		return false;
+	return true;
+}
+
 static const ConfigChoice kIslandEdgeRingChoices[] =
 {
 	{ "false", 0, "false" }, { "true", 1, "true" }
@@ -55,6 +83,9 @@ const MovementConfig kMovementDefaults =
 	K7_HOLD_ON, // cfg_k7PostDeathHold
 	true, // k7DestReadyGateEnabled
 	true, // k7ArrivalTriggerEnabled
+	FF_OFF, // cfg_formationFollow
+	true, // formationGatherPaceEnabled
+	TRACE_OFF, // cfg_movementTrace
 };
 
 MovementConfig g_movementCfg = kMovementDefaults;
@@ -102,6 +133,14 @@ const ConfigKey g_movementConfigKeys[] =
 	  "Re-issue on navmesh arrival",
 	  "When an order stops far short while its destination's navmesh is missing, re-issues it as soon"
 	  " as that navmesh arrives. Off only logs when it would have sent."),
+	CFG_OROW("formationFollow", CK_CUSTOM, MovementConfig, cfg_formationFollow, 1.0f, 0.0f, INT_MIN, false, NDOC,
+	         ParseFormationFollow, NULL, NULL, false, 0.0f, 0, NULL, 0, true),
+	CFG_OBOOL("formationGatherPace", MovementConfig, formationGatherPaceEnabled, DOC, DEVROW,
+	  "Pace a squad's gather",
+	  "While a squad set to run together gathers before it travels, the members nearer the gather point"
+	  " walk slower so everyone arrives at about the same time, never below half speed."),
+	CFG_OROW("movementTrace", CK_CUSTOM, MovementConfig, cfg_movementTrace, 1.0f, 0.0f, INT_MIN, false, NDOC,
+	         ParseMovementTrace, NULL, NULL, false, 0.0f, 0, NULL, 0, true),
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }
 };
 
