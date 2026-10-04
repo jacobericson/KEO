@@ -11,7 +11,7 @@ Store layout:
   manifests\\<M>\\<R>.json       one candidate per earlier result of key M, written once
   objects\\<R[:2]>\\<R>\\          its entry: the named blobs, out.txt, and meta.json, which
                                records each one's sha256 and size and is written last
-  bad\\                         candidates and entries refused or replaced, kept until evicted
+  bad\\                         candidates and entries refused or replaced, kept for an hour
   tmp\\, trash\\                  entries being published or evicted
   evict.lock, usage.json       one evictor at a time; the last full walk's size and time
 """
@@ -29,11 +29,12 @@ try:
 except ImportError:
     msvcrt = None
 
-SCHEMA = 1
+SCHEMA = 2             # in every key, candidate and meta.json: nothing of an older schema is read
 CANDIDATES = 8          # candidates of one key tried per lookup, newest first
 EVICT_TO = 0.8          # eviction stops below this share of the cap
 WALK_EVERY = 3600.0     # at most one full walk of the store per this many seconds, unless over the cap
 TMP_AGE = 3600.0        # an unfinished publish older than this is garbage
+BAD_AGE = 3600.0        # how long a refused or replaced item stays in bad\ for inspection
 META = 'meta.json'
 OUTPUT = 'out.txt'
 USAGE = 'usage.json'
@@ -393,8 +394,31 @@ class Store(object):
         for source, target in ((self.entry_dir(R), stamp), (self.candidate_path(M, R), stamp + '.json')):
             try:
                 os.replace(source, os.path.join(bad, target))
+                os.utime(os.path.join(bad, target))  # its age in bad\ counts from now
             except OSError:
                 pass
+
+    def prune_bad(self):
+        """Deletes what has been in bad\\ longer than BAD_AGE; returns (items, bytes) removed.
+        Reads the bad\\ listing only."""
+        removed, freed = 0, 0
+        cutoff = time.time() - BAD_AGE
+        try:
+            entries = list(os.scandir(self.path('bad')))
+        except OSError:
+            return 0, 0
+        for e in entries:
+            try:
+                if e.stat(follow_symlinks=False).st_mtime >= cutoff:
+                    continue
+            except OSError:
+                continue
+            size = tree_size(e.path)
+            remove_tree(e.path)
+            if not os.path.exists(e.path):
+                removed += 1
+                freed += size
+        return removed, freed
 
     def walk_due(self, cap):
         """Whether eviction must walk the store: no walk within WALK_EVERY, or the entry count

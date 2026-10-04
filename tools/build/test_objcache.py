@@ -694,6 +694,42 @@ class StoreTest(unittest.TestCase):
         write(path, '{broken')
         self.assertTrue(self.store.walk_due(10 ** 12))
 
+    def test_an_older_schema_is_never_read(self):
+        M, (R, _) = self.publish(5)
+        path = os.path.join(self.store.entry_dir(R), objcache.META)
+        with open(path, 'rb') as f:
+            meta = json.loads(f.read().decode('ascii'))
+        meta['schema'] = objcache.SCHEMA - 1
+        write(path, json.dumps(meta))
+        with self.assertRaises(objcache.EntryError):
+            self.store.load(M, R)
+        cache = objcache.ObjectCache('on', self.store.dir, 1 << 40, self.tmp)
+        self.assertFalse(cache._current({'schema': objcache.SCHEMA - 1, 'includes': [], 'roots': [], 'shadow': {}}))
+        self.assertTrue(cache._current({'schema': objcache.SCHEMA, 'includes': [], 'roots': [], 'shadow': {}}))
+
+    def test_bad_items_over_an_hour_old_are_deleted_and_reported(self):
+        groups = []
+        for i in range(3):
+            M, (R, _) = self.publish(i)
+            self.store.reject(M, R, 'test %d' % i)
+            groups.append(R)
+        bad = self.store.path('bad')
+        old = time.time() - objstore.BAD_AGE - 60
+        for name in os.listdir(bad):
+            if name.startswith(groups[0]):
+                os.utime(os.path.join(bad, name), (old, old))
+        self.assertEqual(self.store.prune_bad()[0], 3)  # the entry folder, its candidate, the note
+        self.assertEqual(sorted(set(n[:64] for n in os.listdir(bad))), sorted(groups[1:]))
+        for name in os.listdir(bad):
+            if name.startswith(groups[1]):
+                os.utime(os.path.join(bad, name), (old, old))
+        cache = objcache.ObjectCache('on', self.store.dir, 1 << 40, self.tmp)
+        self.assertIsNone(cache.finish())  # published nothing: no check
+        cache.published = 1
+        line = cache.finish()
+        self.assertTrue(line.startswith('object cache eviction: bad\\: 3 item(s) over an hour old removed ('), line)
+        self.assertEqual(sorted(set(n[:64] for n in os.listdir(bad))), [groups[2]])
+
     def test_load_checks_every_blob_and_the_output(self):
         M, (R, state) = self.publish(3)
         self.assertEqual(state, 'published')

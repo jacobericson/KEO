@@ -46,7 +46,8 @@ got there first, theirs stands. The candidate follows.
 Eviction: after a run that published, when the cache is over KEO_CACHE_MAX_GB, the least recently
 used entries (meta.json's mtime, touched on each hit) go until it is under 80 %, by one process
 at a time; an entry a reader holds open is skipped. The full walk runs at most once an hour
-unless the entry count times the last walk's bytes per entry is over the cap.
+unless the entry count times the last walk's bytes per entry is over the cap. Every run that
+published also deletes what has been in bad\\ over an hour (refused, or replaced by write).
 
 Not detected, so a clean build (BUILD_CACHE=off) stays the check:
   - a new header under BOOST_ROOT or the INCLUDE folders that would shadow an included one;
@@ -260,6 +261,8 @@ class ObjectCache(object):
 
     def _current(self, content):
         """Whether every include still has its recorded content and every shadow set is as it was."""
+        if content.get('schema') != SCHEMA:
+            return False
         after = time.time() - FRESH
         for tagged, sha in content['includes']:
             try:
@@ -371,19 +374,22 @@ class ObjectCache(object):
             return 'uncacheable', 'not published (%s)' % error
 
     def finish(self):
-        """After the run: evicts when this run published and the cache is over its cap. Returns a
-        line to print, or None."""
+        """After a run that published: deletes what has been in bad\\ over an hour, then evicts
+        when the cache is over its cap. Returns a line to print, or None."""
         if not self.published:
             return None
+        notes = []
         try:
-            if not self.store.walk_due(self.cap):
-                return None
-            result = self.store.evict(self.cap)
+            pruned, freed = self.store.prune_bad()
+            if pruned:
+                notes.append('bad\\: %d item(s) over an hour old removed (%.2f GiB)' % (pruned, freed / float(GIB)))
+            result = self.store.evict(self.cap) if self.store.walk_due(self.cap) else None
         except OSError as error:
-            return 'object cache eviction failed (%s)' % error
-        if not result or not result[0]:
-            return None
-        removed, before, after = result
-        return ('object cache eviction: %d entr%s removed, %.2f GiB -> %.2f GiB (KEO_CACHE_MAX_GB %.2f)'
-                % (removed, 'y' if removed == 1 else 'ies', before / float(GIB), after / float(GIB),
-                   self.cap / float(GIB)))
+            notes.append('failed (%s)' % error)
+            result = None
+        if result and result[0]:
+            removed, before, after = result
+            notes.insert(0, '%d entr%s removed, %.2f GiB -> %.2f GiB (KEO_CACHE_MAX_GB %.2f)'
+                         % (removed, 'y' if removed == 1 else 'ies', before / float(GIB),
+                            after / float(GIB), self.cap / float(GIB)))
+        return 'object cache eviction: ' + '; '.join(notes) if notes else None
