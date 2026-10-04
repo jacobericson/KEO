@@ -33,13 +33,14 @@ struct ProdRow
 static const ProdRow kProdPage[] =
 {
 	{ "preload", "Zone loading" }, { "navmeshWorkerCount", "Zone loading" },
-	{ "zoneLifeRetainRadius", "Zone loading" }, { "navmeshDiskCacheMaxMB", "Zone loading" },
+	{ "zoneLifeRetainRadius", "Zone loading" }, { "plannerAheadTiles", "Zone loading" },
+	{ "navmeshDiskCacheMaxMB", "Zone loading" },
 	{ "particleStepCap", "Performance" }, { "renderLevers", "Performance" }, { "foliagePageBudgetMs", "Performance" },
 	{ "groupCohesion", "Squad movement" }, { "formationGatherPace", "Squad movement" },
 	{ "k7PostDeathHold", "Squad movement" }, { "plannerMode", "Squad movement" },
 	{ NULL, NULL }
 };
-static const int PROD_PAGE_ROWS = 11;
+static const int PROD_PAGE_ROWS = 12;
 static const char* const PROD_SECTIONS[] = { "Zone loading", "Performance", "Squad movement" };
 
 static void CheckNamed(bool ok, const std::string& what)

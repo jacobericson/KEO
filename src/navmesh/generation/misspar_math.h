@@ -14,8 +14,8 @@ struct MissParInterval { __int64 start, end; };
 __int64 MissParUnion(MissParInterval* v, int n, __int64* sumOut);
 
 // How many realGenerate calls may run at once. cfg > 0: cfg, at most cap.
-// 0 (automatic): two, less on a machine without three cores to spare, never
-// below one.
+// 0 (automatic): the logical CPU count less three, at most cap, never below
+// one.
 int MissParGenConcurrency(int cfg, int logicalCpus, int cap);
 
 // The startup line stating what navmeshGenConcurrency resolved to, so a

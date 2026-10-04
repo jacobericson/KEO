@@ -54,7 +54,6 @@ int MissParGenConcurrency(int cfg, int logicalCpus, int cap)
 	if (cfg > 0)
 		return cfg < cap ? cfg : cap;
 	int n = logicalCpus - 3;
-	if (n > 2)   n = 2;
 	if (n > cap) n = cap;
 	return n < 1 ? 1 : n;
 }

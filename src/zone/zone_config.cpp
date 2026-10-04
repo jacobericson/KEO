@@ -42,7 +42,7 @@ const ZoneConfig kZoneDefaults =
 	0.0f, // cfg_camFocusMaxDist
 	3.0f, // cfg_camFocusHardMult
 	250.0f, // cfg_camFocusHysteresis
-	2, // cfg_zoneLifeRetainRadius
+	1, // cfg_zoneLifeRetainRadius
 	30.0, // cfg_zoneLifeIdleSeconds
 };
 

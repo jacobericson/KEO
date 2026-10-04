@@ -236,6 +236,30 @@ static void CheckPlannerKeys()
 	planner::g_plannerCfg = held;
 }
 
+// The retain radius as an empty INI loads it, and as an explicit line inside its range loads it.
+static void CheckZoneRetainRadius()
+{
+	const zone::ZoneConfig held = zone::g_zoneCfg;
+	zone::g_zoneCfg = zone::kZoneDefaults;
+	ConfigClampLoaded(&DiscardLog);
+	Check(zone::g_zoneCfg.cfg_zoneLifeRetainRadius == 1, "zone: an empty INI loads zoneLifeRetainRadius 1");
+	const char* const texts[] = { "2", "1", "4" };
+	const int values[] = { 2, 1, 4 };
+	for (int i = 0; i < 3; ++i)
+	{
+		zone::g_zoneCfg = zone::kZoneDefaults;
+		zone::g_zoneCfg.cfg_zoneLifeRetainRadius = -7;
+		ConfigLoadState st;
+		ConfigApplyLine("zoneLifeRetainRadius", texts[i], 1, &st, &DiscardLog);
+		ConfigClampLoaded(&DiscardLog);
+		std::ostringstream ss;
+		ss << "zone: zoneLifeRetainRadius=" << texts[i] << " loads " << values[i];
+		Check(zone::g_zoneCfg.cfg_zoneLifeRetainRadius == values[i] && st.overrides == 1 && st.unrecognised == 0,
+		      ss.str().c_str());
+	}
+	zone::g_zoneCfg = held;
+}
+
 int main()
 {
 	Check(kConfigModuleCount == 9 && kConfigModuleCount <= CONFIG_MODULE_MAX, "nine modules within stage capacity");
@@ -302,5 +326,6 @@ int main()
 		else if (strcmp(mod->name, kOwners[i].module)) Fail(kOwners[i].key, std::string("expected in ") + kOwners[i].module + ", found in " + mod->name);
 	}
 	CheckPlannerKeys();
+	CheckZoneRetainRadius();
 	return CheckExit("config_modules_units");
 }

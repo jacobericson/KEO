@@ -33,7 +33,7 @@ static const char* const SUITE_NAME = "settings_factory_units";
 static const char* const SUITE_NAME = "settings_factory_prod_units";
 #endif
 static const size_t CORE_ROWS_DEV = 85;
-static const int DEV_ONLY_ROWS = 95;
+static const int DEV_ONLY_ROWS = 94;
 
 // ---- Sections --------------------------------------------------------------
 
@@ -158,7 +158,7 @@ static void CheckRowCounts()
 	std::vector<SettingsRow> dev = Rows(&st, true, NULL), prod = Rows(&st, false, NULL);
 	Check(ModuleSections(dev).size() == CORE_ROWS_DEV, "core rows dev");
 	Check(Section(dev, RENDER_TITLE).size() == 21, "render rows dev");
-	Check(Section(prod, "Zone loading").size() == 4 && Section(prod, "Performance").size() == 3
+	Check(Section(prod, "Zone loading").size() == 5 && Section(prod, "Performance").size() == 3
 	      && Section(prod, "Squad movement").size() == 4, "player section rows prod");
 }
 

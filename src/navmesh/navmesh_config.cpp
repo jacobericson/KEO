@@ -110,7 +110,7 @@ const ConfigKey g_navmeshConfigKeys[] =
 	CFG_OINT("navmeshGenConcurrency", NavMeshConfig, cfg_navmeshGenConcurrency, 0.0f, 4.0f, INT_MIN, DOC, DEVROW,
 	  "Parallel navmesh generations",
 	  "How many navmesh generations may run at once while parallel generation is on. 0 is automatic:"
-	  " two, fewer on CPUs with under five logical cores."),
+	  " the logical CPU count less three, at most four, one on CPUs with under five logical cores."),
 	CFG_OINT("navmeshDiskCacheMaxMB", NavMeshConfig, cfg_navmeshDiskCacheMaxMB, 32.0f, 8192.0f, INT_MIN, NDOC, SHOW,
 	  "Navmesh cache size (MB)",
 	  "Size cap of the navmesh_cache folder; past it the oldest files are deleted down to 75% of the"

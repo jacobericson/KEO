@@ -197,7 +197,10 @@ int main()
 	Check(MissParUnion(over, 3, &sum) == 30 && sum == 40, "overlapping, unsorted");
 	Check(MissParUnion(over, 0, &sum) == 0 && sum == 0, "none");
 
-	Check(MissParGenConcurrency(0, 16, 4) == 2, "auto, 16 cpus");
+	Check(MissParGenConcurrency(0, 16, 4) == 4, "auto, 16 cpus");
+	Check(MissParGenConcurrency(0, 7, 4) == 4, "auto, 7 cpus");
+	Check(MissParGenConcurrency(0, 6, 4) == 3, "auto, 6 cpus");
+	Check(MissParGenConcurrency(0, 5, 4) == 2, "auto, 5 cpus");
 	Check(MissParGenConcurrency(0, 4, 4) == 1, "auto, 4 cpus");
 	Check(MissParGenConcurrency(0, 1, 4) == 1, "auto, 1 cpu");
 	Check(MissParGenConcurrency(3, 16, 4) == 3, "explicit 3");

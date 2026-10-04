@@ -228,12 +228,13 @@ bool ZoneRetentionWantsRelease(void* zoneEntry)
 	in.readerPinned      = e->readerPinCount > 0;
 	in.minResidenceLive  = e->minResidenceDeadline > now;
 	in.discretionaryLive = e->graceDeadline > now || e->predictionLeaseDeadline > now;
-	// The lifecycle pass's own map, which is wider than a plain radius
-	// around the camera and the players: it also stamps watched movers'
-	// current and next cells and everything in the mod's working tables, at
-	// the configured retain radius rather than this policy's. Reading it as
-	// the cheap filter therefore errs towards holding, and the live check
-	// below is what decides a release.
+	// The lifecycle pass's own map: the camera's and the players' cells, the
+	// watched movers' current and next cells and everything in the mod's
+	// working tables, each stamped at the configured retain radius, which is
+	// independent of this policy's live radius. Outside pressure a cell the
+	// map marks holds without the live read; a cell it misses, even one inside
+	// the live radius, is decided by the live check below, which is what
+	// decides a release.
 	in.mapRetained       = ZlRetentionNear(cell);
 	in.underPressure     = g_pressure;
 	in.pacingAllows      = ZoneRetentionPacingAllows(g_probedThisFrame, ZoneHandoffAdoptedThisFrame(),

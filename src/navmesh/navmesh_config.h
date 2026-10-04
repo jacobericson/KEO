@@ -95,7 +95,7 @@ struct NavMeshConfig
 	int    cfg_navmeshWorkerCount;    // INI value; 0 = automatic (half the logical CPUs)
 
 	// How many realGenerate calls may run at once with processJobCS released.
-	// 0 = automatic (two, fewer on small CPUs), 1 = one at a
+	// 0 = automatic (logical CPUs less three, 1..4), 1 = one at a
 	// time, clamped to 0..4. Read once at startup.
 	int    cfg_navmeshGenConcurrency;
 

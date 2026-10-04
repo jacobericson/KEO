@@ -76,9 +76,10 @@ ZoneRetentionPrecheck ZoneRetentionPrecheckCell(const ZoneRetentionCellInputs& i
 // The second stage, with the live anchor answer in hand.
 ZoneRetentionVerdict ZoneRetentionFinalVerdict(bool nearAnchorsNow);
 
-// The radius the live check should use: pressure narrows it to the hard core,
-// because the proximity map is stamped at the configured retain radius and
-// says nothing about radius 1.
+// The radius the live check uses: the hard core under pressure, the
+// hysteresis radius otherwise. Neither follows the configured retain radius
+// the proximity map is stamped at, so a cell inside this radius of an anchor
+// but outside the map is still held by the live check.
 int ZoneRetentionLiveRadius(bool underPressure);
 
 // At most one expensive decision per frame, never in a frame that admitted a

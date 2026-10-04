@@ -157,7 +157,7 @@ const ConfigKey g_plannerConfigKeys[] =
 	  "Builds the planner's graph of the whole map from the navmesh tiles at startup. Off plans over"
 	  " the loaded cells only. Default On.", kPlannerSwitchChoices),
 	// Below 0 is refused; above 8 loads as 8.
-	CFG_OINT("plannerAheadTiles", PlannerConfig, aheadTiles, 0.0f, 8.0f, 0, NDOC, DEVROW,
+	CFG_OINT("plannerAheadTiles", PlannerConfig, aheadTiles, 0.0f, 8.0f, 0, NDOC, SHOW,
 	  "Route tiles to preload",
 	  "Tiles along a planned route queued for preloading ahead of the squad. 0 queues none; default 3."),
 	// Below 1 is refused; above 60 loads as 60.

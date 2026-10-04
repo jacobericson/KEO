@@ -8,6 +8,7 @@ const SettingsPlace kSettingsPlaces[] =
 	{ "Zone loading",   "zone",     "preload" },
 	{ "Zone loading",   "navmesh",  "navmeshWorkerCount" },
 	{ "Zone loading",   "zone",     "zoneLifeRetainRadius" },
+	{ "Zone loading",   "planner",  "plannerAheadTiles" },
 	{ "Zone loading",   "navmesh",  "navmeshDiskCacheMaxMB" },
 	{ "Performance",    "render",   "particleStepCap" },
 	{ "Performance",    "render",   "renderLevers" },
