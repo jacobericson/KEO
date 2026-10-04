@@ -1,4 +1,4 @@
-"""Guard the three ways the test run has silently reported success before.
+"""Guard the ways the test run has silently reported success, or could.
 
 1. A suite dropped from tools\\tests\\suites.txt (or never added when a new
    *_units.cpp landed) would just never run, with nothing saying so. Every
@@ -21,12 +21,16 @@
    switched to it pass no matter what it checked. A scratch suite that runs
    Check(false, ...) and CHECK(false, ...) through check.h must fail the run
    and report both failures.
-
-4. Every git-tracked tools\\**\\test_*.py must be a row of
+4. run_suites.py's no-op knobs (TEST_SUITES_NOOP_CL=1, TEST_SUITES_NOOP_LINK=1)
+   turn every compile or link into a command that exits 0 and writes nothing.
+   A valid scratch suite run under each must still fail, through the runner's
+   check that each step left a fresh output, or a compile or link that quietly
+   did nothing would pass on the previous run's files.
+5. Every git-tracked tools\\**\\test_*.py must be a row of
    tools\\tests\\py_tests.txt or py_tests_private.txt, or named on an
    "# excluded: <path> - <reason>" line in one of them, and every when= glob
    on a row must match some file of the tree.
-5. run_py_tests.py must refuse, through its own checks, a failing module, an
+6. run_py_tests.py must refuse, through its own checks, a failing module, an
    import crash, a module with no tests, a shard that selects no tests, a
    shard whose selection overlaps another's (TEST_PY_SHARD_SKEW=1) and a
    shard that exits 0 without its result (TEST_PY_SHARD_CRASH=1); a cpu
@@ -38,9 +42,10 @@
    own timings and slots folders, so a busy host cannot delay it; the output
    is shown only when a case is not refused.
 
-Run from the repo root (build_tests.bat anchors its own cd before calling
-this, so a relative invocation from elsewhere is refused rather than passing
-by accident); prints what it found and exits 1 on any problem.
+Run from the repo root (test_gate.py starts it there whatever the caller's
+directory; a relative invocation from elsewhere is refused rather than
+passing by accident); prints what it found and exits 1 on any problem, or ends with
+"check_test_guards: all checks passed" and exits 0.
 """
 import concurrent.futures
 import fnmatch
@@ -137,14 +142,15 @@ def check_coverage():
     return ok
 
 
-def _run_scratch_suite(name, body, extra_files=()):
+def _run_scratch_suite(name, body, extra_files=(), env=None):
     """Compiles and runs one scratch suite named `name` with the given C++
     main() body through run_suites.py, in an isolated scratch directory, and
     returns the finished subprocess.CompletedProcess. Caller cleans up.
 
     `extra_files` are repo-root-relative paths copied into the scratch
     directory before compiling, so a quoted #include next to the scratch
-    .cpp resolves the way it would next to any real tools\\tests\\*.cpp."""
+    .cpp resolves the way it would next to any real tools\\tests\\*.cpp.
+    `env` is the runner's environment (default: this process's)."""
     scratch_dir = tempfile.mkdtemp(prefix="check_test_guards_")
     cpp = os.path.join(scratch_dir, name + ".cpp")
     suites_path = os.path.join(scratch_dir, "suites.txt")
@@ -157,7 +163,7 @@ def _run_scratch_suite(name, body, extra_files=()):
     try:
         return subprocess.run(
             [sys.executable, RUN_SUITES, "--suites", suites_path],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
     finally:
         # run_suites.py gives each suite its own build\tests\obj\<name>\
         # (so suites never race on a shared object name); clean up both that
@@ -242,7 +248,40 @@ def check_check_h_counts():
     return ok
 
 
-RUN_PY_TESTS = "tools/tests/run_py_tests.py"
+# (step, knob, the runner's message for a step that left no output)
+NOOP_KNOBS = (("compile", "TEST_SUITES_NOOP_CL", "compile reported success but no object was produced"),
+              ("link", "TEST_SUITES_NOOP_LINK", "link reported success but no executable was produced"))
+
+
+def check_runner_refuses_noops():
+    """A valid scratch suite run with each no-op knob must fail as COMPILE FAILED (exit 1), its
+    output must show the knob fired and the runner's own no-output message, and the no-op link
+    must leave no RUN line."""
+    ok = True
+    for step, knob, message in NOOP_KNOBS:
+        name = "_selftest_noop_" + step
+        env = dict(os.environ)
+        for _, other, _ in NOOP_KNOBS:
+            env.pop(other, None)
+        env[knob] = "1"
+        result = _run_scratch_suite(name, "int main() { return 0; }\n", env=env)
+        lines = result.stdout.splitlines()
+        refused = (result.returncode == 1
+                   and "%s: COMPILE FAILED (exit 1)" % name in result.stdout
+                   and "%s=1 ran" % knob in result.stdout
+                   and message in result.stdout
+                   and not any(l.strip() == "RUN" for l in lines))
+        if refused:
+            print("check_test_guards: run_suites.py refused a no-op %s (exit %s)" % (step, result.returncode))
+        else:
+            ok = False
+            print("check_test_guards: run_suites.py did not refuse a no-op %s under %s=1 (exit %s):"
+                  % (step, knob, result.returncode))
+            print(result.stdout)
+    return ok
+
+
+RUN_PY_TESTS ="tools/tests/run_py_tests.py"
 PY_LISTS = ("tools/tests/py_tests.txt", "tools/tests/py_tests_private.txt")
 SKIP_DIRS = {"build", "__pycache__"}  # and every folder whose name starts with "."
 
@@ -490,11 +529,15 @@ def main():
             coverage_ok = check_coverage()
             runner_ok = check_runner_fails_on_failure()
             check_h_ok = check_check_h_counts()
+            noop_ok = check_runner_refuses_noops()
             py_coverage_ok = check_python_coverage()
             py_runner_ok = check_py_runner_controls(py_futures)
     finally:
         shutil.rmtree(py_root, ignore_errors=True)
-    return 0 if (coverage_ok and runner_ok and check_h_ok and py_coverage_ok and py_runner_ok) else 1
+    if coverage_ok and runner_ok and check_h_ok and noop_ok and py_coverage_ok and py_runner_ok:
+        print("check_test_guards: all checks passed")
+        return 0
+    return 1
 
 
 if __name__ == "__main__":
