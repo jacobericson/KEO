@@ -32,7 +32,8 @@ its destination and moved into place, and out.txt stands in for cl's output. A c
 that cannot be read or does not check out is moved to bad\\ and counted as rejected, and the
 source is compiled. Rejections alone are no defect: a lookup racing a publish or an eviction, or
 a file a scanner holds for a moment, is refused the same way. Before the link, every restored
-object's inputs are read afresh, and any that changed during the build refuses the link.
+object's inputs and shadow sets are read afresh, and any that changed during the build refuses
+the link.
 
 Right after each compile, the source's and every include's times and sha256 are captured; a file
 whose write or change time falls after 2 s before the compile started makes the compile not
@@ -52,6 +53,7 @@ published also deletes what has been in bad\\ over an hour (refused, or replaced
 Not detected, so a clean build (BUILD_CACHE=off) stays the check:
   - a new header under BOOST_ROOT or the INCLUDE folders that would shadow an included one;
   - an input whose change time was set back on purpose (a copy tool never does);
+  - an input written through a memory map (neither write time nor change time moves);
   - an object that depends on the absolute path it was compiled at. Objects are shared between
     checkouts, which is sound while the DLLs linked from them are path-independent: no DLL source
     holds an anonymous namespace (MSVC names one after the source's absolute path) or uses
@@ -231,8 +233,8 @@ class ObjectCache(object):
 
     def restore(self, key, obj_path):
         """Writes the cached object of key to obj_path. Returns ((output, includes, R, inputs) or
-        None, the number of candidates and entries refused); inputs is [(path, sha256)] of the
-        source and each include, for recheck()."""
+        None, the number of candidates and entries refused); inputs, for recheck(), is
+        ([(path, sha256)] of the source and each include, the candidate's roots, its shadow sets)."""
         rejected = 0
         for R, path in self.store.candidates(key.M):
             try:
@@ -256,7 +258,8 @@ class ObjectCache(object):
                 return None, rejected
             self.store.touch(key.M, R)
             includes = [p for p, _ in inputs]
-            return (output, includes, R, [(key.source, key.source_sha)] + inputs), rejected
+            checks = ([(key.source, key.source_sha)] + inputs, content['roots'], content['shadow'])
+            return (output, includes, R, checks), rejected
         return None, rejected
 
     def _current(self, content):
@@ -292,7 +295,7 @@ class ObjectCache(object):
         for path in [key.source] + list(includes):
             what = 'the source' if not captured else path
             try:
-                times, sha = self.hashes.get(self.norm(path), after)
+                times, sha = self.hashes.get(self.norm(path), after, hashed_after=start)  # never a lookup's hash
             except Changed:
                 return None, '%s changed while it was hashed' % what
             except OSError as error:
@@ -305,20 +308,31 @@ class ObjectCache(object):
         return captured, None
 
     def recheck(self, inputs):
-        """Before a link: problems with restored objects whose inputs ([(path, sha256)] per
-        object, as restore() returned them) were changed during the build, read afresh now."""
+        """Before a link: problems with restored objects whose inputs or shadow sets (per object,
+        as restore() returned them) changed during the build, read afresh now."""
         after = time.time()
         problems = []
-        for listed in inputs:
+        for listed, roots, shadow in inputs:
+            source = listed[0][0]
             for path, sha in listed:
                 try:
                     now = self.hashes.get(self.norm(path), after)[1]
                 except OSError as error:
-                    problems.append('%s: %s is unreadable (%s)' % (listed[0][0], path, error))
+                    problems.append('%s: %s is unreadable (%s)' % (source, path, error))
                     break
                 if now != sha:
-                    problems.append('%s: %s changed after its object was restored' % (listed[0][0], path))
+                    problems.append('%s: %s changed after its object was restored' % (source, path))
                     break
+            else:
+                try:
+                    moved = self._shadow(roots, list(shadow), after)[0] != shadow
+                except OSError as error:
+                    moved, error_text = True, ' (%s)' % error
+                else:
+                    error_text = ''
+                if moved:
+                    problems.append('%s: a header named like one of its includes appeared or went '
+                                    'after its object was restored%s' % (source, error_text))
         return problems
 
     def publish_all(self, compiled):

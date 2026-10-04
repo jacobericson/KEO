@@ -5,7 +5,8 @@ entries (named blobs plus an output text) with its eviction. Nothing here knows 
 A file's "times" are its last write time and its change time, in ns since 1970. NTFS moves the
 change time on every write, rename or attribute change, including the mtime a copy tool puts
 back afterwards, and copy tools leave it alone, so equal times mean equal bytes unless someone
-set the change time on purpose (SetFileInformationByHandle can). Elsewhere st_ctime_ns serves.
+set the change time on purpose (SetFileInformationByHandle can) or wrote the file through a
+memory map (neither time moves then). Elsewhere st_ctime_ns serves.
 
 Store layout:
   manifests\\<M>\\<R>.json       one candidate per earlier result of key M, written once
@@ -114,26 +115,30 @@ class Changed(OSError):
 
 class Hashes(object):
     """Each file's content sha256, memoized for the process by (path, times). A caller names how
-    old a times read it accepts, since a read costs more than reusing one."""
+    old a times read it accepts, since a read costs more than reusing one, and may name how old a
+    read of the bytes it accepts."""
 
     def __init__(self):
-        self._memo = {}  # path -> (time the read began, times, sha256)
+        self._memo = {}  # path -> (time the times read began, times, sha256, time the hash began)
 
-    def get(self, path, after):
-        """(times, sha256) of path from a read begun at or after `after`; OSError when missing,
-        Changed when it changed while being hashed."""
+    def get(self, path, after, hashed_after=None):
+        """(times, sha256) of path from a times read begun at or after `after` and, given
+        hashed_after, a hash of the bytes begun at or after it; OSError when missing, Changed when
+        it changed while being hashed."""
         seen = self._memo.get(path)
+        if seen is not None and hashed_after is not None and seen[3] < hashed_after:
+            seen = None
         if seen is not None and seen[0] >= after:
             return seen[1], seen[2]
         began = time.time()
         times = file_times(path)
         if seen is not None and seen[1] == times:
-            sha = seen[2]
+            sha, hashed = seen[2], seen[3]
         else:
-            sha = file_digest(path)
+            sha, hashed = file_digest(path), began
             if file_times(path) != times:
                 raise Changed('%s changed while it was hashed' % path)
-        self._memo[path] = (began, times, sha)
+        self._memo[path] = (began, times, sha, hashed)
         return times, sha
 
 

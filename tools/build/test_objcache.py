@@ -478,6 +478,36 @@ class StaleInputTest(CacheTestBase):
         self.assertIn('a.h changed after its object was restored', run.log)
         self.assertEqual(run.objects, [])
 
+    def test_a_shadowing_header_created_after_the_restore_refuses_the_link(self):
+        self.build()
+        os.chdir(self.root)
+        try:
+            cache = objcache.ObjectCache.from_env(self.root)
+            command = [sys.executable, os.path.join(self.root, 'fake_cl.py'), '/nologo', '/Iinc',
+                       '/I' + os.path.join(self.kenshilib, 'Include'), '/showIncludes', '/c', 'src\\a.cpp',
+                       '/Fo' + os.path.join('build', 'api.obj')]
+            hit, rejected = cache.restore(cache.key(command, 'src\\a.cpp'), os.path.join('build', 'api.obj'))
+            self.assertIsNotNone(hit)
+            self.assertEqual(cache.recheck([hit[3]]), [])
+            write(os.path.join(self.root, 'src', 'deeper', 'common.h'), '// shadow\n')
+            problems = cache.recheck([hit[3]])
+        finally:
+            os.chdir(self.cwd)
+        self.assertEqual(len(problems), 1)
+        self.assertIn('src\\a.cpp: a header named like one of its includes appeared or went', problems[0])
+
+    def test_a_compile_never_takes_a_hash_from_before_it_started(self):
+        path = os.path.join(self.root, 'src', 'a.h')
+        stamp = time.time() - 60
+        set_times(path, stamp)
+        hashes = objstore.Hashes()
+        old = hashes.get(path, 0)[1]
+        start = time.time()
+        write(path, '// x\n')  # the same size, and every time forged back
+        set_times(path, stamp)
+        self.assertEqual(hashes.get(path, time.time())[1], old)  # times-keyed: the forgery passes
+        self.assertNotEqual(hashes.get(path, time.time(), hashed_after=start)[1], old)
+
     def test_write_replaces_a_stale_entry(self):
         self.build()
         key = [e['key'] for e in self.build().objects if e['src'] == 'src\\a.cpp'][0]

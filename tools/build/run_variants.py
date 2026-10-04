@@ -32,8 +32,8 @@ compile output, and the console repeats it:
 where c counts the cl processes run, r the cache entries refused (and moved aside; a lookup
 racing another build's publish or eviction is refused too, so r > 0 alone is no defect), u the
 compiles not published. objects.json records per source how it was made, its cache entry and,
-when it was not published, why. Before the link, every restored object's inputs are read afresh;
-one that changed during the build refuses the link.
+when it was not published, why. Before the link, every restored object's inputs and shadow sets
+are read afresh; one that changed during the build refuses the link.
 
 Usage:
   run_variants.py --fail-prefix PREFIX [--kind opt|prof] [--sources LIST] [--compile-only]
