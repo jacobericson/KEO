@@ -17,7 +17,8 @@ run add up to that count, and the count is above zero. Up to PY_JOBS shard proce
 %LOCALAPPDATA%\\KEO\\timings\\py_tests.json (KEO_TIMINGS_DIR overrides the folder); with no
 usable record, sharded modules go first by shard count, then list order. Each shard process
 holds one host-wide cpu token from tools/build/slots.py while it runs, and inherits KEO_CPU_HELD=1
-so that the processes it starts take none.
+so that the processes it starts take none. A runner started under someone else's cpu token
+(KEO_CPU_HELD=1) runs one shard at a time.
 
 Each module's output is printed as one block, in list order, followed by
     py: <stem>: <n> tests, <N> shard(s), <seconds> s
@@ -457,6 +458,9 @@ def main(argv=None):
         return 1
     try:
         jobs_max = jobs_count()
+        if jobs_max > 1 and slots.cpu_held():
+            print('python test jobs: 1 (started under a cpu token)')
+            jobs_max = 1
     except ValueError as exc:
         print('python tests FAILED: %s' % exc)
         return 1
