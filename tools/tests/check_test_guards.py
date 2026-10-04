@@ -22,10 +22,25 @@
    Check(false, ...) and CHECK(false, ...) through check.h must fail the run
    and report both failures.
 
+4. Every git-tracked tools\\**\\test_*.py must be a row of
+   tools\\tests\\py_tests.txt or py_tests_private.txt, or named on an
+   "# excluded: <path> - <reason>" line in one of them, and every when= glob
+   on a row must match some file of the tree.
+5. run_py_tests.py must refuse, through its own checks, a failing module, an
+   import crash, a module with no tests, a shard that selects no tests, a
+   shard whose selection overlaps another's (TEST_PY_SHARD_SKEW=1) and a
+   shard that exits 0 without its result (TEST_PY_SHARD_CRASH=1); and with
+   a base it cannot read it must still run, and pass, every module, a
+   sharded one included, whose shards see KEO_CPU_HELD=1 (each runs under a
+   cpu token). Each case runs on scratch modules with its own timings
+   folder; the output is shown only when a case is not refused.
+
 Run from the repo root (build_tests.bat anchors its own cd before calling
 this, so a relative invocation from elsewhere is refused rather than passing
 by accident); prints what it found and exits 1 on any problem.
 """
+import concurrent.futures
+import fnmatch
 import glob
 import os
 import re
@@ -33,6 +48,9 @@ import shutil
 import subprocess
 import sys
 import tempfile
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import run_py_tests  # noqa: E402
 
 SUITES_TXT = "tools/tests/suites.txt"
 PRIVATE_SUITES_TXT = os.path.join(os.path.dirname(SUITES_TXT), "suites_private.txt")
@@ -221,11 +239,197 @@ def check_check_h_counts():
     return ok
 
 
+RUN_PY_TESTS = "tools/tests/run_py_tests.py"
+PY_LISTS = ("tools/tests/py_tests.txt", "tools/tests/py_tests_private.txt")
+SKIP_DIRS = {"build", "__pycache__"}  # and every folder whose name starts with "."
+
+
+def tree_files():
+    """Repo-relative paths of the tree: git's tracked files, or a walk where git lists none."""
+    try:
+        out = subprocess.run(["git", "ls-files", "-z"], stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, check=True).stdout
+        paths = [p.decode("utf-8", "surrogateescape") for p in out.split(b"\0") if p]
+    except (OSError, subprocess.CalledProcessError):
+        paths = []
+    if paths:
+        return paths
+    for root, dirs, files in os.walk("."):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".")]
+        for name in files:
+            paths.append(to_slash(os.path.relpath(os.path.join(root, name), ".")))
+    return paths
+
+
+def check_python_coverage():
+    """Every tools/**/test_*.py on disk is listed or excluded, and no when= glob is stale."""
+    errors, rows, excluded = [], [], set()
+    for path in PY_LISTS:
+        if not os.path.isfile(path):
+            if path == PY_LISTS[0]:
+                print("check_test_guards: cannot find %s (run from the repo root)" % path)
+                return False
+            continue
+        rows.extend(run_py_tests.read_list(path, errors))
+        for line in open(path, encoding="utf-8").read().split("\n"):
+            m = EXCLUDE_RE.match(line.strip())
+            if m:
+                excluded.add(to_slash(m.group(1)).lower())
+    if errors:
+        for e in errors:
+            print("check_test_guards: %s" % e)
+        return False
+    listed = set(to_slash(r.rel).lower() for r in rows)
+    files = tree_files()
+    tests = sorted(set(p for p in files if p.startswith("tools/") and os.path.isfile(p)
+                       and fnmatch.fnmatch(p.rsplit("/", 1)[-1], "test_*.py")))
+    if not tests:
+        print("check_test_guards: matched no tools/**/test_*.py -- the search is stale")
+        return False
+    missing = [p for p in tests if p.lower() not in listed and p.lower() not in excluded]
+    stale = sorted(p for p in excluded if not os.path.isfile(p))
+    lowered = [p.lower() for p in files]
+    dead = ["%s: %s" % (r.stem, g) for r in rows for g in (r.when or [])
+            if not any(fnmatch.fnmatchcase(p, g.lower()) for p in lowered)]
+    ok = True
+    if missing:
+        ok = False
+        print("check_test_guards: %d python test module(s) in neither %s nor %s:"
+              % (len(missing), PY_LISTS[0], PY_LISTS[1]))
+        for p in missing:
+            print("  %s" % p)
+        print('Add a row, or an "# excluded: %s - <reason>" line.' % missing[0])
+    if stale:
+        ok = False
+        print("check_test_guards: %d python exclude line(s) name a file that no longer exists:" % len(stale))
+        for p in stale:
+            print("  %s" % p)
+    if dead:
+        ok = False
+        print("check_test_guards: %d when= glob(s) match no file of the tree:" % len(dead))
+        for d in dead:
+            print("  %s" % d)
+    if ok:
+        print("check_test_guards: %d python test modules, all listed (%d excluded)"
+              % (len(tests), sum(1 for p in tests if p.lower() in excluded)))
+    return ok
+
+
+SCRATCH_TWO = ("import unittest\n\n\nclass T(unittest.TestCase):\n"
+               "    def test_a(self):\n        pass\n\n    def test_b(self):\n        pass\n")
+SCRATCH_FOUR = SCRATCH_TWO + "\n    def test_c(self):\n        pass\n\n    def test_d(self):\n        pass\n"
+SCRATCH_FAIL = ("import unittest\n\n\nclass T(unittest.TestCase):\n"
+                "    def test_a(self):\n        pass\n\n    def test_b(self):\n"
+                "        self.assertEqual(1, 2)\n")
+SCRATCH_IMPORT = "raise RuntimeError('scratch import crash marker')\n"
+SCRATCH_EMPTY = "import unittest\n\n\nclass T(unittest.TestCase):\n    def helper(self):\n        pass\n"
+
+# (case, [(stem, source, row options)], extra environment, reason in the FAILED line,
+#  text the output must also carry)
+PY_REFUSALS = [
+    ("a failing module", [("_pyguard_fail", SCRATCH_FAIL, "")], {}, "1 failure(s), 0 error(s)",
+     "AssertionError: 1 != 2"),
+    ("an import crash", [("_pyguard_import", SCRATCH_IMPORT, "")], {}, "exit 2, no result",
+     "scratch import crash marker"),
+    ("a zero-test module", [("_pyguard_empty", SCRATCH_EMPTY, "")], {}, "no tests", None),
+    ("over-sharding (shards=3 on 2 tests)", [("_pyguard_over", SCRATCH_TWO, "shards=3")], {},
+     "shard 3/3 selected no tests", None),
+    ("a skewed shard (TEST_PY_SHARD_SKEW=1)", [("_pyguard_skew", SCRATCH_FOUR, "shards=2")],
+     {"TEST_PY_SHARD_SKEW": "1"}, "shards overlap", None),
+    ("a shard with no result (TEST_PY_SHARD_CRASH=1)", [("_pyguard_crash", SCRATCH_TWO, "shards=2")],
+     {"TEST_PY_SHARD_CRASH": "1"}, "shard 1/2 wrote no result", None),
+]
+SCRATCH_HELD = ("import os\nimport unittest\n\n\nclass T(unittest.TestCase):\n"
+                "    def test_a(self):\n        self.assertEqual(os.environ.get('KEO_CPU_HELD'), '1')\n\n"
+                "    def test_b(self):\n        self.assertEqual(os.environ.get('KEO_CPU_HELD'), '1')\n")
+PY_FAIL_OPEN = [("_pyguard_a", SCRATCH_HELD, "shards=2"),
+                ("_pyguard_b", SCRATCH_TWO, "when=no/such/folder/**")]
+PY_ENV_CLEAR = ("PY_TESTS_SINCE", "TEST_PY_SHARD_SKEW", "TEST_PY_SHARD_CRASH")
+
+
+def _run_scratch_py(root, name, modules, env_extra, args=()):
+    """Writes the scratch modules and their list under root/name and runs run_py_tests.py on them."""
+    folder = os.path.join(root, name)
+    os.makedirs(folder)
+    lines = []
+    for i, (stem, source, opts) in enumerate(modules):
+        path = os.path.join(folder, stem + ".py")
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(source)
+        lines.append(("%d %s %s" % (10 * (i + 1), path, opts)).rstrip())
+    listing = os.path.join(folder, "list.txt")
+    with open(listing, "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(lines) + "\n")
+    env = dict(os.environ)
+    for key in PY_ENV_CLEAR:
+        env.pop(key, None)
+    env["KEO_TIMINGS_DIR"] = os.path.join(folder, "timings")
+    env.update(env_extra)
+    return subprocess.run([sys.executable, RUN_PY_TESTS, "--list", listing] + list(args),
+                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env,
+                          stdin=subprocess.DEVNULL)
+
+
+def _show(result):
+    text = result.stdout.decode("utf-8", "replace")
+    for line in text.splitlines():
+        print("  | %s" % line)
+
+
+def start_py_runner_controls(pool, root):
+    """Starts every run_py_tests.py control on pool; check_py_runner_controls reports them."""
+    futures = []
+    for i, (case, modules, env_extra, _, _) in enumerate(PY_REFUSALS):
+        futures.append(pool.submit(_run_scratch_py, root, "refuse%d" % i, modules, env_extra))
+    futures.append(pool.submit(_run_scratch_py, root, "failopen", PY_FAIL_OPEN, {},
+                               ("--since", "no-such-rev-for-check-test-guards")))
+    return futures
+
+
+def check_py_runner_controls(futures):
+    ok = True
+    for (case, modules, _, reason, shown), fut in zip(PY_REFUSALS, futures):
+        result = fut.result()
+        text = result.stdout.decode("utf-8", "replace")
+        lines = text.splitlines()
+        want = "python tests FAILED: %s (%s)" % (modules[0][0], reason)
+        if (result.returncode == 1 and lines and lines[-1].strip() == want
+                and not any(l.startswith("python tests: ") for l in lines)
+                and (shown is None or shown in text)):
+            print("check_test_guards: run_py_tests.py refused %s (exit %s)" % (case, result.returncode))
+        else:
+            ok = False
+            print('check_test_guards: run_py_tests.py did not refuse %s with "%s" (exit %s):'
+                  % (case, want, result.returncode))
+            _show(result)
+    result = futures[len(PY_REFUSALS)].result()
+    lines = [l.strip() for l in result.stdout.decode("utf-8", "replace").splitlines()]
+    want = "python tests: %s OK" % ", ".join(stem for stem, _, _ in PY_FAIL_OPEN)
+    if (result.returncode == 0 and lines and lines[-1] == want
+            and any(l.startswith("python test selection: off (") for l in lines)
+            and "py: _pyguard_a: 2 tests, 2 shard(s)" in "\n".join(lines)):
+        print("check_test_guards: run_py_tests.py ran every module when the base could not be read")
+    else:
+        ok = False
+        print('check_test_guards: run_py_tests.py did not run and pass every module, a sharded one '
+              'included, after an unreadable base (exit %s):' % result.returncode)
+        _show(result)
+    return ok
+
+
 def main():
-    coverage_ok = check_coverage()
-    runner_ok = check_runner_fails_on_failure()
-    check_h_ok = check_check_h_counts()
-    return 0 if (coverage_ok and runner_ok and check_h_ok) else 1
+    py_root = tempfile.mkdtemp(prefix="check_test_guards_py_")
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(PY_REFUSALS) + 1) as pool:
+            py_futures = start_py_runner_controls(pool, py_root)
+            coverage_ok = check_coverage()
+            runner_ok = check_runner_fails_on_failure()
+            check_h_ok = check_check_h_counts()
+            py_coverage_ok = check_python_coverage()
+            py_runner_ok = check_py_runner_controls(py_futures)
+    finally:
+        shutil.rmtree(py_root, ignore_errors=True)
+    return 0 if (coverage_ok and runner_ok and check_h_ok and py_coverage_ok and py_runner_ok) else 1
 
 
 if __name__ == "__main__":

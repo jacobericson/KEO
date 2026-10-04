@@ -15,7 +15,9 @@ module's test count and test ids, their selections are disjoint and cover every 
 run add up to that count, and the count is above zero. Up to PY_JOBS shard processes run at once
 (default: half the logical cores), longest first by the times recorded in
 %LOCALAPPDATA%\\KEO\\timings\\py_tests.json (KEO_TIMINGS_DIR overrides the folder); with no
-usable record, sharded modules go first by shard count, then list order.
+usable record, sharded modules go first by shard count, then list order. Each shard process
+holds one host-wide cpu token from tools/build/slots.py while it runs, and inherits KEO_CPU_HELD=1
+so that the processes it starts take none.
 
 Each module's output is printed as one block, in list order, followed by
     py: <stem>: <n> tests, <N> shard(s), <seconds> s
@@ -48,6 +50,8 @@ REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
 LIST_DIR = os.path.join(REPO, 'tools', 'tests')
 LISTS = [os.path.join(LIST_DIR, 'py_tests.txt'), os.path.join(LIST_DIR, 'py_tests_private.txt')]
 PY_SHARD = os.path.join(LIST_DIR, 'py_shard.py')
+sys.path.insert(0, os.path.join(REPO, 'tools', 'build'))
+import slots  # noqa: E402
 RUNNER_FILES = ['tools/tests/run_py_tests.py', 'tools/tests/py_shard.py',
                 'tools/tests/py_tests.txt', 'tools/tests/py_tests_private.txt']
 MAX_SHARDS = 32
@@ -302,11 +306,13 @@ def run_shard(mod, k, tmp):
     cmd = [sys.executable, PY_SHARD, mod.path, '--shard', '%d/%d' % (k, n), '--result', res_path]
     t0 = time.time()
     try:
-        with open(out_path, 'wb') as out:
-            rc = subprocess.call(cmd, cwd=REPO, stdout=out, stderr=subprocess.STDOUT,
-                                 stdin=subprocess.DEVNULL)
-        return ShardRun(k, rc, out_path, res_path, t0, time.time())
-    except OSError as exc:
+        with slots.cpu_token('py %s %d/%d' % (mod.row.stem, k, n)):
+            t0 = time.time()
+            with open(out_path, 'wb') as out:
+                rc = subprocess.call(cmd, cwd=REPO, stdout=out, stderr=subprocess.STDOUT,
+                                     stdin=subprocess.DEVNULL, env=slots.child_env())
+            return ShardRun(k, rc, out_path, res_path, t0, time.time())
+    except (OSError, ValueError, slots.SlotTimeout) as exc:
         return ShardRun(k, None, out_path, res_path, t0, time.time(), error=str(exc))
 
 

@@ -1,7 +1,9 @@
 # Python unit tests run by tools\tests\run_py_tests.py (from build_tests.bat), one per line as
-# "<order> <repo-relative path>". Blank lines and lines starting with # are ignored. Where a
-# py_tests_private.txt sits beside this file, the runner merges its lines with these and runs
-# every module in ascending order.
+# "<order> <repo-relative path>", optionally followed by "shards=N" and "when=<globs>" (see the
+# runner). Blank lines and lines starting with # are ignored, except that check_test_guards.py
+# reads "# excluded: <path> - <reason>" lines for test modules that are not run. Where a
+# py_tests_private.txt sits beside this file, the runner merges its lines with these and orders
+# every module by <order>.
 40 tools\kenshilib\test_check_headers_pin.py
 50 tools\kenshilib\test_resources_root.py
 90 tools\build\test_hook_sites.py
