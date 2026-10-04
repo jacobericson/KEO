@@ -3,7 +3,8 @@
 `git init` and every `git config` start a git process. A repository made here costs none after
 the first of its configuration: the template is `git init` from an empty template directory (no
 sample hooks) plus the same config rows in the same order, and each new repository is a copy of
-its `.git`. The templates are removed when the process exits.
+its `.git`. The templates are removed when the process exits. read_head answers
+`git rev-parse HEAD` from the repository's files where it can, also without a process.
 """
 import atexit
 import os
@@ -13,6 +14,7 @@ import tempfile
 
 # Variables that would point git at a repository other than the one being made.
 _REPO_VARS = ('GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY')
+_HEX = frozenset('0123456789abcdef')
 
 _templates = {}
 _scratch = []
@@ -48,3 +50,19 @@ def init(root, config=(), branch=None):
         _templates[key] = _make_template(branch, key[1])
     shutil.copytree(_templates[key], os.path.join(root, '.git'))
 
+
+def read_head(root):
+    """The commit `root`'s HEAD names when HEAD is a branch whose ref is a loose file, read without
+    starting git; None otherwise (packed or unborn ref, detached HEAD, a `.git` file), so the caller
+    asks git instead."""
+    git_dir = os.path.join(root, '.git')
+    try:
+        with open(os.path.join(git_dir, 'HEAD'), 'rb') as f:
+            head = f.read().decode('ascii').strip()
+        if not head.startswith('ref: refs/heads/'):
+            return None
+        with open(os.path.join(git_dir, *head[len('ref: '):].split('/')), 'rb') as f:
+            sha = f.read().decode('ascii').strip()
+    except (OSError, UnicodeDecodeError):
+        return None
+    return sha if len(sha) == 40 and set(sha) <= _HEX else None
