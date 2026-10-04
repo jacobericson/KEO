@@ -48,8 +48,9 @@ struct SettingsKeyRef
 };
 
 // A header titled title only when a row shows, then one row per shown key:
-// the live keys, then the startup-only ones, each in keys order. Offset
-// fields that fit bind directly; other rows bind their staged slots.
+// the checkboxes, then the drop boxes, then the sliders, each group's live
+// keys before its startup-only ones, in keys order. Offset fields that fit
+// bind directly; other rows bind their staged slots.
 void AddSectionRows(const char* title, const std::vector<SettingsKeyRef>& keys, bool devBuild,
                     std::vector<SettingsRow>* out);
 

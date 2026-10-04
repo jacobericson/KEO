@@ -77,16 +77,17 @@ static void CheckSections()
 	}
 	Check(order && next == PROD_PAGE_ROWS, "Sections: PROD rows in order under their headings");
 
-	// Performance holds the render module's PROD rows: the live ones in table
-	// order, then the startup-only ones, label for label and kind for kind.
+	// Performance holds the render module's PROD rows: the checkboxes, then
+	// the sliders, each live before startup-only and in table order, label for
+	// label and kind for kind.
 	std::vector<const SettingsRow*> render = Section(rows, "Performance");
 	std::vector<std::string> wantLabel;
 	std::vector<SettingsRowKind> wantKind;
-	for (int pass = 0; pass < 2; ++pass)
+	for (int pass = 0; pass < 4; ++pass)
 	for (int i = 0; g_renderKeys[i].name; ++i)
 	{
 		const RenderKey& k = g_renderKeys[i];
-		if (!k.label || k.kind == RK_TEXT || k.devOnly || k.live != (pass == 0))
+		if (!k.label || k.kind == RK_TEXT || k.devOnly || (k.kind == RK_BOOL) != (pass < 2) || k.live != (pass % 2 == 0))
 			continue;
 		wantLabel.push_back(std::string(k.label) + (k.live ? "" : " *"));
 		wantKind.push_back(k.kind == RK_BOOL ? SR_CHECKBOX : SR_SLIDER);
@@ -96,8 +97,8 @@ static void CheckSections()
 		same = render[i]->label == wantLabel[i] && render[i]->kind == wantKind[i];
 	Check(same, "Sections");
 	Check(render.size() == 3 && render[0]->label == "Cap particle updates at high game speed"
-	      && render[1]->label == "Foliage time limit at high speed (ms)"
-	      && render[2]->label == "Rendering optimizations *", "Sections");
+	      && render[1]->label == "Rendering optimizations *"
+	      && render[2]->label == "Foliage time limit at high speed (ms)", "Sections");
 }
 
 // ---- Every shown key once; labels; counts ---------------------------------

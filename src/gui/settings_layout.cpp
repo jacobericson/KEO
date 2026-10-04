@@ -6,12 +6,12 @@ namespace keo_gui {
 const SettingsPlace kSettingsPlaces[] =
 {
 	{ "Zone loading",   "zone",     "preload" },
-	{ "Zone loading",   "zone",     "zoneLifeRetainRadius" },
 	{ "Zone loading",   "navmesh",  "navmeshWorkerCount" },
+	{ "Zone loading",   "zone",     "zoneLifeRetainRadius" },
 	{ "Zone loading",   "navmesh",  "navmeshDiskCacheMaxMB" },
 	{ "Performance",    "render",   "particleStepCap" },
-	{ "Performance",    "render",   "foliagePageBudgetMs" },
 	{ "Performance",    "render",   "renderLevers" },
+	{ "Performance",    "render",   "foliagePageBudgetMs" },
 	{ "Squad movement", "movement", "groupCohesion" },
 	{ "Squad movement", "movement", "k7PostDeathHold" },
 	{ NULL, NULL, NULL }

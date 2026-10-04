@@ -22,14 +22,17 @@
 #include <mygui/MyGUI_TabControl.h>
 #include <mygui/MyGUI_TabItem.h>
 #include <mygui/MyGUI_Button.h>
+#include <mygui/MyGUI_ComboBox.h>
 #include <mygui/MyGUI_Delegate.h>
 #include "base/klib_include_end.h"
 
 static_assert(offsetof(OptionsWindow, tabs) == 0x108, "OptionsWindow::tabs");
 static_assert(offsetof(OptionsWindow, tooltip) == 0x118, "OptionsWindow::tooltip");
 static_assert(offsetof(DatapanelGUI, currentCategory) == 0xB0, "DatapanelGUI::currentCategory");
+static_assert(offsetof(DatapanelGUI, basicSpacing) == 0x130, "DatapanelGUI::basicSpacing");
 static_assert(offsetof(DataPanelLine, callback) == 0x20, "DataPanelLine::callback");
 static_assert(offsetof(DataPanelLine_Button, button) == 0x140, "DataPanelLine_Button::button");
+static_assert(offsetof(DataPanelLine_DropBox, listBox) == 0x120, "DataPanelLine_DropBox::listBox");
 
 #ifdef KEO_DEBUG
 static const bool DEV_BUILD = true;
@@ -128,6 +131,22 @@ static void OnButtonPress(DataPanelLine* line)
 static const char* const HEADING_COLOUR = "#afa68b";
 static const char* const NOTE_COLOUR    = "#a0a0a0";
 
+// The game's slider lines end their value box, and its checkbox lines their
+// box, at this fraction of the panel's width; the value box starts this far
+// before it.
+static const float VALUE_COLUMN_RIGHT = 0.98f;
+static const float VALUE_COLUMN_WIDTH = 0.16f;
+
+// A drop box line places its box at a fixed left offset; this moves it into
+// the value column, keeping its row and its width.
+static void AlignToValueColumn(MyGUI::Widget* box)
+{
+	if (!box || !box->getParent())
+		return;
+	int panelWidth = box->getParent()->getWidth();
+	box->setPosition((int)(panelWidth * (VALUE_COLUMN_RIGHT - VALUE_COLUMN_WIDTH)), box->getTop());
+}
+
 static void AddRows(DatapanelGUI* panel, const std::vector<SettingsRow>& rows, int cat, ToolTip* tooltip)
 {
 	const std::string buttonSkin = "Kenshi_Button2";
@@ -174,7 +193,8 @@ static void AddRows(DatapanelGUI* panel, const std::vector<SettingsRow>& rows, i
 		}
 		case SR_DROPBOX:
 		{
-			DataPanelLine_DropBox* d = panel->setLineDropBox(r.label, cat, r.intPtr, false, 0.4f);
+			DataPanelLine_DropBox* d = panel->setLineDropBox(r.label, cat, r.intPtr, false, VALUE_COLUMN_WIDTH);
+			AlignToValueColumn(d->listBox);
 			for (size_t c = 0; c < r.choices.size(); ++c)
 				d->addAValue(r.choices[c].first, r.choices[c].second);
 			d->refresh();
@@ -240,6 +260,10 @@ static void BuildTab(OptionsWindow* win)
 		owned = true;
 		panel->changeCategory(cat);
 		panel->setLineSpacing(25.0f);
+		// Until its first control line, a panel puts each line in a fixed slot
+		// a full line apart; packing from the start keeps the first heading as
+		// close to its rows as the others.
+		panel->basicSpacing = false;
 		AddRows(panel, rows, cat, win->tooltip);
 		tab->setVisible(false);
 		s_staged = true;

@@ -22,7 +22,8 @@ static const char* const MODULE_TITLES[] =
 };
 
 // The PROD page's rows in display order, by key and section: the settings an
-// end user changes in game, live rows before startup-only ones in a section.
+// end user changes in game; in a section, checkboxes, drop boxes, then
+// sliders, each live before startup-only.
 struct ProdRow
 {
 	const char* key;
@@ -30,9 +31,9 @@ struct ProdRow
 };
 static const ProdRow kProdPage[] =
 {
-	{ "preload", "Zone loading" }, { "zoneLifeRetainRadius", "Zone loading" },
-	{ "navmeshWorkerCount", "Zone loading" }, { "navmeshDiskCacheMaxMB", "Zone loading" },
-	{ "particleStepCap", "Performance" }, { "foliagePageBudgetMs", "Performance" }, { "renderLevers", "Performance" },
+	{ "preload", "Zone loading" }, { "navmeshWorkerCount", "Zone loading" },
+	{ "zoneLifeRetainRadius", "Zone loading" }, { "navmeshDiskCacheMaxMB", "Zone loading" },
+	{ "particleStepCap", "Performance" }, { "renderLevers", "Performance" }, { "foliagePageBudgetMs", "Performance" },
 	{ "groupCohesion", "Squad movement" }, { "k7PostDeathHold", "Squad movement" },
 	{ NULL, NULL }
 };

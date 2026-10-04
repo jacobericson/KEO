@@ -1,6 +1,6 @@
 // The settings page's layout, built twice at /DZONEHAND_STEP=3: with
-// /DKEO_DEBUG (the DEV table) and without it (the PROD table). Restart-row
-// order and the footnote in both views, the PROD layout table, and the
+// /DKEO_DEBUG (the DEV table) and without it (the PROD table). Row order in
+// each section and the footnote in both views, the PROD layout table, and the
 // fallback section for a shown key the table does not place.
 
 #include "gui/settings_layout.h"
@@ -24,10 +24,17 @@ static const char* const SUITE_NAME = "settings_layout_units";
 static const char* const SUITE_NAME = "settings_layout_prod_units";
 #endif
 
-// In every section the startup-only rows follow the live ones; one footnote
+// A row's widget group in a section's order: checkboxes, drop boxes, sliders.
+static int Group(const SettingsRow& r)
+{
+	return r.kind == SR_CHECKBOX ? 0 : r.kind == SR_DROPBOX ? 1 : 2;
+}
+
+// In every section the checkboxes come first, then the drop boxes, then the
+// sliders, each group's startup-only rows after its live ones; one footnote
 // follows the sections exactly when a startup-only row shows, before the
 // Benchmark section.
-static void CheckRestartOrder()
+static void CheckSectionOrder()
 {
 	SettingsStaging st;
 	StageAll(&st);
@@ -37,7 +44,8 @@ static void CheckRestartOrder()
 	for (int view = 0; view < 2; ++view)
 	{
 		std::vector<SettingsRow> rows = Rows(&st, view != 0, &bench);
-		bool order = true, seenRestart = false, anyRestart = false, tooltips = true;
+		bool order = true, anyRestart = false, tooltips = true;
+		int last = -1;
 		int notes = 0;
 		size_t note = rows.size(), benchmark = rows.size();
 		for (size_t i = 0; i < rows.size(); ++i)
@@ -45,7 +53,7 @@ static void CheckRestartOrder()
 			const SettingsRow& r = rows[i];
 			if (r.kind == SR_HEADER)
 			{
-				seenRestart = false;
+				last = -1;
 				if (r.label == "Benchmark")
 					benchmark = i;
 				continue;
@@ -58,14 +66,18 @@ static void CheckRestartOrder()
 			}
 			if (r.restart)
 			{
-				seenRestart = anyRestart = true;
+				anyRestart = true;
 				tooltips = tooltips && EndsWith(r.tooltip, " Takes effect after restarting the game.");
 			}
-			else if (seenRestart && i < benchmark)
-				order = false;
+			if (i < benchmark)
+			{
+				int place = 2 * Group(r) + (r.restart ? 1 : 0);
+				order = order && place >= last;
+				last = place;
+			}
 		}
 		std::string name = view ? "DEV" : "PROD";
-		CheckNamed(order, "restart rows trail live rows: " + name);
+		CheckNamed(order, "checkboxes, drop boxes, sliders, each live then restart: " + name);
 		CheckNamed(tooltips, "restart rows say so in their tooltips: " + name);
 		CheckNamed(anyRestart && notes == 1 && rows[note].label == "* Takes effect after restarting the game.",
 		           "one footnote: " + name);
@@ -142,7 +154,7 @@ static void CheckFallback()
 
 int main()
 {
-	CheckRestartOrder();
+	CheckSectionOrder();
 	CheckLayoutTable();
 	CheckFallback();
 	return CheckExit(SUITE_NAME);

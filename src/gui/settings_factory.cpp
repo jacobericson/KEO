@@ -183,16 +183,28 @@ static void AddKeyRow(const ConfigKey& k, int i, ConfigModuleStage* s, bool devB
 	out->push_back(r);
 }
 
+// A row's place among a section's widget groups: checkboxes, drop boxes, sliders.
+static int WidgetGroup(const ConfigKey& k)
+{
+	switch (WidgetOf(k))
+	{
+	case SW_CHECKBOX: return 0;
+	case SW_DROPBOX:  return 1;
+	default:          return 2;
+	}
+}
+
 void AddSectionRows(const char* title, const std::vector<SettingsKeyRef>& keys, bool devBuild,
                     std::vector<SettingsRow>* out)
 {
 	bool headerAdded = false;
-	for (int pass = 0; pass < 2; ++pass)
+	// Pass p shows widget group p / 2, its live keys on an even pass.
+	for (int pass = 0; pass < 6; ++pass)
 	{
 		for (size_t j = 0; j < keys.size(); ++j)
 		{
 			const ConfigKey& k = keys[j].module->keys[keys[j].key];
-			if (!SettingsKeyShown(k, devBuild) || k.live != (pass == 0))
+			if (!SettingsKeyShown(k, devBuild) || WidgetGroup(k) != pass / 2 || k.live != (pass % 2 == 0))
 				continue;
 			if (!headerAdded)
 			{

@@ -91,7 +91,7 @@ const ConfigKey g_movementConfigKeys[] =
 	  "Re-issue deleted move orders",
 	  "Re-issues a player move order the engine deleted, never one the player cancelled."),
 	CFG_OCUSTOM_CHOICES("k7PostDeathHold", MovementConfig, cfg_k7PostDeathHold, ParseK7PostDeathHold, DOC, SHOW,
-	  "Hold move orders through combat",
+	  "Resume move orders after combat",
 	  "Holds a player move order that ended as combat took over, and re-issues it once the fight ends,"
 	  " up to 60 seconds. Observe (DEV) only logs what would be held.", kK7HoldChoices),
 	CFG_OBOOL("k7DestReadyGate", MovementConfig, k7DestReadyGateEnabled,       DOC, DEVROW,

@@ -22,8 +22,8 @@ extern const SettingsPlace kSettingsPlaces[];
 // The heading of the shown keys no place names.
 extern const char* const OTHER_SETTINGS_TITLE;
 
-// The PROD rows: each section of places with its shown keys (live, then
-// startup-only), then every shown key places does not name under
+// The PROD rows: each section of places with its shown keys, ordered by
+// AddSectionRows, then every shown key places does not name under
 // OTHER_SETTINGS_TITLE, so a row missing from the table still reaches the tab.
 void AddPlayerSections(const SettingsPlace* places, SettingsStaging* staging, std::vector<SettingsRow>* out);
 
