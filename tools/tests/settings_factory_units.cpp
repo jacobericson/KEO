@@ -32,8 +32,8 @@ static const char* const SUITE_NAME = "settings_factory_units";
 #else
 static const char* const SUITE_NAME = "settings_factory_prod_units";
 #endif
-static const size_t CORE_ROWS_DEV = 73;
-static const int DEV_ONLY_ROWS = 85;
+static const size_t CORE_ROWS_DEV = 85;
+static const int DEV_ONLY_ROWS = 95;
 
 // ---- Sections --------------------------------------------------------------
 
@@ -47,8 +47,8 @@ static void CheckSections()
 
 	// DEV: every module section, then the Benchmark section.
 	std::vector<std::string> dev = Headers(Rows(&st, true, &bench));
-	bool sections = dev.size() == 8 && dev[0] == RENDER_TITLE && dev[7] == "Benchmark";
-	for (int i = 0; sections && i < 6; ++i) sections = dev[i + 1] == MODULE_TITLES[i];
+	bool sections = dev.size() == 9 && dev[0] == RENDER_TITLE && dev[8] == "Benchmark";
+	for (int i = 0; sections && i < 7; ++i) sections = dev[i + 1] == MODULE_TITLES[i];
 	Check(sections, "Sections: DEV");
 
 	// PROD: only the sections that keep a row, and no Benchmark.
@@ -159,7 +159,7 @@ static void CheckRowCounts()
 	Check(ModuleSections(dev).size() == CORE_ROWS_DEV, "core rows dev");
 	Check(Section(dev, RENDER_TITLE).size() == 21, "render rows dev");
 	Check(Section(prod, "Zone loading").size() == 4 && Section(prod, "Performance").size() == 3
-	      && Section(prod, "Squad movement").size() == 2, "player section rows prod");
+	      && Section(prod, "Squad movement").size() == 4, "player section rows prod");
 }
 
 // ---- Restart and devOnly ---------------------------------------------------
@@ -522,6 +522,36 @@ static void CheckCustomDropBox()
 		      && movement::g_movementCfg.cfg_k7PostDeathHold == r->choices[i].second, "custom drop box: the written value parses back");
 	}
 	movement::g_movementCfg.cfg_k7PostDeathHold = held;
+}
+
+// The route planner's drop box: Observe is DEV-only, so PROD offers Off and On and keeps Observe
+// only while the row holds it, and DEV offers all three.
+static void CheckPlannerModeRow()
+{
+	int c = ModuleFor("plannerMode");
+	int pm = c >= 0 ? KeyIndex(kConfigModules[c], "plannerMode") : -1;
+	Check(pm >= 0 && kConfigModules[c].keys[pm].label, "Observe is DEV-only: the plannerMode row");
+	if (pm < 0 || !kConfigModules[c].keys[pm].label)
+		return;
+	const ConfigKey& k = kConfigModules[c].keys[pm];
+	SettingsStaging st;
+	StageAll(&st);
+	std::vector<SettingsRow> prod = Rows(&st, false, NULL), dev = Rows(&st, true, NULL);
+	const SettingsRow* p = FindLabel(prod, RowLabel(k));
+	Check(st.module[c].slots[pm].i == planner::PLANNER_ON && p && p->kind == SR_DROPBOX && p->choices.size() == 2
+	      && p->choices[0].first == "Off" && p->choices[0].second == planner::PLANNER_OFF
+	      && p->choices[1].first == "On" && p->choices[1].second == planner::PLANNER_ON,
+	      "Observe is DEV-only: PROD shows Off and On");
+	const SettingsRow* d = FindLabel(dev, RowLabel(k));
+	Check(d && d->kind == SR_DROPBOX && d->choices.size() == 3
+	      && d->choices[1].first == "Observe" && d->choices[1].second == planner::PLANNER_OBSERVE,
+	      "Observe is DEV-only: DEV shows Off, Observe and On");
+	SettingsStaging held = st;
+	held.module[c].slots[pm].i = planner::PLANNER_OBSERVE;
+	prod = Rows(&held, false, NULL);
+	p = FindLabel(prod, RowLabel(k));
+	Check(p && p->choices.size() == 3 && p->choices[1].second == planner::PLANNER_OBSERVE,
+	      "Observe is DEV-only: PROD keeps Observe while the row holds it");
 }
 
 // Every row the page shows saves: a change through its bound pointer gives
@@ -990,6 +1020,7 @@ int main()
 	CheckWorkerRow();
 	CheckOneKey();
 	CheckCustomDropBox();
+	CheckPlannerModeRow();
 	CheckEveryRowSaves();
 	CheckStageReads();
 	CheckCommitClamp();

@@ -15,6 +15,8 @@ int BenchLoadedZoneCount() { return 0; }
 namespace config_modules_units_detail {
 struct Owner { const char* key; const char* module; };
 struct Expected { const char* name; const char* title; size_t size; const void* defaults; };
+struct PlannerField { const char* key; int planner::PlannerConfig::* field; int value; };
+struct PlannerLine { const char* key; const char* text; int planner::PlannerConfig::* field; int value; };
 }
 using namespace config_modules_units_detail;
 
@@ -133,6 +135,107 @@ static void Fail(const char* key, const std::string& reason)
 	printf("config_modules_units: %s: %s\n", key, reason.c_str());
 }
 
+static void DiscardLog(const std::string&) {}
+
+// The planner's fields as the process starts and an empty INI loads them: no line applied, then
+// the load's clamp.
+static const PlannerField kPlannerEmptyIni[] =
+{
+	{ "plannerMode", &planner::PlannerConfig::mode, 2 },
+	{ "plannerLegSpan", &planner::PlannerConfig::legSpan, 2 },
+	{ "plannerBaseBuild", &planner::PlannerConfig::baseBuild, 1 },
+	{ "plannerAheadTiles", &planner::PlannerConfig::aheadTiles, 3 },
+	{ "plannerWaitSeconds", &planner::PlannerConfig::waitSeconds, 10 },
+	{ "plannerWaterCost", &planner::PlannerConfig::waterCost, 2 },
+	{ "plannerWaterEngine", &planner::PlannerConfig::waterEngine, 1 },
+	{ "plannerAcidCost", &planner::PlannerConfig::acidCost, 3 },
+	{ "plannerPreArrivalMs", &planner::PlannerConfig::preArrivalMs, 1000 },
+	{ "plannerLegAim", &planner::PlannerConfig::legAim, 1 },
+	{ "plannerMergeBias", &planner::PlannerConfig::mergeBias, 3 },
+	{ "plannerMergeDetour", &planner::PlannerConfig::mergeDetour, 15 },
+};
+
+// Each planner key's default text and values inside its range, as an INI line loads them.
+static const PlannerLine kPlannerLines[] =
+{
+	{ "plannerMode", "on", &planner::PlannerConfig::mode, 2 },
+	{ "plannerMode", "off", &planner::PlannerConfig::mode, 0 },
+	{ "plannerMode", "observe", &planner::PlannerConfig::mode, 1 },
+	{ "plannerLegSpan", "2", &planner::PlannerConfig::legSpan, 2 },
+	{ "plannerLegSpan", "1", &planner::PlannerConfig::legSpan, 1 },
+	{ "plannerLegSpan", "8", &planner::PlannerConfig::legSpan, 8 },
+	{ "plannerBaseBuild", "true", &planner::PlannerConfig::baseBuild, 1 },
+	{ "plannerBaseBuild", "false", &planner::PlannerConfig::baseBuild, 0 },
+	{ "plannerAheadTiles", "3", &planner::PlannerConfig::aheadTiles, 3 },
+	{ "plannerAheadTiles", "0", &planner::PlannerConfig::aheadTiles, 0 },
+	{ "plannerAheadTiles", "8", &planner::PlannerConfig::aheadTiles, 8 },
+	{ "plannerWaitSeconds", "10", &planner::PlannerConfig::waitSeconds, 10 },
+	{ "plannerWaitSeconds", "1", &planner::PlannerConfig::waitSeconds, 1 },
+	{ "plannerWaitSeconds", "60", &planner::PlannerConfig::waitSeconds, 60 },
+	{ "plannerWaterCost", "dynamic", &planner::PlannerConfig::waterCost, 2 },
+	{ "plannerWaterCost", "off", &planner::PlannerConfig::waterCost, 0 },
+	{ "plannerWaterCost", "floor", &planner::PlannerConfig::waterCost, 1 },
+	{ "plannerWaterCost", "engine", &planner::PlannerConfig::waterCost, 3 },
+	{ "plannerWaterEngine", "match", &planner::PlannerConfig::waterEngine, 1 },
+	{ "plannerWaterEngine", "off", &planner::PlannerConfig::waterEngine, 0 },
+	{ "plannerAcidCost", "3", &planner::PlannerConfig::acidCost, 3 },
+	{ "plannerAcidCost", "1", &planner::PlannerConfig::acidCost, 1 },
+	{ "plannerAcidCost", "10", &planner::PlannerConfig::acidCost, 10 },
+	{ "plannerPreArrivalMs", "1000", &planner::PlannerConfig::preArrivalMs, 1000 },
+	{ "plannerPreArrivalMs", "0", &planner::PlannerConfig::preArrivalMs, 0 },
+	{ "plannerPreArrivalMs", "3000", &planner::PlannerConfig::preArrivalMs, 3000 },
+	{ "plannerLegAim", "true", &planner::PlannerConfig::legAim, 1 },
+	{ "plannerLegAim", "false", &planner::PlannerConfig::legAim, 0 },
+	{ "plannerMergeBias", "3", &planner::PlannerConfig::mergeBias, 3 },
+	{ "plannerMergeBias", "1", &planner::PlannerConfig::mergeBias, 1 },
+	{ "plannerMergeBias", "10", &planner::PlannerConfig::mergeBias, 10 },
+	{ "plannerMergeDetour", "15", &planner::PlannerConfig::mergeDetour, 15 },
+	{ "plannerMergeDetour", "0", &planner::PlannerConfig::mergeDetour, 0 },
+	{ "plannerMergeDetour", "100", &planner::PlannerConfig::mergeDetour, 100 },
+};
+
+// One INI line through the loader, then the load's clamp, from the compiled defaults with the
+// line's field set apart, so a refused line leaves the marker; the field as loaded.
+static int LoadPlannerLine(const char* key, const char* text, int planner::PlannerConfig::* field, ConfigLoadState* st)
+{
+	planner::g_plannerCfg = planner::kPlannerDefaults;
+	planner::g_plannerCfg.*field = -7;
+	ConfigApplyLine(key, text, 1, st, &DiscardLog);
+	ConfigClampLoaded(&DiscardLog);
+	return planner::g_plannerCfg.*field;
+}
+
+static void CheckPlannerKeys()
+{
+	const planner::PlannerConfig held = planner::g_plannerCfg;
+	ConfigClampLoaded(&DiscardLog);
+	for (size_t i = 0; i < sizeof(kPlannerEmptyIni) / sizeof(kPlannerEmptyIni[0]); ++i)
+	{
+		const PlannerField& f = kPlannerEmptyIni[i];
+		if (planner::g_plannerCfg.*f.field != f.value) Fail(f.key, "an empty INI does not load the default");
+	}
+	for (size_t i = 0; i < sizeof(kPlannerLines) / sizeof(kPlannerLines[0]); ++i)
+	{
+		const PlannerLine& l = kPlannerLines[i];
+		ConfigLoadState st;
+		int v = LoadPlannerLine(l.key, l.text, l.field, &st);
+		if (v != l.value || st.overrides != 1 || st.unrecognised != 0)
+		{
+			std::ostringstream ss;
+			ss << l.key << "=" << l.text << " loads " << v << ", want " << l.value;
+			Fail(l.key, ss.str());
+		}
+	}
+
+	// A ranged key refuses a value below its range and clamps one above it to the top.
+	ConfigLoadState below, above;
+	Check(LoadPlannerLine("plannerLegSpan", "0", &planner::PlannerConfig::legSpan, &below) == -7
+	      && below.overrides == 0 && below.unrecognised == 1, "planner: plannerLegSpan=0 is refused");
+	Check(LoadPlannerLine("plannerLegSpan", "9", &planner::PlannerConfig::legSpan, &above) == 8
+	      && above.overrides == 1, "planner: plannerLegSpan=9 loads as 8");
+	planner::g_plannerCfg = held;
+}
+
 int main()
 {
 	Check(kConfigModuleCount == 9 && kConfigModuleCount <= CONFIG_MODULE_MAX, "nine modules within stage capacity");
@@ -198,5 +301,6 @@ int main()
 		if (!k) Fail(kOwners[i].key, std::string("expected in ") + kOwners[i].module + ", missing");
 		else if (strcmp(mod->name, kOwners[i].module)) Fail(kOwners[i].key, std::string("expected in ") + kOwners[i].module + ", found in " + mod->name);
 	}
+	CheckPlannerKeys();
 	return CheckExit("config_modules_units");
 }

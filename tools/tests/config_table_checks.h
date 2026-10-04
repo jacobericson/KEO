@@ -550,7 +550,7 @@ void CheckCoreWriter(const ConfigModule& core)
 	for (int m = 0; m < kConfigModuleCount; ++m)
 		if (kConfigModules[m].state && strcmp(kConfigModules[m].name, "render"))
 			ConfigIniEntries(kConfigModules[m], kConfigModules[m].state, kConfigModules[m].defaults, &e);
-	Check(e.size() == 74u,
+	Check(e.size() == 86u,
 	      "writer: core entries, every active row but the custom rows without choices");
 	bool appends = false;
 	for (size_t i = 0; i < e.size(); ++i)

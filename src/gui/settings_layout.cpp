@@ -13,7 +13,9 @@ const SettingsPlace kSettingsPlaces[] =
 	{ "Performance",    "render",   "renderLevers" },
 	{ "Performance",    "render",   "foliagePageBudgetMs" },
 	{ "Squad movement", "movement", "groupCohesion" },
+	{ "Squad movement", "movement", "formationGatherPace" },
 	{ "Squad movement", "movement", "k7PostDeathHold" },
+	{ "Squad movement", "planner", "plannerMode" },
 	{ NULL, NULL, NULL }
 };
 

@@ -2,24 +2,10 @@
 #include "planner/planner_config.h"
 #include "base/config_rows.h"
 #include "base/ini_text.h"
-#include <cstddef>
-#include <stdlib.h>
 #include <string.h>
 
 // The parsers' one write: an accepted value into its field of the live config.
 static bool StoreField(int planner::PlannerConfig::* field, int v) { planner::g_plannerCfg.*field = v; return true; }
-
-// A decimal integer in [lo, hi] with nothing after it; anything else is refused.
-static bool ParseRanged(const std::string& val, int lo, int hi, int* out)
-{
-	const char* s = val.c_str();
-	char* end = NULL;
-	long v = strtol(s, &end, 10);
-	if (end == s || *end != '\0' || v < lo || v > hi)
-		return false;
-	*out = (int)v;
-	return true;
-}
 
 // plannerMode: off, observe or on; anything else is refused.
 static bool ParsePlannerMode(const std::string& val, ConfigLogFn log)
@@ -37,16 +23,6 @@ static bool ParsePlannerMode(const std::string& val, ConfigLogFn log)
 	return StoreField(&planner::PlannerConfig::mode, mode);
 }
 
-// plannerLegSpan: 1..8.
-static bool ParsePlannerLegSpan(const std::string& val, ConfigLogFn log)
-{
-	(void)log;
-	int v;
-	if (!ParseRanged(val, 1, 8, &v))
-		return false;
-	return StoreField(&planner::PlannerConfig::legSpan, v);
-}
-
 // plannerBaseBuild: true or false.
 static bool ParsePlannerBaseBuild(const std::string& val, ConfigLogFn log)
 {
@@ -55,26 +31,6 @@ static bool ParsePlannerBaseBuild(const std::string& val, ConfigLogFn log)
 	if (!ParseBoolOr(val, NULL, &b, &third) || third)
 		return false;
 	return StoreField(&planner::PlannerConfig::baseBuild, b ? 1 : 0);
-}
-
-// plannerAheadTiles: 0..8.
-static bool ParsePlannerAheadTiles(const std::string& val, ConfigLogFn log)
-{
-	(void)log;
-	int v;
-	if (!ParseRanged(val, 0, 8, &v))
-		return false;
-	return StoreField(&planner::PlannerConfig::aheadTiles, v);
-}
-
-// plannerWaitSeconds: 1..60.
-static bool ParsePlannerWaitSeconds(const std::string& val, ConfigLogFn log)
-{
-	(void)log;
-	int v;
-	if (!ParseRanged(val, 1, 60, &v))
-		return false;
-	return StoreField(&planner::PlannerConfig::waitSeconds, v);
 }
 
 // plannerWaterCost: off, floor, dynamic or engine; anything else is refused.
@@ -109,26 +65,6 @@ static bool ParsePlannerWaterEngine(const std::string& val, ConfigLogFn log)
 	return StoreField(&planner::PlannerConfig::waterEngine, mode);
 }
 
-// plannerAcidCost: 1..10; a value out of range is refused and the default stays.
-static bool ParsePlannerAcidCost(const std::string& val, ConfigLogFn log)
-{
-	(void)log;
-	int v;
-	if (!ParseRanged(val, 1, 10, &v))
-		return false;
-	return StoreField(&planner::PlannerConfig::acidCost, v);
-}
-
-// plannerPreArrivalMs: 0..3000; a value out of range is refused and the default stays.
-static bool ParsePlannerPreArrivalMs(const std::string& val, ConfigLogFn log)
-{
-	(void)log;
-	int v;
-	if (!ParseRanged(val, 0, 3000, &v))
-		return false;
-	return StoreField(&planner::PlannerConfig::preArrivalMs, v);
-}
-
 // plannerLegAim: true or false.
 static bool ParsePlannerLegAim(const std::string& val, ConfigLogFn log)
 {
@@ -139,25 +75,28 @@ static bool ParsePlannerLegAim(const std::string& val, ConfigLogFn log)
 	return StoreField(&planner::PlannerConfig::legAim, b ? 1 : 0);
 }
 
-// plannerMergeBias: 1..10; a value out of range is refused and the default stays.
-static bool ParsePlannerMergeBias(const std::string& val, ConfigLogFn log)
+// The drop boxes' choices: the INI text each parser accepts, the value it stores.
+static const ConfigChoice kPlannerModeChoices[] =
 {
-	(void)log;
-	int v;
-	if (!ParseRanged(val, 1, 10, &v))
-		return false;
-	return StoreField(&planner::PlannerConfig::mergeBias, v);
-}
+	{ "off", planner::PLANNER_OFF, "Off" }, { "observe", planner::PLANNER_OBSERVE, "Observe", true }, { "on", planner::PLANNER_ON, "On" }
+};
 
-// plannerMergeDetour: 0..100 per cent; a value out of range is refused and the default stays.
-static bool ParsePlannerMergeDetour(const std::string& val, ConfigLogFn log)
+static const ConfigChoice kPlannerWaterCostChoices[] =
 {
-	(void)log;
-	int v;
-	if (!ParseRanged(val, 0, 100, &v))
-		return false;
-	return StoreField(&planner::PlannerConfig::mergeDetour, v);
-}
+	{ "off", planner::PWC_OFF, "Off" }, { "floor", planner::PWC_FLOOR, "Floor" },
+	{ "dynamic", planner::PWC_DYNAMIC, "Dynamic" }, { "engine", planner::PWC_ENGINE, "Engine" }
+};
+
+static const ConfigChoice kPlannerWaterEngineChoices[] =
+{
+	{ "off", planner::PWE_OFF, "Off" }, { "match", planner::PWE_MATCH, "Match" }
+};
+
+// The int fields that hold a switch: 0 off, 1 on.
+static const ConfigChoice kPlannerSwitchChoices[] =
+{
+	{ "false", 0, "Off" }, { "true", 1, "On" }
+};
 
 namespace planner {
 
@@ -205,18 +144,59 @@ namespace planner {
 
 const ConfigKey g_plannerConfigKeys[] =
 {
-	CFG_OCUSTOM("plannerMode", PlannerConfig, mode, ParsePlannerMode, NDOC),
-	CFG_OCUSTOM("plannerLegSpan", PlannerConfig, legSpan, ParsePlannerLegSpan, NDOC),
-	CFG_OCUSTOM("plannerBaseBuild", PlannerConfig, baseBuild, ParsePlannerBaseBuild, NDOC),
-	CFG_OCUSTOM("plannerAheadTiles", PlannerConfig, aheadTiles, ParsePlannerAheadTiles, NDOC),
-	CFG_OCUSTOM("plannerWaitSeconds", PlannerConfig, waitSeconds, ParsePlannerWaitSeconds, NDOC),
-	CFG_OCUSTOM("plannerWaterCost", PlannerConfig, waterCost, ParsePlannerWaterCost, NDOC),
-	CFG_OCUSTOM("plannerWaterEngine", PlannerConfig, waterEngine, ParsePlannerWaterEngine, NDOC),
-	CFG_OCUSTOM("plannerAcidCost", PlannerConfig, acidCost, ParsePlannerAcidCost, NDOC),
-	CFG_OCUSTOM("plannerPreArrivalMs", PlannerConfig, preArrivalMs, ParsePlannerPreArrivalMs, NDOC),
-	CFG_OCUSTOM("plannerLegAim", PlannerConfig, legAim, ParsePlannerLegAim, NDOC),
-	CFG_OCUSTOM("plannerMergeBias", PlannerConfig, mergeBias, ParsePlannerMergeBias, NDOC),
-	CFG_OCUSTOM("plannerMergeDetour", PlannerConfig, mergeDetour, ParsePlannerMergeDetour, NDOC),
+	CFG_OCUSTOM_CHOICES("plannerMode", PlannerConfig, mode, ParsePlannerMode, NDOC, SHOW,
+	  "Route planner",
+	  "Plans a long squad move over the whole map and walks it leg by leg, so the squad does not stop"
+	  " short where the game cannot see a path. Observe (DEV) only logs the plans.", kPlannerModeChoices),
+	// Below 1 is refused; above 8 loads as 8.
+	CFG_OINT("plannerLegSpan", PlannerConfig, legSpan, 1.0f, 8.0f, 1, NDOC, DEVROW,
+	  "Planner leg span (cells)",
+	  "The most cells one planned leg crosses, and the span below which an order walks unplanned. Default 2."),
+	CFG_OCUSTOM_CHOICES("plannerBaseBuild", PlannerConfig, baseBuild, ParsePlannerBaseBuild, NDOC, DEVROW,
+	  "Build the whole-map route graph",
+	  "Builds the planner's graph of the whole map from the navmesh tiles at startup. Off plans over"
+	  " the loaded cells only. Default On.", kPlannerSwitchChoices),
+	// Below 0 is refused; above 8 loads as 8.
+	CFG_OINT("plannerAheadTiles", PlannerConfig, aheadTiles, 0.0f, 8.0f, 0, NDOC, DEVROW,
+	  "Route tiles to preload",
+	  "Tiles along a planned route queued for preloading ahead of the squad. 0 queues none; default 3."),
+	// Below 1 is refused; above 60 loads as 60.
+	CFG_OINT("plannerWaitSeconds", PlannerConfig, waitSeconds, 1.0f, 60.0f, 1, NDOC, DEVROW,
+	  "Wait for a route section (s)",
+	  "Seconds a squad waits at a leg's end for the next navmesh section before the planner re-plans."
+	  " Default 10."),
+	CFG_OCUSTOM_CHOICES("plannerWaterCost", PlannerConfig, waterCost, ParsePlannerWaterCost, NDOC, DEVROW,
+	  "Planner water cost",
+	  "How the planner prices water: Dynamic by each character's swim speed, Floor never below the"
+	  " game's price, Engine the game's price alone, Off as land. Default Dynamic.", kPlannerWaterCostChoices),
+	CFG_OCUSTOM_CHOICES("plannerWaterEngine", PlannerConfig, waterEngine, ParsePlannerWaterEngine, NDOC, DEVROW,
+	  "Water cost in path requests",
+	  "Match writes the planner's water price into each player path request, so the game's own leg"
+	  " searches price water as the plan did. Default Match.", kPlannerWaterEngineChoices),
+	// Below 1 is refused; above 10 loads as 10.
+	CFG_OINT("plannerAcidCost", PlannerConfig, acidCost, 1.0f, 10.0f, 1, NDOC, DEVROW,
+	  "Acid water cost (x)",
+	  "How many times the water price acidic water costs a character who is not immune. 1 prices it as"
+	  " any water; default 3."),
+	// Below 0 is refused; above 3000 loads as 3000.
+	CFG_OINT("plannerPreArrivalMs", PlannerConfig, preArrivalMs, 0.0f, 3000.0f, 0, NDOC, DEVROW,
+	  "Request the next leg early (ms)",
+	  "The path latency, in milliseconds, the next leg's request is sent ahead of a squad reaching its"
+	  " leg's end. 0 is off; default 1000."),
+	CFG_OCUSTOM_CHOICES("plannerLegAim", PlannerConfig, legAim, ParsePlannerLegAim, NDOC, DEVROW,
+	  "Aim legs at the next leg",
+	  "Aims each leg's border crossing along the line to the leg after it rather than at the crossing's"
+	  " nearest point. Default On.", kPlannerSwitchChoices),
+	// Below 1 is refused; above 10 loads as 10.
+	CFG_OINT("plannerMergeBias", PlannerConfig, mergeBias, 1.0f, 10.0f, 1, NDOC, DEVROW,
+	  "Run-together route bias",
+	  "A run-together member's step onto the leading member's route costs 1/n of its length, so the"
+	  " members join one route. 1 is no bias; default 3."),
+	// Below 0 is refused; above 100 loads as 100.
+	CFG_OINT("plannerMergeDetour", PlannerConfig, mergeDetour, 0.0f, 100.0f, 0, NDOC, DEVROW,
+	  "Run-together detour cap (%)",
+	  "The longest detour, in per cent of its own route, a member takes to join the leading route."
+	  " Default 15."),
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }
 };
 

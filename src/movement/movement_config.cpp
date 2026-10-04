@@ -135,10 +135,10 @@ const ConfigKey g_movementConfigKeys[] =
 	  " as that navmesh arrives. Off only logs when it would have sent."),
 	CFG_OROW("formationFollow", CK_CUSTOM, MovementConfig, cfg_formationFollow, 1.0f, 0.0f, INT_MIN, false, NDOC,
 	         ParseFormationFollow, NULL, NULL, false, 0.0f, 0, NULL, 0, true),
-	CFG_OBOOL("formationGatherPace", MovementConfig, formationGatherPaceEnabled, DOC, DEVROW,
-	  "Pace a squad's gather",
-	  "While a squad set to run together gathers before it travels, the members nearer the gather point"
-	  " walk slower so everyone arrives at about the same time, never below half speed."),
+	CFG_OBOOL("formationGatherPace", MovementConfig, formationGatherPaceEnabled, DOC, SHOW,
+	  "Arrive together when gathering",
+	  "When a squad set to run together gathers before it sets off, the members closer to the"
+	  " gathering point walk slower so everyone arrives at about the same time."),
 	CFG_OROW("movementTrace", CK_CUSTOM, MovementConfig, cfg_movementTrace, 1.0f, 0.0f, INT_MIN, false, NDOC,
 	         ParseMovementTrace, NULL, NULL, false, 0.0f, 0, NULL, 0, true),
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }

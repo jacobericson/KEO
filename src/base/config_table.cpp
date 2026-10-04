@@ -231,6 +231,13 @@ static const char* const kClampOrder[] =
 	"zoneLifeRetainRadius",
 	"islandFarSpan",
 	"zoneLifeIdleSeconds",
+	"plannerLegSpan",
+	"plannerAheadTiles",
+	"plannerWaitSeconds",
+	"plannerAcidCost",
+	"plannerPreArrivalMs",
+	"plannerMergeBias",
+	"plannerMergeDetour",
 	NULL
 };
 
