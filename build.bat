@@ -26,13 +26,6 @@ REM --- Create output directories ---
 if not exist "%OBJDIR%" mkdir "%OBJDIR%"
 if not exist "%OUTDIR%" mkdir "%OUTDIR%"
 
-REM --- cl /MP: compile the sources in parallel cl processes. It only schedules
-REM the compile; the DLL is byte-identical apart from the link timestamps.
-REM BUILD_MP=0 turns it off, BUILD_MP=<n> sets the process count. ---
-set "B_MP=/MP"
-if "%BUILD_MP%"=="0" set "B_MP="
-if not "%BUILD_MP%"=="" if not "%BUILD_MP%"=="0" set "B_MP=/MP%BUILD_MP%"
-
 REM --- Sources: tools\build\profsrc.txt, one path per line, in link order ---
 if not exist tools\build\profsrc.txt (
     echo ERROR: tools\build\profsrc.txt is missing.
@@ -40,21 +33,17 @@ if not exist tools\build\profsrc.txt (
 )
 python tools\build\check_coresrc.py --profsrc
 if errorlevel 1 exit /b 1
-set "SRC_RSP=%OBJDIR%\sources.rsp"
 set "OBJS_RSP=%OBJDIR%\objs.rsp"
-> "%SRC_RSP%" (
-    for /f "usebackq eol=# delims=" %%F in ("tools\build\profsrc.txt") do echo "%%F"
-)
 > "%OBJS_RSP%" (
     for /f "usebackq eol=# delims=" %%F in ("tools\build\profsrc.txt") do echo "%OBJDIR%\%%~nF.obj"
 )
 
-REM --- Compile ---
-cl /nologo /EHsc /O2 /GL /MD /W3 /DNDEBUG /DWIN32_LEAN_AND_MEAN /DBOOST_ALL_NO_LIB /DBOOST_ERROR_CODE_HEADER_ONLY /DBOOST_SYSTEM_NO_DEPRECATED %B_MP% ^
-   /I"%KENSHILIB%\Include" /I"%KENSHILIB%\Include\ogre" /I"%BOOST_ROOT%" /Isrc ^
-   /c @"%SRC_RSP%" ^
-   /Fo%OBJDIR%\
-
+REM --- Compile: one cl process per source (tools\build\run_variants.py, which
+REM holds the flags). Every listed object is deleted first and must come back
+REM fresh and match objects.json before the link below may run. Its output is
+REM in %OBJDIR%\build.log; BUILD_MP sets how many cl processes run at once. ---
+python tools\build\run_variants.py --kind prof --sources tools\build\profsrc.txt --compile-only ^
+    --fail-prefix "PROFILER COMPILE FAILED at" --variant "%OUTDIR%" "%OBJDIR%" "" ""
 if errorlevel 1 (
     echo.
     echo COMPILE FAILED
