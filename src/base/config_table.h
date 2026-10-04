@@ -16,12 +16,15 @@ typedef void (*ConfigLogFn)(const std::string& line);
 typedef bool (*ConfigParseFn)(const std::string& val, ConfigLogFn log);
 
 // One legal value of a CK_INT or CK_CUSTOM row: the INI text, the value the
-// field holds for it, and the settings page's name for it.
+// field holds for it, and the settings page's name for it. A devOnly choice
+// is offered in DEV only, or in PROD while the row holds it; a table that
+// leaves the field out offers every choice.
 struct ConfigChoice
 {
 	const char* ini;
 	int         value;
 	const char* label;
+	bool        devOnly;
 };
 
 struct ConfigKey

@@ -751,13 +751,29 @@ static void CheckCustomDropBox()
 	SettingsStaging saved;
 	StageAll(&saved);
 	SettingsStaging st = saved;
-	std::vector<SettingsRow> rows = Rows(&st, false, NULL);
+
+	// PROD leaves the DEV-only Observe out, unless the row already holds it.
+	if (k7 >= 0 && core.keys[k7].label)
+	{
+		std::vector<SettingsRow> prod = Rows(&st, false, NULL);
+		const SettingsRow* p = FindLabel(prod, RowLabel(core.keys[k7]));
+		Check(st.module[c].slots[k7].i != K7_HOLD_OBSERVE && p && p->choices.size() == 2
+		      && p->choices[0].first == "Off" && p->choices[1].first == "On", "custom drop box: PROD shows Off and On");
+		SettingsStaging held = saved;
+		held.module[c].slots[k7].i = K7_HOLD_OBSERVE;
+		prod = Rows(&held, false, NULL);
+		p = FindLabel(prod, RowLabel(core.keys[k7]));
+		Check(p && p->choices.size() == 3 && p->choices[1].second == K7_HOLD_OBSERVE,
+		      "custom drop box: PROD keeps Observe while the row holds it");
+	}
+
+	std::vector<SettingsRow> rows = Rows(&st, true, NULL);
 	const SettingsRow* r = k7 >= 0 && core.keys[k7].label ? FindLabel(rows, RowLabel(core.keys[k7])) : NULL;
 	bool ok = r && r->kind == SR_DROPBOX && r->intPtr == &st.module[c].slots[k7].i && r->choices.size() == 3
 	       && r->choices[0].first == "Off" && r->choices[0].second == K7_HOLD_OFF
 	       && r->choices[1].first == "Observe" && r->choices[1].second == K7_HOLD_OBSERVE
 	       && r->choices[2].first == "On" && r->choices[2].second == K7_HOLD_ON;
-	Check(ok, "custom drop box: k7PostDeathHold shows Off, Observe and On");
+	Check(ok, "custom drop box: DEV shows Off, Observe and On");
 	if (!ok)
 		return;
 	const char* want[3] = { "false", "observe", "true" };

@@ -39,7 +39,7 @@ static const ConfigChoice kIslandEdgeRingChoices[] =
 
 static const ConfigChoice kK7HoldChoices[] =
 {
-	{ "false", K7_HOLD_OFF, "Off" }, { "observe", K7_HOLD_OBSERVE, "Observe" }, { "true", K7_HOLD_ON, "On" }
+	{ "false", K7_HOLD_OFF, "Off" }, { "observe", K7_HOLD_OBSERVE, "Observe", true }, { "true", K7_HOLD_ON, "On" }
 };
 
 namespace movement {
@@ -93,7 +93,7 @@ const ConfigKey g_movementConfigKeys[] =
 	CFG_OCUSTOM_CHOICES("k7PostDeathHold", MovementConfig, cfg_k7PostDeathHold, ParseK7PostDeathHold, DOC, SHOW,
 	  "Hold move orders through combat",
 	  "Holds a player move order that ended as combat took over, and re-issues it once the fight ends,"
-	  " up to 60 seconds. observe only logs what would be held.", kK7HoldChoices),
+	  " up to 60 seconds. Observe (DEV) only logs what would be held.", kK7HoldChoices),
 	CFG_OBOOL("k7DestReadyGate", MovementConfig, k7DestReadyGateEnabled,       DOC, DEVROW,
 	  "Wait for the destination's navmesh",
 	  "Before re-issuing a deleted order, waits up to 15 seconds for the destination cell's navmesh to"

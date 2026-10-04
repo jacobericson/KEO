@@ -140,7 +140,7 @@ static SettingsRow NewRow(SettingsRowKind kind, const std::string& label, const 
 
 // One shown key's row, bound into s: a fitting offset field directly, any
 // other row through its staged slot.
-static void AddKeyRow(const ConfigKey& k, int i, ConfigModuleStage* s, std::vector<SettingsRow>* out)
+static void AddKeyRow(const ConfigKey& k, int i, ConfigModuleStage* s, bool devBuild, std::vector<SettingsRow>* out)
 {
 	std::string label = k.label;
 	std::string tooltip = k.tooltip ? k.tooltip : "";
@@ -170,7 +170,11 @@ static void AddKeyRow(const ConfigKey& k, int i, ConfigModuleStage* s, std::vect
 		r = NewRow(SR_DROPBOX, label, tooltip.c_str());
 		r.intPtr = field ? (int*)field : &slot->i;
 		for (int c = 0; c < k.choiceCount; ++c)
-			r.choices.push_back(std::make_pair(std::string(k.choices[c].label), k.choices[c].value));
+		{
+			const ConfigChoice& choice = k.choices[c];
+			if (devBuild || !choice.devOnly || choice.value == *r.intPtr)
+				r.choices.push_back(std::make_pair(std::string(choice.label), choice.value));
+		}
 		break;
 	default:
 		return;
@@ -195,7 +199,7 @@ void AddSectionRows(const char* title, const std::vector<SettingsKeyRef>& keys, 
 				out->push_back(NewRow(SR_HEADER, title, NULL));
 				headerAdded = true;
 			}
-			AddKeyRow(k, keys[j].key, keys[j].stage, out);
+			AddKeyRow(k, keys[j].key, keys[j].stage, devBuild, out);
 		}
 	}
 }
