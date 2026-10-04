@@ -1,26 +1,20 @@
 @echo off
-REM Builds ONE KEO.dll variant: compile, link, KenshiLib import check,
-REM RE_Kenshi.json. Called by tools\build\run_variants.py (build_opt_step4.bat,
-REM and so build_opt.bat) as two processes per variant,
-REM "compile" then "link", with the output going to <OBJDIR>\build.log.
+REM Links ONE KEO.dll variant: link, KenshiLib import check, RE_Kenshi.json,
+REM the settings INI. Called by tools\build\run_variants.py (build_opt_step4.bat,
+REM and so build_opt.bat) once a variant's objects are compiled and checked,
+REM with the output going to <OBJDIR>\build.log. run_variants.py compiles;
+REM its cl_args() holds the compile flags.
 REM
 REM Usage (from the repository root, after vcvarsall amd64 and
 REM tools\kenshilib\build_env.bat have set up the environment):
-REM   tools\build\variant.bat <MODE> <OUTDIR> <OBJDIR> "<DEFINES>" "<MPFLAG>" "<LABEL>"
-REM     MODE     compile = compile every tools\build\coresrc.txt source into
-REM              OBJDIR; link = link every CORESRC object in OBJDIR, import
-REM              check, RE_Kenshi.json; all = both.
-REM     DEFINES  every define after /DBOOST_SYSTEM_NO_DEPRECATED (gate values,
-REM              KEO_DEBUG), exactly as the calling script
-REM              computed them.
-REM     MPFLAG   "/MP<n>" to compile the sources in n parallel cl processes, or
-REM              "" for one process. /MP only schedules the compile; the DLL is
-REM              byte-identical apart from the link timestamps.
+REM   tools\build\variant.bat link <OUTDIR> <OBJDIR> "<LABEL>"
+REM     link     the only mode: link every CORESRC object in OBJDIR, import
+REM              check, RE_Kenshi.json, KEO.ini.
 REM     LABEL    name used in the progress lines ("" = OUTDIR).
 REM
-REM DEV or PROD is decided from the "_dev" suffix on OUTDIR:
-REM   PROD = cl /O2 /GL /Gy, link /LTCG /OPT:REF /OPT:ICF;
-REM   DEV  = cl /O2 /GL, link /LTCG (no /Gy /OPT:REF /OPT:ICF).
+REM DEV or PROD is decided from the "_dev" suffix on OUTDIR, as for the compile:
+REM   PROD = link /LTCG /OPT:REF /OPT:ICF;
+REM   DEV  = link /LTCG (no /OPT:REF /OPT:ICF).
 REM Every variant MUST keep /GL + /LTCG: without whole-program optimization
 REM &KenshiLib::fn resolves to an import thunk inside our own DLL, and
 REM KenshiLib::GetRealAddress() asserts at startup ("address ... in your own
@@ -37,22 +31,14 @@ setlocal enabledelayedexpansion
 set "B_MODE=%~1"
 set "B_OUTDIR=%~2"
 set "B_OBJDIR=%~3"
-set "B_DEFINES=%~4"
-set "B_MP=%~5"
-set "B_LABEL=%~6"
+set "B_LABEL=%~4"
 if "%B_LABEL%"=="" set "B_LABEL=%B_OUTDIR%"
-set "B_DOCOMPILE=NO"
-set "B_DOLINK=NO"
-if /i "%B_MODE%"=="compile" set "B_DOCOMPILE=YES"
-if /i "%B_MODE%"=="link" set "B_DOLINK=YES"
-if /i "%B_MODE%"=="all" set "B_DOCOMPILE=YES"
-if /i "%B_MODE%"=="all" set "B_DOLINK=YES"
-if "%B_DOCOMPILE%%B_DOLINK%"=="NONO" (
-    echo ERROR: usage: tools\build\variant.bat compile^|link^|all OUTDIR OBJDIR "DEFINES" "MPFLAG" "LABEL"
+if /i not "%B_MODE%"=="link" (
+    echo ERROR: usage: tools\build\variant.bat link OUTDIR OBJDIR "LABEL" -- tools\build\run_variants.py compiles
     exit /b 1
 )
 if "%B_OBJDIR%"=="" (
-    echo ERROR: usage: tools\build\variant.bat compile^|link^|all OUTDIR OBJDIR "DEFINES" "MPFLAG" "LABEL"
+    echo ERROR: usage: tools\build\variant.bat link OUTDIR OBJDIR "LABEL"
     exit /b 1
 )
 
@@ -63,68 +49,37 @@ set "B_ISDEV=NO"
 if not "%B_OUTDIR:_dev=%"=="%B_OUTDIR%" set "B_ISDEV=YES"
 
 if "%B_ISDEV%"=="YES" (
-    set "B_GL=/GL"
-    set "B_OPTFLAGS="
     set "B_LTCG=/LTCG"
     set "B_LINKOPT="
-    set "B_FLAVOUR=DEV, folder ends in _dev: cl /O2 /GL without /Gy; link /LTCG without /OPT:REF /OPT:ICF"
 ) else (
-    set "B_GL=/GL"
-    set "B_OPTFLAGS=/Gy"
     set "B_LTCG=/LTCG"
     set "B_LINKOPT=/OPT:REF /OPT:ICF"
-    set "B_FLAVOUR=PROD: cl /O2 /GL /Gy; link /LTCG /OPT:REF /OPT:ICF"
 )
 
-REM Response files (@file): cmd's delayed-expansion "set" silently truncates
+REM Response file (@file): cmd's delayed-expansion "set" silently truncates
 REM around 8,191 characters (confirmed with a 200-entry scratch variable: it
 REM ran with no error and the program received only the first ~8,102 of
 REM ~11,400 characters). At 171 CORESRC files the object list already sits
 REM close to that ceiling (measured 7,824 characters for a 168-file OBJS/LINK
-REM line, before three more files were added). Both the link's object list
-REM and the compile's source list go into a one-token-per-line response file
-REM instead, read entirely by cl/link with no cmd variable in the middle, so
-REM there is no length ceiling below what those tools accept.
+REM line, before three more files were added). The link's object list goes
+REM into a one-token-per-line response file instead, read entirely by link
+REM with no cmd variable in the middle, so there is no length ceiling below
+REM what link accepts.
 REM
 REM tools\build\coresrc.txt is the one source list for every optimizer
 REM variant, one path per line; its order is the link order, and the link
 REM list is built from it, never from %OBJDIR%\*.obj (stale objects from
-REM removed source files would otherwise link). Both response files are read
+REM removed source files would otherwise link). The response file is read
 REM straight from it with "for /f", never assembled into one cmd variable.
 set "B_OBJS_RSP=%B_OBJDIR%\objs.rsp"
 > "%B_OBJS_RSP%" (
     for /f "usebackq eol=# delims=" %%F in ("tools\build\coresrc.txt") do echo "%B_OBJDIR%\%%~nF.obj"
 )
-set "B_SRC_RSP=%B_OBJDIR%\sources.rsp"
-> "%B_SRC_RSP%" (
-    for /f "usebackq eol=# delims=" %%F in ("tools\build\coresrc.txt") do echo "%%F"
-)
 
-REM The command lines are built once and echoed before they run, so the log
+REM The command line is built once and echoed before it runs, so the log
 REM shows exactly what was executed.
 REM The link also writes KEO.map beside the objects, for tools\build\verify_layout.py.
-set "B_CL=cl /nologo /EHsc /O2 %B_GL% %B_OPTFLAGS% /MD /W3 /DNDEBUG /DWIN32_LEAN_AND_MEAN /DBOOST_ALL_NO_LIB /DBOOST_ERROR_CODE_HEADER_ONLY /DBOOST_SYSTEM_NO_DEPRECATED %B_DEFINES% %B_MP% /I"%KENSHILIB%\Include" /I"%KENSHILIB%\Include\ogre" /I"%BOOST_ROOT%" /Isrc /c @"%B_SRC_RSP%" /Fo%B_OBJDIR%\"
 set "B_LINK=link /nologo /DLL %B_LTCG% %B_LINKOPT% /MACHINE:X64 /SUBSYSTEM:CONSOLE /LIBPATH:"%KENSHILIB%\Libraries\KenshiLib" /LIBPATH:"%KENSHILIB%\Libraries\mygui" KenshiLib.lib MyGUIEngine_x64.lib user32.lib @"%B_OBJS_RSP%" /OUT:"%B_OUTDIR%\KEO.dll" /IMPLIB:"%B_OBJDIR%\KEO.lib" /MAP:"%B_OBJDIR%\KEO.map""
-
-REM TEST_NOOP_CL=1 replaces the real compile with a command that exits 0 and
-REM produces no objects, for exercising run_variants.py's own guard against a
-REM no-op compile (check_objects_fresh). Never set in any build script;
-REM test-only.
-if "%TEST_NOOP_CL%"=="1" set "B_CL=cmd /c exit /b 0"
-
-if "%B_DOCOMPILE%"=="YES" (
-    echo === Building %B_LABEL% ===
-    echo Flavour: !B_FLAVOUR!
-    echo CL: !B_CL!
-    echo   sources.rsp: @"%B_SRC_RSP%"
-    !B_CL!
-    if errorlevel 1 (
-        echo.
-        echo %B_LABEL% COMPILE FAILED
-        exit /b 1
-    )
-)
-if "%B_DOLINK%"=="NO" exit /b 0
 
 echo LINK: !B_LINK!
 echo   objs.rsp: @"%B_OBJS_RSP%"

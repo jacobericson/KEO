@@ -11,6 +11,9 @@ REM   STEP4_SUFFIX: optional, from the environment. Appended to the output and
 REM   object folder names before _dev/_prod, so a second pair can sit beside
 REM   the first (STEP4_SUFFIX=_base -> build\KEO_step4_base_dev\).
 REM   It must not contain "_dev" or "_prod" (the _dev suffix selects DEV flags).
+REM   STEP4_VARIANTS: optional, from the environment. Empty or "dev prod"
+REM   builds both folders; "dev" builds the DEV folder only, and the PROD line
+REM   below then reads "(not built)". Any other value is refused.
 REM   The success line below always prints every effective gate value (never
 REM   empty), so a log proves what was built.
 REM
@@ -20,10 +23,11 @@ REM         build\KEO_step4<SUFFIX>_prod\  (PROD: reduced logging;
 REM                                                  /GL /Gy + /LTCG /OPT:REF /OPT:ICF)
 REM   where <SUFFIX> is STEP4_SUFFIX.
 REM
-REM The two variants build at the same time (tools\build\run_variants.py, one
-REM tools\build\variant.bat process each; BUILD_JOBS=1 builds them one after
-REM the other, BUILD_MP sets cl's /MP count). Each variant's full output is in
-REM build\obj_step4<SUFFIX>_dev\build.log / ..._prod\build.log; a failure
+REM The variants build at the same time through tools\build\run_variants.py:
+REM one cl process per source, then each variant's link through
+REM tools\build\variant.bat. BUILD_JOBS=1 builds them one after the other;
+REM BUILD_MP sets how many processes run at once. Each variant's full output
+REM is in build\obj_step4<SUFFIX>_dev\build.log / ..._prod\build.log; a failure
 REM prints that log's tail and "STEP4 FAILED at <folder>", and exits 1.
 
 setlocal enabledelayedexpansion
@@ -81,19 +85,30 @@ set "STEP4_FOLDER_SUFFIX=%STEP4_SUFFIX%"
 set "STEP4_DEV_OUT=build\KEO_step4%STEP4_FOLDER_SUFFIX%_dev"
 set "STEP4_PROD_OUT=build\KEO_step4%STEP4_FOLDER_SUFFIX%_prod"
 
+REM Which variants: both unless STEP4_VARIANTS=dev. Exact values only, so a
+REM misspelt or space-padded value is refused rather than read as "both".
+if not "%STEP4_VARIANTS%"=="" if not "%STEP4_VARIANTS%"=="dev" if not "%STEP4_VARIANTS%"=="dev prod" (
+    echo ERROR: STEP4_VARIANTS="%STEP4_VARIANTS%" must be empty, "dev" or "dev prod".
+    exit /b 1
+)
+set "STEP4_PROD_ARG=--variant "%STEP4_PROD_OUT%" "build\obj_step4%STEP4_FOLDER_SUFFIX%_prod" "" """
+set "STEP4_PROD_SHOW=%STEP4_PROD_OUT%\"
+if "%STEP4_VARIANTS%"=="dev" set "STEP4_PROD_ARG="
+if "%STEP4_VARIANTS%"=="dev" set "STEP4_PROD_SHOW=(not built)"
+
 REM Both variants compile with "%STEP4_DEFINES%" plus their own
 REM extra define (DEV: /DKEO_DEBUG), as before. DEV/PROD flags follow the
-REM "_dev" suffix on the output folder (tools\build\variant.bat). On failure
+REM "_dev" suffix on the output folder (tools\build\run_variants.py). On failure
 REM run_variants.py prints the failing log's tail and "STEP4 FAILED at <folder>".
 python tools\build\run_variants.py --fail-prefix "STEP4 FAILED at" --defines "%STEP4_DEFINES%" ^
     --variant "%STEP4_DEV_OUT%" "build\obj_step4%STEP4_FOLDER_SUFFIX%_dev" "/DKEO_DEBUG" "" ^
-    --variant "%STEP4_PROD_OUT%" "build\obj_step4%STEP4_FOLDER_SUFFIX%_prod" "" ""
+    %STEP4_PROD_ARG%
 if errorlevel 1 exit /b 1
 
 echo.
 echo STEP4 build OK: ZONEHAND_STEP=%ZONEHAND_STEP%
 echo   DEV:  %STEP4_DEV_OUT%\
-echo   PROD: %STEP4_PROD_OUT%\
+echo   PROD: %STEP4_PROD_SHOW%
 endlocal
 exit /b 0
 
