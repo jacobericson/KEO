@@ -39,7 +39,7 @@ static const ConfigChoice kIslandEdgeRingChoices[] =
 
 static const ConfigChoice kK7HoldChoices[] =
 {
-	{ "false", K7_HOLD_OFF, "off" }, { "observe", K7_HOLD_OBSERVE, "observe" }, { "true", K7_HOLD_ON, "on" }
+	{ "false", K7_HOLD_OFF, "Off" }, { "observe", K7_HOLD_OBSERVE, "Observe" }, { "true", K7_HOLD_ON, "On" }
 };
 
 namespace movement {
@@ -70,7 +70,7 @@ namespace movement {
 const ConfigKey g_movementConfigKeys[] =
 {
 	CFG_OBOOL("groupCohesion", MovementConfig, groupCohesionEnabled,         NDOC, SHOW,
-	  "Squad cohesion",
+	  "Keep squads together",
 	  "Keeps a squad given one move order walking together instead of scattering."),
 	CFG_OBOOL("islandFix", MovementConfig, islandFixEnabled,             NDOC, DEVROW,
 	  "Island routing overlay",

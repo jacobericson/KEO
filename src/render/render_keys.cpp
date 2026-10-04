@@ -18,8 +18,8 @@
 const RenderKey g_renderKeys[] =
 {
 	RK_ROW("renderLevers",             RK_BOOL,  RK_FIELD(renderLevers),             0, 0.0f, 0.0f, false,
-	  "Render and particle levers",
-	  "Master switch for every render and particle lever, including those set only in KEO.ini. Read when the game starts.", false, 0.0f, 0),
+	  "Rendering optimizations",
+	  "Master switch for KEO's rendering and particle optimizations, including those set only in KEO.ini.", false, 0.0f, 0),
 	RK_ROW("reflectionHalfRate",       RK_BOOL,  RK_FIELD(reflectionHalfRate),       0, 0.0f, 0.0f, true,
 	  "Water reflection at half rate",
 	  "Renders the water reflection every other frame.", true, 0.0f, 0),
@@ -30,7 +30,7 @@ const RenderKey g_renderKeys[] =
 	  "Pause off-screen particle effects",
 	  "Looping effects out of view stop updating after the off-screen time below.", true, 0.0f, 0),
 	RK_ROW("particleStepCap",          RK_BOOL,  RK_FIELD(particleStepCap),          0, 0.0f, 0.0f, true,
-	  "Cap particle steps at high game speed",
+	  "Cap particle updates at high game speed",
 	  "Above a game speed set by particleStepCapSpeed in KEO.ini (3x by default), particle effects advance in capped steps, so smoke and fire animate slower.", false, 0.0f, 0),
 	RK_ROW("gpuParamLookupDiag",       RK_BOOL,  RK_FIELD(gpuParamLookupDiag),       0, 0.0f, 0.0f, true,
 	  "Shader constant lookup counter (DEV)",
@@ -67,8 +67,8 @@ const RenderKey g_renderKeys[] =
 	  "their queues are empty, or nothing in them is shown and in view. "
 	  "Fog fades keep their usual speed.", true, 0.0f, 0),
 	RK_ROW("foliagePageBudgetMs",      RK_FLOAT, RK_FIELD(foliagePageBudgetMs),      0, 0.0f, 50.0f, true,
-	  "Foliage build budget at speed (ms, 0 = off)",
-	  "Above a game speed set by foliageBudgetSpeed in KEO.ini (3x by default), foliage stops building pages for the rest of a frame once this many milliseconds are spent; trees and grass fill in a few frames later.", false, 0.0f, 1),
+	  "Foliage time limit at high speed (ms)",
+	  "Above a game speed set by foliageBudgetSpeed in KEO.ini (3x by default), foliage stops building pages for the rest of a frame once this many milliseconds are spent; trees and grass fill in a few frames later. 0 turns it off.", false, 0.0f, 1),
 	RK_ROW("foliageBudgetSpeed",       RK_FLOAT, RK_FIELD(foliageBudgetSpeed),       0, 1.5f, 20.0f, true,
 	  "Foliage budget from game speed",
 	  "The game speed above which the foliage build budget applies.", true, 1.5f, 1),

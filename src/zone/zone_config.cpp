@@ -64,7 +64,7 @@ const ConfigKey g_zoneConfigKeys[] =
 	  "Lets a zone count as ready while its navmesh work is still pending, once its content sections"
 	  " have drained."),
 	CFG_OBOOL("preload", ZoneConfig, preloadEnabled,               NDOC, SHOW,
-	  "Zone preloading",
+	  "Preload nearby zones",
 	  "Loads the zones around the camera and the player's characters before they are needed."),
 	CFG_OBOOL("movementAware", ZoneConfig, movementAwareEnabled,         NDOC, DEVROW,
 	  "Movement-aware preloading",
@@ -127,7 +127,7 @@ const ConfigKey g_zoneConfigKeys[] =
 	  "World units past the preload threshold a neighbouring zone's prediction must move to take over"
 	  " or be released, so a point near a border does not thrash.", 0.0f, 0),
 	CFG_OINT("zoneLifeRetainRadius", ZoneConfig, cfg_zoneLifeRetainRadius, 1.0f, 4.0f, INT_MIN, NDOC, SHOW,
-	  "Zone retain radius in cells",
+	  "Keep zones loaded within (cells)",
 	  "Radius, in cells around the camera and the player's characters, inside which a zone the mod"
 	  " loaded is never unloaded."),
 	CFG_ODOUBLE("zoneLifeIdleSeconds", ZoneConfig, cfg_zoneLifeIdleSeconds, 5.0f, 600.0f, NDOC, DEVROW,

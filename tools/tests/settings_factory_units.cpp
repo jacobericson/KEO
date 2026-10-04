@@ -289,9 +289,9 @@ static void CheckSections()
 	for (size_t i = 0; same && i < render.size(); ++i)
 		same = render[i]->label == wantLabel[i] && render[i]->kind == wantKind[i];
 	Check(same, "Sections");
-	Check(render.size() == 3 && render[0]->label == "Cap particle steps at high game speed"
-	      && render[1]->label == "Foliage build budget at speed (ms, 0 = off)"
-	      && render[2]->label == "Render and particle levers *", "Sections");
+	Check(render.size() == 3 && render[0]->label == "Cap particle updates at high game speed"
+	      && render[1]->label == "Foliage time limit at high speed (ms)"
+	      && render[2]->label == "Rendering optimizations *", "Sections");
 }
 
 // ---- Every shown key once; labels; counts ---------------------------------
@@ -693,7 +693,7 @@ static void CheckWorkerRow()
 	StageAll(&saved);
 	SettingsStaging st = saved;
 	std::vector<SettingsRow> rows = Rows(&st, false, NULL);
-	const SettingsRow* r = FindLabel(rows, "Navmesh worker threads *");
+	const SettingsRow* r = FindLabel(rows, "Background navmesh threads *");
 	bool ok = r && w >= 0 && r->kind == SR_DROPBOX && r->intPtr == &((navmesh::NavMeshConfig*)st.module[c].state)->cfg_navmeshWorkerCount && r->choices.size() == 7
 	       && r->choices[0].first == "Auto" && r->choices[0].second == 0;
 	for (int n = 1; ok && n <= 6; ++n)
@@ -754,10 +754,10 @@ static void CheckCustomDropBox()
 	std::vector<SettingsRow> rows = Rows(&st, false, NULL);
 	const SettingsRow* r = k7 >= 0 && core.keys[k7].label ? FindLabel(rows, RowLabel(core.keys[k7])) : NULL;
 	bool ok = r && r->kind == SR_DROPBOX && r->intPtr == &st.module[c].slots[k7].i && r->choices.size() == 3
-	       && r->choices[0].first == "off" && r->choices[0].second == K7_HOLD_OFF
-	       && r->choices[1].first == "observe" && r->choices[1].second == K7_HOLD_OBSERVE
-	       && r->choices[2].first == "on" && r->choices[2].second == K7_HOLD_ON;
-	Check(ok, "custom drop box: k7PostDeathHold shows off, observe and on");
+	       && r->choices[0].first == "Off" && r->choices[0].second == K7_HOLD_OFF
+	       && r->choices[1].first == "Observe" && r->choices[1].second == K7_HOLD_OBSERVE
+	       && r->choices[2].first == "On" && r->choices[2].second == K7_HOLD_ON;
+	Check(ok, "custom drop box: k7PostDeathHold shows Off, Observe and On");
 	if (!ok)
 		return;
 	const char* want[3] = { "false", "observe", "true" };

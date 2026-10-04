@@ -104,7 +104,7 @@ const ConfigKey g_navmeshConfigKeys[] =
 	  "The same for the generation the background navmesh thread runs itself. Needs parallel navmesh"
 	  " generation."),
 	CFG_OINT_CHOICES("navmeshWorkerCount", NavMeshConfig, cfg_navmeshWorkerCount, 0.0f, 6.0f, INT_MIN, DOC, SHOW,
-	  "Navmesh worker threads",
+	  "Background navmesh threads",
 	  "Threads that generate and load navmesh tiles in the background."
 	  " Auto uses half the logical CPUs.", kWorkerChoices),
 	CFG_OINT("navmeshGenConcurrency", NavMeshConfig, cfg_navmeshGenConcurrency, 0.0f, 4.0f, INT_MIN, DOC, DEVROW,
@@ -112,7 +112,7 @@ const ConfigKey g_navmeshConfigKeys[] =
 	  "How many navmesh generations may run at once while parallel generation is on. 0 is automatic:"
 	  " two, fewer on CPUs with under five logical cores."),
 	CFG_OINT("navmeshDiskCacheMaxMB", NavMeshConfig, cfg_navmeshDiskCacheMaxMB, 32.0f, 8192.0f, INT_MIN, NDOC, SHOW,
-	  "Navmesh disk cache size in MB",
+	  "Navmesh cache size (MB)",
 	  "Size cap of the navmesh_cache folder; past it the oldest files are deleted down to 75% of the"
 	  " cap."),
 	CFG_ODOUBLE("reprioritizeInterval", NavMeshConfig, cfg_reprioritizeInterval, 1.0f, 30.0f, DOC, DEVROW,

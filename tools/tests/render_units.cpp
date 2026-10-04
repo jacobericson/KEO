@@ -1712,10 +1712,10 @@ static void SettingsRowsTests()
 	      "gpuUploadSkip is DEV-only");
 	Check(FindRow(dev, "Render stats") != NULL && FindRow(prod, "Render stats") == NULL, "renderDiag is DEV-only");
 
-	const SettingsRow* levers = FindRow(prod, "Render and particle levers");
-	Check(levers && levers->label == "Render and particle levers *" && levers->kind == SR_CHECKBOX
+	const SettingsRow* levers = FindRow(prod, "Rendering optimizations");
+	Check(levers && levers->label == "Rendering optimizations *" && levers->kind == SR_CHECKBOX
 	      && levers->boolPtr == &StagedRender(&st).renderLevers, "renderLevers: a checkbox bound to staging, marked restart");
-	const SettingsRow* cap = FindRow(prod, "Cap particle steps");
+	const SettingsRow* cap = FindRow(prod, "Cap particle updates");
 	Check(cap && cap->label.find(" *") == std::string::npos && !cap->restart, "live keys are not marked restart");
 	const SettingsRow* speed = FindRow(dev, "Particle step cap from");
 	Check(speed && speed->kind == SR_SLIDER && speed->floatPtr == &StagedRender(&st).particleStepCapSpeed
@@ -1744,7 +1744,7 @@ static void SettingsRowsTests()
 	}
 	Check(prod[0].kind == SR_HEADER, "a section heading comes first");
 
-	const SettingsRow* wp = FindRow(prod, "Navmesh worker threads");
+	const SettingsRow* wp = FindRow(prod, "Background navmesh threads");
 	Check(wp != NULL, "the worker drop box is shown");
 	if (!wp)
 		return;
