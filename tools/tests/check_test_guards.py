@@ -29,11 +29,14 @@
 5. run_py_tests.py must refuse, through its own checks, a failing module, an
    import crash, a module with no tests, a shard that selects no tests, a
    shard whose selection overlaps another's (TEST_PY_SHARD_SKEW=1) and a
-   shard that exits 0 without its result (TEST_PY_SHARD_CRASH=1); and with
-   a base it cannot read it must still run, and pass, every module, a
-   sharded one included, whose shards see KEO_CPU_HELD=1 (each runs under a
-   cpu token). Each case runs on scratch modules with its own timings
-   folder; the output is shown only when a case is not refused.
+   shard that exits 0 without its result (TEST_PY_SHARD_CRASH=1); a cpu
+   token that never comes (a holder process on a scratch slots folder with
+   one slot) must fail the first shard after one wait and every queued one
+   at once; and with a base it cannot read it must still run, and pass,
+   every module, a sharded one included, whose shards see KEO_CPU_HELD=1
+   (each runs under a cpu token). Each case runs on scratch modules with its
+   own timings and slots folders, so a busy host cannot delay it; the output
+   is shown only when a case is not refused.
 
 Run from the repo root (build_tests.bat anchors its own cd before calling
 this, so a relative invocation from elsewhere is refused rather than passing
@@ -262,7 +265,7 @@ def tree_files():
 
 
 def check_python_coverage():
-    """Every tools/**/test_*.py on disk is listed or excluded, and no when= glob is stale."""
+    """Every git-tracked tools/**/test_*.py is listed or excluded, and no when= glob is stale."""
     errors, rows, excluded = [], [], set()
     for path in PY_LISTS:
         if not os.path.isfile(path):
@@ -344,10 +347,18 @@ SCRATCH_HELD = ("import os\nimport unittest\n\n\nclass T(unittest.TestCase):\n"
                 "    def test_b(self):\n        self.assertEqual(os.environ.get('KEO_CPU_HELD'), '1')\n")
 PY_FAIL_OPEN = [("_pyguard_a", SCRATCH_HELD, "shards=2"),
                 ("_pyguard_b", SCRATCH_TWO, "when=no/such/folder/**")]
-PY_ENV_CLEAR = ("PY_TESTS_SINCE", "TEST_PY_SHARD_SKEW", "TEST_PY_SHARD_CRASH")
+PY_ENV_CLEAR = ("PY_TESTS_SINCE", "TEST_PY_SHARD_SKEW", "TEST_PY_SHARD_CRASH",
+                "KEO_CPU_HELD", "KEO_HEAVY_HELD", "KEO_SLOTS")
+TOKEN_CASE = "a cpu token that never comes, once for the whole queue"
+TOKEN_MODULES = [("_pyguard_tok%d" % i, SCRATCH_TWO, "") for i in (1, 2, 3)]
+TOKEN_WAIT_S = 2
+TOKEN_SKIPPED = "could not start: an earlier shard could not get a cpu token"
+HOLDER = ("import sys\nsys.path.insert(0, sys.argv[1])\nimport slots\n"
+          "with slots.cpu_token('check_test_guards holder'):\n"
+          "    sys.stdout.write('held\\n')\n    sys.stdout.flush()\n    sys.stdin.read()\n")
 
 
-def _run_scratch_py(root, name, modules, env_extra, args=()):
+def _run_scratch_py(root, name, modules, env_extra, args=(), base_env=None):
     """Writes the scratch modules and their list under root/name and runs run_py_tests.py on them."""
     folder = os.path.join(root, name)
     os.makedirs(folder)
@@ -360,14 +371,45 @@ def _run_scratch_py(root, name, modules, env_extra, args=()):
     listing = os.path.join(folder, "list.txt")
     with open(listing, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
-    env = dict(os.environ)
+    env = dict(os.environ if base_env is None else base_env)
     for key in PY_ENV_CLEAR:
         env.pop(key, None)
     env["KEO_TIMINGS_DIR"] = os.path.join(folder, "timings")
+    if base_env is None:
+        env["KEO_SLOTS_DIR"] = os.path.join(folder, "slots")
     env.update(env_extra)
     return subprocess.run([sys.executable, RUN_PY_TESTS, "--list", listing] + list(args),
                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env,
                           stdin=subprocess.DEVNULL)
+
+
+def _run_token_timeout(root):
+    """Runs three one-shard scratch modules, one job at a time, while a holder process keeps the
+    only cpu slot of a scratch slots folder. Returns (result or None, holder note)."""
+    folder = os.path.join(root, "token")
+    slots_dir = os.path.join(folder, "slots")
+    os.makedirs(slots_dir)
+    env = dict(os.environ)
+    for key in PY_ENV_CLEAR:
+        env.pop(key, None)
+    env.update({"KEO_SLOTS_DIR": slots_dir, "KEO_CPU_SLOTS": "1"})
+    holder = subprocess.Popen([sys.executable, "-c", HOLDER, os.path.abspath("tools/build")],
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT, env=env)
+    try:
+        first = holder.stdout.readline().strip()
+        if first != b"held":
+            return None, "the holder did not take the slot: %r" % first
+        env.update({"KEO_CPU_WAIT": str(TOKEN_WAIT_S), "PY_JOBS": "1"})
+        listing_root = os.path.join(folder, "run")
+        os.makedirs(listing_root)
+        return _run_scratch_py(listing_root, "list", TOKEN_MODULES, {}, base_env=env), None
+    finally:
+        try:
+            holder.stdin.close()
+            holder.wait(timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            holder.kill()
 
 
 def _show(result):
@@ -381,6 +423,7 @@ def start_py_runner_controls(pool, root):
     futures = []
     for i, (case, modules, env_extra, _, _) in enumerate(PY_REFUSALS):
         futures.append(pool.submit(_run_scratch_py, root, "refuse%d" % i, modules, env_extra))
+    futures.append(pool.submit(_run_token_timeout, root))
     futures.append(pool.submit(_run_scratch_py, root, "failopen", PY_FAIL_OPEN, {},
                                ("--since", "no-such-rev-for-check-test-guards")))
     return futures
@@ -402,7 +445,29 @@ def check_py_runner_controls(futures):
             print('check_test_guards: run_py_tests.py did not refuse %s with "%s" (exit %s):'
                   % (case, want, result.returncode))
             _show(result)
-    result = futures[len(PY_REFUSALS)].result()
+    result, note = futures[len(PY_REFUSALS)].result()
+    text = result.stdout.decode("utf-8", "replace") if result is not None else ""
+    lines = text.splitlines()
+    first, rest = TOKEN_MODULES[0][0], [stem for stem, _, _ in TOKEN_MODULES[1:]]
+    head = "python tests FAILED: %s (could not start: slots: FAILED: no cpu slot within " % first
+    tail = ", ".join("%s (%s)" % (stem, TOKEN_SKIPPED) for stem in rest)
+    # The queued modules' own clocks, not the run's wall, show they did not wait: a loaded
+    # host can stretch the runner's start-up past a second.
+    waits = [re.search(r"^py: %s: FAILED \(%s\), 1 shard\(s\), ([\d.]+) s\r?$"
+                       % (stem, re.escape(TOKEN_SKIPPED)), text, re.M) for stem in rest]
+    if (result is not None and result.returncode == 1 and lines
+            and lines[-1].strip().startswith(head) and lines[-1].strip().endswith("), " + tail)
+            and all(m and float(m.group(1)) < TOKEN_WAIT_S / 2.0 for m in waits)):
+        print("check_test_guards: run_py_tests.py refused %s (exit %s)" % (TOKEN_CASE, result.returncode))
+    else:
+        ok = False
+        print("check_test_guards: run_py_tests.py did not refuse %s: want one %d s wait, then "
+              '"%s" at once for the rest (exit %s)%s'
+              % (TOKEN_CASE, TOKEN_WAIT_S, TOKEN_SKIPPED, None if result is None else result.returncode,
+                 (": " + note) if note else ":"))
+        if result is not None:
+            _show(result)
+    result = futures[len(PY_REFUSALS) + 1].result()
     lines = [l.strip() for l in result.stdout.decode("utf-8", "replace").splitlines()]
     want = "python tests: %s OK" % ", ".join(stem for stem, _, _ in PY_FAIL_OPEN)
     if (result.returncode == 0 and lines and lines[-1] == want
@@ -420,7 +485,7 @@ def check_py_runner_controls(futures):
 def main():
     py_root = tempfile.mkdtemp(prefix="check_test_guards_py_")
     try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=len(PY_REFUSALS) + 1) as pool:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(PY_REFUSALS) + 2) as pool:
             py_futures = start_py_runner_controls(pool, py_root)
             coverage_ok = check_coverage()
             runner_ok = check_runner_fails_on_failure()
