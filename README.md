@@ -15,10 +15,12 @@ KEO makes moving between areas of the map smoother. It loads areas before your s
 
 - **Faster area loading.** Areas around your camera and your squads are loaded ahead of time, so crossing into a new one is much quicker.
 - **Pathing ready sooner.** Walkable ground for a new area is prepared faster and saved to disk, so an area you have visited before is ready right away.
-- **Better squad movement.** Long move orders the game drops partway are re-issued, and squads keep together while travelling.
+- **Route planning for long orders.** A move order across several areas is planned over the whole map before your squad sets off, so it crosses area borders without zig-zags or doubling back, and each next stretch of the route is ready before your squad reaches the border.
+- **Water and acid on routes.** Routes weigh water by each character's own swimming speed and keep characters out of acidic water that would burn them.
+- **Better squad movement.** A squad running together gathers on one route and arrives together, a move order onto a building stops at its door, and long move orders the game drops partway are re-issued.
 - **Higher frame rate.** Render and particle optimizations. Any change that causes a noticeable drop in quality is off by default.
 - **Stability fixes** for several of the vanilla bugs and crashes.
-- **KEO tab** in the game's Options window, with an **in-game benchmark** that measures the frame-rate optimizations on your own machine.
+- **KEO tab** in the game's Options window, grouped into sections like the game's own tabs, with an **in-game benchmark** that measures the frame-rate optimizations on your own machine.
 
 ## Requirements
 
@@ -42,6 +44,7 @@ If you used an earlier version, your settings in `KenshiZoneOpt.ini` are carried
 ## Known defects
 
 - **GOG version not supported.** On the GOG build of Kenshi, KEO stays inactive: it detects the version at startup and changes nothing.
+- **Long move orders can still stop short.** Now and then a squad on a long order stops before its destination; giving the order again continues it.
 
 ## Bug reports
 
@@ -62,7 +65,7 @@ set BOOST_ROOT=C:\path\to\boost_1_60_0
 build_opt_step4.bat
 ```
 
-The mod is built into `build\KEO_step4_prod\`. To install it, copy that folder into Kenshi's `mods\` directory. `build.bat` builds the optional `KEOProfiler` diagnostics plugin into `build\KEOProfiler\`, and `tools\tests\build_tests.bat` runs the unit tests.
+The mod is built into `build\KEO_step4_prod\`. To install it, copy that folder into Kenshi's `mods\` directory. `build.bat` builds the optional `KEOProfiler` diagnostics plugin into `build\KEOProfiler\`, and `tools\tests\build_tests.bat` runs the unit tests. Builds reuse unchanged objects from a cache under `%LOCALAPPDATA%\KEO\objcache` (`KEO_CACHE_DIR` moves it, `BUILD_CACHE=off` makes a clean build); deleting it is always safe.
 
 ## License
 
