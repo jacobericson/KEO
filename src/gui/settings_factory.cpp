@@ -430,3 +430,35 @@ int ModuleStageEntries(const ConfigModule& m, const ConfigModuleStage& staged, c
 	}
 	return n;
 }
+
+static int LiveRows(const ConfigModule& m, const ConfigModuleStage& staged, bool apply,
+                    std::vector<std::string>* applied)
+{
+	if (!m.state)
+		return 0;
+	int n = 0;
+	for (int i = 0; i < CONFIG_STAGE_MAX && m.keys[i].name; ++i)
+	{
+		const ConfigKey& k = m.keys[i];
+		if (!k.live || k.retired || k.target || ConfigOffsetValueEqual(k, staged.state, m.state))
+			continue;
+		if (apply)
+		{
+			memcpy((char*)m.state + k.offset, (const char*)staged.state + k.offset, k.size);
+			if (applied)
+				applied->push_back(std::string(k.name) + "=" + ConfigFormatValue(m, k, m.state));
+		}
+		++n;
+	}
+	return n;
+}
+
+int LiveModuleRowsDiffering(const ConfigModule& m, const ConfigModuleStage& staged)
+{
+	return LiveRows(m, staged, false, NULL);
+}
+
+int ApplyLiveModuleRows(const ConfigModule& m, const ConfigModuleStage& staged, std::vector<std::string>* applied)
+{
+	return LiveRows(m, staged, true, applied);
+}

@@ -148,7 +148,7 @@ static void CheckFallback()
 	const ConfigModule* mod = NULL;
 	const ConfigKey* k = FindConfigKey(dropped, &mod);
 	std::vector<const SettingsRow*> other = Section(rows, keo_gui::OTHER_SETTINGS_TITLE);
-	Check(k && other.size() == 1 && other[0]->label == RowLabel(*k) && Section(rows, "Zone loading").size() == 4,
+	Check(k && other.size() == 1 && other[0]->label == RowLabel(*k) && Section(rows, "Zone loading").size() == 6,
 	      "fallback: the unplaced key alone under Other settings");
 }
 

@@ -103,27 +103,45 @@ const char* ZlUnloadUnavailable()
 using namespace zone_life_detail;
 
 
-// A cell within Chebyshev radius r of a live anchor: the
-// hook's camera cell, the zone manager's central zone, or a player
-// character's zone (read now, not from the 1 s retention bitmap). An anchor
-// that cannot be read counts as near (never act blind).
-static bool ZlNearAnchors(void* zoneMgr, int gx, int gy, int r)
+static bool ZlWithin(int gx, int gy, int ax, int ay, int r)
 {
-	if (!zoneMgr || !gridCalibrated)
-		return true;
+	int dx = gx - ax; if (dx < 0) dx = -dx;
+	int dy = gy - ay; if (dy < 0) dy = -dy;
+	return dx <= r && dy <= r;
+}
+
+// A cell within Chebyshev radius r of the hook's camera cell or the zone
+// manager's central zone. *known is false when neither could be read.
+static bool ZlNearCameraCells(void* zoneMgr, int gx, int gy, int r, bool* known)
+{
+	*known = false;
+	bool inRange = false;
 	if (lastCameraGX >= 0 && lastCameraGY >= 0)
 	{
-		int dx = gx - lastCameraGX; if (dx < 0) dx = -dx;
-		int dy = gy - lastCameraGY; if (dy < 0) dy = -dy;
-		if (dx <= r && dy <= r) return true;
+		*known = true;
+		inRange = ZlWithin(gx, gy, lastCameraGX, lastCameraGY, r);
 	}
 	void* central = *(void**)(KLIB_MEMBER(2, (uintptr_t)zoneMgr, ZoneManager_centralZone, OFF_ZM_CURRENT_ZONE));
 	if (central)
 	{
-		int dx = gx - GetZoneGridX(central); if (dx < 0) dx = -dx;
-		int dy = gy - GetZoneGridY(central); if (dy < 0) dy = -dy;
-		if (dx <= r && dy <= r) return true;
+		*known = true;
+		inRange = inRange || ZlWithin(gx, gy, GetZoneGridX(central), GetZoneGridY(central), r);
 	}
+	return inRange;
+}
+
+// A cell within Chebyshev radius rCamera of the camera cell or the central
+// zone, or rSquad of a player character's zone (read now, not from the 1 s
+// retention bitmap). An anchor that cannot be read counts as near (never act
+// blind).
+static bool ZlNearAnchors(void* zoneMgr, int gx, int gy, int rCamera, int rSquad)
+{
+	if (!zoneMgr || !gridCalibrated)
+		return true;
+	// A camera that cannot be read falls through to the players.
+	bool cameraKnown;
+	if (ZlNearCameraCells(zoneMgr, gx, gy, rCamera, &cameraKnown))
+		return true;
 	uintptr_t playerIntf = *(uintptr_t*)((uintptr_t)GameAddr(RVA_GLOBAL_PLAYER));
 	if (!playerIntf)
 		return true;
@@ -138,9 +156,7 @@ static bool ZlNearAnchors(void* zoneMgr, int gx, int gy, int r)
 		int cgx, cgy;
 		if (!WorldToZoneGrid(GetCharPosX(scStuff[j]), GetCharPosZ(scStuff[j]), &cgx, &cgy))
 			continue;
-		int dx = gx - cgx; if (dx < 0) dx = -dx;
-		int dy = gy - cgy; if (dy < 0) dy = -dy;
-		if (dx <= r && dy <= r) return true;
+		if (ZlWithin(gx, gy, cgx, cgy, rSquad)) return true;
 	}
 	return false;
 }
@@ -423,7 +439,19 @@ using namespace zone_life_detail;
 void ZlRetentionRefresh(void* zoneMgr) { ZlBuildRetention(zoneMgr); }
 bool ZlRetentionReadable()             { return g_zlRetainOk; }
 bool ZlRetentionNear(int cell)         { return cell >= 0 && g_zlRetain[cell] != 0; }
-bool ZlAnchorsNearCell(void* zoneMgr, int gx, int gy, int r) { return ZlNearAnchors(zoneMgr, gx, gy, r); }
+bool ZlAnchorsNearCell(void* zoneMgr, int gx, int gy, int rCamera, int rSquad)
+{
+	return ZlNearAnchors(zoneMgr, gx, gy, rCamera, rSquad);
+}
+
+bool ZlCellNearCamera(void* zoneMgr, int gx, int gy, int r)
+{
+	if (!zoneMgr || !gridCalibrated)
+		return true;
+	bool known;
+	bool inRange = ZlNearCameraCells(zoneMgr, gx, gy, r, &known);
+	return inRange || !known;
+}
 
 static void ZlStamp(int gx, int gy, int r)
 {
@@ -440,30 +468,38 @@ static void ZlStamp(int gx, int gy, int r)
 	}
 }
 
-// The retention set: every cell within Chebyshev radius zoneLifeRetainRadius
-// of the camera zone (the hook's own camera cell and the zone manager's central
-// zone), of every player character's zone, of every watched mover's current
-// and next zone (tracking.cpp), and of every zone queued, pending, registered
-// or handed off in the working tables. Returns false when an anchor could not
-// be read (no calibrated grid, no camera zone, no player interface, an
-// implausible player list); the caller then treats every zone as retained.
+// The retention set, each anchor stamped at its own Chebyshev radius:
+//   zoneLifeRetainRadius (rc): the camera zone (the hook's own camera cell
+//     and the zone manager's central zone), and every camera-owned zone
+//     queued, pending, registered or handed off in the working tables;
+//   zoneLifeSquadRadius (rp): every player character's zone, a stationary
+//     watched character's zone, and every character-owned working-table zone;
+//   max(rp, 1): a watched mover's current and next zone (tracking.cpp), so a
+//     squad on the move keeps the cells its own preload just brought in.
+// Returns false when an anchor could not be read (no calibrated grid, no
+// camera zone, no player interface, an implausible player list); the caller
+// then treats every zone as retained.
 static bool ZlBuildRetentionImpl(void* zoneMgr)
 {
 	memset(g_zlRetain, 0, sizeof(g_zlRetain));
-	int r = zone::g_zoneCfg.cfg_zoneLifeRetainRadius;
+	int rc = zone::g_zoneCfg.cfg_zoneLifeRetainRadius;
+	int rp = zone::g_zoneCfg.cfg_zoneLifeSquadRadius;
+	if (rp < 0)
+		rp = 0;
+	int rMover = rp > 1 ? rp : 1;
 	if (!zoneMgr || !gridCalibrated)
 		return false;
 
 	bool haveCamera = false;
 	if (lastCameraGX >= 0 && lastCameraGY >= 0)
 	{
-		ZlStamp(lastCameraGX, lastCameraGY, r);
+		ZlStamp(lastCameraGX, lastCameraGY, rc);
 		haveCamera = true;
 	}
 	void* central = *(void**)(KLIB_MEMBER(2, (uintptr_t)zoneMgr, ZoneManager_centralZone, OFF_ZM_CURRENT_ZONE));
 	if (central)
 	{
-		ZlStamp(GetZoneGridX(central), GetZoneGridY(central), r);
+		ZlStamp(GetZoneGridX(central), GetZoneGridY(central), rc);
 		haveCamera = true;
 	}
 	if (!haveCamera)
@@ -483,24 +519,26 @@ static bool ZlBuildRetentionImpl(void* zoneMgr)
 			continue;
 		int cgx, cgy;
 		if (WorldToZoneGrid(GetCharPosX(scStuff[j]), GetCharPosZ(scStuff[j]), &cgx, &cgy))
-			ZlStamp(cgx, cgy, r);
+			ZlStamp(cgx, cgy, rp);
 	}
 
 	int mx[2 * MAX_WATCHED], my[2 * MAX_WATCHED];
-	int mn = CollectMoverRetainZones(mx, my, 2 * MAX_WATCHED);
+	bool moving[2 * MAX_WATCHED];
+	int mn = CollectMoverRetainZones(mx, my, moving, 2 * MAX_WATCHED);
 	for (int k = 0; k < mn; ++k)
-		ZlStamp(mx[k], my[k], r);
+		ZlStamp(mx[k], my[k], moving[k] ? rMover : rp);
 
 	for (int k = cameraQueueNext; k < cameraQueueCount; ++k)
-		ZlStamp(cameraQueue[k].gridX, cameraQueue[k].gridY, r);
+		ZlStamp(cameraQueue[k].gridX, cameraQueue[k].gridY, rc);
 	for (int k = charQueueNext; k < charQueueCount; ++k)
-		ZlStamp(charQueue[k].gridX, charQueue[k].gridY, r);
+		ZlStamp(charQueue[k].gridX, charQueue[k].gridY, rp);
 	for (int k = 0; k < numPreloaded; ++k)
 	{
 		if (!preloadedZones[k].zoneEntry)
 			continue;
 		if (preloadedZones[k].pending || preloadedZones[k].registered)
-			ZlStamp(preloadedZones[k].gridX, preloadedZones[k].gridY, r);
+			ZlStamp(preloadedZones[k].gridX, preloadedZones[k].gridY,
+			        preloadedZones[k].owner == OWNER_CAMERA ? rc : rp);
 	}
 	return true;
 }
@@ -637,7 +675,8 @@ void ZoneLifeUnloadPass(void* zoneMgr, double now)
 	// The bitmap is up to 1 s old. A cell queued,
 	// adopted or near a live anchor since then is back in use: count it as
 	// retained now.
-	if (ZlCellInUse(bgx, bgy) || ZlNearAnchors(zoneMgr, bgx, bgy, zone::g_zoneCfg.cfg_zoneLifeRetainRadius))
+	if (ZlCellInUse(bgx, bgy) || ZlNearAnchors(zoneMgr, bgx, bgy, zone::g_zoneCfg.cfg_zoneLifeRetainRadius,
+	                                           zone::g_zoneCfg.cfg_zoneLifeSquadRadius))
 	{
 		g_zl[best].lastInRadius = now;
 		g_zlNextAttempt = now;

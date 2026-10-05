@@ -179,7 +179,11 @@ SettingsDiff DiffSettings(const SettingsStaging& staged, const RenderConfig& liv
 	}
 	std::vector<IniEntry> entries;
 	for (int m = 0; m < kConfigModuleCount && m < CONFIG_MODULE_MAX; ++m)
+	{
+		if (m != r)
+			d.applied += LiveModuleRowsDiffering(kConfigModules[m], staged.module[m]);
 		d.saved += ModuleStageEntries(kConfigModules[m], staged.module[m], saved.module[m], &entries);
+	}
 	return d;
 }
 

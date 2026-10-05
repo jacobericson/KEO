@@ -16,6 +16,11 @@
 // cover, so the answer is false and the caller enqueues nothing either way.
 bool CoverageFullGridAllowed(int maxPreloaded, int cameraReserved, int numCenters);
 
+// Whether the character scan preloads around a character: always within the
+// camera's radius, and away from it only while the squad radius keeps a ring
+// (squadRadius >= 1) and the retention hold is not past its cap.
+bool CoverageCharacterInScan(bool nearCamera, int squadRadius, bool retentionPressure);
+
 // accepted = cells the queue actually took; the rest were duplicates or
 // refusals, which is the difference between "restored" and "covering".
 void CoverageNoteCameraGrid(int accepted);

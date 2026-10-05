@@ -43,6 +43,8 @@ const ZoneConfig kZoneDefaults =
 	3.0f, // cfg_camFocusHardMult
 	250.0f, // cfg_camFocusHysteresis
 	1, // cfg_zoneLifeRetainRadius
+	1, // cfg_zoneLifeSquadRadius
+	45, // cfg_zoneRetentionMaxHeld
 	30.0, // cfg_zoneLifeIdleSeconds
 };
 
@@ -94,7 +96,8 @@ const ConfigKey g_zoneConfigKeys[] =
 	  "Lets the readiness deferral override the game's answer. Off leaves the game's own answer."),
 	CFG_OBOOL("zoneLifeUnload", ZoneConfig, zoneLifeUnloadEnabled,        NDOC, DEVROW,
 	  "Unload idle mod zones",
-	  "Unloads the zones the mod loaded once they are idle and outside the retain radius."),
+	  "Unloads the zones the mod loaded once they are idle and outside the camera's and the squads'"
+	  " radii."),
 	CFG_OBOOL("zoneCycleStats", ZoneConfig, zoneCycleStatsEnabled,        DOC, DEVROW,
 	  "Zone cycle measurement",
 	  "Measures each zone manager loading cycle, the player characters in cells the mod holds and Set"
@@ -126,13 +129,26 @@ const ConfigKey g_zoneConfigKeys[] =
 	  "Camera focus hysteresis",
 	  "World units past the preload threshold a neighbouring zone's prediction must move to take over"
 	  " or be released, so a point near a border does not thrash.", 0.0f, 0),
-	CFG_OINT("zoneLifeRetainRadius", ZoneConfig, cfg_zoneLifeRetainRadius, 1.0f, 4.0f, INT_MIN, NDOC, SHOW,
-	  "Keep zones loaded within (cells)",
-	  "Radius, in cells around the camera and the player's characters, inside which a zone the mod"
-	  " loaded is never unloaded."),
+	CFG_OINT_LIVE("zoneLifeRetainRadius", ZoneConfig, cfg_zoneLifeRetainRadius, 1.0f, 4.0f, INT_MIN, DOC, SHOW,
+	  "Zones kept around the camera (vanilla 1)",
+	  "Radius, in zones around the camera, inside which the zones the mod loaded stay loaded: 1 keeps a"
+	  " 3x3, 2 a 5x5. The game itself keeps a 3x3 around the camera."),
+	CFG_OINT_LIVE("zoneLifeSquadRadius", ZoneConfig, cfg_zoneLifeSquadRadius, 0.0f, 4.0f, 0, DOC, SHOW,
+	  "Zones kept around other squads (vanilla 0)",
+	  "Radius, in zones around each of your characters away from the camera. 0 keeps only the zone each"
+	  " one stands in, as the game does by itself (a 3x3 with its Fast zone hopping option): the mod then"
+	  " loads and keeps nothing extra around them, which saves CPU with many squads spread over the map,"
+	  " and switching the camera to one of them loads its surroundings at that moment. 1 keeps and"
+	  " preloads a 3x3 around each."),
+	CFG_OINT_LIVE("zoneRetentionMaxHeld", ZoneConfig, cfg_zoneRetentionMaxHeld, 12.0f, 45.0f, INT_MIN, DOC, SHOW,
+	  "Max extra zones kept loaded",
+	  "How many zones the mod may keep loaded beyond the ones the game keeps by itself (the game keeps"
+	  " none extra). Past it the mod keeps only the zones right around the camera and your characters,"
+	  " and stops preloading around squads away from the camera, until the count falls back."),
 	CFG_ODOUBLE("zoneLifeIdleSeconds", ZoneConfig, cfg_zoneLifeIdleSeconds, 5.0f, 600.0f, NDOC, DEVROW,
 	  "Idle zone unload delay seconds",
-	  "Seconds a zone the mod loaded must sit outside the retain radius before it is unloaded.", 5.0f, 0),
+	  "Seconds a zone the mod loaded must sit outside the camera's and the squads' radii before it is"
+	  " unloaded.", 5.0f, 0),
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }
 };
 

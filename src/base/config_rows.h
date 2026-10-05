@@ -11,9 +11,15 @@
 #define SHOW false
 #define DEVROW true
 #define CFG_COUNT(a) ((int)(sizeof(a) / sizeof((a)[0])))
-#define CFG_OROW(n, kind, T, field, lo, hi, minI, posOnly, doc, fn, label, tip, diag, sLo, sExp, ch, chN, dbg) \
-	{ n, kind, offsetof(T, field), sizeof(((T*)0)->field), lo, hi, false, label, tip, diag, sLo, sExp, \
+#define CFG_OROW_L(n, kind, T, field, lo, hi, minI, posOnly, doc, fn, label, tip, diag, sLo, sExp, ch, chN, dbg, live) \
+	{ n, kind, offsetof(T, field), sizeof(((T*)0)->field), lo, hi, live, label, tip, diag, sLo, sExp, \
 	  NULL, minI, posOnly, doc, false, NULL, NULL, fn, ch, chN, dbg }
+#define CFG_OROW(n, kind, T, field, lo, hi, minI, posOnly, doc, fn, label, tip, diag, sLo, sExp, ch, chN, dbg) \
+	CFG_OROW_L(n, kind, T, field, lo, hi, minI, posOnly, doc, fn, label, tip, diag, sLo, sExp, ch, chN, dbg, false)
+// A live row: the settings tab's close writes it into the running config on
+// the main thread, so every reader of its field must run on the main thread.
+#define CFG_OINT_LIVE(n, T, field, lo, hi, minI, doc, diag, label, tip) \
+	CFG_OROW_L(n, CK_INT, T, field, lo, hi, minI, false, doc, NULL, label, tip, diag, lo, 0, NULL, 0, false, true)
 #define CFG_OBOOL(n, T, field, doc, diag, label, tip) \
 	CFG_OROW(n, CK_BOOL, T, field, 1.0f, 0.0f, INT_MIN, false, doc, NULL, label, tip, diag, 0.0f, 0, NULL, 0, false)
 #define CFG_OBOOL_DBG(n, T, field, doc, diag, label, tip) \

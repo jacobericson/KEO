@@ -306,6 +306,16 @@ static void CommitStaging()
 			next.renderLevers = g_renderCfg.renderLevers;
 		ApplyRenderConfig(next);
 	}
+	// The other modules' live rows go straight into the running config; this
+	// runs on the main thread, as their readers do.
+	std::vector<std::string> live;
+	for (int m = 0; m < kConfigModuleCount && m < CONFIG_MODULE_MAX; ++m)
+	{
+		if (m != renderModule)
+			ApplyLiveModuleRows(kConfigModules[m], staged.module[m], &live);
+	}
+	for (size_t i = 0; i < live.size(); ++i)
+		LogMsg("Settings panel: live " + live[i]);
 
 	int savedKeys = 0;
 	if (d.saved)
@@ -329,7 +339,7 @@ static void CommitStaging()
 	std::ostringstream ss;
 	// A lever's on/off path runs on the in-game render tick, so a change made
 	// at the title screen acts once a game is loaded.
-	ss << "Settings panel: applied " << d.applied << " render key(s) (levers act from the next in-game frame), saved "
+	ss << "Settings panel: applied " << d.applied << " live key(s) (levers act from the next in-game frame), saved "
 	   << savedKeys << " key(s)";
 	LogDebug(ss.str());
 }

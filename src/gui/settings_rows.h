@@ -93,7 +93,7 @@ void StageBenchSpeeds(SettingsStaging* staging, const BenchSlot* slots);
 
 struct SettingsDiff
 {
-	int applied;   // live render keys that differ from the running config
+	int applied;   // live render keys and live module rows that differ from the running config
 	int saved;     // keys of every module that differ from the INI
 };
 SettingsDiff DiffSettings(const SettingsStaging& staged, const RenderConfig& live,

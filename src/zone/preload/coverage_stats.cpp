@@ -13,6 +13,11 @@ bool CoverageFullGridAllowed(int maxPreloaded, int cameraReserved, int numCenter
 	return (available / numCenters) >= 9;
 }
 
+bool CoverageCharacterInScan(bool nearCamera, int squadRadius, bool retentionPressure)
+{
+	return nearCamera || (squadRadius >= 1 && !retentionPressure);
+}
+
 static volatile LONG s_camGrids     = 0;   // EnqueueCameraGrid calls
 static volatile LONG s_camGridZones = 0;   // cells the camera queue took from them
 

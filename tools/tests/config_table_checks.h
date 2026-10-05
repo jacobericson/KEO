@@ -237,7 +237,7 @@ const char* const kUndocumented[] =
 	"plannerLegAim", "plannerLegSpan", "plannerMergeBias", "plannerMergeDetour", "plannerMode", "plannerPreArrivalMs", "plannerWaitSeconds", "plannerWaterCost", "plannerWaterEngine", "playerHierOnCap", "playerHierarchical",
 	"preload", "preloadKeepAliveSeconds",
 	"priorityBoost", "readinessOverrides", "saveLoadUnload", "zoneLifeIdleSeconds",
-	"zoneLifeRetainRadius", "zoneLifeUnload", NULL
+	"zoneLifeUnload", NULL
 };
 
 void CheckNamed(bool ok, const std::string& what)
@@ -265,7 +265,7 @@ void CheckTemplateAndDefaults(const ConfigModule& core, const ConfigModule& rend
 	std::string text = ReadFile("KEO.ini", &ok);
 	Check(ok, "KEO.ini found at the repository root");
 	std::vector<KeyValue> tmpl = TemplateKeys(text);
-	Check(tmpl.size() == 74, "template has 74 documented key lines");
+	Check(tmpl.size() == 77, "template has 77 documented key lines");
 
 	// 1. Every template line names a documented, active row...
 	std::vector<std::string> missing;
@@ -307,7 +307,7 @@ void CheckTemplateAndDefaults(const ConfigModule& core, const ConfigModule& rend
 		for (int i = 0; kUndocumented[i]; ++i)
 			want.push_back(kUndocumented[i]);
 		std::sort(undoc.begin(), undoc.end());
-		Check(undoc.size() == 43, "undocumented rows: 43");
+		Check(undoc.size() == 42, "undocumented rows: 42");
 		for (size_t i = 0; i < undoc.size(); ++i)
 			CheckNamed(std::binary_search(want.begin(), want.end(), undoc[i]), "undocumented " + undoc[i]);
 		for (size_t i = 0; i < want.size(); ++i)
@@ -485,6 +485,8 @@ void CheckClamps(const ConfigModule& core)
 	zone::g_zoneCfg.cfg_camFocusHardMult = 11.0f;
 	zone::g_zoneCfg.cfg_camFocusHysteresis = -1.0f;
 	zone::g_zoneCfg.cfg_zoneLifeRetainRadius = 5;
+	zone::g_zoneCfg.cfg_zoneLifeSquadRadius = 5;
+	zone::g_zoneCfg.cfg_zoneRetentionMaxHeld = 3;
 	movement::g_movementCfg.cfg_islandFarSpan = 9;
 	zone::g_zoneCfg.cfg_zoneLifeIdleSeconds = 4.0;
 	Captured().clear();
@@ -499,6 +501,8 @@ void CheckClamps(const ConfigModule& core)
 	want.push_back("Config: camFocusHardMult=11 clamped to max 10");
 	want.push_back("Config: camFocusHysteresis=-1 clamped to min 0");
 	want.push_back("Config: zoneLifeRetainRadius=5 clamped to max 4");
+	want.push_back("Config: zoneLifeSquadRadius=5 clamped to max 4");
+	want.push_back("Config: zoneRetentionMaxHeld=3 clamped to min 12");
 	want.push_back("Config: islandFarSpan=9 clamped to max 8");
 	want.push_back("Config: zoneLifeIdleSeconds=4 clamped to min 5");
 	Check(Captured() == want, "every other clamp bound, in order");
@@ -550,7 +554,7 @@ void CheckCoreWriter(const ConfigModule& core)
 	for (int m = 0; m < kConfigModuleCount; ++m)
 		if (kConfigModules[m].state && strcmp(kConfigModules[m].name, "render"))
 			ConfigIniEntries(kConfigModules[m], kConfigModules[m].state, kConfigModules[m].defaults, &e);
-	Check(e.size() == 86u,
+	Check(e.size() == 88u,
 	      "writer: core entries, every active row but the custom rows without choices");
 	bool appends = false;
 	for (size_t i = 0; i < e.size(); ++i)
@@ -625,7 +629,7 @@ void CheckGoldenRecord(const ConfigModule& core)
 		if (!fl[i].empty() && eq != std::string::npos)
 			want.push_back(KeyValue(fl[i].substr(0, eq), fl[i].substr(eq + 1)));
 	}
-	Check(want.size() == 115u, "golden record key count");
+	Check(want.size() == 117u, "golden record key count");
 	CheckNamed(got.size() == want.size(), "golden count");
 	for (size_t i = 0; i < got.size(); ++i)
 	{
@@ -672,7 +676,7 @@ void CheckTables()
 		Check(mod.keys[i].name == NULL, "tables end");
 	}
 	Check(kConfigModuleCount == 9, "tables end: nine modules");
-	Check(active == 117 && retired == 23, "tables end: active and retired rows");
+	Check(active == 119 && retired == 23, "tables end: active and retired rows");
 	Check(coreActive == 2 && renderActive == 22, "tables end: rows per module");
 	std::printf("  tables: %d module(s), %d active row(s) (core %d, render %d), %d retired\n",
 	            kConfigModuleCount, active, coreActive, renderActive, retired);

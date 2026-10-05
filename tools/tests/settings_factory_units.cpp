@@ -32,7 +32,7 @@ static const char* const SUITE_NAME = "settings_factory_units";
 #else
 static const char* const SUITE_NAME = "settings_factory_prod_units";
 #endif
-static const size_t CORE_ROWS_DEV = 85;
+static const size_t CORE_ROWS_DEV = 87;
 static const int DEV_ONLY_ROWS = 94;
 
 // ---- Sections --------------------------------------------------------------
@@ -158,7 +158,7 @@ static void CheckRowCounts()
 	std::vector<SettingsRow> dev = Rows(&st, true, NULL), prod = Rows(&st, false, NULL);
 	Check(ModuleSections(dev).size() == CORE_ROWS_DEV, "core rows dev");
 	Check(Section(dev, RENDER_TITLE).size() == 21, "render rows dev");
-	Check(Section(prod, "Zone loading").size() == 5 && Section(prod, "Performance").size() == 3
+	Check(Section(prod, "Zone loading").size() == 7 && Section(prod, "Performance").size() == 3
 	      && Section(prod, "Squad movement").size() == 4, "player section rows prod");
 }
 
@@ -171,8 +171,24 @@ static void CheckRestart()
 	std::vector<SettingsRow> rows = Rows(&st, true, NULL);
 	std::vector<const SettingsRow*> core = ModuleSections(rows);
 	bool ok = !core.empty();
-	for (size_t i = 0; i < core.size(); ++i)
-		ok = ok && EndsWith(core[i]->label, " *") && core[i]->restart;
+	// A module row is startup-only unless its key is live: the three zone
+	// footprint rows.
+	int liveCore = 0;
+	for (int m = 0; m < kConfigModuleCount; ++m)
+	{
+		const ConfigModule& mod = kConfigModules[m];
+		if (strcmp(mod.name, "render") == 0)
+			continue;
+		for (int i = 0; mod.keys[i].name; ++i)
+		{
+			const ConfigKey& k = mod.keys[i];
+			if (!Shown(k, true))
+				continue;
+			const SettingsRow* r = FindLabel(rows, RowLabel(k));
+			ok = ok && r && r->restart == !k.live && EndsWith(r->label, " *") == !k.live;
+			liveCore += k.live ? 1 : 0;
+		}
+	}
 	int live = 0;
 	for (int i = 0; g_renderKeys[i].name; ++i)
 	{
@@ -183,7 +199,7 @@ static void CheckRestart()
 		ok = ok && r && !EndsWith(r->label, " *") && !r->restart;
 		++live;
 	}
-	Check(ok && live > 0, "Restart");
+	Check(ok && live > 0 && liveCore == 3, "Restart");
 }
 
 static bool OnProdPage(const char* name)
@@ -1003,6 +1019,39 @@ static void CheckUnlabelledOffsetDouble()
 	      "unlabelled offset double keeps and saves its state field");
 }
 
+// A live row's clamped staged value reaches the running config at the
+// close; a startup-only row staged beside it does not.
+static void CheckLiveModuleRows()
+{
+	int z = ModuleFor("zoneLifeSquadRadius");
+	const ConfigModule& zoneMod = kConfigModules[z];
+	const zone::ZoneConfig held = zone::g_zoneCfg;
+	SettingsStaging saved;
+	StageAll(&saved);
+	SettingsStaging st = saved;
+	Check(LiveModuleRowsDiffering(zoneMod, st.module[z]) == 0 && ApplyLiveModuleRows(zoneMod, st.module[z], NULL) == 0,
+	      "live rows: an unchanged stage applies nothing");
+
+	std::vector<SettingsRow> prod = Rows(&st, false, NULL);
+	const SettingsRow* squad = FindLabel(prod, RowLabel(zoneMod.keys[KeyIndex(zoneMod, "zoneLifeSquadRadius")]));
+	const SettingsRow* preload = FindLabel(prod, RowLabel(zoneMod.keys[KeyIndex(zoneMod, "preload")]));
+	Check(squad && squad->floatPtr && preload && preload->boolPtr, "live rows: the squad radius and preload rows bind");
+	if (!squad || !squad->floatPtr || !preload || !preload->boolPtr)
+		return;
+	*squad->floatPtr = 0.0f;
+	*preload->boolPtr = !held.preloadEnabled;
+	ClampModuleStage(zoneMod, &st.module[z], saved.module[z], &DiscardLog);
+
+	Check(LiveModuleRowsDiffering(zoneMod, st.module[z]) == 1, "live rows: one live row differs");
+	std::vector<std::string> applied;
+	int n = ApplyLiveModuleRows(zoneMod, st.module[z], &applied);
+	Check(n == 1 && applied.size() == 1 && applied[0] == "zoneLifeSquadRadius=0"
+	      && zone::g_zoneCfg.cfg_zoneLifeSquadRadius == 0 && zone::g_zoneCfg.preloadEnabled == held.preloadEnabled,
+	      "live rows: the squad radius applies, preload waits for a restart");
+	Check(LiveModuleRowsDiffering(zoneMod, st.module[z]) == 0, "live rows: an applied row no longer differs");
+	zone::g_zoneCfg = held;
+}
+
 int main()
 {
 	CheckSections();
@@ -1027,5 +1076,6 @@ int main()
 	CheckRoundTrips();
 	CheckIniOnlyOffsetText();
 	CheckUnlabelledOffsetDouble();
+	CheckLiveModuleRows();
 	return CheckExit(SUITE_NAME);
 }

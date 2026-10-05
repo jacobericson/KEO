@@ -229,6 +229,8 @@ static const char* const kClampOrder[] =
 	"camFocusHardMult",
 	"camFocusHysteresis",
 	"zoneLifeRetainRadius",
+	"zoneLifeSquadRadius",
+	"zoneRetentionMaxHeld",
 	"islandFarSpan",
 	"zoneLifeIdleSeconds",
 	"plannerLegSpan",

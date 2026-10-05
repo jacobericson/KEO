@@ -102,6 +102,8 @@ static const Owner kOwners[] =
 	{ "camFocusHysteresis", "zone" },
 	{ "reprioritizeInterval", "navmesh" },
 	{ "zoneLifeRetainRadius", "zone" },
+	{ "zoneLifeSquadRadius", "zone" },
+	{ "zoneRetentionMaxHeld", "zone" },
 	{ "zoneLifeIdleSeconds", "zone" },
 	{ "plannerMode", "planner" },
 	{ "plannerLegSpan", "planner" },
@@ -260,6 +262,44 @@ static void CheckZoneRetainRadius()
 	zone::g_zoneCfg = held;
 }
 
+// The squad radius and the held-zone cap: their defaults, the squad radius's
+// 0 (vanilla) accepted and a negative value refused, the cap clamped to its
+// range.
+static void CheckZoneSquadRadiusAndCap()
+{
+	const zone::ZoneConfig held = zone::g_zoneCfg;
+	zone::g_zoneCfg = zone::kZoneDefaults;
+	ConfigClampLoaded(&DiscardLog);
+	Check(zone::g_zoneCfg.cfg_zoneLifeSquadRadius == 1, "zone: an empty INI loads zoneLifeSquadRadius 1");
+	Check(zone::g_zoneCfg.cfg_zoneRetentionMaxHeld == 45, "zone: an empty INI loads zoneRetentionMaxHeld 45");
+
+	ConfigLoadState st;
+	ConfigApplyLine("zoneLifeSquadRadius", "0", 1, &st, &DiscardLog);
+	ConfigClampLoaded(&DiscardLog);
+	Check(zone::g_zoneCfg.cfg_zoneLifeSquadRadius == 0 && st.overrides == 1, "zone: zoneLifeSquadRadius=0 loads 0");
+
+	ConfigLoadState st2;
+	ConfigApplyLine("zoneLifeSquadRadius", "-1", 1, &st2, &DiscardLog);
+	Check(zone::g_zoneCfg.cfg_zoneLifeSquadRadius == 0 && st2.unrecognised == 1,
+	      "zone: zoneLifeSquadRadius=-1 is refused and leaves the value");
+
+	ConfigLoadState st3;
+	ConfigApplyLine("zoneRetentionMaxHeld", "5", 1, &st3, &DiscardLog);
+	ConfigClampLoaded(&DiscardLog);
+	Check(zone::g_zoneCfg.cfg_zoneRetentionMaxHeld == 12, "zone: zoneRetentionMaxHeld=5 clamps to 12");
+	zone::g_zoneCfg = held;
+}
+
+// The live offset rows outside the render module: each one's readers all run
+// on the main thread, where the settings tab writes it.
+static bool LiveOffsetRowAllowed(const char* module, const char* key)
+{
+	if (strcmp(module, "zone"))
+		return false;
+	return !strcmp(key, "zoneLifeRetainRadius") || !strcmp(key, "zoneLifeSquadRadius")
+	    || !strcmp(key, "zoneRetentionMaxHeld");
+}
+
 int main()
 {
 	Check(kConfigModuleCount == 9 && kConfigModuleCount <= CONFIG_MODULE_MAX, "nine modules within stage capacity");
@@ -303,7 +343,7 @@ int main()
 				if (k.size != width && (strcmp(mod.name, "render") || k.size != 0)) Fail(k.name, "kind width");
 				if (k.offset + width > mod.stateSize) Fail(k.name, "kind width outside state");
 			}
-			if (k.live && strcmp(mod.name, "render")) Fail(k.name, "live row outside the render module");
+			if (k.live && strcmp(mod.name, "render") && !LiveOffsetRowAllowed(mod.name, k.name)) Fail(k.name, "live row outside the render module and the allowed zone rows");
 			if (!mod.state || !strcmp(mod.name, "render") || k.retired || k.lo > k.hi
 			    || (k.kind != CK_INT && k.kind != CK_FLOAT && k.kind != CK_DOUBLE)) continue;
 			std::vector<unsigned char> saved((unsigned char*)mod.state, (unsigned char*)mod.state + mod.stateSize);
@@ -317,7 +357,7 @@ int main()
 		}
 		if (i == CONFIG_STAGE_MAX) Fail(mod.name, "no table end within stage capacity");
 	}
-	Check(moduleKeys == 93 && activeCore == 2 && retiredCore == 23 && debug == 4, "module and core row counts");
+	Check(moduleKeys == 95 && activeCore == 2 && retiredCore == 23 && debug == 4, "module and core row counts");
 	for (size_t i = 0; i < sizeof(kOwners) / sizeof(kOwners[0]); ++i)
 	{
 		const ConfigModule* mod = NULL;
@@ -327,5 +367,6 @@ int main()
 	}
 	CheckPlannerKeys();
 	CheckZoneRetainRadius();
+	CheckZoneSquadRadiusAndCap();
 	return CheckExit("config_modules_units");
 }

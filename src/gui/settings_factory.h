@@ -72,3 +72,11 @@ void ClampModuleStage(const ConfigModule& m, ConfigModuleStage* s, const ConfigM
 // custom rows with choices write their choice's INI text.
 int ModuleStageEntries(const ConfigModule& m, const ConfigModuleStage& staged, const ConfigModuleStage& saved,
                        std::vector<IniEntry>* out);
+
+// The live offset rows of m (not retired, no target) whose field in the
+// clamped staged state differs from the running config, m.state. The first
+// only counts them; the second also copies each one into m.state, adding
+// "key=value" to applied when it is not NULL, and must run on the main
+// thread, which is where every live row's readers run.
+int LiveModuleRowsDiffering(const ConfigModule& m, const ConfigModuleStage& staged);
+int ApplyLiveModuleRows(const ConfigModule& m, const ConfigModuleStage& staged, std::vector<std::string>* applied);

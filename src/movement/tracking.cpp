@@ -6,6 +6,8 @@
 #include "movement/tracking.h"
 #include "movement/mover_policy.h"
 #include "zone/preload/coverage_stats.h"
+#include "zone/zone_life.h"
+#include "zone/retention/zone_retention.h"
 #include "planner/planner_tick.h"
 
 // Registry evictions. Defined here, where they happen; the counter line that
@@ -273,10 +275,11 @@ void ScanCharacterZones(void* zoneMgr)
 
 	// Per-character grid scan: one 3x3 (or 2x2, when the preload budget is
 	// tight) around every player character that is not already following a
-	// move order. The registry watches stationary characters too, so the
-	// skip below tests the move order, not mere membership -- skipping every
-	// watched character would leave a full registry with no grid coverage
-	// at all.
+	// move order, except those away from the camera that the squad radius or
+	// the retention cap would not keep (CoverageCharacterInScan). The registry
+	// watches stationary characters too, so the skip below tests the move
+	// order, not mere membership -- skipping every watched character would
+	// leave a full registry with no grid coverage at all.
 	uintptr_t playerIntf = *(uintptr_t*)((uintptr_t)GameAddr(RVA_GLOBAL_PLAYER));
 	if (!playerIntf)
 		return;
@@ -286,6 +289,12 @@ void ScanCharacterZones(void* zoneMgr)
 	int numCenters = 0;
 	int charCount = 0;
 	int centersDropped = 0;   // cells past MAX_CHAR_ZONES, which get no grid
+	int farSkipped = 0;       // characters away from the camera the squad radius or the cap leaves out
+
+	// Read each scan: both are live settings.
+	int rCamera = zone::g_zoneCfg.cfg_zoneLifeRetainRadius;
+	int rSquad  = zone::g_zoneCfg.cfg_zoneLifeSquadRadius;
+	bool pressure = ZoneRetentionUnderPressure();
 
 	unsigned int scCount = GetPlayerCharCount(playerIntf);
 	uintptr_t* scStuff = GetPlayerCharStuff(playerIntf);
@@ -309,7 +318,13 @@ void ScanCharacterZones(void* zoneMgr)
 			if (WorldToZoneGrid(charX, charZ, &gx, &gy))
 			{
 				bool found = false;
-				for (int c = 0; c < numCenters; ++c)
+				if (!CoverageCharacterInScan(ZlCellNearCamera(zoneMgr, gx, gy, rCamera), rSquad, pressure))
+				{
+					// Retention would let the grid go again, so it is never queued.
+					found = true;
+					farSkipped++;
+				}
+				for (int c = 0; c < numCenters && !found; ++c)
 				{
 					if (centers[c].gx == gx && centers[c].gy == gy)
 					{ found = true; break; }
@@ -378,6 +393,7 @@ void ScanCharacterZones(void* zoneMgr)
 	   << ", " << numCenters << " centers"
 	   << (useFullGrid ? " x3x3" : " x2x2")
 	   << ", " << zonesEnqueued << " new zones queued"
+	   << ", farSkipped=" << farSkipped
 	   << (centersDropped > 0 ? " OVERFLOW" : "");
 	LogDebug(ss.str());
 }
@@ -593,7 +609,7 @@ void TieredCharacterPoll(void* zoneMgr, double now)
 // pointer is validated against the player list by PollActiveMovers alone, so
 // it is never dereferenced here. A baseline entry (dest == current) yields
 // just its current zone.
-int CollectMoverRetainZones(int* gx, int* gy, int cap)
+int CollectMoverRetainZones(int* gx, int* gy, bool* moving, int cap)
 {
 	int n = 0;
 	for (int i = 0; i < numWatched && n < cap; ++i)
@@ -604,19 +620,25 @@ int CollectMoverRetainZones(int* gx, int* gy, int cap)
 		int cy = watchedChars[i].currentZoneY;
 		if (cx < 0 || cx > ZONE_GRID_MAX || cy < 0 || cy > ZONE_GRID_MAX)
 			continue;
-		gx[n] = cx;
-		gy[n] = cy;
-		n++;
 
 		int dirX = 0, dirY = 0;
 		if (watchedChars[i].destZoneX > cx) dirX = 1;
 		else if (watchedChars[i].destZoneX >= 0 && watchedChars[i].destZoneX < cx) dirX = -1;
 		if (watchedChars[i].destZoneY > cy) dirY = 1;
 		else if (watchedChars[i].destZoneY >= 0 && watchedChars[i].destZoneY < cy) dirY = -1;
-		if ((dirX != 0 || dirY != 0) && n < cap)
+		bool stepping = dirX != 0 || dirY != 0;
+
+		gx[n] = cx;
+		gy[n] = cy;
+		if (moving)
+			moving[n] = stepping;
+		n++;
+		if (stepping && n < cap)
 		{
 			gx[n] = cx + dirX;
 			gy[n] = cy + dirY;
+			if (moving)
+				moving[n] = true;
 			n++;
 		}
 	}

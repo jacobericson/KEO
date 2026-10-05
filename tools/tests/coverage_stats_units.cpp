@@ -32,6 +32,14 @@ int main()
 	Check(CoverageFullGridAllowed(21, 12, 1), "exactly 9 available qualifies");
 	Check(!CoverageFullGridAllowed(20, 12, 1), "8 available does not");
 
+	// The scan's per-character gate: the camera's area always, elsewhere only
+	// while the squad radius keeps a ring and the hold is under its cap.
+	Check(CoverageCharacterInScan(true, 0, true), "near the camera: scanned whatever the squad radius or cap");
+	Check(CoverageCharacterInScan(false, 1, false), "away, squad radius 1, no pressure: scanned");
+	Check(CoverageCharacterInScan(false, 3, false), "away, a wider squad radius: scanned");
+	Check(!CoverageCharacterInScan(false, 0, false), "away, squad radius 0: skipped");
+	Check(!CoverageCharacterInScan(false, 1, true), "away, past the cap: skipped");
+
 	// Every counter prints from the start, so a session can tell "never
 	// reached" from "absent". A fresh token must carry all of them at zero.
 	{
