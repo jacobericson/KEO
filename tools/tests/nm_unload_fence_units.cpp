@@ -8,6 +8,7 @@ struct FakeFence
 	char trace[32];
 	int beginAnswer;
 	int pjAnswer;
+	int mode;
 	bool bumpJob, bumpClaim;
 	long job, claim;
 };
@@ -18,7 +19,7 @@ static void Note(FakeFence* f, char c)
 	f->trace[n] = c;
 	f->trace[n + 1] = 0;
 }
-static int  Begin(void* p)      { FakeFence* f = (FakeFence*)p; Note(f, 'b'); if (f->bumpJob) ++f->job; if (f->bumpClaim) ++f->claim; return f->beginAnswer; }
+static int  Begin(void* p, int mode) { FakeFence* f = (FakeFence*)p; Note(f, 'b'); f->mode = mode; if (f->bumpJob) ++f->job; if (f->bumpClaim) ++f->claim; return f->beginAnswer; }
 static long SkipJob(void* p)    { Note((FakeFence*)p, 'j'); return ((FakeFence*)p)->job; }
 static long SkipClaim(void* p)  { Note((FakeFence*)p, 'c'); return ((FakeFence*)p)->claim; }
 static int  TryPj(void* p)      { Note((FakeFence*)p, 'p'); return ((FakeFence*)p)->pjAnswer; }
@@ -35,6 +36,7 @@ static NmFenceOps Ops(FakeFence* f)
 static NmFenceResult Run(FakeFence* f, int beginAnswer, int pjAnswer, bool bumpJob, bool bumpClaim)
 {
 	memset(f, 0, sizeof(*f));
+	f->mode = -1;
 	f->beginAnswer = beginAnswer;
 	f->pjAnswer = pjAnswer;
 	f->bumpJob = bumpJob;
@@ -46,6 +48,71 @@ static NmFenceResult Run(FakeFence* f, int beginAnswer, int pjAnswer, bool bumpJ
 static void Release(FakeFence* f, NmFenceResult* r)
 {
 	NmFenceRelease(r, Ops(f));
+}
+
+// The claims mode with both counts set to move on a begin: it must read neither.
+static NmFenceResult RunClaims(FakeFence* f, int beginAnswer)
+{
+	memset(f, 0, sizeof(*f));
+	f->mode = -1;
+	f->beginAnswer = beginAnswer;
+	f->pjAnswer = NM_FENCE_PJ_HELD;
+	f->bumpJob = true;
+	f->bumpClaim = true;
+	NmFenceResult rec = NM_FENCE_RELEASED;
+	return NmFenceTryBegin(&rec, Ops(f), NM_FENCE_MODE_CLAIMS);
+}
+
+static void TestClaimsMode(FakeFence* f)
+{
+	NmFenceResult r = RunClaims(f, NM_FENCE_BEGIN_OK);
+	Check(r == NM_FENCE_CLAIMS_ONLY && strcmp(f->trace, "b") == 0 && f->mode == NM_FENCE_MODE_CLAIMS,
+	      "claims: begun with one operation, no processJobCS try");
+	Check(NmFenceProceeds(r), "claims: a begun fence proceeds");
+	Release(f, &r);
+	Check(strcmp(f->trace, "be") == 0 && r == NM_FENCE_RELEASED, "claims: the release ends the publication, no unlock");
+	Release(f, &r);
+	Check(strcmp(f->trace, "be") == 0, "claims: a second release does nothing");
+
+	r = RunClaims(f, NM_FENCE_BEGIN_CLAIMED);
+	Check(r == NM_FENCE_REFUSED_CLAIM && strcmp(f->trace, "b") == 0, "claims: a claim's refusal is named by the begin, no count read");
+	r = RunClaims(f, NM_FENCE_BEGIN_IDLE);
+	Check(r == NM_FENCE_IDLE && strcmp(f->trace, "b") == 0 && !NmFenceProceeds(r), "claims: no generator is idle and does not proceed");
+	r = RunClaims(f, NM_FENCE_BEGIN_UNAVAILABLE);
+	Check(r == NM_FENCE_UNAVAILABLE && strcmp(f->trace, "b") == 0, "claims: unavailable");
+	r = RunClaims(f, NM_FENCE_BEGIN_REFUSED);
+	Check(r == NM_FENCE_REFUSED && strcmp(f->trace, "b") == 0, "claims: another refusal");
+
+	static const int kAnswers[5] = { NM_FENCE_BEGIN_REFUSED, NM_FENCE_BEGIN_OK, NM_FENCE_BEGIN_UNAVAILABLE,
+	                                 NM_FENCE_BEGIN_IDLE, NM_FENCE_BEGIN_CLAIMED };
+	bool quiet = true;
+	for (int i = 0; i < 5; ++i)
+	{
+		r = RunClaims(f, kAnswers[i]);
+		Release(f, &r);
+		quiet = quiet && r == NM_FENCE_RELEASED && !strchr(f->trace, 'p') && !strchr(f->trace, 'u') &&
+		        !strchr(f->trace, 'r') && !strchr(f->trace, 'j') && !strchr(f->trace, 'c');
+	}
+	Check(quiet, "claims: no answer tries, unlocks or prioritises processJobCS, or reads a count");
+
+	NmFenceResult held = RunClaims(f, NM_FENCE_BEGIN_OK);
+	NmFenceResult again = NmFenceTryBegin(&held, Ops(f), NM_FENCE_MODE_CLAIMS);
+	Check(again == NM_FENCE_REFUSED && held == NM_FENCE_CLAIMS_ONLY && strcmp(f->trace, "b") == 0,
+	      "claims: a second begin refuses and keeps the publication owed");
+	Release(f, &held);
+	Check(strcmp(f->trace, "be") == 0, "claims: the kept publication ends exactly once");
+
+	r = Run(f, NM_FENCE_BEGIN_OK, NM_FENCE_PJ_HELD, false, false);
+	Check(f->mode == NM_FENCE_MODE_FULL && strcmp(f->trace, "jcbp") == 0,
+	      "full: the begin is asked for the full mode and the trace is unchanged");
+	Release(f, &r);
+	r = Run(f, NM_FENCE_BEGIN_IDLE, NM_FENCE_PJ_HELD, false, false);
+	Check(r == NM_FENCE_REFUSED && strcmp(f->trace, "jcbjc") == 0, "full: an idle answer is a plain refusal");
+	r = Run(f, NM_FENCE_BEGIN_CLAIMED, NM_FENCE_PJ_HELD, false, false);
+	Check(r == NM_FENCE_REFUSED && strcmp(f->trace, "jcbjc") == 0, "full: a claimed answer without its count is a plain refusal");
+
+	Check(NM_FENCE_CLAIMS_ONLY == 8 && NM_FENCE_IDLE == 9 && NmFenceProceeds(NM_FENCE_CLAIMS_ONLY) && !NmFenceProceeds(NM_FENCE_IDLE),
+	      "the claims mode's values follow released; only its begun fence proceeds");
 }
 
 int main()
@@ -106,5 +173,6 @@ int main()
 	again = NmFenceTryBegin(&held, Ops(&f));
 	Check(strcmp(f.trace, "jcbpuejcbp") == 0 && again == NM_FENCE_HELD && held == NM_FENCE_HELD,
 	      "the kept hold releases once, and the released fence begins again");
+	TestClaimsMode(&f);
 	return CheckExit("nm_unload_fence_units");
 }

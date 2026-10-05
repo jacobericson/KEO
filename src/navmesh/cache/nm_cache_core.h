@@ -388,6 +388,8 @@ struct NavMeshCacheState
 	//                was queued
 	//   ulSkipClaim= NavMeshUnloadFence::TryBegin refused: a claim for the zone
 	//                in flight
+	//   ulGuardClaim= the claims mode found a claim for the zone after its
+	//                lock-free check missed it (printed only when non-zero)
 	//   ulSkipPj=    processJobCS try failed while an unload was published
 	//   ulHeld=      claim attempts that left the unloading zone's job queued
 	//                (printed only when non-zero)
@@ -396,6 +398,7 @@ struct NavMeshCacheState
 	//   ulPrioWin=   zero-wait tries that won while a request was still up
 	volatile long nmUlSkipJob;
 	volatile long nmUlSkipClaim;
+	volatile long nmUlGuardClaim;
 	volatile long nmUlSkipPj;
 	volatile long nmUlHeld;
 	volatile long nmUlPrio;

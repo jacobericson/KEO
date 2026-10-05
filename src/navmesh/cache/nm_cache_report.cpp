@@ -462,6 +462,9 @@ static void AppendClaimAndUnload(std::ostringstream& ss)
 		long ulHeld = InterlockedCompareExchange(&navmesh::g_nmCache.nmUlHeld, 0, 0);
 		if (ulHeld)
 			ss << " ulHeld=" << ulHeld;
+		long ulGuardClaim = InterlockedCompareExchange(&navmesh::g_nmCache.nmUlGuardClaim, 0, 0);
+		if (ulGuardClaim)
+			ss << " ulGuardClaim=" << ulGuardClaim;
 	}
 }
 

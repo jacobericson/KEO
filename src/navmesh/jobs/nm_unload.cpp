@@ -107,6 +107,16 @@ void ClaimZoneClear(int slot)
 //    collision build and before its cache lookup (a worker HIT, whose lookup
 //    ran at the claim, before its mesh rebuild), and goes on only if its zone
 //    is still loaded with the content it held before the wait.
+// 6. The claims mode (the game's own expiry of a zone) keeps points 2 and
+//    3 and drops 1 and 4: no queue walk and no processJobCS. Its
+//    publication still goes up under +152, because a claim loop acts on
+//    the reading it took in its hold of +152 (the bg dispatch reads it
+//    twice in one hold, with its pick registered in between), so a
+//    publication must never appear while a claim loop holds the lock; a
+//    clear may, it only leaves a job queued. With no generator yet there is
+//    no lock to publish under and no claim loop has run, so the begin
+//    publishes nothing and answers IDLE. Types 2/3/4 and the bad-zone
+//    forward keep vanilla's own exposure in this mode.
 //
 // Never read NMG+232 (NavMeshGenerator::current) and never call
 // NavMeshGenerator::hasJob: both are unlocked. Never hold +152 across
@@ -135,22 +145,28 @@ enum NavMeshUnloadBegin
 {
 	NM_UL_REFUSED = 0,   // transient: retry the zone on a later frame
 	NM_UL_BEGUN,         // free of mod NavMesh work; NavMeshEndZoneUnload must follow
-	NM_UL_UNAVAILABLE    // can never pass in this build or session
+	NM_UL_UNAVAILABLE,   // can never pass in this build or session
+	NM_UL_IDLE,          // claims mode: no claim can exist yet; nothing published
+	NM_UL_CLAIMED        // claims mode: a claim names the zone; nothing published
 };
 } // namespace nm_unload_detail
 using namespace nm_unload_detail;
 
-static NavMeshUnloadBegin NavMeshBeginZoneUnload(void* zone)
+// walkQueue false is the claims mode: no queue walk, no processJobCS
+// readiness, and answers of its own for "no generator yet" and for a claim.
+static NavMeshUnloadBegin NavMeshBeginZoneUnload(void* zone, bool walkQueue)
 {
 	if (!zone)
 		return NM_UL_REFUSED;
 	if (NavMeshZoneUnloadUnavailable())
 		return NM_UL_UNAVAILABLE;
 	if (!navmesh::g_navmeshCfg.cachingEnabled)
-		return NM_UL_BEGUN;   // no mod NavMesh thread exists: nothing to keep off the zone
-	if (!InterlockedCompareExchange(&g_pjLockReady, 0, 0))
+		return walkQueue ? NM_UL_BEGUN : NM_UL_IDLE;   // no mod NavMesh thread exists: nothing to keep off the zone
+	if (walkQueue && !InterlockedCompareExchange(&g_pjLockReady, 0, 0))
 		return NM_UL_REFUSED;
 	uintptr_t nmg = g_navMeshGen;
+	if (!nmg && !walkQueue)
+		return NM_UL_IDLE;      // no dispatch yet: no claim loop has run (see point 6)
 	if (!nmg || !game::g_gameFn.fn_pathBuilderInit || !game::g_gameFn.fn_pathBuilderFinalize || !game::g_gameFn.fn_readerUnlock)
 		return NM_UL_REFUSED;   // no dispatch yet: transient
 	// One unload at a time: a Begin not yet matched by its End still owns the
@@ -160,27 +176,30 @@ static NavMeshUnloadBegin NavMeshBeginZoneUnload(void* zone)
 
 	NmQueueLock queue(nmg);
 
-	bool queued = false;
-	int walked = 0;
-	for (uintptr_t node = *(uintptr_t*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_front, 136));
-	     node; node = *(uintptr_t*)(KLIB_MEMBER(4, node, NavMeshGenerator__Task_next, 96)))
+	if (walkQueue)
 	{
-		if (++walked > UNLOAD_QUEUE_WALK_CAP ||
-		    *(uintptr_t*)KLIB_MEMBER(4, node, NavMeshGenerator__Task_zone, 0) == (uintptr_t)zone)
+		bool queued = false;
+		int walked = 0;
+		for (uintptr_t node = *(uintptr_t*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_front, 136));
+		     node; node = *(uintptr_t*)(KLIB_MEMBER(4, node, NavMeshGenerator__Task_next, 96)))
 		{
-			queued = true;
-			break;
+			if (++walked > UNLOAD_QUEUE_WALK_CAP ||
+			    *(uintptr_t*)KLIB_MEMBER(4, node, NavMeshGenerator__Task_zone, 0) == (uintptr_t)zone)
+			{
+				queued = true;
+				break;
+			}
+		}
+
+		if (queued)
+		{
+			queue.Release();
+			InterlockedIncrement(&navmesh::g_nmCache.nmUlSkipJob);
+			return NM_UL_REFUSED;
 		}
 	}
 
-	if (queued)
-	{
-		queue.Release();
-		InterlockedIncrement(&navmesh::g_nmCache.nmUlSkipJob);
-		return NM_UL_REFUSED;
-	}
-
-	// Published under +152: see point 2 above.
+	// Published under +152: see points 2 and 6 above.
 	InterlockedExchangePointer(&g_unloadingZone, zone);
 	queue.Release();
 
@@ -189,8 +208,13 @@ static NavMeshUnloadBegin NavMeshBeginZoneUnload(void* zone)
 		if (InterlockedCompareExchangePointer(&g_claimZone[i], NULL, NULL) == zone)
 		{
 			InterlockedExchangePointer(&g_unloadingZone, NULL);
-			InterlockedIncrement(&navmesh::g_nmCache.nmUlSkipClaim);
-			return NM_UL_REFUSED;
+			if (walkQueue)
+			{
+				InterlockedIncrement(&navmesh::g_nmCache.nmUlSkipClaim);
+				return NM_UL_REFUSED;
+			}
+			InterlockedIncrement(&navmesh::g_nmCache.nmUlGuardClaim);
+			return NM_UL_CLAIMED;
 		}
 	}
 	return NM_UL_BEGUN;
@@ -202,10 +226,16 @@ static void NavMeshEndZoneUnload()
 }
 
 // The fence's operations, bound to this protocol. Main thread.
-static int  FenceBegin(void* zone)
+static int  FenceBegin(void* zone, int mode)
 {
-	NavMeshUnloadBegin b = NavMeshBeginZoneUnload(zone);
-	return b == NM_UL_BEGUN ? NM_FENCE_BEGIN_OK : b == NM_UL_UNAVAILABLE ? NM_FENCE_BEGIN_UNAVAILABLE : NM_FENCE_BEGIN_REFUSED;
+	switch (NavMeshBeginZoneUnload(zone, mode == NM_FENCE_MODE_FULL))
+	{
+	case NM_UL_BEGUN:       return NM_FENCE_BEGIN_OK;
+	case NM_UL_UNAVAILABLE: return NM_FENCE_BEGIN_UNAVAILABLE;
+	case NM_UL_IDLE:        return NM_FENCE_BEGIN_IDLE;
+	case NM_UL_CLAIMED:     return NM_FENCE_BEGIN_CLAIMED;
+	default:                return NM_FENCE_BEGIN_REFUSED;
+	}
 }
 static long FenceSkipJob(void*)   { return InterlockedCompareExchange(&navmesh::g_nmCache.nmUlSkipJob, 0, 0); }
 static long FenceSkipClaim(void*) { return InterlockedCompareExchange(&navmesh::g_nmCache.nmUlSkipClaim, 0, 0); }
@@ -225,9 +255,9 @@ static NmFenceOps FenceOps(void* zone)
 	return ops;
 }
 
-NmFenceResult NavMeshUnloadFence::TryBegin(void* zone)
+NmFenceResult NavMeshUnloadFence::TryBegin(void* zone, NmFenceMode mode)
 {
-	return NmFenceTryBegin(&result, FenceOps(zone));
+	return NmFenceTryBegin(&result, FenceOps(zone), mode);
 }
 
 void NavMeshUnloadFence::Release()

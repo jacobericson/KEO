@@ -121,7 +121,7 @@ enum NavMeshPjLockResult
 //   without publishing anything (vanilla's own exposure only). Main
 //   thread.
 //
-// NmFenceResult NavMeshUnloadFence::TryBegin(void* zone)
+// NmFenceResult NavMeshUnloadFence::TryBegin(void* zone, NM_FENCE_MODE_FULL)
 //   NM_FENCE_UNAVAILABLE whenever NavMeshZoneUnloadUnavailable is non-NULL.
 //   Otherwise takes the generator's queue lock (NMG+152, the primitives
 //   PrioritizeNavMeshQueue uses), walks the job queue (NMG+136 via Task::next)
@@ -168,7 +168,7 @@ enum NavMeshPjLockResult
 //   The request is up now (raised and not expired). Main thread.
 //
 // void NavMeshUnloadFence::Release()
-//   After NM_FENCE_HELD or NM_FENCE_NO_LOCK: releases processJobCS when
+//   After NM_FENCE_HELD, NO_LOCK or CLAIMS_ONLY: releases processJobCS when
 //   held, then clears the publication. After any other result, or a second
 //   time, it releases nothing.
 //
@@ -230,13 +230,21 @@ bool NavMeshZoneClaimed(void* zone);
 // NM_FENCE_NO_LOCK the caller unloads, then calls Release, which unlocks
 // processJobCS when held and then ends the publication. The destructor
 // releases only what the caller did not, on a C++ unwind.
+//
+// TryBegin(zone, NM_FENCE_MODE_CLAIMS) is the fence of the game's own expiry
+// of a zone: it publishes the zone under the queue lock without walking the
+// queue, refuses it while a claim names it (NM_FENCE_REFUSED_CLAIM, counted
+// ulGuardClaim=) and never touches processJobCS. NM_FENCE_CLAIMS_ONLY
+// proceeds and owes only the publication's end; NM_FENCE_IDLE (no dispatch
+// has run yet, or caching is off) published nothing, because no claim can
+// exist. Its other answers are the full mode's UNAVAILABLE and REFUSED.
 struct NavMeshUnloadFence
 {
 	NmFenceResult result;
 
 	NavMeshUnloadFence() : result(NM_FENCE_RELEASED) {}
 	~NavMeshUnloadFence() { Release(); }
-	NmFenceResult TryBegin(void* zone);
+	NmFenceResult TryBegin(void* zone, NmFenceMode mode = NM_FENCE_MODE_FULL);
 	void Release();
 
 private:
