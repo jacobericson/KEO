@@ -16,6 +16,8 @@
 
 #if ZONEHAND_STEP >= 3
 
+#include "zone/retention/zone_retention_policy.h"
+
 void ZoneRetentionInit();
 void ZoneRetentionOnWorldReset();
 
@@ -37,11 +39,20 @@ void ZoneRetentionNoteRetired(int gx, int gy);
 // pressure and prints the periodic line.
 void ZoneRetentionTick(void* zoneMgr, double now);
 
-// The prologue's decision for one cell: true when the caller must take the
-// fences and let the original expire it. False covers both "not ours" and
-// "held" -- the caller does the same thing for either, and when the answer is
-// a hold the town countdown has already been written here.
-bool ZoneRetentionWantsRelease(void* zoneEntry);
+// The prologue's first question: do this cell's three native countdowns all
+// run out this frame, at a loading phase that lets them? Answers whether
+// retention is on or off; false before the first frame has opened.
+bool ZoneExpiresThisFrame(void* zoneEntry);
+
+// For a cell that expires this frame: RELEASE when the caller must take the
+// full fence and let the original expire it; HELD when it stays, its town
+// countdown already written here; NOT_MINE when retention is off or does
+// not track the cell, which leaves it to the expiry guard.
+ZoneRetentionAnswer ZoneRetentionAnswerFor(void* zoneEntry);
+
+// The town countdown write a hold is made of, and nothing else: no held
+// stamp, no count, no backoff.
+void ZoneRetentionWriteTownHold(void* zoneEntry);
 
 // The fences refused, so the release becomes a hold for this frame: writes
 // the countdown and counts the reason.

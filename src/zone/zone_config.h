@@ -46,9 +46,9 @@ struct ZoneConfig
 
 	// zoneRetention: hold a cell the game took over from the mod past its native
 	// expiry, for as long as the retention policy says (zone_retention.cpp,
-	// ZONEHAND_STEP >= 3). On by default; false leaves every expiry exactly as
-	// the engine decides it, which is the A/B control and the behaviour of a
-	// build one step below.
+	// ZONEHAND_STEP >= 3). On by default; false is the A/B control: every expiry
+	// is the engine's, held only while a navmesh job still works on the cell
+	// (zone_expiry_guard.cpp).
 	bool zoneRetentionEnabled;
 
 	// islandReadinessRule: per-caller readiness rule in hook_isContentPending.

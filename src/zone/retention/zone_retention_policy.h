@@ -46,6 +46,15 @@ enum ZoneRetentionVerdict
 	ZONE_RETENTION_RELEASE
 };
 
+// The prologue's answer for a cell whose countdowns run out this frame. The
+// zero value is NOT_MINE, so a default leaves the cell to the expiry guard.
+enum ZoneRetentionAnswer
+{
+	ZONE_RETENTION_ANSWER_NOT_MINE = 0,  // retention is off or does not track the cell
+	ZONE_RETENTION_ANSWER_HELD,          // held: the town countdown is already written
+	ZONE_RETENTION_ANSWER_RELEASE        // the caller takes the full fence and lets the original expire it
+};
+
 // The first stage answers from cheap state alone. ASK_ANCHORS means every
 // cheap reason to hold is exhausted and the caller should now read the live
 // anchors — the one expensive input — and finish with the call below.

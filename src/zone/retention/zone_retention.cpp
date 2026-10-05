@@ -10,6 +10,7 @@
 
 #include "zone/retention/zone_retention_policy.h"
 #include "zone/retention/zone_retention_ledger.h"
+#include "zone/retention/zone_expiry_guard.h"
 #include "zone/handoff/zone_adoption_seam.h"
 #include "zone/handoff/zone_handoff.h"
 #include "zone/zone_life.h"
@@ -94,6 +95,7 @@ void ZoneRetentionInit()
 	for (int c = 0; c < ZONE_GRID_COUNT; ++c)
 		g_heldAt[c] = -1.0;
 	ClearBackoff();
+	ZoneExpiryGuardInit();
 	g_init = true;
 }
 
@@ -104,6 +106,7 @@ void ZoneRetentionOnWorldReset()
 	for (int c = 0; c < ZONE_GRID_COUNT; ++c)
 		g_heldAt[c] = -1.0;
 	ClearBackoff();
+	ZoneExpiryGuardOnWorldReset();
 	g_zoneMgr         = NULL;
 	g_frameNow        = 0.0;
 	g_probedThisFrame = false;
@@ -119,6 +122,7 @@ void ZoneRetentionBeginFrame(void* zoneMgr)
 	g_zoneMgr         = zoneMgr;
 	g_frameNow        = ElapsedSec();
 	g_probedThisFrame = false;
+	ZoneExpiryGuardBeginFrame();
 }
 
 static bool CellInGrid(int gx, int gy)
@@ -177,10 +181,16 @@ static float* Countdowns(void* zoneEntry)
 // hold margin. Chosen because nothing reads that slot as a lease:
 // getDeactivationCountdown, which is what a town's coverage refresh passes
 // on, is the larger of the camera and player slots only.
-static void WriteHold(void* zoneEntry, int cell)
+void ZoneRetentionWriteTownHold(void* zoneEntry)
 {
 	float frameDelta = *(const float*)((uintptr_t)GameAddr(RVA_GLOBAL_FRAME_TIME));
 	Countdowns(zoneEntry)[ZONE_ACTIVATION_TOWN] = ZoneRetentionHoldValue(frameDelta);
+}
+
+// A retention hold: the write, the stamp the cap counts, and the count.
+static void WriteHold(void* zoneEntry, int cell)
+{
+	ZoneRetentionWriteTownHold(zoneEntry);
 	if (cell >= 0)
 		g_heldAt[cell] = g_frameNow;
 	g_holds++;
@@ -196,9 +206,9 @@ static int HeldCount(double now)
 	return n;
 }
 
-bool ZoneRetentionWantsRelease(void* zoneEntry)
+bool ZoneExpiresThisFrame(void* zoneEntry)
 {
-	if (!zone::g_zoneCfg.zoneRetentionEnabled || !zoneEntry || !g_zoneMgr)
+	if (!zoneEntry || !g_zoneMgr)
 		return false;
 
 	// Past phase 1 the original keeps every cell without touching a
@@ -209,14 +219,18 @@ bool ZoneRetentionWantsRelease(void* zoneEntry)
 
 	const float* cd = Countdowns(zoneEntry);
 	float frameDelta = *(const float*)((uintptr_t)GameAddr(RVA_GLOBAL_FRAME_TIME));
-	if (!ZoneRetentionNativeWouldExpireThisFrame(cd[ZONE_ACTIVATION_CAMERA], cd[ZONE_ACTIVATION_PLAYER],
-	                                            cd[ZONE_ACTIVATION_TOWN], frameDelta))
-		return false;
+	return ZoneRetentionNativeWouldExpireThisFrame(cd[ZONE_ACTIVATION_CAMERA], cd[ZONE_ACTIVATION_PLAYER],
+	                                               cd[ZONE_ACTIVATION_TOWN], frameDelta);
+}
 
+ZoneRetentionAnswer ZoneRetentionAnswerFor(void* zoneEntry)
+{
+	if (!zone::g_zoneCfg.zoneRetentionEnabled)
+		return ZONE_RETENTION_ANSWER_NOT_MINE;
 	int gx = GetZoneGridX(zoneEntry);
 	int gy = GetZoneGridY(zoneEntry);
 	if (!CellInGrid(gx, gy))
-		return false;
+		return ZONE_RETENTION_ANSWER_NOT_MINE;
 
 	int cell = ZoneCell(gx, gy);
 	const ZoneRetentionEntry* e = ZoneRetentionLedgerGetConst(&g_ledger, gx, gy);
@@ -242,11 +256,11 @@ bool ZoneRetentionWantsRelease(void* zoneEntry)
 
 	ZoneRetentionPrecheck pre = ZoneRetentionPrecheckCell(in);
 	if (pre == ZONE_RETENTION_PRE_PASS)
-		return false;
+		return ZONE_RETENTION_ANSWER_NOT_MINE;
 	if (pre == ZONE_RETENTION_PRE_HOLD)
 	{
 		WriteHold(zoneEntry, cell);
-		return false;
+		return ZONE_RETENTION_ANSWER_HELD;
 	}
 
 	// A cell whose fences have just refused stands down before it is asked
@@ -256,7 +270,7 @@ bool ZoneRetentionWantsRelease(void* zoneEntry)
 	{
 		g_deferQuiet++;
 		WriteHold(zoneEntry, cell);
-		return false;
+		return ZONE_RETENTION_ANSWER_HELD;
 	}
 
 	// Everything past here is expensive, whichever way it ends: the anchor
@@ -276,9 +290,9 @@ bool ZoneRetentionWantsRelease(void* zoneEntry)
 		ZoneRetentionLedgerSetGrace(&g_ledger, gx, gy,
 		                            now + ZoneRetentionGraceSecondsForLevel(e->revisitBackoffLevel));
 		WriteHold(zoneEntry, cell);
-		return false;
+		return ZONE_RETENTION_ANSWER_HELD;
 	}
-	return true;
+	return ZONE_RETENTION_ANSWER_RELEASE;
 }
 
 void ZoneRetentionHoldInstead(void* zoneEntry, ZoneRetentionDefer reason)
@@ -410,6 +424,7 @@ void ZoneRetentionTick(void* zoneMgr, double now)
 		   << " lease=" << g_leases
 		   << " pressure=" << (g_pressure ? 1 : 0)
 		   << " anchors=" << (ZlRetentionReadable() ? 1 : 0);
+		ss << ZoneExpiryGuardStatsFragment();
 		if (g_kept)
 			ss << " kept=" << g_kept;
 		LogMsg(ss.str());

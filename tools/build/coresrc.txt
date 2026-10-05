@@ -280,3 +280,5 @@ src\movement\movement_trace.cpp
 src\pathfind\path_result_trace.cpp
 src\gui\settings_layout.cpp
 src\planner\planner_prearrival.cpp
+src\zone\retention\zone_expiry_guard_policy.cpp
+src\zone\retention\zone_expiry_guard.cpp

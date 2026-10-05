@@ -8,7 +8,8 @@
 // it and refuses the town refresh that would otherwise renew a town's whole
 // coverage from nothing, and one on ZoneMap::update, which holds a cell the
 // game has just taken over instead of letting it expire on the first pass
-// that reaches it.
+// that reaches it, and holds any expiring cell while a navmesh job is still
+// working on it.
 //
 // Adds to *installed the number of detours that went in. Main thread,
 // startPlugin.

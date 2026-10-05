@@ -10,6 +10,8 @@
 
 #include "zone/handoff/zone_handoff.h"
 #include "zone/retention/zone_retention.h"
+#include "zone/retention/zone_expiry_guard.h"
+#include "zone/retention/zone_expiry_guard_policy.h"
 #include "navmesh/nm_workers.h"
 #include "game/game.h"
 #include "base/core.h"
@@ -68,23 +70,12 @@ static bool __fastcall hook_activateZoneMap(void* zoneMgr, void* map, __int64 ce
 typedef bool (__fastcall *zoneMapUpdate_t)(void* zoneEntry);
 static zoneMapUpdate_t orig_zoneMapUpdate = NULL;
 
-// The original decides every cell's fate; this only decides whether the
-// countdown it is about to read has run out. Holding is a write to the town
-// countdown and nothing else, so the original's own expiry branch does every
-// teardown there is — the deactivate, the set erase and the notification —
-// and it does them inside the fences when the policy wants the cell gone.
-//
-// Runs for every member of the active set, every frame, so a cell that is
-// not about to expire costs four reads and the call.
-static bool __fastcall hook_zoneMapUpdate(void* zoneEntry)
+// Retention wants this cell gone. The zone's navmesh goes with it, so no mod
+// navmesh thread may be working on the cell and none may start while the
+// teardown runs. This blocks briefly on the generator's queue mutex, which
+// is why retention lets at most one cell per frame reach it.
+static bool RetentionFencedUpdate(void* zoneEntry)
 {
-	if (!ZoneRetentionWantsRelease(zoneEntry))
-		return orig_zoneMapUpdate(zoneEntry);
-
-	// The zone's navmesh goes with it, so no mod navmesh thread may be
-	// working on the cell and none may start while the teardown runs. This
-	// blocks briefly on the generator's queue mutex, which is why the decision
-	// above lets at most one cell per frame reach it.
 	NavMeshUnloadFence fence;
 	NmFenceResult fr = fence.TryBegin(zoneEntry);
 	if (fr == NM_FENCE_UNAVAILABLE)
@@ -115,18 +106,47 @@ static bool __fastcall hook_zoneMapUpdate(void* zoneEntry)
 	return kept;
 }
 
+// The original decides every cell's fate; this only decides whether the
+// countdown it is about to read has run out, and under which fence. Holding
+// is a write to the town countdown and nothing else, so the original's own
+// expiry branch does every teardown there is — the deactivate, the set erase
+// and the notification. The deactivate frees the cell's content, which a
+// navmesh job that claimed the cell reads with no lock, so every expiry runs
+// fenced wherever a fence can exist: retention's for a cell it wants gone,
+// the expiry guard's for every other.
+//
+// Runs for every member of the active set, every frame, so a cell that is
+// not about to expire costs a handful of reads and the call.
+static bool __fastcall hook_zoneMapUpdate(void* zoneEntry)
+{
+	if (!ZoneExpiresThisFrame(zoneEntry))
+		return orig_zoneMapUpdate(zoneEntry);
+
+	switch (ZoneExpiryRouteFor(true, ZoneRetentionAnswerFor(zoneEntry)))
+	{
+	case ZONE_EXPIRY_ROUTE_RETENTION_FENCE:
+		return RetentionFencedUpdate(zoneEntry);
+	case ZONE_EXPIRY_ROUTE_CLAIMS_GUARD:
+		return ZoneExpiryGuardUpdate(zoneEntry, orig_zoneMapUpdate);
+	default:
+		// Held by retention: the hold is already written.
+		return orig_zoneMapUpdate(zoneEntry);
+	}
+}
+
 static void InstallZoneMapUpdateHook(int* installed)
 {
 	if (HookInstall(HOOK_ZONEMAP_UPDATE, hook_zoneMapUpdate, &orig_zoneMapUpdate,
 	                installed, true) == NULL)
 	{
 		LogMsg(std::string("Zone lifecycle: ZoneMap::update detour installed (retention=")
-		       + (zone::g_zoneCfg.zoneRetentionEnabled ? "on)" : "off)"));
+		       + (zone::g_zoneCfg.zoneRetentionEnabled ? "on" : "off") + " expiryGuard=on)");
 		return;
 	}
 	orig_zoneMapUpdate = NULL;
 	ErrorLog("Zone lifecycle: ZoneMap::update detour NOT installed — nothing holds a cell the game has "
-	         "taken over from the mod, so every one of them expires on the first pass that reaches it; "
+	         "taken over from the mod, so every one of them expires on the first pass that reaches it, "
+	         "and no expiry waits for a navmesh job still working on its cell (the expiry guard is lost); "
 	         "this build prepares cells that are then thrown away");
 }
 

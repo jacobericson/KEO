@@ -92,3 +92,4 @@ formation_gather_policy_units | tools\tests\formation_gather_policy_units.cpp | 
 formation_follow_policy_units | tools\tests\formation_follow_policy_units.cpp | src\movement\formation_follow_policy.cpp |
 formation_pace_policy_units | tools\tests\formation_pace_policy_units.cpp | src\movement\formation_pace_policy.cpp |
 movement_trace_policy_units | tools\tests\movement_trace_policy_units.cpp | src\movement\movement_trace_policy.cpp |
+zone_expiry_guard_units | tools\tests\zone_expiry_guard_units.cpp | src\zone\retention\zone_expiry_guard_policy.cpp |

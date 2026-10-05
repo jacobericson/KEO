@@ -108,13 +108,13 @@
 #endif
 
 #if ZONEHAND_STEP >= 3
-	// ZoneMap::update (src/zone/handoff/zone_lifecycle_hooks.cpp): `mov [rsp+8],rbx; push
-	// rdi; sub rsp,20h`, so the five bytes a detour takes are one whole
-	// instruction. diagnostic = true: without it a cell the game has taken
-	// over expires the way any other member of the set does, which is vanilla
-	// behaviour rather than a mod-caused fault. The churn that leaves is a
-	// reason to say so loudly at the install site, not to refuse a plugin
-	// whose navmesh cache and render levers are unaffected.
+	// ZoneMap::update (src/zone/handoff/zone_lifecycle_hooks.cpp): `mov [rsp+10h],rbx;
+	// push rdi; sub rsp,20h`, so the five bytes a detour takes are one whole
+	// instruction. It holds a cell the game has taken over, and holds any expiring
+	// cell while a navmesh job still works on it. diagnostic = true: without it
+	// every cell expires on the game's own timers, as in vanilla but with the
+	// worker pool's jobs exposed too; the install site says so loudly rather than
+	// refuse a plugin whose navmesh cache and render levers still work.
 	HOOK_ROW(HOOK_ZONEMAP_UPDATE, "zoneMapUpdate", RVA_ZONEMAP_UPDATE, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
 	         0x48,0x89,0x5C,0x24,0x10,0x57,0x48,0x83,0xEC,0x20,0x48,0x8B,0x81,0x88,0x00,0x00)
 #endif

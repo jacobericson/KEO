@@ -42,7 +42,7 @@ static void TestPrecheckUntracked()
 	ZoneRetentionCellInputs in = Base();
 	in.tracked = false;
 	Check(ZoneRetentionPrecheckCell(in) == ZONE_RETENTION_PRE_PASS,
-	      "an untracked cell expires the way it does in vanilla");
+	      "an untracked cell is not retention's to hold: the hook leaves it to the expiry guard");
 }
 
 static void TestPrecheckUnconditionalHolds()

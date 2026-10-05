@@ -8,8 +8,8 @@ float ZoneRetentionHoldValue(float frameDelta)
 
 ZoneRetentionPrecheck ZoneRetentionPrecheckCell(const ZoneRetentionCellInputs& in)
 {
-	// A cell the ledger does not track is not the policy's to hold: it
-	// expires the way it does in vanilla.
+	// A cell the ledger does not track is not the policy's to hold: the hook
+	// leaves it to the expiry guard.
 	if (!in.tracked)
 		return ZONE_RETENTION_PRE_PASS;
 
