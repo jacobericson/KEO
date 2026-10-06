@@ -423,18 +423,29 @@ bool NmForceRebuildInKeyCall()
 	return s_inCall && s_tagKey && IsMainThread();
 }
 
+// Applies one transition of the press-show flag and returns the value it
+// replaced. A show that keeps the value writes nothing; a dismissal, a release
+// and a reset always exchange.
+static LONG PressShowApply(NmPressShowEvent ev, bool keyCallWithHold)
+{
+	const LONG cur  = InterlockedCompareExchange(&s_pressShowOpen, 0, 0);
+	const LONG next = NmPressShowNext(cur, ev, keyCallWithHold);
+	if (ev == NM_PRESS_SHOW && next == cur)
+		return cur;
+	return InterlockedExchange(&s_pressShowOpen, next);
+}
+
 void NmForceRebuildNoteShow()
 {
 	if (!s_inCall || !IsMainThread())
 		return;
 	s_shown = true;
-	if (s_tagKey && InterlockedCompareExchange(&s_holdActive, 0, 0))
-		InterlockedExchange(&s_pressShowOpen, 1);
+	PressShowApply(NM_PRESS_SHOW, s_tagKey && InterlockedCompareExchange(&s_holdActive, 0, 0) != 0);
 }
 
 void NmForceRebuildNoteDismissed()
 {
-	InterlockedExchange(&s_pressShowOpen, 0);
+	PressShowApply(NM_PRESS_DISMISSED, false);
 }
 
 // ---------------------------------------------------------------------
@@ -562,7 +573,7 @@ bool NmForceRebuildTick(void* zoneMgr, bool saveLoading)
 		InterlockedExchange(&s_holdActive, 0);
 		// A press never leaves the panel up: a dismissal the hold swallowed, or
 		// the press's own show with no dismissal since, is issued below.
-		const bool shownOpen = InterlockedExchange(&s_pressShowOpen, 0) != 0;
+		const bool shownOpen = PressShowApply(NM_PRESS_RELEASE, false) != 0;
 		if (NmHoldReleaseOwes(v, InterlockedCompareExchange(&s_dismissOwed, 0, 0) != 0, shownOpen))
 			InterlockedExchange(&s_dismissOwed, 1);
 		LogHoldEnd(v, since);   // "NavMesh rebuild done:" or "NavMesh rebuild hold capped:"
@@ -583,7 +594,7 @@ void NmForceRebuildOnWorldReset()
 	s_pressCount = 0;
 	InterlockedExchange(&s_holdActive, 0);
 	InterlockedExchange(&s_dismissOwed, 0);
-	InterlockedExchange(&s_pressShowOpen, 0);
+	PressShowApply(NM_PRESS_RELEASE, false);
 }
 
 // ---------------------------------------------------------------------

@@ -135,6 +135,13 @@ bool NmHoldReleaseOwes(NmHoldVerdict v, bool heldOwed, bool pressShowOpen)
 	return released && (heldOwed || pressShowOpen);
 }
 
+long NmPressShowNext(long cur, NmPressShowEvent ev, bool keyCallWithHold)
+{
+	if (ev == NM_PRESS_SHOW)
+		return keyCallWithHold ? 1 : cur;
+	return 0;
+}
+
 bool NmHoldReplayNow(bool owed, bool haveZoneManager, int loadingPhase, bool saveLoading)
 {
 	return owed && haveZoneManager && loadingPhase == 0 && !saveLoading;

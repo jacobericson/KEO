@@ -155,8 +155,6 @@ static void TestRelease()
 	Check(NmHoldReleaseOwes(NM_HOLD_DONE, true, false), "a held dismissal is replayed when the hold is done");
 	Check(NmHoldReleaseOwes(NM_HOLD_DONE, false, true),
 	      "the press's show with no dismissal since is dismissed when the hold is done");
-	Check(!NmHoldReleaseOwes(NM_HOLD_DONE, false, false),
-	      "the press's show, then a dismissal that reached the game: nothing is replayed when the hold is done");
 	Check(!NmHoldReleaseOwes(NM_HOLD_DONE, false, false), "neither held nor shown: nothing is replayed when the hold is done");
 	Check(NmHoldReleaseOwes(NM_HOLD_DONE, true, true), "held and shown: one dismissal is owed when the hold is done");
 	Check(NmHoldReleaseOwes(NM_HOLD_CAPPED, true, false), "a held dismissal is replayed at the cap");
@@ -166,6 +164,46 @@ static void TestRelease()
 	      "neither held nor shown, or shown and dismissed since: nothing is replayed at the cap");
 	Check(!NmHoldReleaseOwes(NM_HOLD_PENDING, true, true) && !NmHoldReleaseOwes(NM_HOLD_IDLE, true, true),
 	      "a pending or idle hold owes nothing at its end");
+}
+
+// One step of a press-show sequence: a show inside the key's call with the
+// hold armed ('S'), a show outside it ('s'), or a dismissal that reached the
+// game ('D').
+static long PressShowStep(long cur, char step)
+{
+	if (step == 'S')
+		return NmPressShowNext(cur, NM_PRESS_SHOW, true);
+	if (step == 's')
+		return NmPressShowNext(cur, NM_PRESS_SHOW, false);
+	return NmPressShowNext(cur, NM_PRESS_DISMISSED, false);
+}
+
+// Runs the steps from a cleared flag, then the hold's release (done, nothing
+// held): whether a dismissal is owed, and the flag the release leaves.
+static bool OwesAfter(const char* steps, long* afterRelease)
+{
+	long cur = 0;
+	for (const char* p = steps; *p; ++p)
+		cur = PressShowStep(cur, *p);
+	const long old = cur;
+	*afterRelease  = NmPressShowNext(cur, NM_PRESS_RELEASE, false);
+	return NmHoldReleaseOwes(NM_HOLD_DONE, false, old != 0);
+}
+
+static void TestPressShowSequences()
+{
+	long after = -1;
+	Check(OwesAfter("S", &after) && after == 0, "the key's show with the hold armed, then the release: one dismissal owed");
+	Check(!OwesAfter("SD", &after) && after == 0,
+	      "the key's show, then a dismissal that reached the game, then the release: nothing owed");
+	Check(!OwesAfter("s", &after) && after == 0,
+	      "a show outside the key's call or with no hold, then the release: nothing owed");
+	Check(!OwesAfter("", &after) && !OwesAfter("D", &after), "no show, then the release: nothing owed");
+	Check(OwesAfter("SDS", &after) && after == 0,
+	      "a show, a dismissal and a second show, then the release: one dismissal owed");
+	Check(OwesAfter("Ss", &after), "a later show outside the key's call keeps the flag the key's show set");
+	Check(NmPressShowNext(1, NM_PRESS_RELEASE, true) == 0 && NmPressShowNext(0, NM_PRESS_RELEASE, false) == 0,
+	      "the release always clears the flag");
 }
 
 int main()
@@ -178,5 +216,6 @@ int main()
 	TestEligibleAndCaller();
 	TestHold();
 	TestRelease();
+	TestPressShowSequences();
 	return CheckExit("nm_force_rebuild_units");
 }

@@ -79,6 +79,12 @@ NmHoldVerdict NmHoldDecide(bool active, int unfinished, double sincePressSec);
 // one, or when the press showed the panel and no dismissal has reached the
 // game since: a press never leaves the panel up.
 bool NmHoldReleaseOwes(NmHoldVerdict v, bool heldOwed, bool pressShowOpen);
+// The press-show flag (1: the press showed the panel and no dismissal has
+// reached the game since). A show sets it only inside the key's call with the
+// hold armed, and keeps it otherwise; a dismissal that reaches the game and the
+// hold's release (or a reset) clear it.
+enum NmPressShowEvent { NM_PRESS_SHOW = 0, NM_PRESS_DISMISSED, NM_PRESS_RELEASE };
+long NmPressShowNext(long cur, NmPressShowEvent ev, bool keyCallWithHold);
 // An owed dismissal is issued only as the game's own site would: the zone
 // manager idle (loadingPhase 0) and no save load running.
 bool NmHoldReplayNow(bool owed, bool haveZoneManager, int loadingPhase, bool saveLoading);
