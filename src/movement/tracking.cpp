@@ -268,6 +268,14 @@ void RemoveWatchedCharacter(int index)
 // Character scanning (baseline: current-position preloading only)
 // =========================================================================
 
+// A grid cell retention will keep: any cell while the squads keep a ring,
+// otherwise only one inside the camera's radius, since nothing else would
+// hold it once it loads.
+static bool ScanCellKept(void* zoneMgr, int gx, int gy, int rCamera, int rSquad)
+{
+	return rSquad >= 1 || ZlCellNearCamera(zoneMgr, gx, gy, rCamera);
+}
+
 void ScanCharacterZones(void* zoneMgr)
 {
 	if (movement::g_movementCfg.playerCharRegistryEnabled)
@@ -320,7 +328,8 @@ void ScanCharacterZones(void* zoneMgr)
 				bool found = false;
 				if (!CoverageCharacterInScan(ZlCellNearCamera(zoneMgr, gx, gy, rCamera), rSquad, pressure))
 				{
-					// Retention would let the grid go again, so it is never queued.
+					// Away from the camera with no squad ring, or the hold past its
+					// cap: no grid is queued for it.
 					found = true;
 					farSkipped++;
 				}
@@ -369,7 +378,8 @@ void ScanCharacterZones(void* zoneMgr)
 			{
 				for (int i = 0; i < 9; ++i)
 				{
-					if (EnqueueCharacterZone(cx + ORDER_DX[i], cy + ORDER_DY[i]))
+					int zx = cx + ORDER_DX[i], zy = cy + ORDER_DY[i];
+					if (ScanCellKept(zoneMgr, zx, zy, rCamera, rSquad) && EnqueueCharacterZone(zx, zy))
 						zonesEnqueued++;
 				}
 			}
@@ -377,7 +387,8 @@ void ScanCharacterZones(void* zoneMgr)
 			{
 				for (int i = 0; i < 4; ++i)
 				{
-					if (EnqueueCharacterZone(cx + SMALL_DX[i], cy + SMALL_DY[i]))
+					int zx = cx + SMALL_DX[i], zy = cy + SMALL_DY[i];
+					if (ScanCellKept(zoneMgr, zx, zy, rCamera, rSquad) && EnqueueCharacterZone(zx, zy))
 						zonesEnqueued++;
 				}
 			}
@@ -607,8 +618,9 @@ void TieredCharacterPoll(void* zoneMgr, double now)
 // and one step along the sign of (destination - current), the direction
 // PollActiveMovers preloads. Read from the stored fields only: the character
 // pointer is validated against the player list by PollActiveMovers alone, so
-// it is never dereferenced here. A baseline entry (dest == current) yields
-// just its current zone.
+// it is never dereferenced here. A baseline entry yields its stored current
+// zone, plus one step toward its live zone when that stored zone is stale;
+// only an entry on a move order is marked moving.
 int CollectMoverRetainZones(int* gx, int* gy, bool* moving, int cap)
 {
 	int n = 0;
@@ -627,18 +639,22 @@ int CollectMoverRetainZones(int* gx, int* gy, bool* moving, int cap)
 		if (watchedChars[i].destZoneY > cy) dirY = 1;
 		else if (watchedChars[i].destZoneY >= 0 && watchedChars[i].destZoneY < cy) dirY = -1;
 		bool stepping = dirX != 0 || dirY != 0;
+		// A step alone does not mean a move: a baseline entry's current zone is
+		// only refreshed while it is on an order, so a squad that arrived, or
+		// drifted under its AI, still steps from where it last was.
+		bool onOrder = stepping && watchedChars[i].hasMoveOrder;
 
 		gx[n] = cx;
 		gy[n] = cy;
 		if (moving)
-			moving[n] = stepping;
+			moving[n] = onOrder;
 		n++;
 		if (stepping && n < cap)
 		{
 			gx[n] = cx + dirX;
 			gy[n] = cy + dirY;
 			if (moving)
-				moving[n] = true;
+				moving[n] = onOrder;
 			n++;
 		}
 	}

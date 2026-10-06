@@ -21,7 +21,8 @@
 //
 // ZlAnchorsNearCell is the live single-cell question, read now rather than
 // from the map, at radii the caller chooses: rCamera around the camera's
-// cell and the central zone, rSquad around each player character. Its
+// cell and the central zone, rSquad around each player character (at least
+// 1 around one on a move order). Its
 // fail-open rule is its own and is NOT the rebuild's: it answers "near" when
 // the zone manager, the grid or the player list cannot be read, but a
 // missing camera anchor only makes it fall through to the players, so with

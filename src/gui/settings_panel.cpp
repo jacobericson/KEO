@@ -220,7 +220,11 @@ static void BuildTab(OptionsWindow* win)
 		return;
 
 	for (int m = 0; m < kConfigModuleCount && m < CONFIG_MODULE_MAX; ++m)
+	{
 		s_staging.module[m] = s_saved.module[m];
+		if (m != RenderModuleIndex())
+			StageLiveModuleRows(kConfigModules[m], &s_staging.module[m]);
+	}
 	if (RenderModuleIndex() >= 0)
 	{
 		RenderConfig& render = StagedRender(&s_staging);

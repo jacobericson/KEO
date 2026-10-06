@@ -131,9 +131,9 @@ static bool ZlNearCameraCells(void* zoneMgr, int gx, int gy, int r, bool* known)
 }
 
 // A cell within Chebyshev radius rCamera of the camera cell or the central
-// zone, or rSquad of a player character's zone (read now, not from the 1 s
-// retention bitmap). An anchor that cannot be read counts as near (never act
-// blind).
+// zone, or rSquad (at least 1 on a move order) of a player character's zone,
+// read now, not from the 1 s retention bitmap. An anchor that cannot be read
+// counts as near (never act blind).
 static bool ZlNearAnchors(void* zoneMgr, int gx, int gy, int rCamera, int rSquad)
 {
 	if (!zoneMgr || !gridCalibrated)
@@ -156,7 +156,12 @@ static bool ZlNearAnchors(void* zoneMgr, int gx, int gy, int rCamera, int rSquad
 		int cgx, cgy;
 		if (!WorldToZoneGrid(GetCharPosX(scStuff[j]), GetCharPosZ(scStuff[j]), &cgx, &cgy))
 			continue;
-		if (ZlWithin(gx, gy, cgx, cgy, rSquad)) return true;
+		// A character on a move order keeps at least the ring its own preload
+		// brings in, as in the map.
+		int r = rSquad;
+		if (r < 1 && IsCharacterMovingOnOrder(scStuff[j]))
+			r = 1;
+		if (ZlWithin(gx, gy, cgx, cgy, r)) return true;
 	}
 	return false;
 }

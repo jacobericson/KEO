@@ -1043,12 +1043,25 @@ static void CheckLiveModuleRows()
 	ClampModuleStage(zoneMod, &st.module[z], saved.module[z], &DiscardLog);
 
 	Check(LiveModuleRowsDiffering(zoneMod, st.module[z]) == 1, "live rows: one live row differs");
+	Check(DiffSettings(st, g_renderCfg, saved).applied == DiffSettings(saved, g_renderCfg, saved).applied + 1,
+	      "live rows: the close counts the live row as applied");
 	std::vector<std::string> applied;
 	int n = ApplyLiveModuleRows(zoneMod, st.module[z], &applied);
 	Check(n == 1 && applied.size() == 1 && applied[0] == "zoneLifeSquadRadius=0"
 	      && zone::g_zoneCfg.cfg_zoneLifeSquadRadius == 0 && zone::g_zoneCfg.preloadEnabled == held.preloadEnabled,
 	      "live rows: the squad radius applies, preload waits for a restart");
 	Check(LiveModuleRowsDiffering(zoneMod, st.module[z]) == 0, "live rows: an applied row no longer differs");
+
+	// A later tab stages the live rows from the running config, not the saved
+	// copy (an INI write that failed leaves the two apart): the slider shows
+	// 0 and the saved copy still differs, so the next close writes again.
+	ConfigModuleStage next = saved.module[z];
+	StageLiveModuleRows(zoneMod, &next);
+	int sq = KeyIndex(zoneMod, "zoneLifeSquadRadius");
+	std::vector<IniEntry> e;
+	Check(next.slots[sq].f == 0.0f && ((const zone::ZoneConfig*)next.state)->cfg_zoneLifeSquadRadius == 0
+	      && ModuleStageEntries(zoneMod, next, saved.module[z], &e) == 1,
+	      "live rows: the next tab stages the running value and writes it again");
 	zone::g_zoneCfg = held;
 }
 

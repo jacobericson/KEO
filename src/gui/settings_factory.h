@@ -80,3 +80,8 @@ int ModuleStageEntries(const ConfigModule& m, const ConfigModuleStage& staged, c
 // thread, which is where every live row's readers run.
 int LiveModuleRowsDiffering(const ConfigModule& m, const ConfigModuleStage& staged);
 int ApplyLiveModuleRows(const ConfigModule& m, const ConfigModuleStage& staged, std::vector<std::string>* applied);
+
+// Stages m's live offset rows from the running config rather than the saved
+// copy, slots included, so the tab shows what runs: after a close whose INI
+// write failed the two differ, and the next close writes the value again.
+void StageLiveModuleRows(const ConfigModule& m, ConfigModuleStage* s);

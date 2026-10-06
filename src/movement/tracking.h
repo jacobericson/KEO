@@ -68,8 +68,9 @@ bool FindNearestPlayerCharacterXZ(float px, float pz, float* outX, float* outZ);
 // Every watched mover's current zone and the next zone toward its
 // destination, for the zone-lifecycle retention set (zone_life.cpp). Writes up
 // to cap cells into gx/gy and returns how many; moving (may be NULL) marks the
-// cells of an entry that has a step toward a destination. Main thread; stored
-// fields only (currentZoneX/Y, destZoneX/Y), never the character pointer.
+// cells of an entry on a move order with a step toward its destination. Main
+// thread; stored fields only (currentZoneX/Y, destZoneX/Y, hasMoveOrder),
+// never the character pointer.
 int CollectMoverRetainZones(int* gx, int* gy, bool* moving, int cap);
 
 

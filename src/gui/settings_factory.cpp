@@ -462,3 +462,22 @@ int ApplyLiveModuleRows(const ConfigModule& m, const ConfigModuleStage& staged, 
 {
 	return LiveRows(m, staged, true, applied);
 }
+
+void StageLiveModuleRows(const ConfigModule& m, ConfigModuleStage* s)
+{
+	if (!m.state)
+		return;
+	for (int i = 0; i < CONFIG_STAGE_MAX && m.keys[i].name; ++i)
+	{
+		const ConfigKey& k = m.keys[i];
+		if (!k.live || k.retired || k.target)
+			continue;
+		memcpy((char*)s->state + k.offset, (const char*)m.state + k.offset, k.size);
+		if (SlotBoundOffset(k))
+		{
+			ConfigKey local = k;
+			local.target = (char*)s->state + k.offset;
+			s->slots[i] = ReadTarget(local);
+		}
+	}
+}
