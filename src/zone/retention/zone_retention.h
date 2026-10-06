@@ -68,6 +68,10 @@ void ZoneRetentionHoldInstead(void* zoneEntry, ZoneRetentionDefer reason);
 // true when it took its expiry branch and the cell left Set B.
 void ZoneRetentionNoteReleased(void* zoneEntry, bool expired, bool fenced);
 
+// The held count is past zoneRetentionMaxHeld and has not yet fallen back
+// below the low water mark.
+bool ZoneRetentionUnderPressure();
+
 #else
 
 inline void ZoneRetentionInit() {}
@@ -76,6 +80,7 @@ inline void ZoneRetentionBeginFrame(void*) {}
 inline void ZoneRetentionNoteAdopted(int, int, double) {}
 inline void ZoneRetentionNoteRetired(int, int) {}
 inline void ZoneRetentionTick(void*, double) {}
+inline bool ZoneRetentionUnderPressure() { return false; }
 
 #endif // ZONEHAND_STEP >= 3
 

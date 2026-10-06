@@ -244,11 +244,10 @@ ZoneRetentionAnswer ZoneRetentionAnswerFor(void* zoneEntry)
 	in.discretionaryLive = e->graceDeadline > now || e->predictionLeaseDeadline > now;
 	// The lifecycle pass's own map: the camera's and the players' cells, the
 	// watched movers' current and next cells and everything in the mod's
-	// working tables, each stamped at the configured retain radius, which is
-	// independent of this policy's live radius. Outside pressure a cell the
-	// map marks holds without the live read; a cell it misses, even one inside
-	// the live radius, is decided by the live check below, which is what
-	// decides a release.
+	// working tables, each stamped at its configured radius, up to a second
+	// old. Outside pressure a cell the map marks holds without the live read;
+	// a cell it misses is decided by the live check below, at the same radii,
+	// which is what decides a release.
 	in.mapRetained       = ZlRetentionNear(cell);
 	in.underPressure     = g_pressure;
 	in.pacingAllows      = ZoneRetentionPacingAllows(g_probedThisFrame, ZoneHandoffAdoptedThisFrame(),
@@ -282,7 +281,9 @@ ZoneRetentionAnswer ZoneRetentionAnswerFor(void* zoneEntry)
 	g_probedThisFrame = true;
 
 	// An anchor it cannot read answers "near", which is a hold.
-	bool anchorInRange = ZlAnchorsNearCell(g_zoneMgr, gx, gy, ZoneRetentionLiveRadius(g_pressure));
+	bool anchorInRange = ZlAnchorsNearCell(g_zoneMgr, gx, gy,
+	                                       ZoneRetentionLiveRadius(g_pressure, zone::g_zoneCfg.cfg_zoneLifeRetainRadius),
+	                                       ZoneRetentionLiveRadius(g_pressure, zone::g_zoneCfg.cfg_zoneLifeSquadRadius));
 	if (ZoneRetentionFinalVerdict(anchorInRange) == ZONE_RETENTION_HOLD)
 	{
 		// Proximity renews the grace, so a cell that has just been beside the
@@ -375,13 +376,18 @@ void ZoneRetentionNoteReleased(void* zoneEntry, bool expired, bool fenced)
 // The policy tick
 // =========================================================================
 
+bool ZoneRetentionUnderPressure()
+{
+	return g_pressure;
+}
+
 // A mover heading into a cell buys it a lease, renewed while the order
 // stands and left to run out when it does not.
 static void RenewPredictionLeases(double now)
 {
 	int gx[ZONE_RETENTION_MOVER_CELLS];
 	int gy[ZONE_RETENTION_MOVER_CELLS];
-	int n = CollectMoverRetainZones(gx, gy, ZONE_RETENTION_MOVER_CELLS);
+	int n = CollectMoverRetainZones(gx, gy, NULL, ZONE_RETENTION_MOVER_CELLS);
 	for (int i = 0; i < n; ++i)
 	{
 		if (!CellInGrid(gx[i], gy[i]))
@@ -405,8 +411,8 @@ void ZoneRetentionTick(void* zoneMgr, double now)
 		g_nextMapRefresh = now + ZONE_RETENTION_MAP_REFRESH_SEC;
 		ZlRetentionRefresh(zoneMgr);
 		RenewPredictionLeases(now);
-		g_pressure = ZoneRetentionPressureNext(g_pressure, HeldCount(now),
-		                                       ZONE_RETENTION_SOFT_CAP, ZONE_RETENTION_LOW_WATER);
+		int cap = zone::g_zoneCfg.cfg_zoneRetentionMaxHeld;
+		g_pressure = ZoneRetentionPressureNext(g_pressure, HeldCount(now), cap, ZoneRetentionLowWater(cap));
 	}
 
 	if (now >= g_nextStatsLog)
@@ -423,6 +429,8 @@ void ZoneRetentionTick(void* zoneMgr, double now)
 		   << " defQuiet=" << g_deferQuiet << "/" << g_deferStreakMax
 		   << " lease=" << g_leases
 		   << " pressure=" << (g_pressure ? 1 : 0)
+		   << " cap=" << zone::g_zoneCfg.cfg_zoneRetentionMaxHeld
+		   << " r=" << zone::g_zoneCfg.cfg_zoneLifeRetainRadius << "/" << zone::g_zoneCfg.cfg_zoneLifeSquadRadius
 		   << " anchors=" << (ZlRetentionReadable() ? 1 : 0);
 		ss << ZoneExpiryGuardStatsFragment();
 		if (g_kept)

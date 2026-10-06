@@ -6,10 +6,9 @@
 // release pacing and the soft-cap hysteresis. No game types and no game
 // state — the caller reads the cell and the world, this decides.
 
-// Chebyshev radii around a live camera or player anchor. The hard radius is
-// what survives pressure; the wider one is the ordinary hysteresis.
-const int ZONE_RETENTION_HARD_RADIUS       = 1;
-const int ZONE_RETENTION_HYSTERESIS_RADIUS = 2;
+// The Chebyshev radius around a live camera or player anchor that survives
+// pressure, when the configured radius is wider.
+const int ZONE_RETENTION_HARD_RADIUS = 1;
 
 // Seconds a cell is kept after the game takes it over, and the lease a
 // predicted use buys.
@@ -19,13 +18,13 @@ const double ZONE_RETENTION_PREDICTION_LEASE_SEC = 10.0;
 // Between two releases, when there is no pressure.
 const double ZONE_RETENTION_RELEASE_SPACING_SEC = 2.0;
 
-// Cells held past native expiry: above the cap the policy stops holding
-// anything discretionary, and it keeps doing so until the count falls below
-// the low water mark. Held, not tracked -- a tracked cell inside a live
-// camera or player lease costs nothing and must not count towards a cap on
-// what the policy is keeping alive by itself.
-const int ZONE_RETENTION_SOFT_CAP  = 45;
-const int ZONE_RETENTION_LOW_WATER = 36;
+// Cells held past native expiry: above the cap (zoneRetentionMaxHeld) the
+// policy stops holding anything discretionary, and it keeps doing so until
+// the count falls below the low water mark, a fifth under the cap. Held, not
+// tracked -- a tracked cell inside a live camera or player lease costs
+// nothing and must not count towards a cap on what the policy is keeping
+// alive by itself.
+int ZoneRetentionLowWater(int softCap);
 
 // The margin left in the town countdown after the native decrement. Large
 // enough that `(frameDelta + margin) - frameDelta` stays positive in single
@@ -85,11 +84,10 @@ ZoneRetentionPrecheck ZoneRetentionPrecheckCell(const ZoneRetentionCellInputs& i
 // The second stage, with the live anchor answer in hand.
 ZoneRetentionVerdict ZoneRetentionFinalVerdict(bool nearAnchorsNow);
 
-// The radius the live check uses: the hard core under pressure, the
-// hysteresis radius otherwise. Neither follows the configured retain radius
-// the proximity map is stamped at, so a cell inside this radius of an anchor
-// but outside the map is still held by the live check.
-int ZoneRetentionLiveRadius(bool underPressure);
+// The radius the live check uses for one kind of anchor: the configured
+// one, which the proximity map is stamped at too, narrowed to the hard core
+// under pressure but never widened to it (a configured 0 stays 0).
+int ZoneRetentionLiveRadius(bool underPressure, int configured);
 
 // At most one expensive decision per frame, never in a frame that admitted a
 // cohort, and otherwise at least the spacing apart since the last release.

@@ -96,8 +96,14 @@ static void TestFinalVerdict()
 {
 	Check(ZoneRetentionFinalVerdict(true) == ZONE_RETENTION_HOLD, "a live anchor in radius holds the cell");
 	Check(ZoneRetentionFinalVerdict(false) == ZONE_RETENTION_RELEASE, "no anchor in radius releases it");
-	Check(ZoneRetentionLiveRadius(false) == ZONE_RETENTION_HYSTERESIS_RADIUS, "no pressure: the wider radius");
-	Check(ZoneRetentionLiveRadius(true) == ZONE_RETENTION_HARD_RADIUS, "pressure narrows the radius to the hard core");
+	Check(ZoneRetentionLiveRadius(false, 1) == 1 && ZoneRetentionLiveRadius(false, 3) == 3,
+	      "no pressure: the configured radius");
+	Check(ZoneRetentionLiveRadius(false, 0) == 0 && ZoneRetentionLiveRadius(true, 0) == 0,
+	      "a configured 0 stays 0, pressure or not");
+	Check(ZoneRetentionLiveRadius(true, 3) == ZONE_RETENTION_HARD_RADIUS
+	      && ZoneRetentionLiveRadius(true, 1) == ZONE_RETENTION_HARD_RADIUS,
+	      "pressure narrows a wider radius to the hard core");
+	Check(ZoneRetentionLiveRadius(false, -2) == 0, "a negative radius reads as 0");
 }
 
 static void TestPacing()
@@ -115,17 +121,19 @@ static void TestPacing()
 
 static void TestPressure()
 {
-	Check(!ZoneRetentionPressureNext(false, ZONE_RETENTION_SOFT_CAP, ZONE_RETENTION_SOFT_CAP, ZONE_RETENTION_LOW_WATER),
-	      "at the cap, pressure has not started");
-	Check(ZoneRetentionPressureNext(false, ZONE_RETENTION_SOFT_CAP + 1, ZONE_RETENTION_SOFT_CAP, ZONE_RETENTION_LOW_WATER),
-	      "above the cap, pressure starts");
-	Check(ZoneRetentionPressureNext(true, ZONE_RETENTION_SOFT_CAP, ZONE_RETENTION_SOFT_CAP, ZONE_RETENTION_LOW_WATER),
-	      "pressure does not end at the cap it started above");
-	Check(ZoneRetentionPressureNext(true, ZONE_RETENTION_LOW_WATER, ZONE_RETENTION_SOFT_CAP, ZONE_RETENTION_LOW_WATER),
-	      "pressure holds at the low water mark");
-	Check(!ZoneRetentionPressureNext(true, ZONE_RETENTION_LOW_WATER - 1, ZONE_RETENTION_SOFT_CAP, ZONE_RETENTION_LOW_WATER),
-	      "pressure ends below the low water mark");
-	Check(ZONE_RETENTION_LOW_WATER < ZONE_RETENTION_SOFT_CAP, "the low water mark is below the cap, or the hysteresis is not one");
+	const int cap = 45;
+	const int low = ZoneRetentionLowWater(cap);
+	Check(low == 36, "the low water mark is a fifth under the default cap");
+	Check(!ZoneRetentionPressureNext(false, cap, cap, low), "at the cap, pressure has not started");
+	Check(ZoneRetentionPressureNext(false, cap + 1, cap, low), "above the cap, pressure starts");
+	Check(ZoneRetentionPressureNext(true, cap, cap, low), "pressure does not end at the cap it started above");
+	Check(ZoneRetentionPressureNext(true, low, cap, low), "pressure holds at the low water mark");
+	Check(!ZoneRetentionPressureNext(true, low - 1, cap, low), "pressure ends below the low water mark");
+	const int caps[] = { 12, 20, 45 };
+	for (int i = 0; i < 3; ++i)
+		Check(ZoneRetentionLowWater(caps[i]) < caps[i] && ZoneRetentionLowWater(caps[i]) > 0,
+		      "every configurable cap keeps a low water mark below it, or the hysteresis is not one");
+	Check(ZoneRetentionLowWater(12) == 10, "the smallest cap sheds back to 10");
 }
 
 

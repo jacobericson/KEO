@@ -20,8 +20,8 @@ ZoneRetentionPrecheck ZoneRetentionPrecheckCell(const ZoneRetentionCellInputs& i
 		return ZONE_RETENTION_PRE_HOLD;
 
 	// Discretionary holds, and the proximity map with them: the map is stamped
-	// at the configured retain radius, so under pressure it cannot stand in
-	// for the hard core and the live check below answers instead.
+	// at the configured radii, so under pressure it cannot stand in for the
+	// hard core and the live check below answers instead.
 	if (!in.underPressure && (in.mapRetained || in.discretionaryLive))
 		return ZONE_RETENTION_PRE_HOLD;
 
@@ -38,9 +38,18 @@ ZoneRetentionVerdict ZoneRetentionFinalVerdict(bool nearAnchorsNow)
 	return nearAnchorsNow ? ZONE_RETENTION_HOLD : ZONE_RETENTION_RELEASE;
 }
 
-int ZoneRetentionLiveRadius(bool underPressure)
+int ZoneRetentionLiveRadius(bool underPressure, int configured)
 {
-	return underPressure ? ZONE_RETENTION_HARD_RADIUS : ZONE_RETENTION_HYSTERESIS_RADIUS;
+	if (configured < 0)
+		configured = 0;
+	if (underPressure && configured > ZONE_RETENTION_HARD_RADIUS)
+		return ZONE_RETENTION_HARD_RADIUS;
+	return configured;
+}
+
+int ZoneRetentionLowWater(int softCap)
+{
+	return softCap > 0 ? softCap - softCap / 5 : 0;
 }
 
 bool ZoneRetentionPacingAllows(bool probedThisFrame, bool adoptedThisFrame,

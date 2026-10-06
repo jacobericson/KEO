@@ -114,15 +114,18 @@ struct ZoneConfig
 	// meaningfully delaying a real crossing (zones are ~8192 units wide).
 	float  cfg_camFocusHysteresis;
 
-	// Zone lifecycle
-	int    cfg_zoneLifeRetainRadius;  // Chebyshev radius (zones) around camera/player chars
-	                                  // inside which a mod-loaded zone is never unloaded (1-4).
-	                                  // It also sets the radius of the shared proximity map,
-	                                  // which retention reads as its cheap filter, so raising
-	                                  // it makes adopted cells stickier as well.
+	// Zone lifecycle. The two radii are Chebyshev radii in zones. Inside them
+	// the mod neither unloads a zone it loaded nor releases a cell the game
+	// took over from it; both stamp the shared proximity map. The three
+	// fields below are live rows: main-thread readers only.
+	int    cfg_zoneLifeRetainRadius;  // around the camera's cell and the central zone (1-4)
+	int    cfg_zoneLifeSquadRadius;   // around each player character (0-4); 0 also stops the
+	                                  // baseline preload for characters away from the camera
+	int    cfg_zoneRetentionMaxHeld;  // cells held past native expiry before the hold sheds
+	                                  // to the hard core (12-45)
 
 	double cfg_zoneLifeIdleSeconds;   // seconds a mod-loaded zone must sit outside the
-	                                  // retain radius before it is unloaded (5-600)
+	                                  // camera's and the squads' radii before it is unloaded (5-600)
 };
 
 extern ZoneConfig g_zoneCfg;
