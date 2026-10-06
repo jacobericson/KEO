@@ -75,8 +75,12 @@ bool NmRebuildIsKeyCaller(const unsigned __int64* offsets, int n, unsigned __int
 bool NmHoldSuppresses(bool active, bool onMainThread, double sincePressSec);
 enum NmHoldVerdict { NM_HOLD_IDLE = 0, NM_HOLD_PENDING, NM_HOLD_DONE, NM_HOLD_CAPPED };
 NmHoldVerdict NmHoldDecide(bool active, int unfinished, double sincePressSec);
-// A held dismissal is issued again only as the game's own site would: the
-// zone manager idle (loadingPhase 0) and no save load running.
+// At the hold's end (done or capped) one dismissal is owed when the hold held
+// one, or when the press showed the panel and no dismissal has reached the
+// game since: a press never leaves the panel up.
+bool NmHoldReleaseOwes(NmHoldVerdict v, bool heldOwed, bool pressShowOpen);
+// An owed dismissal is issued only as the game's own site would: the zone
+// manager idle (loadingPhase 0) and no save load running.
 bool NmHoldReplayNow(bool owed, bool haveZoneManager, int loadingPhase, bool saveLoading);
 
 #endif

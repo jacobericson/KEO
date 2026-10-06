@@ -38,8 +38,12 @@ bool NmForceRebuildWantsFront(uintptr_t zone, int jobType, __int64 nowQpc);
 bool NmForceRebuildHoldsDismissal();
 // Main thread: inside the key's call of the game's NavMesh::generate.
 bool NmForceRebuildInKeyCall();
-// hook_showLoadingMessage on a show: records that the call showed the panel.
+// hook_showLoadingMessage on a show: records that the call showed the panel,
+// and, for a key press holding it, that the panel is up for the press.
 void NmForceRebuildNoteShow();
+// hook_showLoadingMessage on a dismissal that reaches the game, any thread:
+// the press's panel is down. Interlocked only.
+void NmForceRebuildNoteDismissed();
 // Main thread, every camera frame: expires and drops lost marks, ends the hold
 // (one line), and returns true when the held dismissal is to be issued now.
 bool NmForceRebuildTick(void* zoneMgr, bool saveLoading);

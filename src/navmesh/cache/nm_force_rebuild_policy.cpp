@@ -129,6 +129,12 @@ NmHoldVerdict NmHoldDecide(bool active, int unfinished, double sincePressSec)
 	return NM_HOLD_PENDING;
 }
 
+bool NmHoldReleaseOwes(NmHoldVerdict v, bool heldOwed, bool pressShowOpen)
+{
+	const bool released = v == NM_HOLD_DONE || v == NM_HOLD_CAPPED;
+	return released && (heldOwed || pressShowOpen);
+}
+
 bool NmHoldReplayNow(bool owed, bool haveZoneManager, int loadingPhase, bool saveLoading)
 {
 	return owed && haveZoneManager && loadingPhase == 0 && !saveLoading;

@@ -4,16 +4,7 @@
 // Claims and finishes run on the NavMesh threads and neither allocate nor log; the press,
 // the tick, the reset and the install run on the main thread.
 #include "navmesh/nm_workers.h"
-#include "zone/geometry/zone_geometry_epoch.h"
-#include "zone/reset/zone_reset_gate.h"
-#include "navmesh/generation/nm_misspar.h"
-#include "navmesh/jobs/nm_buildlock.h"
-#include "navmesh/scheduling/nm_adjacency.h"
 #include "plugin/hook_manifest.h"
-#include "diag/exit_capture.h"
-#include "navmesh/jobs/nm_busy_bridge_policy.h"
-#include "navmesh/workers/nm_worker_gate_policy.h"
-#include "navmesh/workers/nm_retire_policy.h"
 #include "navmesh/nm_workers_internal.h"
 #include "navmesh/jobs/nm_queue_lock.h"
 #include "navmesh/cache/nm_force_rebuild.h"
@@ -59,6 +50,7 @@ static long      s_pressBase[5];                  // stored, refused, dropped, e
 static volatile LONG     s_holdActive = 0;        // any thread reads
 static volatile LONGLONG s_holdPressQpc = 0;      // any thread reads
 static volatile LONG     s_dismissOwed = 0;       // any thread
+static volatile LONG     s_pressShowOpen = 0;     // a press showed the panel and no dismissal reached the game since
 static bool s_inCall = false, s_tagKey = false, s_shown = false;
 static volatile LONG s_heldDismissals, s_replays;
 static generateZone_t s_origGenerate = NULL;
@@ -433,8 +425,16 @@ bool NmForceRebuildInKeyCall()
 
 void NmForceRebuildNoteShow()
 {
-	if (s_inCall && IsMainThread())
-		s_shown = true;
+	if (!s_inCall || !IsMainThread())
+		return;
+	s_shown = true;
+	if (s_tagKey && InterlockedCompareExchange(&s_holdActive, 0, 0))
+		InterlockedExchange(&s_pressShowOpen, 1);
+}
+
+void NmForceRebuildNoteDismissed()
+{
+	InterlockedExchange(&s_pressShowOpen, 0);
 }
 
 // ---------------------------------------------------------------------
@@ -526,7 +526,10 @@ static void LogHoldEnd(NmHoldVerdict v, double since)
 		   << " dropped=" << (InterlockedCompareExchange(&s_dropped, 0, 0) - s_pressBase[2])
 		   << " expired=" << (InterlockedCompareExchange(&s_expired, 0, 0) - s_pressBase[3])
 		   << " lost=" << (InterlockedCompareExchange(&s_lost, 0, 0) - s_pressBase[4])
-		   << " owed=" << (InterlockedCompareExchange(&s_dismissOwed, 0, 0) ? 1 : 0);
+		   << " owed=" << (InterlockedCompareExchange(&s_dismissOwed, 0, 0) ? 1 : 0)
+		   << " held=" << InterlockedCompareExchange(&s_heldDismissals, 0, 0)
+		   << " replays=" << InterlockedCompareExchange(&s_replays, 0, 0)
+		   << " marked=" << InterlockedCompareExchange(&s_marked, 0, 0);
 	}
 	else
 	{
@@ -557,6 +560,11 @@ bool NmForceRebuildTick(void* zoneMgr, bool saveLoading)
 		if (v == NM_HOLD_PENDING)
 			return false;
 		InterlockedExchange(&s_holdActive, 0);
+		// A press never leaves the panel up: a dismissal the hold swallowed, or
+		// the press's own show with no dismissal since, is issued below.
+		const bool shownOpen = InterlockedExchange(&s_pressShowOpen, 0) != 0;
+		if (NmHoldReleaseOwes(v, InterlockedCompareExchange(&s_dismissOwed, 0, 0) != 0, shownOpen))
+			InterlockedExchange(&s_dismissOwed, 1);
 		LogHoldEnd(v, since);   // "NavMesh rebuild done:" or "NavMesh rebuild hold capped:"
 	}
 	const bool owed = InterlockedCompareExchange(&s_dismissOwed, 0, 0) != 0;
@@ -575,6 +583,7 @@ void NmForceRebuildOnWorldReset()
 	s_pressCount = 0;
 	InterlockedExchange(&s_holdActive, 0);
 	InterlockedExchange(&s_dismissOwed, 0);
+	InterlockedExchange(&s_pressShowOpen, 0);
 }
 
 // ---------------------------------------------------------------------

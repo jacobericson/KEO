@@ -362,6 +362,8 @@ void hook_showLoadingMessage(void* thisPtr, bool on)
 
 	if (on)
 		NmForceRebuildNoteShow();
+	else
+		NmForceRebuildNoteDismissed();
 	game::g_hookOrig.orig_showLoadingMessage(thisPtr, on);
 }
 

@@ -148,6 +148,26 @@ static void TestHold()
 	      "never during a load, a save load, before a zone manager, or when nothing is owed");
 }
 
+// At the hold's end the panel a press held or showed is dismissed; done and
+// capped behave alike, and nothing is owed while the hold is still pending.
+static void TestRelease()
+{
+	Check(NmHoldReleaseOwes(NM_HOLD_DONE, true, false), "a held dismissal is replayed when the hold is done");
+	Check(NmHoldReleaseOwes(NM_HOLD_DONE, false, true),
+	      "the press's show with no dismissal since is dismissed when the hold is done");
+	Check(!NmHoldReleaseOwes(NM_HOLD_DONE, false, false),
+	      "the press's show, then a dismissal that reached the game: nothing is replayed when the hold is done");
+	Check(!NmHoldReleaseOwes(NM_HOLD_DONE, false, false), "neither held nor shown: nothing is replayed when the hold is done");
+	Check(NmHoldReleaseOwes(NM_HOLD_DONE, true, true), "held and shown: one dismissal is owed when the hold is done");
+	Check(NmHoldReleaseOwes(NM_HOLD_CAPPED, true, false), "a held dismissal is replayed at the cap");
+	Check(NmHoldReleaseOwes(NM_HOLD_CAPPED, false, true),
+	      "the press's show with no dismissal since is dismissed at the cap");
+	Check(!NmHoldReleaseOwes(NM_HOLD_CAPPED, false, false),
+	      "neither held nor shown, or shown and dismissed since: nothing is replayed at the cap");
+	Check(!NmHoldReleaseOwes(NM_HOLD_PENDING, true, true) && !NmHoldReleaseOwes(NM_HOLD_IDLE, true, true),
+	      "a pending or idle hold owes nothing at its end");
+}
+
 int main()
 {
 	TestWord();
@@ -157,5 +177,6 @@ int main()
 	TestSelect();
 	TestEligibleAndCaller();
 	TestHold();
+	TestRelease();
 	return CheckExit("nm_force_rebuild_units");
 }
