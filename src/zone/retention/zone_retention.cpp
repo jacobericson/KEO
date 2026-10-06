@@ -381,16 +381,22 @@ bool ZoneRetentionUnderPressure()
 	return g_pressure;
 }
 
-// A mover heading into a cell buys it a lease, renewed while the order
-// stands and left to run out when it does not.
+// Every watched character's stored cells buy a lease, renewed while the
+// entry stands and left to run out when it goes. At a squad radius of 0 only
+// a mover's do: a stationary entry's stored cell can be one its character
+// has left, and the squads keep no ring to lease.
 static void RenewPredictionLeases(double now)
 {
 	int gx[ZONE_RETENTION_MOVER_CELLS];
 	int gy[ZONE_RETENTION_MOVER_CELLS];
-	int n = CollectMoverRetainZones(gx, gy, NULL, ZONE_RETENTION_MOVER_CELLS);
+	bool moving[ZONE_RETENTION_MOVER_CELLS];
+	int n = CollectMoverRetainZones(gx, gy, moving, ZONE_RETENTION_MOVER_CELLS);
+	bool squadRing = zone::g_zoneCfg.cfg_zoneLifeSquadRadius >= 1;
 	for (int i = 0; i < n; ++i)
 	{
 		if (!CellInGrid(gx[i], gy[i]))
+			continue;
+		if (!moving[i] && !squadRing)
 			continue;
 		if (!ZoneRetentionLedgerGetConst(&g_ledger, gx[i], gy[i])->inUse)
 			continue;
