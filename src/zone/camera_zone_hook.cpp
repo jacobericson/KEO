@@ -9,6 +9,7 @@
 #include "navmesh/nm_workers.h"
 #include "zone/camera_zone_hook.h"
 #include "zone/transition_hook.h"
+#include "navmesh/cache/nm_force_rebuild.h"
 #include "zone/hooks_internal.h"
 #include "diag/mem_probe.h"
 #include "zone/preload/coverage_stats.h"
@@ -265,6 +266,10 @@ static bool CameraZoneTicks(void* zoneMgr, bool saveLoading)
 	PhysXPoolTick(tickNow);
 	StitchSourceTick(tickNow);
 	NavMeshAdjTick(tickNow);
+	// The rebuild key's marks and panel hold; a dismissal it held is issued here
+	// once the zone manager is idle, through the hooked entry.
+	if (NmForceRebuildTick(zoneMgr, saveLoading))
+		hook_showLoadingMessage(GameAddr(RVA_GLOBAL_GUI), false);
 	// Ahead of every early return below, and gated by nothing: a memory figure
 	// that stopped printing under the conditions it exists to describe -- a
 	// save load, a transition, a disabled feature -- would answer nothing.

@@ -267,7 +267,7 @@ static const Flip kFlips[] =
 	{ "destroyListDefer", { "destroyListDefer" }, { NULL } },
 	{ "destroyListDiag and destroyListDefer", { "destroyListDiag", "destroyListDefer" },
 	  { "destroyListInsert" } },
-	{ "caching", { "caching" }, { "dispatchJob" } },
+	{ "caching", { "caching" }, { "dispatchJob", "navMeshGenerate" } },
 	{ "pathfindDiag", { "pathfindDiag" },
 	  { "csFindPath", "csCheckFaceConn", "requestPath", "pathReqSubmit", "csFindPathFallback",
 	    "contentStreamCallee_0x8869" } },
@@ -449,14 +449,14 @@ int main()
 {
 	CheckInstallAdmit();
 #if ZONEHAND_STEP >= 3
+	CheckVariant(kDevRows, kDevCount, "dev", 74, 59, 58, 25, 34, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 70, 55, 53, 25, 30, ProdDefaults());
+#elif ZONEHAND_STEP == 2
 	CheckVariant(kDevRows, kDevCount, "dev", 73, 58, 57, 25, 33, DevDefaults());
 	CheckVariant(kProdRows, kProdCount, "prod", 69, 54, 52, 25, 29, ProdDefaults());
-#elif ZONEHAND_STEP == 2
-	CheckVariant(kDevRows, kDevCount, "dev", 72, 57, 56, 25, 32, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 68, 53, 51, 25, 28, ProdDefaults());
 #else
-	CheckVariant(kDevRows, kDevCount, "dev", 69, 54, 53, 25, 29, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 65, 50, 48, 25, 25, ProdDefaults());
+	CheckVariant(kDevRows, kDevCount, "dev", 70, 55, 54, 25, 30, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 66, 51, 49, 25, 26, ProdDefaults());
 #endif
 	CheckDevMinusProd();
 	CheckWantTruthTable();

@@ -81,6 +81,14 @@ const size_t RVA_QUEUE_LOCK_INIT       = 0x25F350;
 // NavMesh cache: function RVAs (zone optimization -- included in all builds)
 const size_t RVA_PROCESS_JOB_ALT    = 0x3CBE60;  // NavMeshGenerator::processJobAlt (8645 bytes)
 const size_t RVA_DISPATCH_JOB       = 0x3CE030;  // NavMeshGenerator::dispatchJob (691 bytes, impl)
+
+// The rebuild-navmesh key (src/navmesh/cache/nm_force_rebuild.cpp)
+const size_t RVA_NAVMESH_GENERATE_ZONEMAP  = 0x3AB700;   // NavMesh::generate(ZoneMap*): the key, LevelEditor::repath, updateSeedEditor
+const size_t RVA_NMG_ADD_JOB_ZONE          = 0x3C66E0;   // NavMeshGenerator::addJob(ZoneMap*, uint): one type-0 job, appended under queue +152
+const size_t RVA_NAVMESH_HASH_ZONE         = 0x3A1B70;   // NavMesh::hashZone: reads zone->mapContent with no check
+const size_t RVA_PROCESS_KEYS_GENERATE_RET = 0x787CF9;   // GameWorld::processKeys: the return of its NavMesh::generate call
+const size_t RVA_SUBMAP_CELL_SIZE_X        = 0x20989F4;  // float: UtilityT::getSubMapSector's cell size on x
+const size_t RVA_SUBMAP_CELL_SIZE_Z        = 0x20989F0;  // float: the same on z
 const size_t RVA_BUILD_COLLISION    = 0x39810;   // thunk -> 0x3CB700 (925 bytes)
 const size_t RVA_PARTIAL_FIXUP      = 0x1C418;   // sub_14001C418: type 1 partial boundary fixup
 const size_t RVA_ENQUEUE_TO_PROC_QUEUE = 0x2EEBA; // enqueue job to processing queue (+184)

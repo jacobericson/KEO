@@ -7,6 +7,8 @@
 #include "zone/preload/coverage_stats.h"
 #include "navmesh/scheduling/nm_adjacency.h"
 #include "navmesh/jobs/nm_queue_lock.h"
+#include "navmesh/cache/nm_force_rebuild.h"
+#include "base/clock.h"
 #include <new>
 
 
@@ -286,6 +288,8 @@ void PrioritizeNavMeshQueue(int camGridX, int camGridY,
 	const int MAX_PER_TIER = 64;
 	int countIn = 0;
 	int rawTierCount[5] = {0, 0, 0, 0, 0};
+	const LONGLONG frontNow = QpcNow();
+	int rawFront = 0;
 
 	uintptr_t job = head;
 	while (job)
@@ -295,6 +299,15 @@ void PrioritizeNavMeshQueue(int camGridX, int camGridY,
 
 		int tier = 5;
 		uintptr_t zone = *(uintptr_t*)KLIB_MEMBER(4, job, NavMeshGenerator__Task_zone, 0);
+		// Jobs a rebuild-navmesh key press forced go first, ahead of tier 1; the
+		// marks do not change while this runs (a claim needs this lock, and the press and the tick are this thread).
+		int type = *(int*)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_flags, 88)) & 7;
+		if (rawFront < MAX_PER_TIER && NmForceRebuildWantsFront(zone, type, frontNow))
+		{
+			rawFront++;
+			job = nextJob;
+			continue;
+		}
 		if (zone)
 		{
 			int gx = *(int*)(KLIB_MEMBER(4, zone, ZoneMap_coordinates_x, OFF_ZONE_COORDS_X));
@@ -335,6 +348,8 @@ void PrioritizeNavMeshQueue(int camGridX, int camGridY,
 	// spill buffer is too small this pass (spillCapacityOk above).
 	uintptr_t tierJobs[5][MAX_PER_TIER];
 	int tierCounts[5] = {0, 0, 0, 0, 0};
+	uintptr_t frontJobs[MAX_PER_TIER];
+	int frontCount = 0;
 	int spillFill = 0;
 	int countOut = 0;
 
@@ -347,6 +362,13 @@ void PrioritizeNavMeshQueue(int camGridX, int camGridY,
 
 			int tier = 5;
 			uintptr_t zone = *(uintptr_t*)KLIB_MEMBER(4, job, NavMeshGenerator__Task_zone, 0);
+			int type = *(int*)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_flags, 88)) & 7;
+			if (frontCount < MAX_PER_TIER && NmForceRebuildWantsFront(zone, type, frontNow))
+			{
+				frontJobs[frontCount++] = job;
+				job = nextJob;
+				continue;
+			}
 			if (zone)
 			{
 				int gx = *(int*)(KLIB_MEMBER(4, zone, ZoneMap_coordinates_x, OFF_ZONE_COORDS_X));
@@ -373,7 +395,7 @@ void PrioritizeNavMeshQueue(int camGridX, int camGridY,
 		// list (and its node next-pointers) completely untouched and count
 		// a drop instead of rebuilding -- see the "no node mutation above" note.
 		countOut = tierCounts[0] + tierCounts[1] + tierCounts[2] + tierCounts[3]
-		         + tierCounts[4] + spillFill;
+		         + tierCounts[4] + spillFill + frontCount;
 	}
 
 	int totalJobs = 0;
@@ -394,6 +416,11 @@ void PrioritizeNavMeshQueue(int camGridX, int camGridY,
 		uintptr_t newHead = 0;
 		uintptr_t* linkPtr = &newHead;
 
+		for (int i = 0; i < frontCount; ++i)
+		{
+			*linkPtr = frontJobs[i];
+			linkPtr = (uintptr_t*)(KLIB_MEMBER(4, frontJobs[i], NavMeshGenerator__Task_next, 96));
+		}
 		for (int t = 0; t < 5; ++t)
 		{
 			for (int i = 0; i < tierCounts[t]; ++i)
@@ -446,12 +473,14 @@ void PrioritizeNavMeshQueue(int camGridX, int camGridY,
 	// Gated on any tier at all, not on T1-T3: a pass carrying only T4/T5 work
 	// is exactly the case where the mod-prepared-vs-game ranking decides the
 	// order, so it is the one that must not print nothing.
-	if (tierCounts[0] + tierCounts[1] + tierCounts[2] +
+	if (frontCount + tierCounts[0] + tierCounts[1] + tierCounts[2] +
 	    tierCounts[3] + tierCounts[4] > 0)
 	{
 		std::ostringstream ss;
-		ss << "NavMesh queue prioritized:"
-		   << " T1=" << tierCounts[0] << " T2=" << tierCounts[1]
+		ss << "NavMesh queue prioritized:";
+		if (frontCount > 0)
+			ss << " T0=" << frontCount;
+		ss << " T1=" << tierCounts[0] << " T2=" << tierCounts[1]
 		   << " T3=" << tierCounts[2] << " T4=" << tierCounts[3]
 		   << " T5=" << tierCounts[4];
 		LogMsg(ss.str());

@@ -26,6 +26,7 @@
 #include "zone/zone_pause.h"
 #include "zone/handoff/zone_lifecycle_hooks.h"
 #include "navmesh/nm_workers.h"
+#include "navmesh/cache/nm_force_rebuild.h"
 #include "navmesh/scheduling/nm_adjacency.h"
 #include "movement/formation.h"
 #include "movement/islands.h"
@@ -642,6 +643,8 @@ static void (*const kInstallSteps[])(int*, int*) =
 	InstallIslandHooks,
 	InstallCancelHooks,
 	InstallCacheHook,
+	// The rebuild-navmesh key's detour, while caching is wanted; a refusal leaves the key as the game has it.
+	InstallNavMeshRebuildKey,
 	CohesionPatchStep,
 	ClearFormationStep,
 	InstallPathfindHooks,

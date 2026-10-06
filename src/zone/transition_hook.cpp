@@ -14,6 +14,7 @@
 #include "navmesh/scheduling/navmesh_sched.h"
 #include "pathfind/astar_cost.h"
 #include "pathfind/gate_pass.h"
+#include "navmesh/cache/nm_force_rebuild.h"
 
 // Transition state (defined here, declared in transition.h)
 bool           isTransitionActive   = false;
@@ -40,6 +41,8 @@ bool prioritizedThisTransition = false;
 // by it.
 static volatile LONG transitionGen    = 0;
 static LONG          transitionEndGen = 0;
+// The generation of the bracket a rebuild-navmesh key press opened, 0 for none. Main thread.
+static LONG          g_rebuildBracketGen = 0;
 
 
 // =========================================================================
@@ -270,6 +273,11 @@ using namespace ::hooks_detail;
 
 void hook_showLoadingMessage(void* thisPtr, bool on)
 {
+	// A rebuild-navmesh key press holds the path thread's dismissal until its
+	// forced tiles are generated (nm_force_rebuild.cpp's NmForceRebuildHoldsDismissal).
+	if (!on && NmForceRebuildHoldsDismissal())
+		return;
+
 	// A previous bracket's dismissal may still be waiting for the main thread.
 	// Retire it here, before the new bracket is set up, or the start
 	// below would be swallowed by the still-true isTransitionActive and the
@@ -297,7 +305,8 @@ void hook_showLoadingMessage(void* thisPtr, bool on)
 
 	if (on && !isTransitionActive)
 	{
-		InterlockedIncrement(&transitionGen);
+		const LONG gen = InterlockedIncrement(&transitionGen);
+		g_rebuildBracketGen = NmForceRebuildInKeyCall() ? gen : 0;
 		isTransitionActive = true;
 		deferredFrameCount = 0;
 		QueryPerformanceCounter(&transitionStartTime);
@@ -351,6 +360,8 @@ void hook_showLoadingMessage(void* thisPtr, bool on)
 		GatePassNoteDismissal(transitionEndQpc.QuadPart, transitionEndGen, IsMainThread());
 	}
 
+	if (on)
+		NmForceRebuildNoteShow();
 	game::g_hookOrig.orig_showLoadingMessage(thisPtr, on);
 }
 
@@ -372,13 +383,14 @@ void TransitionCompleteIfPending()
 	// known first, because on the superseded path the flag belongs to the newer
 	// bracket and must not be cleared at all.
 	bool superseded = (transitionEndGen != InterlockedCompareExchange(&transitionGen, 0, 0));
+	const bool rebuild = !superseded && g_rebuildBracketGen != 0 && g_rebuildBracketGen == transitionEndGen;
 	if (!superseded)
 	{
 		isTransitionActive = false;
 		// A completed transition is a bracket that closed without being
-		// superseded -- the denominator AstarCap:'s per-100-transitions
-		// rate divides by.
-		AstarCostOnTransitionClosed();
+		// superseded, and not opened by a rebuild key press -- the denominator
+		// AstarCap:'s per-100-transitions rate divides by.
+		if (!rebuild) AstarCostOnTransitionClosed();
 	}
 
 	// Report the arrival here rather than in the hook: this is the main thread,
@@ -455,6 +467,8 @@ void TransitionCompleteIfPending()
 			first = false;
 		}
 	}
+	if (rebuild)
+		ss << " rebuild=1";
 	LogMsg(ss.str());
 
 	// Reset preload state; preserve watchedChars for in-transit squads.

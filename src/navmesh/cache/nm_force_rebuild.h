@@ -30,4 +30,22 @@ void NmForceRebuildNoteEvicted(int n);
 // " forced=... forcedEvict=..." once any mark was claimed, expired or lost; else empty.
 void NmForceRebuildFormatCacheToken(char* out, size_t outSize);
 
+// The prioritizer's front bucket (main thread, under the queue lock): a type-0
+// job of a cell whose mark is MARKED within its TTL.
+bool NmForceRebuildWantsFront(uintptr_t zone, int jobType, __int64 nowQpc);
+// hook_showLoadingMessage, any thread, on a dismissal: true while a key press
+// holds the panel (off the main thread, under the cap). Interlocked and QPC only.
+bool NmForceRebuildHoldsDismissal();
+// Main thread: inside the key's call of the game's NavMesh::generate.
+bool NmForceRebuildInKeyCall();
+// hook_showLoadingMessage on a show: records that the call showed the panel.
+void NmForceRebuildNoteShow();
+// Main thread, every camera frame: expires and drops lost marks, ends the hold
+// (one line), and returns true when the held dismissal is to be issued now.
+bool NmForceRebuildTick(void* zoneMgr, bool saveLoading);
+// Save-load reset (main thread): every mark, the press and the hold cleared.
+void NmForceRebuildOnWorldReset();
+// startPlugin's install step for the row HOOK_NAVMESH_GENERATE_ZONEMAP.
+void InstallNavMeshRebuildKey(int* installed, int* total);
+
 #endif

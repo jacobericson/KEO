@@ -314,6 +314,11 @@
 	// --- hook_manifest.cpp, navmesh cache ---
 	HOOK_ROW(HOOK_DISPATCH_JOB, "dispatchJob", RVA_DISPATCH_JOB, HOOK_FATAL, HOOK_BY_STARTUP, HOOK_WANT_CACHING, HOOK_CAP_NONE,
 	         0x48,0x89,0x6C,0x24,0x20,0x56,0x48,0x83,0xEC,0x30,0x48,0x8D,0xA9,0x88,0x00,0x00)
+	// NavMesh::generate(ZoneMap*) (src/navmesh/cache/nm_force_rebuild.cpp): mov rax,rsp; push rsi;
+	// push rdi, whole and position-independent; another plugin may detour the same entry. Wanted with
+	// caching. diagnostic = true: a mismatch leaves the rebuild-navmesh key as the game has it.
+	HOOK_ROW(HOOK_NAVMESH_GENERATE_ZONEMAP, "navMeshGenerate", RVA_NAVMESH_GENERATE_ZONEMAP, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_CACHING, HOOK_CAP_NONE,
+	         0x48,0x8B,0xC4,0x56,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x48,0x81,0xEC,0xB0,0x00)
 
 	// --- nm_lazy_hooks.cpp, installed on the first dispatch ---
 	HOOK_ROW(HOOK_EDGE_PROCESS, "edgeProcess", RVA_EDGE_PROCESS, HOOK_FATAL, HOOK_BY_LAZY, HOOK_WANT_UNCOUNTED, HOOK_CAP_NONE,

@@ -3,6 +3,7 @@
 #include "zone/preload/coverage_stats.h"
 #include "zone/transition.h"
 #include "navmesh/nm_workers.h"
+#include "navmesh/cache/nm_force_rebuild.h"
 #include "navmesh/generation/nm_misspar.h"
 #include "movement/tracking.h"
 #include "movement/formation.h"
@@ -125,6 +126,7 @@ static void ClearPreloadStateImpl(bool clearNavMeshCache)
 	// a certificate taken in the old world must never match in the new one.
 	ZoneGeometryNoteBoundary();
 	ZoneGeometryCertReset();
+	NmForceRebuildOnWorldReset();
 	H15Reset();
 	// Registry guard: a new session logs its first refusal per zone again.
 	// regSkipCount itself stays cumulative (the Transition line reports it).
