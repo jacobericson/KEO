@@ -19,6 +19,12 @@ int WatchedCapacity(bool registryEnabled);
 // evicted, so the caller drops the add instead.
 int ChooseWatchedEvictSlot(const MoverSlot* slots, int count);
 
+// Whether a watched entry counts as moving for the retention map: it steps
+// toward its destination and carries a move order. A step alone is not
+// enough, because a baseline entry's stored current zone goes stale once its
+// character arrives or drifts.
+bool MoverRetainMoving(bool stepping, bool hasMoveOrder);
+
 // True when this mover carries a move order and stands in this zone, i.e. the
 // zone is on a route the player asked for.
 bool IsRouteTierMatch(bool hasMoveOrder, int moverX, int moverY,

@@ -18,6 +18,11 @@ bool CoverageCharacterInScan(bool nearCamera, int squadRadius, bool retentionPre
 	return nearCamera || (squadRadius >= 1 && !retentionPressure);
 }
 
+bool CoverageCellInScan(bool cellNearCamera, int squadRadius)
+{
+	return squadRadius >= 1 || cellNearCamera;
+}
+
 static volatile LONG s_camGrids     = 0;   // EnqueueCameraGrid calls
 static volatile LONG s_camGridZones = 0;   // cells the camera queue took from them
 

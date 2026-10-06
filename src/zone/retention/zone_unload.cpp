@@ -156,12 +156,12 @@ static bool ZlNearAnchors(void* zoneMgr, int gx, int gy, int rCamera, int rSquad
 		int cgx, cgy;
 		if (!WorldToZoneGrid(GetCharPosX(scStuff[j]), GetCharPosZ(scStuff[j]), &cgx, &cgy))
 			continue;
+		if (ZlWithin(gx, gy, cgx, cgy, rSquad)) return true;
 		// A character on a move order keeps at least the ring its own preload
-		// brings in, as in the map.
-		int r = rSquad;
-		if (r < 1 && IsCharacterMovingOnOrder(scStuff[j]))
-			r = 1;
-		if (ZlWithin(gx, gy, cgx, cgy, r)) return true;
+		// brings in, as in the map; the watched list is walked only for a cell
+		// that ring would reach.
+		if (rSquad < 1 && ZlWithin(gx, gy, cgx, cgy, 1) && IsCharacterMovingOnOrder(scStuff[j]))
+			return true;
 	}
 	return false;
 }
@@ -478,7 +478,8 @@ static void ZlStamp(int gx, int gy, int r)
 //     and the zone manager's central zone), and every camera-owned zone
 //     queued, pending, registered or handed off in the working tables;
 //   zoneLifeSquadRadius (rp): every player character's zone, a stationary
-//     watched character's zone, and every character-owned working-table zone;
+//     watched character's zone (skipped at 0, where the player loop already
+//     stamps every live zone), and every character-owned working-table zone;
 //   max(rp, 1): a watched mover's current and next zone (tracking.cpp), so a
 //     squad on the move keeps the cells its own preload just brought in.
 // Returns false when an anchor could not be read (no calibrated grid, no
@@ -531,7 +532,13 @@ static bool ZlBuildRetentionImpl(void* zoneMgr)
 	bool moving[2 * MAX_WATCHED];
 	int mn = CollectMoverRetainZones(mx, my, moving, 2 * MAX_WATCHED);
 	for (int k = 0; k < mn; ++k)
+	{
+		// At squad radius 0 a stationary entry adds nothing the player loop has
+		// not stamped, and its stored zone may be one its character has left.
+		if (!moving[k] && rp == 0)
+			continue;
 		ZlStamp(mx[k], my[k], moving[k] ? rMover : rp);
+	}
 
 	for (int k = cameraQueueNext; k < cameraQueueCount; ++k)
 		ZlStamp(cameraQueue[k].gridX, cameraQueue[k].gridY, rc);

@@ -39,6 +39,9 @@ int main()
 	Check(CoverageCharacterInScan(false, 3, false), "away, a wider squad radius: scanned");
 	Check(!CoverageCharacterInScan(false, 0, false), "away, squad radius 0: skipped");
 	Check(!CoverageCharacterInScan(false, 1, true), "away, past the cap: skipped");
+	Check(CoverageCellInScan(false, 1) && CoverageCellInScan(true, 1), "a squad ring keeps every grid cell");
+	Check(CoverageCellInScan(true, 0), "no squad ring: a cell near the camera is queued");
+	Check(!CoverageCellInScan(false, 0), "no squad ring: a cell past the camera's radius is not");
 
 	// Every counter prints from the start, so a session can tell "never
 	// reached" from "absent". A fresh token must carry all of them at zero.

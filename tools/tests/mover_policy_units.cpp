@@ -83,5 +83,13 @@ int main()
 		      "slow cadence waits out its longer interval");
 	}
 
+	// Retention's moving flag: a step needs a move order behind it.
+	{
+		Check(MoverRetainMoving(true, true), "a step on a move order is moving");
+		Check(!MoverRetainMoving(true, false), "a baseline entry's stale step is not moving");
+		Check(!MoverRetainMoving(false, true), "an order with no step left is not moving");
+		Check(!MoverRetainMoving(false, false), "a parked baseline entry is not moving");
+	}
+
 	return CheckExit("mover_policy_units");
 }

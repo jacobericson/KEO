@@ -1054,7 +1054,11 @@ static void CheckLiveModuleRows()
 
 	// A later tab stages the live rows from the running config, not the saved
 	// copy (an INI write that failed leaves the two apart): the slider shows
-	// 0 and the saved copy still differs, so the next close writes again.
+	// 0 and the saved copy still differs, so the next close writes again. A
+	// startup-only row keeps its saved value even when the running one
+	// differs (a saved change waiting for a restart), or the close would
+	// revert it.
+	zone::g_zoneCfg.preloadEnabled = !held.preloadEnabled;
 	ConfigModuleStage next = saved.module[z];
 	StageLiveModuleRows(zoneMod, &next);
 	int sq = KeyIndex(zoneMod, "zoneLifeSquadRadius");
@@ -1062,6 +1066,9 @@ static void CheckLiveModuleRows()
 	Check(next.slots[sq].f == 0.0f && ((const zone::ZoneConfig*)next.state)->cfg_zoneLifeSquadRadius == 0
 	      && ModuleStageEntries(zoneMod, next, saved.module[z], &e) == 1,
 	      "live rows: the next tab stages the running value and writes it again");
+	Check(((const zone::ZoneConfig*)next.state)->preloadEnabled == held.preloadEnabled
+	      && e.size() == 1 && e[0].key == "zoneLifeSquadRadius",
+	      "live rows: a startup-only row stays staged from the saved copy");
 	zone::g_zoneCfg = held;
 }
 

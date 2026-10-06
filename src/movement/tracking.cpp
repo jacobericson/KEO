@@ -8,6 +8,7 @@
 #include "zone/preload/coverage_stats.h"
 #include "zone/zone_life.h"
 #include "zone/retention/zone_retention.h"
+#include "zone/retention/zone_retention_policy.h"
 #include "planner/planner_tick.h"
 
 // Registry evictions. Defined here, where they happen; the counter line that
@@ -268,12 +269,12 @@ void RemoveWatchedCharacter(int index)
 // Character scanning (baseline: current-position preloading only)
 // =========================================================================
 
-// A grid cell retention will keep: any cell while the squads keep a ring,
-// otherwise only one inside the camera's radius, since nothing else would
-// hold it once it loads.
+// A grid cell retention will keep (CoverageCellInScan). rCamera is the
+// camera radius the hold keeps right now; the camera lookup is skipped while
+// the squads keep a ring.
 static bool ScanCellKept(void* zoneMgr, int gx, int gy, int rCamera, int rSquad)
 {
-	return rSquad >= 1 || ZlCellNearCamera(zoneMgr, gx, gy, rCamera);
+	return CoverageCellInScan(rSquad < 1 && ZlCellNearCamera(zoneMgr, gx, gy, rCamera), rSquad);
 }
 
 void ScanCharacterZones(void* zoneMgr)
@@ -299,10 +300,11 @@ void ScanCharacterZones(void* zoneMgr)
 	int centersDropped = 0;   // cells past MAX_CHAR_ZONES, which get no grid
 	int farSkipped = 0;       // characters away from the camera the squad radius or the cap leaves out
 
-	// Read each scan: both are live settings.
-	int rCamera = zone::g_zoneCfg.cfg_zoneLifeRetainRadius;
-	int rSquad  = zone::g_zoneCfg.cfg_zoneLifeSquadRadius;
+	// Read each scan: both are live settings. The camera's radius is the one
+	// the hold keeps now, narrowed under pressure.
 	bool pressure = ZoneRetentionUnderPressure();
+	int rCamera = ZoneRetentionLiveRadius(pressure, zone::g_zoneCfg.cfg_zoneLifeRetainRadius);
+	int rSquad  = zone::g_zoneCfg.cfg_zoneLifeSquadRadius;
 
 	unsigned int scCount = GetPlayerCharCount(playerIntf);
 	uintptr_t* scStuff = GetPlayerCharStuff(playerIntf);
@@ -639,10 +641,7 @@ int CollectMoverRetainZones(int* gx, int* gy, bool* moving, int cap)
 		if (watchedChars[i].destZoneY > cy) dirY = 1;
 		else if (watchedChars[i].destZoneY >= 0 && watchedChars[i].destZoneY < cy) dirY = -1;
 		bool stepping = dirX != 0 || dirY != 0;
-		// A step alone does not mean a move: a baseline entry's current zone is
-		// only refreshed while it is on an order, so a squad that arrived, or
-		// drifted under its AI, still steps from where it last was.
-		bool onOrder = stepping && watchedChars[i].hasMoveOrder;
+		bool onOrder = MoverRetainMoving(stepping, watchedChars[i].hasMoveOrder);
 
 		gx[n] = cx;
 		gy[n] = cy;

@@ -42,3 +42,8 @@ int ReprioDue(bool flagRequested, double now, double lastReprio,
 		return REPRIO_TIMER;
 	return REPRIO_NONE;
 }
+
+bool MoverRetainMoving(bool stepping, bool hasMoveOrder)
+{
+	return stepping && hasMoveOrder;
+}
