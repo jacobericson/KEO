@@ -17,4 +17,14 @@ bool CacheSlotMatches(const NavMeshCacheEntry& slot, const NavMeshCacheKey& key)
 // outside the ring matches nothing, and the ring is not read.
 bool CacheSlotMatchesAt(const NavMeshCacheEntry* ring, int idx, const NavMeshCacheKey& key);
 
+// The slot a lookup serves for key in a ring holding fill entries: the lowest
+// index that is valid, has the key and a positive face count. -1 when none.
+int CacheSlotServed(const NavMeshCacheEntry* ring, int fill, const NavMeshCacheKey& key);
+
+// The slots a forced store clears before it publishes: every valid slot with
+// key, lowest first, zero-face ones included, at most cap into out. Returns
+// how many.
+int CacheSlotsToReplace(const NavMeshCacheEntry* ring, int fill, const NavMeshCacheKey& key,
+                        int* out, int cap);
+
 #endif

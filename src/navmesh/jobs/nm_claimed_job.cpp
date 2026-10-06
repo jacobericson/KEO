@@ -1,8 +1,10 @@
 // nm_claimed_job.cpp - ClaimedJob's raise and release checkpoints bound to the game operations. NavMesh bg and worker threads.
 #include "navmesh/jobs/nm_claimed_job.h"
 #include "navmesh/nm_workers_internal.h"
+#include "navmesh/cache/nm_force_rebuild.h"
 
-ClaimedJob::ClaimedJob() : job(0), jobType(0), claimQpc(0), resetRaises(0), claimSlot(-1), clone(NULL), stage(CJ_STAGE_EMPTY)
+ClaimedJob::ClaimedJob() : job(0), jobType(0), claimQpc(0), resetRaises(0), claimSlot(-1), clone(NULL), stage(CJ_STAGE_EMPTY),
+                           forceCell(-1), forceWord(0), forceOutcome(NM_FORCE_DROPPED)
 {
 	memset(&pendingWrite, 0, sizeof(pendingWrite));
 }
@@ -60,6 +62,8 @@ void ClaimedJobBeginLocked(const NmQueueLock& q, ClaimedJob* claimed, uintptr_t 
 	claimed->job = job;
 	claimed->jobType = jobType;
 	claimed->claimSlot = claimSlot;
+	claimed->forceCell = NmForceRebuildClaimLocked(q, zone, jobType, &claimed->forceWord);
+	claimed->forceOutcome = NM_FORCE_DROPPED;
 	claimed->stage = CJ_STAGE_CLAIMED;
 }
 
@@ -82,4 +86,10 @@ void ClaimedJobFinish(ClaimedJob* claimed, CjReleasePoint point, bool bgAdj)
 	CjReleaseFacts facts = { false, false, bgAdj };
 	nm_claimed_job_detail::CjGameContext context = { claimed };
 	CjFinishRun(&claimed->stage, CjReleasePlanFor(point, facts), nm_claimed_job_detail::CjGameOps(&context));
+	// After every release: a forced job's mark ends once the job, its L2 write included, is done.
+	if (claimed->forceCell >= 0)
+	{
+		NmForceRebuildFinish(claimed->forceCell, claimed->forceWord, claimed->forceOutcome);
+		claimed->forceCell = -1;
+	}
 }

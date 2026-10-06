@@ -57,6 +57,12 @@ bool WriteDiskCacheBlob(L2WriteBlob* blob);
 // Frees a blob without writing it.
 void FreeDiskCacheBlob(L2WriteBlob* blob);
 
+// Deletes key's file. FAILED is a delete the system refused: a reader holding
+// the file open (ReadDiskCache) shares no delete. ABSENT is no file, or no
+// cache path to look in.
+enum L2DeleteOutcome { L2DEL_DELETED = 0, L2DEL_ABSENT, L2DEL_FAILED };
+L2DeleteOutcome DeleteDiskCacheFile(const NavMeshCacheKey& key);
+
 // Main-thread startup sweep: deletes stale ".tmp" leftovers and ".bin" files
 // whose name is not the current key format, then measures the directory and
 // trims it to the cap. Leaves the total tracked, so the first write of the

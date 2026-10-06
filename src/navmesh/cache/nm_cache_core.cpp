@@ -167,18 +167,10 @@ void NoteZeroFaceMesh(const NavMeshCacheKey& key, int inputTri, int inputVert, i
 
 int FindCacheEntry(const NmCacheLock&, const NavMeshCacheKey& key)
 {
-	for (int i = 0; i < navmesh::g_nmL1.nmCacheFill; ++i)
-	{
-		if (!navmesh::g_nmL1.nmCache[i].valid || !KeysMatch(navmesh::g_nmL1.nmCache[i].key, key))
-			continue;
-		// Never serve a zero-face mesh, including one a build before this rule
-		// left in the ring buffer. Regenerating is right whether the tile is
-		// genuinely empty or the generation aborted.
-		if (navmesh::g_nmL1.nmCache[i].faceCount <= 0)
-			continue;
-		return i;
-	}
-	return -1;
+	// Never serve a zero-face mesh, including one a build before this rule
+	// left in the ring buffer. Regenerating is right whether the tile is
+	// genuinely empty or the generation aborted.
+	return CacheSlotServed(navmesh::g_nmL1.nmCache, navmesh::g_nmL1.nmCacheFill, key);
 }
 
 void EvictCacheEntry(int idx)
@@ -198,6 +190,15 @@ void EvictCacheEntry(int idx)
 	navmesh::g_nmL1.nmCache[idx].cachedFaceData = NULL;
 	navmesh::g_nmL1.nmCache[idx].cachedEdgeData = NULL;
 	navmesh::g_nmL1.nmCache[idx].valid = false;
+}
+
+int EvictCacheEntriesForKey(const NmCacheLock&, const NavMeshCacheKey& key)
+{
+	int idx[NM_CACHE_SIZE];
+	int n = CacheSlotsToReplace(navmesh::g_nmL1.nmCache, navmesh::g_nmL1.nmCacheFill, key, idx, NM_CACHE_SIZE);
+	for (int i = 0; i < n; ++i)
+		EvictCacheEntry(idx[i]);
+	return n;
 }
 
 // Deep-copies one array out of the generated mesh. Returns false when the mesh

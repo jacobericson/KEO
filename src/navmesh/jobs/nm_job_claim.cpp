@@ -13,6 +13,7 @@
 #include "navmesh/workers/nm_retire_policy.h"
 #include "navmesh/nm_workers_internal.h"
 #include "navmesh/jobs/nm_queue_lock.h"
+#include "navmesh/cache/nm_force_rebuild_policy.h"
 using namespace nm_workers_detail;
 namespace nm_workers_detail {
 // --------------------------------------------------------------------
@@ -374,11 +375,13 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 	// dropped, and ProcessNavMeshJob computes (and checks) its own key.
 	uintptr_t hashContent = 0;
 	bool keyOk = ComputeBuildingHashChecked(zone, &key.buildingHash, &hashContent);
+	// A forced job reads neither L1 nor L2: it regenerates its tile.
+	const bool mayRead = NmJobMayReadCache(keyOk, claimedOut->forceCell >= 0);
 
 	// Phase 2: cache lookup for the claimed job.
 	int hitIdx = -1;
 
-	if (keyOk)
+	if (mayRead)
 	{
 		NmCacheLock cacheLock;
 		int found = FindCacheEntry(cacheLock, key);
@@ -387,7 +390,7 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 		cacheLock.Release();
 	}
 
-	if (keyOk && hitIdx < 0 && game::g_gameFn.fn_navMeshCtor != NULL)
+	if (mayRead && hitIdx < 0 && game::g_gameFn.fn_navMeshCtor != NULL)
 	{
 		// Duplicate jobs for one zone do exist, so two workers can hold
 		// different jobs with the same key. Only one of them reads the file.

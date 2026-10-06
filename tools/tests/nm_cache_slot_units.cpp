@@ -39,6 +39,7 @@ struct Ring
 {
 	NavMeshCacheEntry e[NM_CACHE_SIZE];
 	int writeIdx;
+	int fill;
 };
 
 static Ring s_ring;
@@ -49,6 +50,7 @@ static int Publish(Ring* r, const NavMeshCacheKey& k)
 	int idx = r->writeIdx;
 	r->e[idx] = Entry(k);
 	r->writeIdx = (idx + 1) % NM_CACHE_SIZE;
+	if (r->fill < NM_CACHE_SIZE) ++r->fill;
 	return idx;
 }
 
@@ -115,9 +117,44 @@ static void KeyFields()
 	Check(KeysMatch(k, k), "key: a key matches itself");
 }
 
+// A forced store: the stale entry a lookup would serve, and the replace that clears it.
+static void ForcedReplace()
+{
+	const NavMeshCacheKey k = Key(5, 6);
+	int out[NM_CACHE_SIZE];
+
+	memset(&s_ring, 0, sizeof(s_ring));
+	const int stale = Publish(&s_ring, k);
+	for (int n = 0; n < 5; ++n)
+		Publish(&s_ring, Key(200 + n, 0));
+	Publish(&s_ring, k);
+	Check(CacheSlotServed(s_ring.e, s_ring.fill, k) == stale,
+	      "without a replace, the lower-index stale entry shadows the fresh one");
+
+	memset(&s_ring, 0, sizeof(s_ring));
+	Publish(&s_ring, k);
+	Publish(&s_ring, Key(201, 0));
+	Publish(&s_ring, k);   // a second promotion of the same old file
+	NavMeshCacheEntry zero = Entry(k);
+	zero.faceCount = 0;
+	s_ring.e[s_ring.writeIdx] = zero;
+	s_ring.writeIdx++; s_ring.fill++;
+	int n = CacheSlotsToReplace(s_ring.e, s_ring.fill, k, out, NM_CACHE_SIZE);
+	Check(n == 3 && out[0] == 0 && out[1] == 2 && out[2] == 3,
+	      "the replace lists every copy of the key, the zero-face one too, lowest first");
+	for (int i = 0; i < n; ++i)
+		s_ring.e[out[i]].valid = false;
+	const int stored = Publish(&s_ring, k);
+	Check(CacheSlotServed(s_ring.e, s_ring.fill, k) == stored,
+	      "after a forced store's replace the fresh entry is served");
+	Check(CacheSlotsToReplace(s_ring.e, s_ring.fill, k, out, 0) == 0, "the replace respects its cap");
+	Check(CacheSlotServed(s_ring.e, s_ring.fill, Key(77, 77)) == -1, "a key with no entry is served nothing");
+}
+
 int main()
 {
 	RingModel();
+	ForcedReplace();
 	SlotStates();
 	KeyFields();
 	return CheckExit("nm_cache_slot_units");

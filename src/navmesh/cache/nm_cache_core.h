@@ -567,6 +567,8 @@ void           ClearNavMeshCache();
 int            FindCacheEntry(const NmCacheLock& held, const NavMeshCacheKey& key);
 // Frees slot idx's arrays and marks it invalid. Caller holds nmCacheCS once it is initialised.
 void           EvictCacheEntry(int idx);
+// Evicts every slot holding key (CacheSlotsToReplace). Caller holds nmCacheCS.
+int            EvictCacheEntriesForKey(const NmCacheLock& held, const NavMeshCacheKey& key);
 // Deep-copies the generated mesh into the ring buffer. Returns the slot index,
 // or -1 when the mesh is out of bounds or one of its arrays is missing
 // (nothing is stored in that case — never a valid entry with a NULL array).

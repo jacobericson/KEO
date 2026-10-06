@@ -20,6 +20,9 @@ struct ClaimedJob
 	void* clone;
 	L2WriteBlob pendingWrite;
 	int stage;
+	int forceCell;      // the force mark this job claimed, -1 when none
+	long forceWord;     // that mark's word as the claim wrote it
+	int forceOutcome;   // NmForceOutcome, written by the store
 
 	ClaimedJob();
 
@@ -31,7 +34,7 @@ private:
 // The one raise of a claim, called holding the generator's queue lock (+152)
 // as q right after the job's unlink and before the unlock: the busy bridge
 // (on q's generator), this thread's claim slot and the reset gate's raise
-// count, in that order, then the job's own fields. q must still hold +152: the
+// count, in that order, then the job's own fields and its force mark. q must still hold +152: the
 // busy bridge reads its generator from q, and a released q names none. claimQpc
 // is taken after the unlock; clone and pendingWrite are the pipeline's.
 void ClaimedJobBeginLocked(const NmQueueLock& q, ClaimedJob* claimed, uintptr_t job, int jobType,

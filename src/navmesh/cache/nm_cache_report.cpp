@@ -12,6 +12,7 @@
 #include "navmesh/workers/nm_worker_gate_policy.h"
 #include "navmesh/cache/nm_key_hash.h"
 #include "plugin/hook_manifest.h"
+#include "navmesh/cache/nm_force_rebuild.h"
 
 namespace nm_cache_core_detail {
 static double lastNMLogTime = 0.0;
@@ -179,6 +180,9 @@ static void AppendWorkerCounts(std::ostringstream& ss, const CacheStatsWindowCtx
 	long lateHits = InterlockedCompareExchange(&navmesh::g_nmCache.nmLateHitCount, 0, 0);
 	if (lateHits)
 		ss << " lateHit=" << lateHits;
+	char forcedTok[128];
+	NmForceRebuildFormatCacheToken(forcedTok, sizeof(forcedTok));
+	ss << forcedTok;
 }
 
 // Fresh work-buffer override counts.

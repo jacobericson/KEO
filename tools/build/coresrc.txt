@@ -282,3 +282,5 @@ src\gui\settings_layout.cpp
 src\planner\planner_prearrival.cpp
 src\zone\retention\zone_expiry_guard_policy.cpp
 src\zone\retention\zone_expiry_guard.cpp
+src\navmesh\cache\nm_force_rebuild_policy.cpp
+src\navmesh\cache\nm_force_rebuild.cpp

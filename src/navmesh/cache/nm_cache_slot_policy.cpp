@@ -23,3 +23,25 @@ bool CacheSlotMatchesAt(const NavMeshCacheEntry* ring, int idx, const NavMeshCac
 {
 	return idx >= 0 && idx < NM_CACHE_SIZE && CacheSlotMatches(ring[idx], key);
 }
+
+int CacheSlotServed(const NavMeshCacheEntry* ring, int fill, const NavMeshCacheKey& key)
+{
+	for (int i = 0; i < fill && i < NM_CACHE_SIZE; ++i)
+	{
+		if (ring[i].valid && KeysMatch(ring[i].key, key) && ring[i].faceCount > 0)
+			return i;
+	}
+	return -1;
+}
+
+int CacheSlotsToReplace(const NavMeshCacheEntry* ring, int fill, const NavMeshCacheKey& key,
+                        int* out, int cap)
+{
+	int n = 0;
+	for (int i = 0; i < fill && i < NM_CACHE_SIZE && n < cap; ++i)
+	{
+		if (ring[i].valid && KeysMatch(ring[i].key, key))
+			out[n++] = i;
+	}
+	return n;
+}

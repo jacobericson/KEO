@@ -12,6 +12,8 @@
 #include "navmesh/workers/nm_worker_gate_policy.h"
 #include "navmesh/workers/nm_retire_policy.h"
 #include "navmesh/nm_workers_internal.h"
+#include "navmesh/cache/nm_force_rebuild.h"
+#include "navmesh/cache/nm_force_rebuild_policy.h"
 using namespace nm_workers_detail;
 // Undoes the bg thread's swap-path install (a fresh work buffer written over
 // realNMG+256 for the duration of processJobAlt) if something unwinds out of
@@ -316,6 +318,8 @@ struct PjCtx
 	LONGLONG missLockAt;
 	void* lateMesh;
 	bool cloneActive;
+	bool forced;
+	bool l2DelFailed;
 
 	bool Begin();
 	void Lookup();
@@ -335,6 +339,8 @@ struct PjCtx
 bool PjCtx::Begin()
 {
 	nmg = g_navMeshGen;
+	forced = claimed->forceCell >= 0;
+	l2DelFailed = false;
 
 	// Worker vs bg thread for the pjWait / stale sites. By thread rather than
 	// by workNMG, so a worker whose CloneNMG failed (workNMG == realNMG) still
@@ -391,13 +397,17 @@ void PjCtx::Lookup()
 	// store (ZoneContentUnchanged) to catch an unload that began after the walk.
 	hashContent = 0;
 	keyOk = ComputeBuildingHashChecked(jobZone, &key.buildingHash, &hashContent);
+	// A forced job leaves no entry of its key in L1 and no file on disk, and
+	// reads neither (nm_force_rebuild.cpp's NmForceRebuildClearKey).
+	if (forced)
+		l2DelFailed = NmForceRebuildClearKey(keyOk, key);
 
 	InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 10);
 
 	hitIdx = -1;
 	isHit = false;
 	isL2Hit = false;
-	if (keyOk && navmesh::g_nmCache.nmDiagStage >= 2 && !InterlockedCompareExchange(&navmesh::g_nmCache.nmCacheDisabled, 0, 0))
+	if (NmJobMayReadCache(keyOk, forced) && navmesh::g_nmCache.nmDiagStage >= 2 && !InterlockedCompareExchange(&navmesh::g_nmCache.nmCacheDisabled, 0, 0))
 	{
 		NmCacheLock cacheLock;
 
@@ -605,9 +615,10 @@ void PjCtx::LateLookup()
 	// the game waited to exit). If another thread finished this exact key
 	// while we waited for processJobCS, L1 has it (stored under the lock):
 	// take the HIT instead of generating again.
+	// A forced job never takes a late HIT: the entry it finds may be the one it replaces.
 	NoteWorkerPhase(WPHASE_GENERATING);
 	lateMesh = NULL;
-	if (keyOk && navmesh::g_nmCache.nmDiagStage >= 2 && game::g_gameFn.fn_navMeshCtor != NULL
+	if (NmJobMayReadCache(keyOk, forced) && navmesh::g_nmCache.nmDiagStage >= 2 && game::g_gameFn.fn_navMeshCtor != NULL
 	    && !InterlockedCompareExchange(&navmesh::g_nmCache.nmCacheDisabled, 0, 0))
 	{
 		NmCacheLock cacheLock;
@@ -861,16 +872,25 @@ void PjCtx::StoreGenerated(WbSwapRestore& swapRestore, ProcessJobLock& missLock,
 			               && !certRefused;
 			if (keyOk && !storeOk && !certRefused)
 				InterlockedIncrement(&navmesh::g_nmCache.nmHashRaceCount);
-			if (storeOk)
+			if (storeOk || (forced && keyOk))
 			{
 				NmCacheLock storeLock;
-				storeIdx = StoreCacheEntry(storeLock, key, storedResult);
-				if (storeIdx >= 0)
-					MissParNoteHash(navmesh::g_nmL1.nmCache[storeIdx], !onBgThread);
+				// A forced store leaves its key's only entry: a normal job may
+				// have promoted the old file's mesh since this job's claim.
+				if (forced && keyOk)
+					NmForceRebuildNoteEvicted(EvictCacheEntriesForKey(storeLock, key));
+				if (storeOk)
+				{
+					storeIdx = StoreCacheEntry(storeLock, key, storedResult);
+					if (storeIdx >= 0)
+						MissParNoteHash(navmesh::g_nmL1.nmCache[storeIdx], !onBgThread);
+				}
 				storeLock.Release();
 			}
 		}
 	}
+	if (forced)
+		claimed->forceOutcome = storeIdx >= 0 ? NM_FORCE_STORED : NM_FORCE_REFUSED;
 
 	missLock.Release();
 	mpj.released = QpcNow();
@@ -935,7 +955,11 @@ void PjCtx::Handoff()
 
 	// The file write is the last thing this job does. The game already has
 	// the mesh, so a slow disk no longer delays the result.
+	const bool banked = claimed->pendingWrite.data != NULL;
 	ClaimedJobWritePending(claimed);
+	// A delete a reader refused at the lookup is retried when nothing replaced the file.
+	if (forced && l2DelFailed && !banked)
+		NmForceRebuildRetryDelete(key);
 
 	InterlockedExchange(&navmesh::g_nmCache.nmDiagStep, 50);
 }

@@ -407,6 +407,20 @@ void FreeDiskCacheBlob(L2WriteBlob* blob)
 	blob->size = 0;
 }
 
+// The directory's tracked size is not reduced: a replacing write already adds
+// its size without subtracting the old file's, and the cap's rescan corrects it.
+L2DeleteOutcome DeleteDiskCacheFile(const NavMeshCacheKey& key)
+{
+	char path[MAX_PATH];
+	GetDiskCachePath(key, path, sizeof(path));
+	if (!path[0])
+		return L2DEL_ABSENT;
+	if (DeleteFileA(path))
+		return L2DEL_DELETED;
+	DWORD err = GetLastError();
+	return (err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND) ? L2DEL_ABSENT : L2DEL_FAILED;
+}
+
 bool BuildDiskCacheBlob(const NavMeshCacheKey& key, const NavMeshCacheEntry& e, L2WriteBlob* out)
 {
 	if (!out) return false;
