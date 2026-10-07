@@ -726,6 +726,7 @@ extern FILE* g_secCsv;
 extern FILE* g_frameCsv;
 extern FILE* g_physCsv;
 extern FILE* g_physqCsv;
+extern FILE* g_cpuCsv;
 extern TimerInfo g_timer;
 TimerInfo MeasureTimer();
 void WriteRaw(FILE* f, const std::string& s);

@@ -195,6 +195,7 @@ struct Config
 	unsigned    cursorCharGroups;   // collision-group mask counted as character hits
 	bool        listeners;          // per-class frame-listener timing
 	bool        hullDiag;           // PhysX hull destroy-queue diagnostic
+	bool        cpuSample;          // per-thread CPU time: _cpu.csv and [AUDIT-THREADS]
 };
 
 

@@ -1,8 +1,9 @@
 // audit_render.cpp - Frame and render detours.
-// Main thread records frame and draw state; other callers pass through.
+// Main thread records frame and draw state; other callers pass through (an Ogre worker at the barrier records its thread id).
 // The boundary fallback queues a notice under g_lineCS alone; timing takes no locks.
 
 #include "audit_detail.h"
+#include "audit_steady.h"
 
 namespace kenshiframeaudit_detail {
 
@@ -406,6 +407,9 @@ RsRender_t    oD3DRender   = NULL;
 // Workers call this too (it is the fork/join): they pass straight through.
 void hk_BarrierSync(void* barrier)
 {
+	// Ogre's worker threads reach the barrier too: the CPU sampler names them by it.
+	if (g_cfg.cpuSample && !IsMain())
+		CpuNoteOgreWorker();
 	if (!RenderTracking())
 	{
 		oBarrierSync(barrier);

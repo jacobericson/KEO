@@ -3,6 +3,7 @@
 // QueueLine and DrainLines take g_lineCS alone; the main thread publishes the frame ring.
 
 #include "audit_detail.h"
+#include "audit_steady.h"
 #include "base/ini_names.h"
 #include <stdarg.h>
 #include <stdio.h>
@@ -266,11 +267,14 @@ void OpenAuditFiles()
 		fopen_s(&g_physCsv,  (stem + "_phys.csv").c_str(), "w");
 		fopen_s(&g_physqCsv, (stem + "_physq.csv").c_str(), "w");
 	}
+	if (g_cfg.cpuSample)
+		fopen_s(&g_cpuCsv, (stem + "_cpu.csv").c_str(), "w");
 	if (g_auditLog) setvbuf(g_auditLog, NULL, _IOFBF, 64 * 1024);
 	if (g_secCsv)   setvbuf(g_secCsv,   NULL, _IOFBF, 64 * 1024);
 	if (g_frameCsv) setvbuf(g_frameCsv, NULL, _IOFBF, 256 * 1024);
 	if (g_physCsv)  setvbuf(g_physCsv,  NULL, _IOFBF, 64 * 1024);
 	if (g_physqCsv) setvbuf(g_physqCsv, NULL, _IOFBF, 64 * 1024);
+	if (g_cpuCsv)   setvbuf(g_cpuCsv,   NULL, _IOFBF, 64 * 1024);
 }
 
 void FlushFiles()
@@ -281,6 +285,7 @@ void FlushFiles()
 	if (g_frameCsv) fflush(g_frameCsv);
 	if (g_physCsv)  fflush(g_physCsv);
 	if (g_physqCsv) fflush(g_physqCsv);
+	if (g_cpuCsv)   fflush(g_cpuCsv);
 }
 
 void DrainLines()
@@ -321,6 +326,7 @@ unsigned __stdcall ReporterProc(void*)
 		DrainLines();
 		while (RingPop(&rec))
 			OnRecord(rec);
+		CpuSampleTick();
 		LONGLONG now = Now();
 		if (now - lastFlush >= g_qpcFreq)
 		{

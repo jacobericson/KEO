@@ -100,6 +100,7 @@ void LoadConfig()
 	                                                  : (unsigned)strtoul(charGroups.c_str(), NULL, 0);
 	g_cfg.listeners              = IniInt("Listeners", 1) != 0;
 	g_cfg.hullDiag               = IniInt("HullDiag", 0) != 0;
+	g_cfg.cpuSample              = IniInt("CpuSample", 1) != 0;
 }
 
 bool NameDisabled(const char* name)

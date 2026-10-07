@@ -3,6 +3,7 @@
 // No probe takes a lock, allocates, or logs.
 
 #include "audit_detail.h"
+#include "audit_steady.h"
 
 namespace kenshiframeaudit_detail {
 void RunWorkerBody(ThreadSlot& s, ThreadBody_t orig, void* self, float ft, bool inf, bool isAi)
@@ -11,6 +12,8 @@ void RunWorkerBody(ThreadSlot& s, ThreadBody_t orig, void* self, float ft, bool 
 	s.runSeq = seq;
 	s.lock = s.pre = s.post = 0;
 	bool isPhys = &s == &g_phys;
+	if (g_cfg.cpuSample)
+		CpuNoteRole(isAi ? CPU_ROLE_AI : (isPhys ? CPU_ROLE_PHYS : CPU_ROLE_BIRDS));
 	if (isAi)
 	{
 		g_aiThreadId = GetCurrentThreadId();
