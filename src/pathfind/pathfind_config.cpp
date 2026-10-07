@@ -74,7 +74,7 @@ const PathfindConfig kPathfindDefaults =
 	false, // gatePassDiagEnabled
 #endif
 	true, // pathCostLinesEnabled
-	CGB_BYPASS, // clusterGraphBypassMode
+	CGB_PLAYER, // clusterGraphBypassMode
 	true, // playerRepathTierEnabled
 	AHIER_ON, // playerHierarchicalMode
 	AHIER_CAP_RERUN, // playerHierOnCapMode

@@ -7,7 +7,7 @@
 // answers. Four positions, mutually exclusive, so there is no combination to
 // get wrong:
 //
-//   CGB_BYPASS (true, the default) -- answer 1 without consulting the cluster
+//   CGB_BYPASS (true) -- answer 1 without consulting the cluster
 //     graph. The graph is stale and rejects reachable pairs, and walking it
 //     reads a navmesh section slot that can be replaced underneath it.
 //   CGB_ORIGINAL (false) -- call the original and obey it, so a pair the graph
@@ -17,9 +17,10 @@
 //     rejected pair's search is labelled and its outcome recorded, so what the
 //     bypass lets through is read inside one run instead of from a pair of
 //     runs. It pays CGB_ORIGINAL's read cost: diagnostic, not a default.
-//   CGB_PLAYER ("player") -- call the original, wave a rejected pair through
-//     only when the request being served is player-owned, and obey the
-//     rejection otherwise. The requester is read from the request the
+//   CGB_PLAYER ("player", the default) -- call the original, wave a rejected
+//     pair through only when the request being served is player-owned, and
+//     obey the rejection otherwise, so an NPC pair the graph rejects costs the
+//     check and not a full search that fails. The requester is read from the request the
 //     direct-path check stashed for this thread a few instructions earlier;
 //     a check with no request behind it -- the AI task system's reachability
 //     query, which never runs that check -- counts as unattributed and is
