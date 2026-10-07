@@ -11,6 +11,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest import mock
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -75,6 +76,35 @@ class RmtreeTests(unittest.TestCase):
         finally:
             held.close()
         self.assertFalse(os.path.exists(root))
+
+    def test_a_directory_not_yet_empty_is_retried(self):
+        root, _objects = committed_repo(self.parent)
+        real_rmdir = os.rmdir
+        refused = []
+
+        def rmdir(path, *args, **kwargs):
+            if os.path.normcase(os.path.abspath(path)) == os.path.normcase(os.path.abspath(root)) and not refused:
+                refused.append(path)
+                raise OSError(None, 'The directory is not empty', None, 145)
+            return real_rmdir(path, *args, **kwargs)
+        with mock.patch('os.rmdir', side_effect=rmdir):
+            git_fixture.rmtree(root)
+        self.assertEqual(len(refused), 1)
+        self.assertFalse(os.path.exists(root))
+
+    def test_another_os_error_is_not_retried(self):
+        root, _objects = committed_repo(self.parent)
+        real_rmdir = os.rmdir
+        calls = []
+
+        def rmdir(path, *args, **kwargs):
+            if os.path.normcase(os.path.abspath(path)) == os.path.normcase(os.path.abspath(root)):
+                calls.append(path)
+                raise OSError(None, 'An I/O device error', None, 1117)
+            return real_rmdir(path, *args, **kwargs)
+        with mock.patch('os.rmdir', side_effect=rmdir):
+            self.assertRaises(OSError, git_fixture.rmtree, root)
+        self.assertEqual(len(calls), 2)
 
     def test_missing_path_is_not_an_error(self):
         missing = os.path.join(self.parent, 'never-made')

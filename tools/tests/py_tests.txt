@@ -13,5 +13,5 @@
 95 tools\build\test_slots.py
 96 tools\build\test_objcache.py
 97 tools\build\test_run_variants.py
-98 tools\tests\test_test_gate_select.py when=tools/tests/test_gate*.py
+98 tools\tests\test_test_gate_select.py when=tools/tests/test_gate*.py,tools/tests/run_suites.py,tools/tests/check.h,tools/tests/check_test_guards.py
 99 tools\tests\test_git_fixture.py when=tools/tests/git_fixture.py

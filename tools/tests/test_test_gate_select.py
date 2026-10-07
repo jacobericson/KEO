@@ -3,6 +3,7 @@ runner-control skip, --only's names) and of test_gate.main's wiring of them."""
 import contextlib
 import io
 import os
+import re
 import sys
 import unittest
 from unittest import mock
@@ -103,6 +104,64 @@ class TestRunnerControls(unittest.TestCase):
         for since in (None, ''):
             self.assertIsNone(s.runner_controls_skip(since, ['src/x.cpp']))
         self.assertIsNone(s.runner_controls_skip('abc', None))
+
+
+REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir))
+LOCAL_DIRS = ('tools/tests', 'tools/build')
+# A Python import (a plain statement or one inside a scratch module's source string), or a .py or
+# .h file the code names (a script it runs, a header its scratch suites include).
+REFERENCE_RE = re.compile(r'(?:\bimport\s+|\bfrom\s+)(\w+)|\b(\w+\.(?:py|h))\b')
+
+
+def listed_test_modules():
+    """The stems of the listed unittest modules: named in docstrings, never run by the controls
+    (which run scratch modules of their own)."""
+    stems = set()
+    for name in ('py_tests.txt', 'py_tests_private.txt'):
+        path = os.path.join(REPO, 'tools', 'tests', name)
+        if os.path.isfile(path):
+            with open(path, 'r', encoding='utf-8') as f:
+                stems.update(stem for stem, _ in s.py_rows(f.read()))
+    return stems
+
+
+def references(rel, skip):
+    """The local files rel imports or names, repo-relative with forward slashes, less the
+    unittest modules (stems in skip)."""
+    with open(os.path.join(REPO, rel), 'r', encoding='utf-8') as f:
+        text = f.read()
+    out = set()
+    for module, name in REFERENCE_RE.findall(text):
+        name = name or module + '.py'
+        if os.path.splitext(name)[0] in skip:
+            continue
+        for folder in LOCAL_DIRS:
+            if os.path.isfile(os.path.join(REPO, folder, name)):
+                out.add('%s/%s' % (folder, name))
+    return out
+
+
+def closure(start):
+    skip = listed_test_modules()
+    seen, todo = set(), list(start)
+    while todo:
+        rel = todo.pop()
+        if rel not in seen:
+            seen.add(rel)
+            todo.extend(references(rel, skip))
+    return seen
+
+
+class TestRunnerClosure(unittest.TestCase):
+    def test_the_runner_list_holds_what_the_controls_import_or_run(self):
+        found = closure(['tools/tests/check_test_guards.py'])
+        listed = set(p.lower() for p in s.RUNNER_CONTROL_FILES)
+        missing = sorted(p for p in found if p.lower() not in listed)
+        self.assertEqual(missing, [], 'the runner controls import or run %s, which RUNNER_CONTROL_FILES does not '
+                                      'list: a change to it would skip the controls' % ', '.join(missing))
+        for must in ('tools/tests/run_suites.py', 'tools/tests/py_shard.py', 'tools/tests/check.h',
+                     'tools/build/slots.py'):
+            self.assertIn(must, found)
 
 
 SUITES = ('# comment\r\n'
@@ -206,6 +265,19 @@ class TestGateWiring(unittest.TestCase):
         rc, seen, _ = self.run_main(['--only', name], heavy)
         self.assertEqual(rc, 0)
         self.assertEqual(seen['wanted'], ['suites'])
+
+    def test_a_refused_name_deletes_and_writes_nothing(self):
+        import test_gate
+        out = io.TextIOWrapper(io.BytesIO(), encoding='utf-8')
+        with mock.patch.object(test_gate, 'setup') as setup, \
+                mock.patch.object(test_gate, 'write_repo_lines') as write, \
+                mock.patch.object(test_gate, 'run_phases') as run, contextlib.redirect_stdout(out):
+            rc = test_gate.main(['--only', 'no_such_suite'])
+        out.flush()
+        self.assertEqual(rc, 1)
+        self.assertIn('build_tests: FAILED: --only: no_such_suite is neither', out.buffer.getvalue().decode('utf-8'))
+        for m in (setup, write, run):
+            m.assert_not_called()
 
     def test_the_default_selection_reaches_the_python_runner_and_the_guards(self):
         rc, seen, text = self.run_main([], lambda label=None: contextlib.nullcontext())

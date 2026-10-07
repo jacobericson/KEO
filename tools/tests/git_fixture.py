@@ -25,8 +25,10 @@ _scratch = []
 
 
 # Waits before each retry of a refused removal: a scanner or indexer can hold a file git just wrote
-# for a moment. The attempt after the last wait raises.
-_RETRY_DELAYS = (0, 0.05, 0.1, 0.2, 0.4)
+# for a few seconds under load. The attempt after the last wait raises.
+_RETRY_DELAYS = (0, 0.05, 0.1, 0.2, 0.4, 0.8, 1.6)
+# Access denied, sharing violation, and a directory whose delete-pending entry is not gone yet.
+_RETRY_WINERRORS = (5, 32, 145)
 
 
 def _writable_retry(func, path, _exc):
@@ -38,8 +40,9 @@ def _writable_retry(func, path, _exc):
             return
         except FileNotFoundError:
             return
-        except PermissionError:
-            pass
+        except OSError as exc:
+            if not isinstance(exc, PermissionError) and getattr(exc, 'winerror', None) not in _RETRY_WINERRORS:
+                raise
     os.chmod(path, stat.S_IWRITE)
     func(path)
 

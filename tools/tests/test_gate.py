@@ -323,17 +323,18 @@ def write_repo_lines(rel, lines):
 
 
 def run_only(names, forced, no_close):
-    """The named suites and Python modules alone: no guards, no selection, no heavy slot."""
-    lists = setup()
-    if lists is None:
-        return 1
-    suite_list = lists[0]
-    modules = []
+    """The named suites and Python modules alone: no guards, no selection, no heavy slot. The
+    names are resolved, and refused, before any log is deleted or list written."""
+    suites, modules = [], []
+    for rel in (SUITES, PRIVATE_SUITES):
+        if rel == SUITES or os.path.exists(os.path.join(REPO, rel)):
+            suites += test_gate_select.suite_rows(read_repo_text(rel))
     for rel in PY_LISTS:
         if os.path.exists(os.path.join(REPO, rel)):
             modules += test_gate_select.py_rows(read_repo_text(rel))
-    s_lines, p_lines = test_gate_select.resolve_only(
-        names, test_gate_select.suite_rows(read_repo_text(suite_list)), modules)
+    s_lines, p_lines = test_gate_select.resolve_only(names, suites, modules)
+    if setup() is None:
+        return 1
     wanted = []
     if s_lines:
         write_repo_lines(ONLY_SUITES, s_lines)
