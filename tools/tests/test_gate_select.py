@@ -1,9 +1,14 @@
 """The test gate's choices, as pure functions (Python 3, standard library only): which revision
-the Python test selection runs from.
+the Python test selection runs from, and which suites and Python modules an --only run names.
 
 Nothing here starts a process or reads git; test_gate.py passes in what it read, and
 test_test_gate_select.py checks every rule.
 """
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from run_py_tests import ROW_RE  # noqa: E402
 
 PREFIX = 'build_tests: python selection'
 
@@ -36,3 +41,77 @@ def python_selection(since_arg, all_flag, env_since, resolve):
         return None, '%s off (HEAD is its merge-base with main), running every module' % PREFIX
     return base, '%s since %s (merge-base with main; --all runs every module)' % (PREFIX, base)
 
+
+# ---- --only ------------------------------------------------------------------------------
+
+def suite_rows(text):
+    """[(name, line)] of a suite list's text, the line as written."""
+    out = []
+    for raw in text.replace('\r\n', '\n').split('\n'):
+        line = raw.strip()
+        if not line or line.startswith('#'):
+            continue
+        out.append((line.split('|', 1)[0].strip(), line))
+    return out
+
+
+def py_rows(text):
+    """[(stem, line)] of a Python test list's text, the line as written."""
+    out = []
+    for raw in text.replace('\r\n', '\n').split('\n'):
+        line = raw.strip()
+        if not line or line.startswith('#'):
+            continue
+        m = ROW_RE.match(line)
+        if m:
+            rel = m.group(2).strip().replace('\\', '/')
+            out.append((os.path.splitext(rel.rsplit('/', 1)[-1])[0], line))
+    return out
+
+
+def only_names(raw, all_flag, since_arg):
+    """The names an --only value lists, in order, each once; refuses an empty list and the
+    selection arguments --only cannot take."""
+    if all_flag:
+        raise Refusal('--only and --all together (--only runs exactly the names given)')
+    if since_arg:
+        raise Refusal('--only and --since together (--only runs exactly the names given)')
+    names = []
+    for part in (raw or '').split(','):
+        name = part.strip()
+        if name and name not in names:
+            names.append(name)
+    if not names:
+        raise Refusal('--only names nothing')
+    return names
+
+
+def resolve_only(names, suites, modules):
+    """(suite lines, Python lines) for the names: each first a suite row of suites [(name,
+    line)], else the stem of exactly one row of modules [(stem, line)]. An unknown name or a
+    stem that two rows share is refused."""
+    suite_by = dict(suites)
+    by_stem = {}
+    for stem, line in modules:
+        by_stem.setdefault(stem, []).append(line)
+    s_lines, p_lines, unknown, twice = [], [], [], []
+    for name in names:
+        if name in suite_by:
+            s_lines.append(suite_by[name])
+        elif len(by_stem.get(name, [])) == 1:
+            p_lines.append(by_stem[name][0])
+        elif name in by_stem:
+            twice.append(name)
+        else:
+            unknown.append(name)
+    if unknown:
+        raise Refusal('--only: %s is neither a suite nor a Python test module' % ', '.join(unknown))
+    if twice:
+        raise Refusal('--only: %s names more than one Python test module' % ', '.join(twice))
+    return s_lines, p_lines
+
+
+def only_line(names, seconds):
+    """The --only run's last line; seconds is [(phase, s)] for the phases that ran."""
+    return 'build_tests: only %s: %s' % (', '.join(names),
+                                         ', '.join('%s %.1f s' % (p, s) for p, s in seconds))

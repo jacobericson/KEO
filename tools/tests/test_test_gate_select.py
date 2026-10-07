@@ -82,5 +82,71 @@ class TestPythonSelection(unittest.TestCase):
             self.assertFalse(line.startswith('python test selection'), line)
 
 
+SUITES = ('# comment\r\n'
+          'alpha_units | tools\\tests\\alpha_units.cpp | src\\a.cpp |\r\n'
+          '\r\n'
+          'beta_units | tools\\tests\\beta_units.cpp |  | /DX\r\n')
+PY_PUBLIC = ('# excluded: tools/tests/test_gate.py - not a module\n'
+             '95 tools\\build\\test_slots.py\n'
+             '98 tools\\tests\\test_test_gate_select.py when=tools/tests/test_gate*.py\n')
+PY_PRIVATE = ('130 tools\\release\\test_keo_replay.py shards=5 when=tools/release/**\n'
+              '140 tools\\other\\test_slots.py\n'
+              'not a row\n')
+
+
+class TestOnly(unittest.TestCase):
+    def setUp(self):
+        self.suites = s.suite_rows(SUITES)
+        self.modules = s.py_rows(PY_PUBLIC) + s.py_rows(PY_PRIVATE)
+
+    def test_rows_are_read_with_their_lines_verbatim(self):
+        self.assertEqual(self.suites, [
+            ('alpha_units', 'alpha_units | tools\\tests\\alpha_units.cpp | src\\a.cpp |'),
+            ('beta_units', 'beta_units | tools\\tests\\beta_units.cpp |  | /DX')])
+        self.assertEqual([m[0] for m in self.modules],
+                         ['test_slots', 'test_test_gate_select', 'test_keo_replay', 'test_slots'])
+        self.assertEqual(self.modules[2][1], '130 tools\\release\\test_keo_replay.py shards=5 when=tools/release/**')
+
+    def test_suites_first_then_unique_module_stems(self):
+        s_lines, p_lines = s.resolve_only(['beta_units', 'test_keo_replay', 'test_test_gate_select'],
+                                          self.suites, self.modules)
+        self.assertEqual(s_lines, ['beta_units | tools\\tests\\beta_units.cpp |  | /DX'])
+        self.assertEqual(p_lines, ['130 tools\\release\\test_keo_replay.py shards=5 when=tools/release/**',
+                                   '98 tools\\tests\\test_test_gate_select.py when=tools/tests/test_gate*.py'])
+        suite_named = s.resolve_only(['alpha_units'], self.suites, [('alpha_units', '1 x\\alpha_units.py')])
+        self.assertEqual(suite_named, (['alpha_units | tools\\tests\\alpha_units.cpp | src\\a.cpp |'], []))
+
+    def test_unknown_and_shared_names_are_refused(self):
+        with self.assertRaises(s.Refusal) as cm:
+            s.resolve_only(['alpha_units', 'no_such_suite', 'nope'], self.suites, self.modules)
+        self.assertIn('no_such_suite, nope is neither a suite nor a Python test module', str(cm.exception))
+        with self.assertRaises(s.Refusal) as cm:
+            s.resolve_only(['test_slots'], self.suites, self.modules)
+        self.assertIn('test_slots names more than one Python test module', str(cm.exception))
+        with self.assertRaises(s.Refusal):
+            s.resolve_only(['alpha_units.cpp'], self.suites, self.modules)
+
+    def test_names_are_split_trimmed_and_deduplicated(self):
+        self.assertEqual(s.only_names(' a , b,a,, ', False, None), ['a', 'b'])
+
+    def test_empty_lists_and_selection_arguments_are_refused(self):
+        for raw in ('', ' ', ',', ' , ,'):
+            with self.assertRaises(s.Refusal) as cm:
+                s.only_names(raw, False, None)
+            self.assertIn('names nothing', str(cm.exception))
+        with self.assertRaises(s.Refusal) as cm:
+            s.only_names('a', True, None)
+        self.assertIn('--only and --all', str(cm.exception))
+        with self.assertRaises(s.Refusal) as cm:
+            s.only_names('a', False, 'HEAD~1')
+        self.assertIn('--only and --since', str(cm.exception))
+
+    def test_the_last_line_names_only_the_phases_that_ran(self):
+        self.assertEqual(s.only_line(['a', 'test_b'], [('suites', 1.25), ('python', 3.0)]),
+                         'build_tests: only a, test_b: suites 1.2 s, python 3.0 s')
+        self.assertEqual(s.only_line(['test_b'], [('python', 0.5)]), 'build_tests: only test_b: python 0.5 s')
+        self.assertFalse(s.only_line(['a'], [('suites', 1.0)]).startswith('build_tests: guards'))
+
+
 if __name__ == '__main__':
     unittest.main()

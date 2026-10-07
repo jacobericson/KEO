@@ -2,6 +2,7 @@
 processes, their output printed afterwards in a fixed order (Python 3, standard library only).
 
     python tools\\tests\\test_gate.py [--since REV | --all]
+    python tools\\tests\\test_gate.py --only NAME[,NAME]
 
 Run by build_tests.bat once the VS 2010 x64 environment is set up. Every child runs in the
 repository root, whatever the caller's directory.
@@ -40,6 +41,15 @@ was killed or left an empty log fails. Each failed phase gets a "build_tests: <p
 <reason>" line, then "build_tests: FAILED: <phase>[, <phase>]" ends the output and the exit code
 is 1.
 
+--only runs just the names given: each is a suite of the suite list above, else the stem of one
+module in py_tests.txt or py_tests_private.txt. The rows are written verbatim to
+build\\tests\\suites_only.txt and build\\tests\\py_tests_only.txt, and run through
+run_suites.py --suites and run_py_tests.py --list (no selection: every row listed runs). The
+guards do not run and no heavy slot is taken; the runners still take their cpu tokens. The last
+line is "build_tests: only <names>: suites <a> s, python <b> s", naming only the phases that ran,
+so an --only run never reads as a full one. An unknown name, a stem two modules share, an empty
+list, or --only with --all or --since is refused: "build_tests: FAILED: <why>", exit 1.
+
 Test-only: TEST_GATE_FORCE_FAIL=<phase>[,<phase>] replaces each named phase with a process that
 prints a marker and exits 1; TEST_GATE_NO_CLOSE=<phase>[,<phase>] with one that prints a marker
 and exits 0 without the closing line. Both must fail the run.
@@ -59,6 +69,9 @@ import test_gate_select  # noqa: E402
 SUITES = r'tools\tests\suites.txt'
 PRIVATE_SUITES = r'tools\tests\suites_private.txt'
 MERGED_SUITES = r'build\tests\suites_merged.txt'
+PY_LISTS = (r'tools\tests\py_tests.txt', r'tools\tests\py_tests_private.txt')
+ONLY_SUITES = r'build\tests\suites_only.txt'
+ONLY_PY = r'build\tests\py_tests_only.txt'
 LOG_DIR = os.path.join(REPO, 'build', 'tests')
 MERGE_LINE = 'build_tests: merging the private suite list suites_private.txt'
 PHASES = ('guards', 'suites', 'python')      # the order their logs are printed in
@@ -138,12 +151,13 @@ def merge_suites():
     return MERGED_SUITES, True
 
 
-def commands(suite_list, since, forced, no_close):
+def commands(suite_list, since, forced, no_close, py_list=None):
     py = [sys.executable, '-u']
     cmds = {
         'guards': py + [r'tools\tests\check_test_guards.py'],
         'suites': py + [r'tools\tests\run_suites.py', '--suites', suite_list],
-        'python': py + [r'tools\tests\run_py_tests.py'] + (['--since', since] if since else []),
+        'python': py + [r'tools\tests\run_py_tests.py'] + (['--list', py_list] if py_list else [])
+                  + (['--since', since] if since else []),
     }
     for name in PHASES:
         if name in forced:
@@ -242,28 +256,31 @@ def say(line):
     sys.stdout.flush()
 
 
-def run(since, selection_line, forced, no_close):
-    say(selection_line)
+def setup():
+    """(suite list path, whether the private list was merged in), or None after a FAILED line."""
     try:
         os.makedirs(LOG_DIR, exist_ok=True)
     except OSError as exc:
         say('build_tests: could not create %s: %s' % (LOG_DIR, exc))
         say('build_tests: FAILED: setup')
-        return 1
+        return None
     for name in PHASES:
         try:
             os.remove(log_path(name))
         except OSError:
             pass  # start() truncates it, or fails the phase when it cannot
     try:
-        suite_list, merged = merge_suites()
+        return merge_suites()
     except OSError as exc:
         say('build_tests: could not merge the private suite list: %s' % exc)
         say('build_tests: FAILED: merge')
-        return 1
-    cmds = commands(suite_list, since, forced, no_close)
-    by_name = dict((name, Phase(name, cmds[name])) for name in PHASES)
-    phases = [by_name[name] for name in PHASES]
+        return None
+
+
+def run_phases(wanted, cmds):
+    """Runs the wanted phases; returns them in the printed order."""
+    by_name = dict((name, Phase(name, cmds[name])) for name in PHASES if name in wanted)
+    phases = [by_name[name] for name in PHASES if name in by_name]
     env = slots.child_env(leaf=False)
     env['PYTHONIOENCODING'] = 'utf-8'
     env.pop('PY_TESTS_SINCE', None)
@@ -274,12 +291,60 @@ def run(since, selection_line, forced, no_close):
                 wait_all([p])
         else:
             for name in START_ORDER:
-                start(by_name[name], env)
+                if name in by_name:
+                    start(by_name[name], env)
             wait_all(phases)
     except BaseException:
         stop_all(phases)
         raise
+    return phases
 
+
+def run(since, selection_line, forced, no_close):
+    say(selection_line)
+    lists = setup()
+    if lists is None:
+        return 1
+    suite_list, merged = lists
+    phases = run_phases(PHASES, commands(suite_list, since, forced, no_close))
+    return report(phases, merged, 'build_tests: %s' % ', '.join('%s %.1f s' % (p.name, p.seconds())
+                                                                for p in phases))
+
+
+def read_repo_text(rel):
+    with open(os.path.join(REPO, rel), 'rb') as f:
+        return f.read().decode('utf-8')
+
+
+def write_repo_lines(rel, lines):
+    with open(os.path.join(REPO, rel), 'w', encoding='utf-8', newline='\n') as f:
+        f.write('\n'.join(lines) + '\n')
+
+
+def run_only(names, forced, no_close):
+    """The named suites and Python modules alone: no guards, no selection, no heavy slot."""
+    lists = setup()
+    if lists is None:
+        return 1
+    suite_list = lists[0]
+    modules = []
+    for rel in PY_LISTS:
+        if os.path.exists(os.path.join(REPO, rel)):
+            modules += test_gate_select.py_rows(read_repo_text(rel))
+    s_lines, p_lines = test_gate_select.resolve_only(
+        names, test_gate_select.suite_rows(read_repo_text(suite_list)), modules)
+    wanted = []
+    if s_lines:
+        write_repo_lines(ONLY_SUITES, s_lines)
+        wanted.append('suites')
+    if p_lines:
+        write_repo_lines(ONLY_PY, p_lines)
+        wanted.append('python')
+    phases = run_phases(wanted, commands(ONLY_SUITES, None, forced, no_close, py_list=ONLY_PY))
+    return report(phases, False, test_gate_select.only_line(names, [(p.name, p.seconds()) for p in phases]))
+
+
+def report(phases, merged, last_line):
     for p in phases:
         data = read_log(p)
         if data is None:
@@ -288,7 +353,7 @@ def run(since, selection_line, forced, no_close):
             write_raw(data)
         if p.name == 'guards' and merged:
             say(MERGE_LINE)
-    say('build_tests: %s' % ', '.join('%s %.1f s' % (p.name, p.seconds()) for p in phases))
+    say(last_line)
     failed = []
     for p in phases:
         why = judge(p)
@@ -305,11 +370,15 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description='Run the host test gate.')
     ap.add_argument('--since', metavar='REV', help='select the Python tests changed since REV')
     ap.add_argument('--all', action='store_true', help='run every Python test module')
+    ap.add_argument('--only', metavar='NAME[,NAME]',
+                    help='run only these suites and Python test modules (no guards, no heavy slot)')
     args = ap.parse_args(argv)
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     try:
         forced = test_phases('TEST_GATE_FORCE_FAIL')
         no_close = test_phases('TEST_GATE_NO_CLOSE')
+        if args.only is not None:
+            return run_only(test_gate_select.only_names(args.only, args.all, args.since), forced, no_close)
         since, line = test_gate_select.python_selection(args.since, args.all,
                                                         os.environ.get('PY_TESTS_SINCE'), git_resolve)
         with slots.heavy('build_tests'):
@@ -317,7 +386,7 @@ def main(argv=None):
     except slots.SlotTimeout as exc:
         say('build_tests: FAILED: no heavy slot (%s)' % exc)
         return 1
-    except ValueError as exc:
+    except (ValueError, OSError) as exc:
         say('build_tests: FAILED: %s' % exc)
         return 1
     except KeyboardInterrupt:
