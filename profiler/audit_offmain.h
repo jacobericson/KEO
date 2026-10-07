@@ -29,6 +29,7 @@ struct OgreSyncCall
 	int      kind;      // syncsplit::SyncKind
 	bool     blocked;   // the call will wait for another thread
 	LONGLONG t0;
+	bool     main;      // the barrier is the main scene manager's
 };
 
 void InstallOffMain(bool steam);          // startup, after InstallCursor (main thread)
@@ -58,11 +59,23 @@ int InstallOffMainRows(HMODULE module, CallSiteProbe::Site* rows, const int* idx
 void MarkOffMainTags(const CallSiteProbe::Site* rows, int count);
 
 // audit_ogre.cpp, used by audit_offmain.cpp:
-const int NUM_OGRE_ROWS = 10;
+const int NUM_OGRE_ROWS = 16;
 int InstallOgreProbes(HMODULE ogre);      // the rows installed, 0 when the Ogre part is refused
 void OgreProbeEnter(int tag, CallSiteProbe::U64 a, CallSiteProbe::U64 b);
 void OgreProbeExit(int tag, LONGLONG t0, LONGLONG t1);
 void OgreFrameTotals(FrameRec& r);
+// audit_ogre.cpp: updateAllTransforms' inlined fork/join rows (main thread).
+void OgreXfEnter(int tag, CallSiteProbe::U64 a, CallSiteProbe::U64 b);
+void OgreXfExit(int tag, LONGLONG t0, LONGLONG t1);
+// A module's build: PE TimeDateStamp and SizeOfImage, and two exports at fixed offsets.
+struct ModuleBuild
+{
+	DWORD       stamp, imageSize;
+	const char* sym[2];
+	size_t      rva[2];
+};
+bool ModuleMatches(HMODULE m, const ModuleBuild& b);
+bool OgreMainMatches(HMODULE ogre);   // the OgreMain_x64.dll build every OgreMain offset was read from
 
 } // kenshiframeaudit_detail
 

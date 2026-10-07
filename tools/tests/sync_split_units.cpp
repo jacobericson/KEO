@@ -22,8 +22,10 @@ static void Blocking()
 
 static void Buckets()
 {
-	Check(RequestBucket(0) == 0 && RequestBucket(12) == 12, "requests 0 to 12 keep their bucket");
-	Check(RequestBucket(13) == 13 && RequestBucket(-1) == 13, "anything else goes to bucket 13");
+	Check(RequestBucket(0, false) == 0 && RequestBucket(12, false) == 12, "requests 0 to 12 keep their bucket");
+	Check(RequestBucket(3, true) == BUCKET_LIGHT_BOUNDS, "request 3 on the light list is bucket 13");
+	Check(RequestBucket(3, false) == 3 && RequestBucket(5, true) == 5, "only request 3 has a light list");
+	Check(RequestBucket(13, false) == BUCKET_OTHER && RequestBucket(-1, false) == BUCKET_OTHER, "anything else goes to bucket 14");
 	Check(TicksToUs(25000, 10000000) == 2500, "ticks convert to microseconds");
 	Check(TicksToUs(5, 0) == 0, "a zero frequency converts to 0");
 }

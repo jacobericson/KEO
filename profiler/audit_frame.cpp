@@ -5,6 +5,7 @@
 #include "audit_detail.h"
 #include "audit_steady.h"
 #include "audit_offmain.h"
+#include "audit_scene.h"
 #include <time.h>
 
 namespace kenshiframeaudit_detail {
@@ -295,6 +296,8 @@ void CloseFrame(LONGLONG tNext)
 		FxFrameTotals(r);   // every frame, so each delta covers one frame
 	if (g_cfg.offMainDetail)
 		OffMainFrameTotals(r);   // every frame, so the per-frame totals cover one frame
+	if (g_cfg.sceneDetail)
+		SceneFrameTotals(r);
 	if (c.fxCensused)
 	{
 		double perMs = g_tscPerMs;
@@ -622,6 +625,8 @@ void OncePerSecond()
 	}
 	if (g_cfg.offMainDetail)
 		OffMainOncePerSecond();
+	if (g_cfg.sceneDetail)
+		SceneOncePerSecond();
 }
 
 void SampleWorld()

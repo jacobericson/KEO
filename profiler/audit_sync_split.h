@@ -24,12 +24,17 @@ inline bool WouldBlock(int arrived, int threads)
 	return threads > 0 && arrived < threads - 1;
 }
 
-// Ogre's worker requests 0..12; bucket 13 holds anything else (no scene manager, a bad read).
-const int REQUEST_BUCKETS = 14;
+// Ogre's worker requests 0..12 keep their number; request 3 on the light list (the second bounds
+// fork) is bucket 13; anything else (another barrier, a bad read) is bucket 14.
+const int REQUEST_BUCKETS     = 15;
+const int BUCKET_LIGHT_BOUNDS = 13;
+const int BUCKET_OTHER        = 14;
 
-inline int RequestBucket(int request)
+inline int RequestBucket(int request, bool lightList)
 {
-	return request >= 0 && request <= 12 ? request : REQUEST_BUCKETS - 1;
+	if (request == 3 && lightList)
+		return BUCKET_LIGHT_BOUNDS;
+	return request >= 0 && request <= 12 ? request : BUCKET_OTHER;
 }
 
 inline long long TicksToUs(long long ticks, long long freq)

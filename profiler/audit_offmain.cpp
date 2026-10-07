@@ -7,6 +7,7 @@
 // only; the [AUDIT-SYNC] line is written from the main thread's once-a-second pass.
 
 #include "audit_offmain.h"
+#include "audit_scene.h"
 #include <limits.h>
 
 namespace audit_offmain_detail {
@@ -253,6 +254,16 @@ const char* OffMainStatus()
 
 void OffMainProbeEnter(int tag, CallSiteProbe::U64 a, CallSiteProbe::U64 b, CallSiteProbe::U64, CallSiteProbe::U64)
 {
+	if (tag >= ST_SCENE_FIRST)
+	{
+		SceneProbeEnter(tag, a, b);
+		return;
+	}
+	if (tag >= ST_XF_FIRST)
+	{
+		OgreXfEnter(tag, a, b);
+		return;
+	}
 	if (tag >= ST_OGRE_WORKER_FIRST)
 	{
 		OgreProbeEnter(tag, a, b);
@@ -300,8 +311,18 @@ static void FxForkExit(LONGLONG t0, LONGLONG t1)
 	}
 }
 
-void OffMainProbeExit(int tag, CallSiteProbe::U64, LONGLONG t0, LONGLONG t1)
+void OffMainProbeExit(int tag, CallSiteProbe::U64 ret, LONGLONG t0, LONGLONG t1)
 {
+	if (tag >= ST_SCENE_FIRST)
+	{
+		SceneProbeExit(tag, ret, t0, t1);
+		return;
+	}
+	if (tag >= ST_XF_FIRST)
+	{
+		OgreXfExit(tag, t0, t1);
+		return;
+	}
 	if (tag >= ST_OGRE_WORKER_FIRST)
 	{
 		OgreProbeExit(tag, t0, t1);

@@ -5,6 +5,7 @@
 #include "audit_detail.h"
 #include "audit_steady.h"
 #include "audit_offmain.h"
+#include "audit_scene.h"
 
 namespace kenshiframeaudit_detail {
 
@@ -411,6 +412,8 @@ void hk_BarrierSync(void* barrier)
 	// Ogre's worker threads reach the barrier too: the CPU sampler names them by it.
 	if (g_cfg.cpuSample && !IsMain())
 		CpuNoteOgreWorker();
+	if (g_cfg.sceneDetail && IsMain() && g_cur.open)
+		SceneSyncInputs(barrier);   // the fork's inputs, read while the workers are still parked
 	bool om = g_cfg.offMainDetail && IsMain();
 	OgreSyncCall sc = { 0, 0, false, 0 };
 	if (om)
@@ -470,9 +473,16 @@ void hk_D3DBind(void* rs, int type, void* params, unsigned __int64 mask)
 
 void hk_D3DRender(void* rs, const void* op)
 {
+	// The state reads sit outside the timed window; the shadows follow every main-thread draw.
+	bool st = D3dStateOn() && IsMain();
+	D3dFlags fl = { 0, 0, 0, 0 };
+	if (st)
+		D3dStateEnter(rs, &fl);
 	if (!RenderTracking())
 	{
 		oD3DRender(rs, op);
+		if (st)
+			D3dStateExit(rs, fl);
 		return;
 	}
 	unsigned long long t0 = __rdtsc();
@@ -481,6 +491,8 @@ void hk_D3DRender(void* rs, const void* op)
 	g_cur.d3dTsc += dt;
 	if (g_depth > 0)
 		g_stack[g_depth - 1].d3dTsc += dt;
+	if (st)
+		D3dStateExit(rs, fl);
 }
 
 const void* hk_SetPass(void* sm, const void* pass, bool evenIfSuppressed, bool shadowDerivation)

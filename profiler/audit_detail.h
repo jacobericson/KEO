@@ -376,7 +376,16 @@ const size_t RVA_PREV_MLEFT   = 0x2132282;  // byte: last frame's mLeft
 	X(OAOWN, "oaOwn") X(OAFOL, "oaFol") X(OALISTMAX, "oaListMax") X(SYNCFIREBLK, "syncFireBlk") X(OGRELATETOP, "ogreLateTop") \
 	X(OGREWAKEN, "ogreWakeN") X(FXDRAINN, "fxDrainN") X(FPLOADN, "fpLoadN") X(FPLOADCACHEN, "fpLoadCacheN") X(FPSUBN, "fpSubN") \
 	X(FPSUBWINDN, "fpSubWindN") X(FPLOCKN, "fpLockN") X(INDOORSOTHERN, "indoorsOtherN") X(INDOORSOTHERPHYS, "indoorsOtherPhys") \
-	X(OGREWAKEDROP, "ogreWakeDrop")
+	X(OGREWAKEDROP, "ogreWakeDrop") \
+	X(XFFORKS, "xfForks") X(XFFIREBLK, "xfFireBlk") X(XFJOINLAST, "xfJoinLast") X(XFNODES, "xfNodes") X(XFEMPTY, "xfEmpty") \
+	X(XFSMALL, "xfSmall") X(XFMID, "xfMid") \
+	X(CULLRQ, "cullRq") X(CULLRQEMPTY, "cullRqEmpty") X(V2SKELMGRS, "v2SkelMgrs") X(BNDENTOBJS, "bndEntObjs") \
+	X(BNDLIGHTOBJS, "bndLightObjs") X(INSTDYNB, "instDynB") X(INSTDIRTYB, "instDirtyB") X(INSTCULLFORKS, "instCullForks") \
+	X(INSTCULLEMPTY, "instCullEmpty") X(VISENT, "visEnt") X(VISBATCH, "visBatch") X(VISOTHER, "visOther") \
+	X(RQCLEARS, "rqClears") X(RQMAPWALK, "rqMapWalk") X(RQMAPMAX, "rqMapMax") X(RQUENTN, "rquEntN") \
+	X(INSTUPDN, "instUpdN") X(INSTEMPTYN, "instEmptyN") X(D3DBLENDN, "d3dBlendN") X(D3DSAMPN, "d3dSampN") \
+	X(D3DCLEARN, "d3dClearN") X(BSCHGN, "bsChgN") X(BSSAMEN, "bsSameN") X(RSCHGN, "rsChgN") X(RSSAMEN, "rsSameN") \
+	X(DSCHGN, "dsChgN") X(DSSAMEN, "dsSameN") X(SMPCHGN, "smpChgN")
 
 #define AUDIT_ENUM_C(id, name) C_##id,
 #define AUDIT_NAME(id, name) name,
@@ -577,6 +586,12 @@ enum SiteTag
 	ST_OA_FIRE, ST_OA_WAIT,
 	ST_OGRE_WORKER_FIRST,
 	ST_OA_WK5 = ST_OGRE_WORKER_FIRST, ST_OA_WK6, ST_OGRE_WAKE, ST_OGRE_LATETOP, ST_OGRE_ARRIVE, ST_OGRE_LAST,
+	// OffMainDetail: updateAllTransforms' inlined fork/join and its call (main thread, OgreMain).
+	ST_XF_FIRST,
+	ST_XF_COPY = ST_XF_FIRST, ST_XF_FIREWAIT, ST_XF_FIREREL, ST_XF_JOINWAIT, ST_XF_JOINREL, ST_XF_CALL,
+	// SceneDetail (audit_scene.cpp, audit_d3d.cpp): main-thread render-queue and D3D11 rows.
+	ST_SCENE_FIRST,
+	ST_RQ_PREP = ST_SCENE_FIRST, ST_RQ_INSTUPD, ST_D3D_BLEND, ST_D3D_SAMP, ST_D3D_CLEAR,
 	ST_COUNT
 };
 
@@ -949,6 +964,7 @@ void OnProbeEnter(int id, CallSiteProbe::U64 a, CallSiteProbe::U64 b, CallSitePr
 void OnProbeExit(int id, CallSiteProbe::U64 ret, LONGLONG t0, LONGLONG t1);
 extern int g_hooksOk, g_hooksTotal;
 bool InModule(HMODULE module, const void* p, size_t len);
+bool HookAt(const char* name, HMODULE module, void* target, const unsigned char* expect, void* detour, void** orig);
 void InstallOgreHooks(HMODULE ogre, bool* haveRenderOneFrame);
 void InstallParticleHooks(HMODULE ogre);
 bool InstallExeHooks();

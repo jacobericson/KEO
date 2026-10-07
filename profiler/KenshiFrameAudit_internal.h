@@ -116,6 +116,11 @@ inline double SinceStart(LONGLONG t)
 	X(OM_FPPOOLWAIT, "fpPoolWait") X(OM_FPLOCKRO, "fpLockRO") X(OM_FPLOCKDST, "fpLockDst") X(OM_MSTRACE, "msTrace") \
 	X(OM_MSINDOORS, "msIndoors") X(OM_MSNAVVALID, "msNavValid") X(OM_MSINDOORSFAST, "msIndoorsFast") \
 	X(OM_MSTERRAIN, "msTerrain") X(OM_INDOORSOTHER, "indoorsOther") \
+	X(OM_XFCALL, "rXform") X(OM_XFFORK, "xfForkMs") X(OM_XFFIRE, "xfFireMs") X(OM_XFJOIN, "xfJoinMs") \
+	X(OM_FKCULL, "cullForkMs") X(OM_FKANIM, "sgAnimMs") X(OM_FKBNDENT, "sgBndEntMs") X(OM_FKBNDLIGHT, "sgBndLightMs") \
+	X(OM_FKINSTMGR, "sgInstMgrMs") X(OM_FKINSTCULL, "instCullMs") \
+	X(SC_RQPREP, "rqPrep") X(SC_RQUENT, "rquEnt") X(SC_INSTUPD, "instUpd") X(SC_INSTUPDEMPTY, "instUpdEmpty") \
+	X(SC_D3DBLEND, "d3dBlendCreate") X(SC_D3DSAMP, "d3dSampCreate") \
 	X(ZONE_SM, "zoneSM") X(UNLOAD_MS, "unloadMs") \
 	X(DT, "dt") X(SPEED, "speed") X(CAM_X, "camX") X(CAM_Y, "camY") X(CAM_Z, "camZ") \
 	X(CAM_ALT, "camAlt") X(SUMERR, "sumErr")
@@ -223,6 +228,7 @@ struct Config
 	bool        cpuSample;          // per-thread CPU time: _cpu.csv and [AUDIT-THREADS]
 	bool        steadyDetail;       // character, faction and formation cost probes
 	bool        offMainDetail;      // the off-main probes (OffMainDetail)
+	bool        sceneDetail;        // the scene and render probes (SceneDetail)
 };
 
 

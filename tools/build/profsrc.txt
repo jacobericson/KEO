@@ -32,5 +32,7 @@ profiler\audit_cpu.cpp
 profiler\audit_steady.cpp
 profiler\audit_offmain.cpp
 profiler\audit_ogre.cpp
+profiler\audit_scene.cpp
+profiler\audit_d3d.cpp
 src\base\ini_text.cpp
 src\base\legacy_ini_import.cpp
