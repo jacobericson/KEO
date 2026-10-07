@@ -38,6 +38,7 @@
 #include "fixes/stitch/stitch_byte_guard.h"
 #include "navmesh/construction/wall_splice.h"
 #include "fixes/world/town_claim.h"
+#include "inventory/dialogue_item_function.h"
 #include "fixes/streaming/section_key_ring.h"
 #include "plugin/crash_record.h"
 
@@ -453,6 +454,9 @@ void InstallHooksAndGuards(const EntryCtx& ctx)
 	navmesh::InstallWallSpliceNop(ctx.gateOk);
 	// A third mid-function patch, off the gate banner like the two above: thirteen bytes in createBuilding, written before a world exists.
 	fixes::InstallTownClaimPatch(ctx.gateOk);
+	// A mid-function rel32, off the gate banner like the guards above; written now, before any
+	// world exists, because its four bytes are not aligned for one store.
+	keo_inventory::InstallDialogueItemFunctionPatch(ctx.gateOk);
 
 	// Worker threads created lazily on first hook_dispatchJob call
 	// (Havok world not yet initialized at plugin load time)

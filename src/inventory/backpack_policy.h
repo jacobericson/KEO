@@ -30,6 +30,13 @@ int  HandKeyFormat(const game::HandKey& k, char* out, int n);
 // Exactly five fields and not the null handle.
 bool HandKeyParse(const char* text, int len, game::HandKey* out);
 
+// The food-score post-hook's decision: zero vanilla's score when it wants ground food (above 0)
+// and the worn backpack holds food the character can eat.
+bool FoodScoreZero(bool vanillaWants, bool backpackHasFood);
+// The dialogue item-function wrapper's second look: only when the main inventory said no and a
+// backpack is worn.
+bool DialogUseBackpack(bool mainHas, bool wearsBackpack);
+
 } // namespace keo_inventory
 
 #endif

@@ -113,4 +113,14 @@ bool HandKeyParse(const char* text, int len, game::HandKey* out)
 	return true;
 }
 
+bool FoodScoreZero(bool vanillaWants, bool backpackHasFood)
+{
+	return vanillaWants && backpackHasFood;
+}
+
+bool DialogUseBackpack(bool mainHas, bool wearsBackpack)
+{
+	return !mainHas && wearsBackpack;
+}
+
 } // namespace keo_inventory

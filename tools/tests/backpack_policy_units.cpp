@@ -1,5 +1,6 @@
 // The backpack-first rules: the routing decision row by row, the slot read rule, the field parser
-// and the hand key's text form, and the per-character table through its public API on one thread.
+// and the hand key's text form, the per-character table through its public API on one thread, and
+// the food-score and dialogue item-function rules.
 #include <cstdio>
 #include <cstring>
 #include "inventory/backpack_policy.h"
@@ -188,6 +189,24 @@ static void CheckTable()
 	CHECK(BackpackFirstRaceCount() == 0, "table: one thread never races itself");
 }
 
+static void CheckFood()
+{
+	// Arguments: vanillaWants (the original's score above 0), backpackHasFood.
+	CHECK(FoodScoreZero(true, true), "food: wants ground food and the backpack has food zeroes");
+	CHECK(!FoodScoreZero(true, false), "food: no food in the backpack keeps vanilla");
+	CHECK(!FoodScoreZero(false, true) && !FoodScoreZero(false, false),
+	      "food: vanilla not wanting is never changed");
+}
+
+static void CheckDialog()
+{
+	// Arguments: mainHas (the main inventory's answer), wearsBackpack.
+	CHECK(!DialogUseBackpack(true, true) && !DialogUseBackpack(true, false),
+	      "dialog: the main inventory's yes is final");
+	CHECK(!DialogUseBackpack(false, false), "dialog: no backpack keeps vanilla's no");
+	CHECK(DialogUseBackpack(false, true), "dialog: a main no with a backpack asks the backpack");
+}
+
 int main()
 {
 	CheckRoute();
@@ -195,5 +214,7 @@ int main()
 	CheckFields();
 	CheckKey();
 	CheckTable();
+	CheckFood();
+	CheckDialog();
 	return CheckExit("backpack_policy_units");
 }
