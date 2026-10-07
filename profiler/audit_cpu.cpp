@@ -32,6 +32,10 @@ static const int    CPU_MAX_OGRE        = 32;
 static const double CPU_NAMES_SEC       = 30.0;
 static const ULONG  CPU_START_ADDRESS   = 9;        // ThreadQuerySetWin32StartAddress
 static const DWORD  CPU_QUERY_LIMITED   = 0x0800;   // THREAD_QUERY_LIMITED_INFORMATION
+// Every Ogre worker thread starts at this wrapper (Threads::CreateThread hands it to
+// ::CreateThread); its first bytes are checked before the address is trusted.
+static const size_t        OGRE_WORKER_START = 0x2CD1E0;
+static const unsigned char OGRE_WORKER_START_BYTES[16] = { 0x48,0x89,0x4C,0x24,0x08,0x57,0x48,0x83,0xEC,0x30,0x48,0xC7,0x44,0x24,0x20,0xFE };
 
 static volatile LONG s_roleTid[CPU_ROLE_COUNT];
 static volatile LONG s_ogreTid[CPU_MAX_OGRE];      // claimed from 0 by compare-exchange, never cleared
@@ -51,6 +55,8 @@ static ULONG64         s_procLast      = 0;
 static ULONG64         s_timesLast     = 0;      // GetProcessTimes kernel + user, 100 ns units
 static ULONG64         s_winProc       = 0;      // process cycles since the last names line
 static ULONG64         s_winThreads    = 0;      // followed threads' cycles since then
+static uintptr_t       s_ogreStart     = 0;        // 0: not checked or no match
+static int             s_ogreByStart   = 0;        // threads named ogre by their start address
 
 void CpuNoteRole(int role)
 {
@@ -58,9 +64,8 @@ void CpuNoteRole(int role)
 		InterlockedExchange(&s_roleTid[role], (LONG)GetCurrentThreadId());
 }
 
-void CpuNoteOgreWorker()
+static void ClaimOgreTid(LONG tid)
 {
-	LONG tid = (LONG)GetCurrentThreadId();
 	for (int i = 0; i < CPU_MAX_OGRE; ++i)
 	{
 		LONG v = s_ogreTid[i];
@@ -73,6 +78,11 @@ void CpuNoteOgreWorker()
 				return;
 		}
 	}
+}
+
+void CpuNoteOgreWorker()
+{
+	ClaimOgreTid((LONG)GetCurrentThreadId());
 }
 
 static bool IsOgreWorker(DWORD tid)
@@ -103,24 +113,25 @@ static const char* RoleOf(DWORD tid)
 	return "other";
 }
 
-static void StartModule(HANDLE h, char* out, size_t cap)
+static void* StartModule(HANDLE h, char* out, size_t cap)
 {
 	strcpy_s(out, cap, "-");
 	if (!s_queryThread)
-		return;
+		return NULL;
 	PVOID start = NULL;
 	if (s_queryThread(h, CPU_START_ADDRESS, &start, (ULONG)sizeof(start), NULL) != 0 || !start)
-		return;
+		return NULL;
 	HMODULE mod = NULL;
 	if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
 	                        (LPCSTR)start, &mod) || !mod)
-		return;
+		return NULL;
 	char path[MAX_PATH];
 	DWORD n = GetModuleFileNameA(mod, path, MAX_PATH);
 	if (n == 0 || n >= MAX_PATH)
-		return;
+		return NULL;
 	const char* base = strrchr(path, '\\');
 	strncpy_s(out, cap, base ? base + 1 : path, _TRUNCATE);
+	return start;
 }
 
 static void FollowThread(DWORD tid)
@@ -150,7 +161,12 @@ static void FollowThread(DWORD tid)
 	th.tid  = tid;
 	th.h    = h;
 	th.last = c;
-	StartModule(h, th.module, sizeof(th.module));
+	void* start = StartModule(h, th.module, sizeof(th.module));
+	if (s_ogreStart && (uintptr_t)start == s_ogreStart)
+	{
+		ClaimOgreTid((LONG)tid);
+		++s_ogreByStart;
+	}
 }
 
 static bool Snapshot()
@@ -204,6 +220,10 @@ static bool CpuStart(LONGLONG now)
 		AuditOut("[Audit] cpu: off (QueryThreadCycleTime missing)");
 		return false;
 	}
+	HMODULE ogre = GetModuleHandleA(OGRE_DLL);
+	if (ogre && InModule(ogre, (const void*)((uintptr_t)ogre + OGRE_WORKER_START), sizeof(OGRE_WORKER_START_BYTES)) &&
+	    memcmp((const void*)((uintptr_t)ogre + OGRE_WORKER_START), OGRE_WORKER_START_BYTES, sizeof(OGRE_WORKER_START_BYTES)) == 0)
+		s_ogreStart = (uintptr_t)ogre + OGRE_WORKER_START;
 	if (!Snapshot())
 	{
 		AuditOut(Fmt("[Audit] cpu: off (thread snapshot failed, error %lu)", (unsigned long)GetLastError()));
@@ -212,7 +232,7 @@ static bool CpuStart(LONGLONG now)
 	s_processCycles(GetCurrentProcess(), &s_procLast);
 	s_timesLast = ProcessTimes100ns();
 	WriteRaw(g_cpuCsv, "t,tid,role,cycles,cpuMs,wallMs,module");
-	AuditOut(Fmt("[Audit] cpu: on (%d threads, tscPerMs=%.0f)", s_count, (double)g_tscPerMs));
+	AuditOut(Fmt("[Audit] cpu: on (%d threads, tscPerMs=%.0f, ogreStart=%s)", s_count, (double)g_tscPerMs, s_ogreStart ? "on" : "off"));
 	s_lastSample = s_lastNames = now;
 	s_started = true;
 	return true;
@@ -226,9 +246,9 @@ static void WriteThreadNames(LONGLONG now, double perMs)
 	ULONG64 times = ProcessTimes100ns();
 	double timesMs = times > s_timesLast ? (double)(times - s_timesLast) / 10000.0 : 0.0;
 	s_timesLast = times;
-	std::string line = Fmt("[AUDIT-THREADS] win=%.1fs threads=%d dropped=%d procMs/s=%.1f threadsMs/s=%.1f timesMs/s=%.1f tscPerMs=%.0f |",
+	std::string line = Fmt("[AUDIT-THREADS] win=%.1fs threads=%d dropped=%d procMs/s=%.1f threadsMs/s=%.1f timesMs/s=%.1f tscPerMs=%.0f ogreByStart=%d |",
 	                       sec, s_count, s_dropped, (double)s_winProc / perMs / sec,
-	                       (double)s_winThreads / perMs / sec, timesMs / sec, perMs);
+	                       (double)s_winThreads / perMs / sec, timesMs / sec, perMs, s_ogreByStart);
 	for (int i = 0; i < s_count; ++i)
 	{
 		const char* role = RoleOf(s_threads[i].tid);

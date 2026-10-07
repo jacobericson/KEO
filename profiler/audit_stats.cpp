@@ -129,7 +129,7 @@ void WriteClassSummary(const char* cls, const std::vector<const FrameRec*>& fr)
 	AuditOut(std::string("[AUDIT] ") + cls + " ml p50/p90" + PairList(fr, M_ML_AIJOIN, M_ML_OTHER, sc));
 	AuditOut(std::string("[AUDIT] ") + cls + " sub p50/p90" + PairList(fr, M_SUB_MOUSESCAN, M_SUB_ZCSECT, sc));
 	if (g_cfg.steadyDetail)
-		AuditOut(std::string("[AUDIT] ") + cls + " detail p50/p90" + PairList(fr, M_SD_CU, M_SD_FMBUILD, sc));
+		AuditOut(std::string("[AUDIT] ") + cls + " detail p50/p90" + PairList(fr, M_SD_CU, M_SD_LZCHAR, sc));
 	AuditOut(std::string("[AUDIT] ") + cls + " render p50/p90" + PairList(fr, M_R_CULL, M_R_PASSOTHER, sc));
 	AuditOut(std::string("[AUDIT] ") + cls + " thr p50/p90" + PairList(fr, M_AI_WAKE, M_PHYS_POST, sc) +
 	         Fmt(" | aiJoin=%.0f%% birdsJoin=%.0f%% physRan=%.0f%% aiMiss=%.0f%% aiSync=%.0f%%",

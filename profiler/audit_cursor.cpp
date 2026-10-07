@@ -314,6 +314,8 @@ void CursorExit(LONGLONG ticks)
 
 using CallSiteProbe::SHAPE_INT;
 using CallSiteProbe::SHAPE_FLOAT;
+using CallSiteProbe::SHAPE_FLOAT4;
+using CallSiteProbe::SHAPE_RETFLOAT;
 
 // Site RVA -> the thunk its E8 must decode to (verified in IDA 2026-09-13).
 // InitKlibBindings already compared covered callee implementations; retain
@@ -374,6 +376,13 @@ CallSiteProbe::Site g_sites[] =
 	{ "fcUpdate",   0x2E74EB, 0x262A6, SHAPE_FLOAT, ST_FC_UPDATE },   // Faction::update, every faction
 	{ "fcActive",   0x6BA9E8, 0x3F9D1, SHAPE_FLOAT, ST_FC_ACTIVE },   // Faction::updateActivePlatoons
 	{ "fcPeriodic", 0x2E750F, 0x0937C, SHAPE_INT,   ST_FC_PERIODIC }, // Faction::periodicUpdateMT, one faction a frame
+	// Nested in chPeriodic (SteadyDetail): Character::periodicUpdate's (0x5CC300) light-level call,
+	// GameWorld::getLightLevel 0xA0A040 (a float result), and three calls inside it that run only
+	// at night. Its two 0xA07ED0 calls take a stack argument: counted from the list counts instead.
+	{ "chLight",    0x5CC7C4, 0x1F488, SHAPE_RETFLOAT, ST_CH_LIGHT },  // getLightLevel
+	{ "lzZones",    0xA0A128, 0x311BA, SHAPE_FLOAT4,   ST_LZ_ZONES },  // findOverlappingActiveZones (xmm3 = radius)
+	{ "lzBld",      0xA0A230, 0x3482E, SHAPE_FLOAT4,   ST_LZ_BLD },    // Building::getLights, every object walked
+	{ "lzChar",     0xA0A356, 0x0B5E6, SHAPE_INT,      ST_LZ_CHAR },   // AppearanceBase::getLights, every lit character
 	// RenderTimeBackthread body (AI thread)
 	{ "aiZone",     0x786E41, 0x202CF, SHAPE_INT,   ST_AIZONE },
 	{ "aiContent",  0x786EF0, 0x455A2, SHAPE_INT,   ST_AICONTENT },
@@ -411,6 +420,15 @@ CallSiteProbe::Site g_sites[] =
 };
 extern const int NUM_SITES = sizeof(g_sites) / sizeof(g_sites[0]);
 
+// A lektor's element count (+8, as the hit list); 0 when the pointer or the count is implausible.
+static int LektorCount(uintptr_t lektor)
+{
+	if (!PlausiblePtr(lektor))
+		return 0;
+	unsigned n = *(const unsigned*)(lektor + HIT_LIST_COUNT);
+	return n <= 65535 ? (int)n : 0;
+}
+
 void OnProbeEnter(int id, CallSiteProbe::U64 a, CallSiteProbe::U64 b, CallSiteProbe::U64 c,
                   CallSiteProbe::U64 d)
 {
@@ -440,6 +458,9 @@ void OnProbeEnter(int id, CallSiteProbe::U64 a, CallSiteProbe::U64 b, CallSitePr
 		break;                                                   // traceAll(result, origin, dir, group)
 	case ST_MOUSESCAN: ++g_cur.mouseScanDepth; break;
 	case ST_MOUSERAY2: ++g_cur.ray2Calls; break;
+	case ST_LZ_ZONES: g_cur.lzOut = (uintptr_t)b; break;        // (zm, out, pos, radius)
+	case ST_LZ_BLD:   g_cur.lzList = (uintptr_t)b; break;       // (building, list, pos, radius squared)
+	case ST_LZ_CHAR:  g_cur.lzCharList = (uintptr_t)b; break;   // (appearance, list)
 	case ST_ZONECAM:
 		if (b >= 0x10000 && b < 0x00007FFFFFFFFFFFULL)
 		{
@@ -457,7 +478,6 @@ void OnProbeEnter(int id, CallSiteProbe::U64 a, CallSiteProbe::U64 b, CallSitePr
 
 void OnProbeExit(int id, CallSiteProbe::U64 ret, LONGLONG t0, LONGLONG t1)
 {
-	(void)ret;
 	int tag = CallSiteProbe::TagOf(id);
 	LONGLONG d = t1 - t0;
 
@@ -526,13 +546,30 @@ void OnProbeExit(int id, CallSiteProbe::U64 ret, LONGLONG t0, LONGLONG t1)
 	case ST_ZC_SECT:
 	case ST_ZC_MAINT:   g_cur.sub[SUBT_ZCSECT]    += d; break;
 	case ST_LIGHTS:     g_cur.sub[SUBT_LIGHTS]    += d; break;
-	case ST_CH_PERIODIC: g_cur.sd[SDT_CHPERIODIC] += d; break;
+	case ST_CH_PERIODIC: g_cur.sd[SDT_CHPERIODIC] += d; ++g_cur.chPeriodicN; break;
 	case ST_CH_FOUR:     g_cur.sd[SDT_CHFOUR]     += d; break;
 	case ST_CH_POST:     g_cur.sd[SDT_CHPOST]     += d; break;
 	case ST_CH_DEATH:    g_cur.sd[SDT_CHDEATH]    += d; break;
 	case ST_FC_UPDATE:   g_cur.sd[SDT_FCUPDATE]   += d; break;
 	case ST_FC_ACTIVE:   g_cur.sd[SDT_FCACTIVE]   += d; break;
 	case ST_FC_PERIODIC: g_cur.sd[SDT_FCPERIODIC] += d; break;
+	case ST_CH_LIGHT:    g_cur.sd[SDT_CHLIGHT] += d; ++g_cur.chLightN; break;
+	case ST_LZ_ZONES:
+		g_cur.sd[SDT_LZZONES] += d;
+		++g_cur.lzCalls;
+		g_cur.lzZoneN += LektorCount(g_cur.lzOut);
+		break;
+	case ST_LZ_BLD:
+		g_cur.sd[SDT_LZBLD] += d;
+		++g_cur.lzBldN;
+		if ((unsigned)ret != 0)   // the caller walks the list only on a non-zero return
+			g_cur.lzLightN += LektorCount(g_cur.lzList);
+		break;
+	case ST_LZ_CHAR:
+		g_cur.sd[SDT_LZCHAR] += d;
+		++g_cur.lzCharN;
+		g_cur.lzCharLightN += LektorCount(g_cur.lzCharList);
+		break;
 	case ST_AIKICK:    g_cur.aiKickT = t0; break;
 	case ST_PHYSKICK:  g_phys.kickT  = t0; break;
 	case ST_BIRDSKICK: g_birds.kickT = t0; break;

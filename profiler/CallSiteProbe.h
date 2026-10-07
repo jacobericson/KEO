@@ -34,14 +34,19 @@ namespace CallSiteProbe
 
 	const int MAX_PROBES = 96;
 
-	// How the callee takes its arguments. Wrappers forward rcx/rdx/r8/r9
-	// (SHAPE_INT) or rcx/xmm1/r8/r9 (SHAPE_FLOAT: the second argument is a
-	// float). Forwarding more registers than a callee uses is harmless; no
-	// probed callee may take stack arguments or return in xmm0.
+	// How the callee takes its arguments and returns. Wrappers forward
+	// rcx/rdx/r8/r9 (SHAPE_INT), rcx/xmm1/r8/r9 (SHAPE_FLOAT: the second
+	// argument is a float), rcx/rdx/r8/xmm3 (SHAPE_FLOAT4: the fourth argument
+	// is a float), or rcx/rdx/r8/r9 with the result returned in xmm0
+	// (SHAPE_RETFLOAT). Forwarding more registers than a callee uses is
+	// harmless; no probed callee may take stack arguments, and only a
+	// SHAPE_RETFLOAT callee may return in xmm0.
 	enum Shape
 	{
-		SHAPE_INT   = 0,
-		SHAPE_FLOAT = 1
+		SHAPE_INT      = 0,
+		SHAPE_FLOAT    = 1,
+		SHAPE_FLOAT4   = 2,
+		SHAPE_RETFLOAT = 3
 	};
 
 	struct Site
@@ -76,9 +81,9 @@ namespace CallSiteProbe
 	// Verifies and installs every site that passes its checks: a direct site's
 	// byte 0 is E8 and the call decodes to targetRva; a virtual site's bytes
 	// are 48 8B 01 FF 90 with disp32 == vslot; an indirect site's bytes are
-	// FF 15 and its disp32 decodes to targetRva. Run it once, while none of the
-	// sites can execute. Returns the number installed; each site's status says
-	// why not.
+	// FF 15 and its disp32 decodes to targetRva. A virtual or indirect site must
+	// be SHAPE_INT. Run it once, while none of the sites can execute. Returns
+	// the number installed; each site's status says why not.
 	int Install(HMODULE module, Site* sites, int count);
 
 	// The stub page (NULL until a site was installed).

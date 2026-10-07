@@ -11,6 +11,8 @@ namespace callsiteprobe_detail
 {
 	typedef U64 (*FnInt)(U64, U64, U64, U64);
 	typedef U64 (*FnFloat)(U64, float, U64, U64);
+	typedef U64   (*FnFloat4)(U64, U64, U64, float);
+	typedef float (*FnRetFloat)(U64, U64, U64, U64);
 
 	const size_t PAGE_SIZE  = 0x1000;
 	const size_t SLOT_SIZE  = 16;
@@ -24,6 +26,8 @@ namespace callsiteprobe_detail
 	void*          g_wrapFloat[MAX_PROBES];
 	void*          g_wrapVirt[MAX_PROBES];
 	void*          g_wrapInd[MAX_PROBES];
+	void*          g_wrapFloat4[MAX_PROBES];
+	void*          g_wrapRetFloat[MAX_PROBES];
 	EnterFn        g_onEnter = NULL;
 	ExitFn         g_onExit  = NULL;
 	unsigned char* g_page    = NULL;
@@ -93,6 +97,36 @@ namespace callsiteprobe_detail
 		return r;
 	}
 
+	template<int ID>
+	U64 ProbeFloat4(U64 a, U64 b, U64 c, float d)
+	{
+		EnterFn onEnter = g_onEnter;
+		if (onEnter) onEnter(ID, a, b, c, 0);
+		LARGE_INTEGER t0, t1;
+		QueryPerformanceCounter(&t0);
+		U64 r = ((FnFloat4)g_orig[ID])(a, b, c, d);
+		QueryPerformanceCounter(&t1);
+		ExitFn onExit = g_onExit;
+		if (onExit) onExit(ID, r, t0.QuadPart, t1.QuadPart);
+		return r;
+	}
+
+	// The callee returns a float: kept in a local across the stamp and the
+	// exit callback, both of which may overwrite xmm0, and returned last.
+	template<int ID>
+	float ProbeRetFloat(U64 a, U64 b, U64 c, U64 d)
+	{
+		EnterFn onEnter = g_onEnter;
+		if (onEnter) onEnter(ID, a, b, c, d);
+		LARGE_INTEGER t0, t1;
+		QueryPerformanceCounter(&t0);
+		float r = ((FnRetFloat)g_orig[ID])(a, b, c, d);
+		QueryPerformanceCounter(&t1);
+		ExitFn onExit = g_onExit;
+		if (onExit) onExit(ID, 0, t0.QuadPart, t1.QuadPart);
+		return r;
+	}
+
 	// VS2010 has no variadic templates: fill the wrapper tables recursively.
 	template<int N>
 	struct FillTables
@@ -104,10 +138,14 @@ namespace callsiteprobe_detail
 			FnFloat ff = &ProbeFloat<N - 1>;
 			FnInt   fv = &ProbeVirt<N - 1>;
 			FnInt   fd = &ProbeInd<N - 1>;
+			FnFloat4 f4 = &ProbeFloat4<N - 1>;
+			FnRetFloat fr = &ProbeRetFloat<N - 1>;
 			g_wrapInt[N - 1]   = (void*)fi;
 			g_wrapFloat[N - 1] = (void*)ff;
 			g_wrapVirt[N - 1]  = (void*)fv;
 			g_wrapInd[N - 1]   = (void*)fd;
+			g_wrapFloat4[N - 1] = (void*)f4;
+			g_wrapRetFloat[N - 1] = (void*)fr;
 			FillTables<N - 1>::Run();
 		}
 	};
@@ -252,9 +290,9 @@ int Install(HMODULE module, Site* sites, int count)
 		Site& s = sites[i];
 		bool virt = s.vslot != 0;
 		bool ind  = s.indirect != 0;
-		if (s.siteRva < 3 || base + s.siteRva + 6 > end || (virt && ind))
+		if (s.siteRva < 3 || base + s.siteRva + 6 > end || (virt && ind) || ((virt || ind) && s.shape != SHAPE_INT))
 		{
-			SetStatus(s, (virt && ind) ? "SKIP both virtual and indirect" : "SKIP outside image");
+			SetStatus(s, (virt && ind) ? "SKIP both virtual and indirect" : ((virt || ind) && s.shape != SHAPE_INT) ? "SKIP a virtual or indirect site takes SHAPE_INT" : "SKIP outside image");
 			continue;
 		}
 		const unsigned char* p = (const unsigned char*)(base + s.siteRva);
@@ -348,7 +386,10 @@ int Install(HMODULE module, Site* sites, int count)
 		unsigned char* slot = g_page + SLOT_SIZE * (size_t)s.id;
 		U64 wrapper = (U64)(s.vslot != 0 ? g_wrapVirt[s.id]
 		                  : s.indirect != 0 ? g_wrapInd[s.id]
-		                  : (s.shape == SHAPE_FLOAT ? g_wrapFloat[s.id] : g_wrapInt[s.id]));
+		                  : s.shape == SHAPE_FLOAT ? g_wrapFloat[s.id]
+		                  : s.shape == SHAPE_FLOAT4 ? g_wrapFloat4[s.id]
+		                  : s.shape == SHAPE_RETFLOAT ? g_wrapRetFloat[s.id]
+		                  : g_wrapInt[s.id]);
 		slot[0] = 0xFF;
 		slot[1] = 0x25;
 		*(unsigned int*)(slot + 2) = 0;

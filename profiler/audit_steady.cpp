@@ -1,7 +1,8 @@
 // audit_steady.cpp - Steady-state cost probes (SteadyDetail=1). Character::update and
 // Character::pausedUpdate are timed per call, split player / NPC, with the animation update they
-// make timed inside them; FactionRelations::update is timed on the AI thread with the size of the
-// map it walks; the formation lookups and rebuilds are counted on whatever thread runs them.
+// make timed inside them; the paused update is also split by the character's on-screen and
+// visible-update flags at entry; FactionRelations::update is timed on the AI thread with the size
+// of the map it walks; the formation lookups and rebuilds are counted on whatever thread runs them.
 // The character hooks write the main thread's frame, the relations hook the AI slot inside the AI
 // body, the formation hooks Interlocked counters only. No hook takes a lock, allocates, or logs.
 
@@ -35,6 +36,8 @@ static const unsigned char PRO_FORM_BUILD[16]  = { 0x48,0x8B,0xC4,0x55,0x41,0x54
 // What the hooks read.
 static const size_t CHAR_OWNER        = 0x10;   // RootObjectBase::owner, Faction*
 static const size_t FACTION_IS_PLAYER = 0x250;  // Faction::isPlayer, PlayerInterface* (NULL for NPC factions)
+static const size_t CHAR_VIS_UPDATE   = 0xE4;   // Character::isVisibleUpdateMode, the running loop's full-update test
+static const size_t CHAR_ON_SCREEN    = 0x1A9;  // Character::isOnScreen, distance and frustum only
 static const size_t REL_TABLE_SIZE    = 0x40;   // FactionRelations::_factionRelations (a map at +0x20): its size_
 static_assert(REL_TABLE_SIZE == 0x20 + KLIB_OFF_DeathMapTable_size_, "REL_TABLE_SIZE composed parity");
 
@@ -68,8 +71,8 @@ static bool IsPlayerCharacter(const void* ch)
 }
 
 // Times one character update on the main thread, as the parent of the animation update it makes.
-static void TimeCharacter(CharUpdate_t orig, void* ch, int parent, int slot, int playerSlot,
-                          int* calls, int* playerCalls)
+static LONGLONG TimeCharacter(CharUpdate_t orig, void* ch, int parent, int slot, int playerSlot,
+                              int* calls, int* playerCalls)
 {
 	bool player = IsPlayerCharacter(ch);
 	int outer = g_cur.animParent;
@@ -85,6 +88,7 @@ static void TimeCharacter(CharUpdate_t orig, void* ch, int parent, int slot, int
 		g_cur.sd[playerSlot] += d;
 		++*playerCalls;
 	}
+	return d;
 }
 
 static void hk_CharUpdate(void* ch)
@@ -97,10 +101,25 @@ static void hk_CharUpdate(void* ch)
 
 static void hk_CharPaused(void* ch)
 {
-	if (IsMain() && g_cur.open)
-		TimeCharacter(oCharPaused, ch, ANIM_PARENT_PAUSED, SDT_CP, SDT_CPPLAYER, &g_cur.cpN, &g_cur.cpPlayerN);
-	else
+	if (!IsMain() || !g_cur.open)
+	{
 		oCharPaused(ch);
+		return;
+	}
+	// Read before the original: its setVisible can lower isOnScreen.
+	bool onScreen  = *((const unsigned char*)ch + CHAR_ON_SCREEN) != 0;
+	bool visUpdate = *((const unsigned char*)ch + CHAR_VIS_UPDATE) != 0;
+	LONGLONG d = TimeCharacter(oCharPaused, ch, ANIM_PARENT_PAUSED, SDT_CP, SDT_CPPLAYER, &g_cur.cpN, &g_cur.cpPlayerN);
+	if (onScreen)
+	{
+		g_cur.sd[SDT_CPON] += d;
+		++g_cur.cpOnN;
+	}
+	if (visUpdate)
+	{
+		g_cur.sd[SDT_CPVIS] += d;
+		++g_cur.cpVisN;
+	}
 }
 
 static void hk_AnimUpdate(void* anim, float dt)
@@ -149,7 +168,7 @@ static void hk_FormBuild(void* bb)
 
 bool SteadySiteTag(int tag)
 {
-	return (tag >= ST_CH_PERIODIC && tag <= ST_FC_PERIODIC) || tag == ST_AF_PLATOONU;
+	return (tag >= ST_CH_PERIODIC && tag <= ST_LZ_CHAR) || tag == ST_AF_PLATOONU;
 }
 
 void InstallSteadyHooks()
@@ -173,7 +192,7 @@ const char* SteadyStatus()
 	if (!g_cfg.steadyDetail)
 		return "off";
 	bool all = s_charHooked && s_pausedHooked && s_animHooked && s_relHooked && s_lookupHooked && s_buildHooked;
-	for (int tag = ST_CH_PERIODIC; tag <= ST_FC_PERIODIC; ++tag)
+	for (int tag = ST_CH_PERIODIC; tag <= ST_LZ_CHAR; ++tag)
 		all = all && g_haveTag[tag];
 	all = all && g_haveTag[ST_AF_PLATOONU];
 	return all ? "on" : "partial";
@@ -211,6 +230,12 @@ void SteadyFrameTotals(const CurFrame& c, FrameRec& r)
 	r.m[M_SD_FCUPDATE]   = SdMs(c, SDT_FCUPDATE, g_haveTag[ST_FC_UPDATE]);
 	r.m[M_SD_FCACTIVE]   = SdMs(c, SDT_FCACTIVE, g_haveTag[ST_FC_ACTIVE]);
 	r.m[M_SD_FCPERIODIC] = SdMs(c, SDT_FCPERIODIC, g_haveTag[ST_FC_PERIODIC]);
+	r.m[M_SD_CPON]       = SdMs(c, SDT_CPON, s_pausedHooked);
+	r.m[M_SD_CPVIS]      = SdMs(c, SDT_CPVIS, s_pausedHooked);
+	r.m[M_SD_CHLIGHT]    = SdMs(c, SDT_CHLIGHT, g_haveTag[ST_CH_LIGHT]);
+	r.m[M_SD_LZZONES]    = SdMs(c, SDT_LZZONES, g_haveTag[ST_LZ_ZONES]);
+	r.m[M_SD_LZBLD]      = SdMs(c, SDT_LZBLD, g_haveTag[ST_LZ_BLD]);
+	r.m[M_SD_LZCHAR]     = SdMs(c, SDT_LZCHAR, g_haveTag[ST_LZ_CHAR]);
 	r.m[M_AI_REL]        = c.relMs;
 	r.m[M_AI_PLATU]      = c.afPlatoonU;
 	r.c[C_CUN]           = c.cuN;
@@ -219,6 +244,16 @@ void SteadyFrameTotals(const CurFrame& c, FrameRec& r)
 	r.c[C_CPPLAYERN]     = c.cpPlayerN;
 	r.c[C_RELCALLS]      = c.relCalls;
 	r.c[C_RELNODES]      = c.relNodes;
+	r.c[C_CPONN]         = c.cpOnN;
+	r.c[C_CPVISN]        = c.cpVisN;
+	r.c[C_CHPERIODICN]   = c.chPeriodicN;
+	r.c[C_CHLIGHTN]      = c.chLightN;
+	r.c[C_LZCALLS]       = c.lzCalls;
+	r.c[C_LZZONEN]       = c.lzZoneN;
+	r.c[C_LZBLDN]        = c.lzBldN;
+	r.c[C_LZLIGHTN]      = c.lzLightN;
+	r.c[C_LZCHARN]       = c.lzCharN;
+	r.c[C_LZCHARLIGHTN]  = c.lzCharLightN;
 	if (s_lookupHooked)
 	{
 		LONG n = InterlockedCompareExchange(&s_formLookups, 0, 0);

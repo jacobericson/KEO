@@ -92,6 +92,7 @@ inline double SinceStart(LONGLONG t)
 	X(SD_CPPLAYER, "cpPlayerMs") X(SD_CPANIM, "cpAnimMs") X(SD_CHPERIODIC, "chPeriodic") \
 	X(SD_CHFOUR, "chFour") X(SD_CHPOST, "chPost") X(SD_CHDEATH, "chDeath") X(SD_FCUPDATE, "fcUpdate") \
 	X(SD_FCACTIVE, "fcActive") X(SD_FCPERIODIC, "fcPeriodic") X(SD_FMBUILD, "fmBuildMs") \
+	X(SD_CPON, "cpOnMs") X(SD_CPVIS, "cpVisMs") X(SD_CHLIGHT, "chLight") X(SD_LZZONES, "lzZones") X(SD_LZBLD, "lzBld") X(SD_LZCHAR, "lzChar") \
 	X(R_CULL, "rCull") X(R_SCENE, "rScene") X(R_SHADOW, "rShadow") X(R_QUEUE, "rQueue") \
 	X(R_SUBMIT, "rSubmit") X(R_RSO, "rRso") X(R_SETPASS, "rSetPass") X(R_BIND, "rBind") \
 	X(R_D3D, "rD3D") X(R_SYNC, "rSync") X(R_OLDANIM, "rOldAnim") X(R_LIGHTS, "rLights") \
@@ -133,6 +134,7 @@ enum SdTick
 	SDT_CU, SDT_CUPLAYER, SDT_CUANIM, SDT_CP, SDT_CPPLAYER, SDT_CPANIM,
 	SDT_CHPERIODIC, SDT_CHFOUR, SDT_CHPOST, SDT_CHDEATH,
 	SDT_FCUPDATE, SDT_FCACTIVE, SDT_FCPERIODIC,
+	SDT_CPON, SDT_CPVIS, SDT_CHLIGHT, SDT_LZZONES, SDT_LZBLD, SDT_LZCHAR,
 	SDT_COUNT
 };
 
@@ -290,6 +292,9 @@ struct CurFrame
 	int      chars, dead, full, setB, zoneState;
 	LONGLONG sd[SDT_COUNT];                       // SteadyDetail probe ticks
 	int      cuN, cuPlayerN, cpN, cpPlayerN, relCalls, relNodes;
+	int      cpOnN, cpVisN, chPeriodicN;          // paused calls on screen / in visible-update mode; periodic updates
+	int      chLightN, lzCalls, lzZoneN, lzBldN, lzLightN, lzCharN, lzCharLightN;
+	uintptr_t lzOut, lzList, lzCharList;          // the light-level row in flight: its out list
 	int      animParent;                          // the character update running the animation update
 
 	bool     fxCensused;                          // the effect census ran this frame

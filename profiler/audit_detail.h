@@ -369,7 +369,10 @@ const size_t RVA_PREV_MLEFT   = 0x2132282;  // byte: last frame's mLeft
 	X(CURINPUT, "curInput") \
 	X(CUN, "cuN") X(CUPLAYERN, "cuPlayerN") X(CPN, "cpN") X(CPPLAYERN, "cpPlayerN") \
 	X(FMLOOKUPS, "fmLookups") X(FMBUILDS, "fmBuilds") X(RELCALLS, "relCalls") X(RELNODES, "relNodes") \
-	X(FACTIONSN, "factionsN") X(UNLPLATOONS, "unloadedPlatoons") X(PLAYERS, "players")
+	X(FACTIONSN, "factionsN") X(UNLPLATOONS, "unloadedPlatoons") X(PLAYERS, "players") \
+	X(CPONN, "cpOnN") X(CPVISN, "cpVisN") X(CHPERIODICN, "chPeriodicN") X(CHLIGHTN, "chLightN") \
+	X(LZCALLS, "lzCalls") X(LZZONEN, "lzZoneN") X(LZBLDN, "lzBldN") X(LZLIGHTN, "lzLightN") X(LZCHARN, "lzCharN") \
+	X(LZCHARLIGHTN, "lzCharLightN")
 
 #define AUDIT_ENUM_C(id, name) C_##id,
 #define AUDIT_NAME(id, name) name,
@@ -548,6 +551,8 @@ enum SiteTag
 	ST_LIGHTS,
 	// Main thread, SteadyDetail: nested inside the chars and factions sections.
 	ST_CH_PERIODIC, ST_CH_FOUR, ST_CH_POST, ST_CH_DEATH, ST_FC_UPDATE, ST_FC_ACTIVE, ST_FC_PERIODIC,
+	// Main thread, SteadyDetail: periodicUpdate's light-level call and three calls inside it.
+	ST_CH_LIGHT, ST_LZ_ZONES, ST_LZ_BLD, ST_LZ_CHAR,
 	// AI thread (RenderTimeBackthread body, and threadedUpdate inside list 1).
 	ST_AI_FIRST,
 	ST_AIZONE = ST_AI_FIRST, ST_AICONTENT, ST_AIFACTIONS, ST_AIVIS1, ST_AIVIS2,
@@ -931,6 +936,7 @@ extern const int NUM_SITES;
 void OnProbeEnter(int id, CallSiteProbe::U64 a, CallSiteProbe::U64 b, CallSiteProbe::U64 c, CallSiteProbe::U64 d);
 void OnProbeExit(int id, CallSiteProbe::U64 ret, LONGLONG t0, LONGLONG t1);
 extern int g_hooksOk, g_hooksTotal;
+bool InModule(HMODULE module, const void* p, size_t len);
 void InstallOgreHooks(HMODULE ogre, bool* haveRenderOneFrame);
 void InstallParticleHooks(HMODULE ogre);
 bool InstallExeHooks();
