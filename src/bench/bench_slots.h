@@ -19,6 +19,8 @@ struct BenchSlot
 	float     hour;       // game hour at record time, 0..24
 	int       speed;      // game speed for the run: 1 or 20
 	int       scenario;   // registered scenario kind; not stored, so 0 (the lever A/B)
+	char      weather[32];       // bench.<slot>.weather: a pinned leg's default weather, "" for none
+	float     weatherStrength;   // 0..1; negative: the roll's
 };
 
 enum BenchSlotId
@@ -44,9 +46,10 @@ std::string FormatBenchPose(const BenchPose& p);
 // negative; the sign is kept).
 bool ParseBenchPose(const std::string& s, BenchPose* out);
 
-// Startup: true when key is bench.<slot>.pose|hour|speed and val parsed;
-// the value is stored in slots. A pose that fails to parse leaves the slot
-// unrecorded. hour is clamped to 0..24; speed must be 1 or 20.
+// Startup: true when key is bench.<slot>.pose|hour|speed|weather and val
+// parsed; the value is stored in slots. A pose that fails to parse leaves the
+// slot unrecorded. hour is clamped to 0..24; speed must be 1 or 20; weather is
+// <name>[=<strength>] as a leg's pin writes it after its '/', or empty for none.
 bool ParseBenchSlotKey(const std::string& key, const std::string& val, BenchSlot* slots);
 
 // The three bench.<slot>.* entries for one slot, all append=true.

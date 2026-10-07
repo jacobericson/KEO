@@ -15,6 +15,7 @@ struct BenchRunHeader
 	bool        hourEndRead;    // false: not read (a save load), printed "-"
 	float       recordedHour;
 	std::string weather;
+	std::string pin;            // FormatBenchPinSpec of the run's pin, "none" when unpinned
 	int         chars, zones;
 	std::string follow;         // restored, none, lost, off or "-"
 	bool        orderAbort;     // a player order can abort the run

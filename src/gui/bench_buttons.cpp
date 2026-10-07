@@ -56,7 +56,7 @@ static void Run(int slot, int speed)
 		s.speed = speed;
 		SaveSlot(slot);
 	}
-	BenchRunnerArm(slot, speed, -1, std::string(), NULL);
+	BenchRunnerArm(slot, speed, -1, BenchPinNone(), std::string(), NULL);
 }
 
 int BenchButtonPressed(int id, int speed)

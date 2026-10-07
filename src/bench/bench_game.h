@@ -40,9 +40,22 @@ bool  BenchPause();
 // userPause(false)) resume at speed, without unpausing. False when refused.
 bool  BenchSetPausedResumeSpeed(float speed);
 
-// The game hour, recorded only: setting it would move game time (hunger and
-// timers apply the step). Negative when unknown.
+// The speed the pause key resumes at while paused; negative when unknown.
+float BenchGetPausedResumeSpeed();
+
+// The game hour, read here; never written. A pinned leg moves it only forward,
+// through the clock's rate. Negative when unknown.
 float BenchGetHour();
+int   BenchGetDay();                     // the sky's day; negative when unknown
+
+// The clock's rate: one float the sky's per-frame advance multiplies by the
+// game speed. Off (every pinned arm refused) when install did not find its
+// reader or its shipped value.
+bool  BenchClockReady();
+float BenchClockDefaultRate();           // the game's own value, read at install
+float BenchClockRate();                  // the value now
+// Main thread; finite, 0..24. One aligned 4-byte store, read back.
+bool  BenchSetClockRate(float rate);
 
 bool  BenchGetKeyboardCamera();              // InputHandler::controlEnabled
 void  BenchSetKeyboardCamera(bool enabled);
@@ -62,6 +75,19 @@ bool  BenchRestoreFollowTarget(const BenchFollow& f);
 int   BenchPlayerCharacterCount();
 int   BenchLoadedZoneCount();                // zones loading or loaded, mod preloads included
 std::string BenchWeatherText();              // e.g. "dust 0.40 wind 3.1", or "unknown"
+// The camera biome's weather as a pinned leg holds it.
+struct BenchWeatherHold { const void* region; const void* weather; float strength; };
+bool        BenchWeatherSnapshot(BenchWeatherHold* out);   // the active region's, or false
+// Main thread, after the AI join: the active region's current season's weather
+// named `name`, set up through the game's own call unless it is the current one,
+// then `strength` (0..1; negative: keep the roll's) and its end held ahead of
+// the clock. NULL on success, else a reason; *names lists the season's weathers
+// on a "not in this region's season" refusal.
+const char* BenchForceWeather(const char* name, float strength, std::string* names);
+// Main thread, after the AI join: while h is still the active region's weather,
+// keeps its end, and its season's end, ahead of the clock so the region does not
+// roll another. False (nothing written) when h is no longer current.
+bool        BenchWeatherKeep(const BenchWeatherHold& h);
 
 // GetForegroundWindow() belongs to our process. Independent of
 // BenchGameInstall: it reads no game state, so it works before install too.

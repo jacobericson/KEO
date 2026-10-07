@@ -35,6 +35,8 @@ struct GroupText
 };
 GroupText s_groupText[BENCH_GROUP_TEXT_MAX];
 int       s_groupTextCount = 0;
+char      s_groupDropped[BENCH_GROUP_TEXT_MAX][GROUP_NAME_MAX + 1];   // names past the limit
+int       s_groupDroppedCount = 0;
 
 // Progress through the stages: the stage after the last one done, and a
 // stopped stage with the leg it stopped at (stage < 0: none).
@@ -65,9 +67,39 @@ bool GroupNameValid(const std::string& name)
 	return true;
 }
 
-// <slot>:<speed>[:<group>], speed 0, 1 or 20; the group by its form only.
-bool ParseLeg(const std::string& entry, BenchSweepLeg* out)
+bool GroupDropped(const char* name)
 {
+	for (int i = 0; i < s_groupDroppedCount; ++i)
+	{
+		if (strcmp(s_groupDropped[i], name) == 0)
+			return true;
+	}
+	return false;
+}
+
+void ForgetDroppedGroup(const char* name)
+{
+	for (int i = 0; i < s_groupDroppedCount; ++i)
+	{
+		if (strcmp(s_groupDropped[i], name) != 0)
+			continue;
+		for (int j = i; j + 1 < s_groupDroppedCount; ++j)
+			memcpy(s_groupDropped[j], s_groupDropped[j + 1], sizeof(s_groupDropped[j]));
+		--s_groupDroppedCount;
+		return;
+	}
+}
+
+// <slot>:<speed>[:<group>][@<pin>], speed 0, 1 or 20; the group by its form
+// only. *pinWhy: why the pin was refused, else NULL.
+bool ParseLeg(const std::string& full, BenchSweepLeg* out, const char** pinWhy)
+{
+	*pinWhy = NULL;
+	BenchPinSpec pin = BenchPinNone();
+	size_t at = full.find('@');
+	if (at != std::string::npos && !ParseBenchPinSpec(full.substr(at + 1), &pin, pinWhy))
+		return false;
+	std::string entry = full.substr(0, at);
 	size_t colon = entry.find(':');
 	if (colon == std::string::npos)
 		return false;
@@ -89,12 +121,14 @@ bool ParseLeg(const std::string& entry, BenchSweepLeg* out)
 	out->slot = slot;
 	out->speed = atoi(speed.c_str());
 	_snprintf_s(out->group, sizeof(out->group), _TRUNCATE, "%s", group.c_str());
+	out->pin = pin;
 	return true;
 }
 
-// A comma list of legs into out; returns the count kept.
+// A comma list of legs into out; returns the count kept. badWhy, when given,
+// gets one entry per bad one: the pin's refusal, or "".
 int ParseLegList(const std::string& t, BenchSweepLeg* out, std::vector<std::string>* bad,
-                 std::vector<std::string>* pastLimit)
+                 std::vector<std::string>* pastLimit, std::vector<std::string>* badWhy = NULL)
 {
 	int foundCount = 0;
 	size_t pos = 0;
@@ -105,10 +139,13 @@ int ParseLegList(const std::string& t, BenchSweepLeg* out, std::vector<std::stri
 		if (!entry.empty())
 		{
 			BenchSweepLeg leg;
-			if (!ParseLeg(entry, &leg))
+			const char* pinWhy = NULL;
+			if (!ParseLeg(entry, &leg, &pinWhy))
 			{
 				if (bad)
 					bad->push_back(entry);
+				if (badWhy)
+					badWhy->push_back(pinWhy ? pinWhy : "");
 			}
 			else if (foundCount < BENCH_SWEEP_MAX_LEGS)
 				out[foundCount++] = leg;
@@ -186,10 +223,12 @@ std::string ListText(const BenchSweepLeg* legs, int n)
 	std::string out;
 	for (int i = 0; i < n; ++i)
 	{
-		char buf[48];
+		char buf[128];
 		_snprintf_s(buf, sizeof(buf), _TRUNCATE, "%s%s:%d%s%s", i ? "," : "", BenchSlotKey(legs[i].slot), legs[i].speed,
 		            legs[i].group[0] ? ":" : "", legs[i].group);
 		out += buf;
+		if (legs[i].pin.mode != BPM_NONE)
+			out += "@" + FormatBenchPinSpec(legs[i].pin);
 	}
 	return out;
 }
@@ -249,7 +288,7 @@ bool ArmLeg()
 	            s_stageTotal);
 	s_ended = false;
 	std::string why;
-	if (!s_runner.arm(leg.slot, leg.speed, s_runGroup[s_leg], extra, &why))
+	if (!s_runner.arm(leg.slot, leg.speed, s_runGroup[s_leg], leg.pin, extra, &why))
 	{
 		Stop(why.c_str());
 		return false;
@@ -292,11 +331,15 @@ void ParseStageKey(int n, const std::string& key, const std::string& val, void (
 		st.count = 0;
 		return;
 	}
-	std::vector<std::string> bad, extra;
+	std::vector<std::string> bad, extra, badWhy;
 	BenchSweepLeg found[BENCH_SWEEP_MAX_LEGS];
-	int count = ParseLegList(t, found, &bad, &extra);
+	int count = ParseLegList(t, found, &bad, &extra, &badWhy);
 	for (size_t i = 0; i < bad.size(); ++i)
-		FamilyLog(log, "Bench: " + key + " entry '" + bad[i] + "' ignored (a slot:speed[:group] leg is expected, speed 0, 1 or 20)");
+	{
+		std::string pinWhy = i < badWhy.size() && !badWhy[i].empty() ? "; pin: " + badWhy[i] : std::string();
+		FamilyLog(log, "Bench: " + key + " entry '" + bad[i] +
+		               "' ignored (a slot:speed[:group] leg is expected, speed 0, 1 or 20" + pinWhy + ")");
+	}
 	for (size_t i = 0; i < extra.size(); ++i)
 	{
 		char buf[32];
@@ -327,6 +370,7 @@ void ParseGroupKey(const std::string& key, const std::string& name, const std::s
 	}
 	if (t.empty())
 	{
+		ForgetDroppedGroup(name.c_str());
 		if (at >= 0)
 		{
 			for (int i = at; i + 1 < s_groupTextCount; ++i)
@@ -342,10 +386,17 @@ void ParseGroupKey(const std::string& key, const std::string& name, const std::s
 			char buf[32];
 			_snprintf_s(buf, sizeof(buf), _TRUNCATE, "%d", BENCH_GROUP_TEXT_MAX);
 			FamilyLog(log, "Bench: " + key + " ignored (past the " + buf + "-group limit)");
+			if (!GroupDropped(name.c_str()) && s_groupDroppedCount < BENCH_GROUP_TEXT_MAX)
+			{
+				_snprintf_s(s_groupDropped[s_groupDroppedCount], sizeof(s_groupDropped[0]), _TRUNCATE, "%s",
+				            name.c_str());
+				++s_groupDroppedCount;
+			}
 			return;
 		}
 		at = s_groupTextCount++;
 	}
+	ForgetDroppedGroup(name.c_str());
 	_snprintf_s(s_groupText[at].name, sizeof(s_groupText[at].name), _TRUNCATE, "%s", name.c_str());
 	_snprintf_s(s_groupText[at].value, sizeof(s_groupText[at].value), _TRUNCATE, "%s", t.c_str());
 }
@@ -422,6 +473,16 @@ const char* BenchGroupTextName(int i)
 const char* BenchGroupTextValue(int i)
 {
 	return i >= 0 && i < s_groupTextCount ? s_groupText[i].value : "";
+}
+
+int BenchGroupTextDroppedCount()
+{
+	return s_groupDroppedCount;
+}
+
+const char* BenchGroupTextDroppedName(int i)
+{
+	return i >= 0 && i < s_groupDroppedCount ? s_groupDropped[i] : "";
 }
 
 int BenchSweepLegCount()
@@ -501,7 +562,10 @@ bool BenchSweepStart()
 			groups[i] = s_runner.group(legs[i].group, &why);
 		if (groups[i] < 0)
 		{
-			Log("Bench sweep: refused (group '%s' %s)", legs[i].group, why ? why : "unknown");
+			char limit[48] = "";
+			if (GroupDropped(legs[i].group))
+				_snprintf_s(limit, sizeof(limit), _TRUNCATE, " (past the %d-group limit at startup)", BENCH_GROUP_TEXT_MAX);
+			Log("Bench sweep: refused (group '%s' %s%s)", legs[i].group, why ? why : "unknown", limit);
 			return false;
 		}
 	}

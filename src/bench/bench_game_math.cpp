@@ -77,3 +77,9 @@ std::string FormatBenchWeather(const std::string& name, float strength, float wi
 	_snprintf_s(buf, sizeof(buf), _TRUNCATE, " %.2f wind %.1f", strength, wind);
 	return n + buf;
 }
+
+float BenchUnpauseSpeed(float userSpeed, float userNormal, bool userPaused)
+{
+	float s = userPaused ? userNormal : userSpeed;
+	return _finite(s) && s > 0.0f ? s : 1.0f;
+}

@@ -1,4 +1,5 @@
 #include "bench/bench_slots.h"
+#include "bench/bench_pin.h"
 #include <cstdio>
 #include <cmath>
 #include <float.h>
@@ -106,6 +107,19 @@ bool ParseBenchSlotKey(const std::string& key, const std::string& val, BenchSlot
 		if (v != 1 && v != 20)
 			return false;
 		slots[idx].speed = v;
+		return true;
+	}
+	if (field == "weather")
+	{
+		// The same form a leg's pin takes after its '/', read through that parser.
+		BenchPinSpec p;
+		const char* why = NULL;
+		if (val.empty())
+			p = BenchPinNone();
+		else if (val == "-" || !ParseBenchPinSpec("0/" + val, &p, &why))
+			return false;
+		_snprintf_s(slots[idx].weather, sizeof(slots[idx].weather), _TRUNCATE, "%s", p.weather);
+		slots[idx].weatherStrength = p.strength;
 		return true;
 	}
 	return false;

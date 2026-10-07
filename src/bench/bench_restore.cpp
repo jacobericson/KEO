@@ -1,5 +1,6 @@
 #include "bench/bench_restore.h"
 #include "bench/bench_game.h"
+#include "bench/bench_game_math.h"
 #include "base/core.h"
 #include <stdio.h>
 
@@ -51,4 +52,40 @@ void BenchRestoreTick(bool saveLoading)
 	else
 		_snprintf_s(buf, sizeof(buf), _TRUNCATE, "Bench: restored qpc=%lld", (long long)q.QuadPart);
 	LogMsg(buf);
+}
+
+void BenchEndSpeed(BenchSpeedEndKind how, float userSpeed, float userNormal, bool userPaused, bool worldGone,
+                   bool saveLoading, BenchPendingRestore* pend, BenchSpeedEnd* out)
+{
+	BenchSpeedEnd none = { false, false, false, 0.0f, 0.0f, 0.0f };
+	*out = none;
+	float speed = userPaused ? userNormal : userSpeed;
+	if (how == BSE_USER_UNPAUSE)
+	{
+		// Whatever route ended the run's pause (the pause key, the play button,
+		// a speed key), the run ends at the user's speed.
+		out->unpaused = true;
+		out->unpausedAt = BenchGetSpeed();
+		out->pauseKey = BenchGetPausedResumeSpeed();
+		out->set = BenchUnpauseSpeed(userSpeed, userNormal, userPaused);
+		if (!BenchRestoreGateClear(saveLoading) || !BenchSetSpeed(out->set))
+		{
+			pend->speed = true;
+			pend->speedValue = out->set;
+			pend->paused = false;
+		}
+	}
+	else if (how == BSE_USER_CHANGE)
+	{
+		// A pause (the key or a dialogue) saved the run's speed as the one to
+		// resume at; the user's goes back in its place. A speed change stands.
+		out->left = true;
+		out->resumeSet = !(BenchGetSpeed() > 0.0f) && BenchSetPausedResumeSpeed(speed);
+	}
+	else if (worldGone || !BenchRestoreGateClear(saveLoading) || !BenchRestoreSpeed(speed, userPaused))
+	{
+		pend->speed = true;
+		pend->speedValue = speed;
+		pend->paused = userPaused;
+	}
 }

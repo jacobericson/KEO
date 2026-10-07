@@ -9,6 +9,7 @@ enum BenchStepKind
 	BS_ARM,        // wait for menus and loading to clear, then count down
 	BS_SET_POSE,
 	BS_SET_SPEED,
+	BS_PIN,        // move the clock to the leg's hour and set its weather (pinned runs only)
 	BS_SETTLE,     // wait for the world to settle around the pose
 	BS_PAUSE,      // pause the game for the windows (runner-owned)
 	BS_WINDOW,     // apply a settings set, discard, then measure
@@ -72,3 +73,5 @@ const char*          BenchScenarioName(int kind);      // NULL when not register
 BenchStep BenchMakeStep(BenchStepKind kind);
 BenchStep BenchMakeWindow(int set, int pass, const BenchScenarioParams& p);
 int       BenchWindowCount(const BenchScenario& sc);
+// Inserts a kind step right after the first `after` step; nothing when there is none.
+void      BenchInsertStepAfter(BenchScenario* sc, BenchStepKind after, BenchStepKind kind);

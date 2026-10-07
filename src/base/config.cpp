@@ -122,16 +122,32 @@ void LoadConfig(const std::string& dllDir)
 
 	// A key=value line normally fits in one fgets() call; lineNo only advances
 	// when the previous read actually ended the physical line, so a line
-	// longer than the buffer still counts as one line instead of several.
+	// longer than the buffer still counts as one line instead of several. A
+	// read that continues a line is skipped (it would parse as a line of its
+	// own), with one line when it holds more than whitespace.
 	int lineNo = 0;
+	int longLogged = 0;
 	bool atLineStart = true;
 	char lineBuf[512];
 	while (fgets(lineBuf, sizeof(lineBuf), f))
 	{
+		bool continued = !atLineStart;
 		if (atLineStart)
 			++lineNo;
 		size_t rawLen = strlen(lineBuf);
 		atLineStart = (rawLen > 0 && lineBuf[rawLen - 1] == '\n');
+		if (continued)
+		{
+			if (longLogged != lineNo && strspn(lineBuf, " \t\r\n") != rawLen)
+			{
+				char msg[96];
+				_snprintf_s(msg, sizeof(msg), _TRUNCATE,
+				            "Config: line %d is longer than 511 characters, the rest of it is ignored", lineNo);
+				LogMsg(msg);
+				longLogged = lineNo;
+			}
+			continue;
+		}
 
 		std::string key, val;
 		if (!SplitIniLine(std::string(lineBuf), &key, &val))

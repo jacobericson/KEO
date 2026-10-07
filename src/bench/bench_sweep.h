@@ -1,4 +1,5 @@
 #pragma once
+#include "bench/bench_pin.h"
 #include <string>
 #include <vector>
 
@@ -8,19 +9,21 @@
 
 struct BenchSweepLeg
 {
-	int  slot;        // index into g_benchSlots
-	int  speed;       // 0 (paused), 1 or 20
-	char group[16];   // a bench.group name, or "" for the lever A/B
+	int          slot;        // index into g_benchSlots
+	int          speed;       // 0 (paused), 1 or 20
+	char         group[16];   // a bench.group name, or "" for the lever A/B
+	BenchPinSpec pin;         // the leg's hour and weather; mode BPM_NONE when it names none
 };
 
 const int BENCH_SWEEP_MAX_LEGS   = 24;   // per stage
 const int BENCH_SWEEP_MAX_STAGES = 8;
-const int BENCH_GROUP_TEXT_MAX   = 16;   // bench.group keys kept
+const int BENCH_GROUP_TEXT_MAX   = 64;   // bench.group keys kept
 
 // Startup: true when key is bench.sweep; the value, a comma list of
-// <slot>:<speed>[:<group>] (spaces trimmed around each entry), becomes the
-// leg list. An entry with an unknown slot, a speed other than 0, 1 or 20, or a
-// group name not of 1-12 a-z0-9 characters is appended to *bad and dropped; a
+// <slot>:<speed>[:<group>][@<pin>] (spaces trimmed around each entry), becomes
+// the leg list. An entry with an unknown slot, a speed other than 0, 1 or 20, a
+// group name not of 1-12 a-z0-9 characters or a pin ParseBenchPinSpec refuses
+// is appended to *bad and dropped; a
 // valid one past BENCH_SWEEP_MAX_LEGS goes to *pastLimit and is dropped. An
 // empty value selects the default list; so does one with no valid entry,
 // which also sets *usedDefault. Any parse starts the stages over.
@@ -39,6 +42,9 @@ bool ParseBenchSweepFamilyKey(const std::string& key, const std::string& val,
 int         BenchGroupTextCount();
 const char* BenchGroupTextName(int i);
 const char* BenchGroupTextValue(int i);
+// The bench.group names dropped at startup for the group limit, each once.
+int         BenchGroupTextDroppedCount();
+const char* BenchGroupTextDroppedName(int i);
 
 // The next stage's legs: the stopped stage while one waits to resume, else the
 // stage after the last one done.
@@ -50,9 +56,10 @@ std::string   BenchSweepListText();   // "swamp:1,swamp:20,city:0:paused,..."
 struct BenchSweepRunner
 {
 	// Arms one run at speed without changing the slot; group is a resolved
-	// group's index, or -1 for the lever A/B; headerExtra is appended to its
-	// result header. False with the reason when refused.
-	bool (*arm)(int slot, int speed, int group, const std::string& headerExtra, std::string* whyNot);
+	// group's index, or -1 for the lever A/B; pin is the leg's; headerExtra is
+	// appended to its result header. False with the reason when refused.
+	bool (*arm)(int slot, int speed, int group, const BenchPinSpec& pin, const std::string& headerExtra,
+	            std::string* whyNot);
 	bool (*active)();
 	void (*abort)(const char* reason);   // acted on at the runner's next tick
 	// NULL when a run can be armed now; otherwise why not, with *isFinal true

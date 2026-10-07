@@ -1,4 +1,5 @@
 #pragma once
+#include "bench/bench_pin.h"
 #include <string>
 
 // The benchmark run: one at a time, main thread only, stepped from the
@@ -18,10 +19,14 @@ std::string BenchUnavailableReason();  // the install's refusal reason; empty wh
 // Arms a run of the slot at speed (0, 1 or 20); the slot itself is left
 // unchanged. group is a resolved benchmark group, whose scenario the run
 // takes, or -1 for the slot's own; speed 0 needs a group, and its run settles
-// at 1x, then pauses for its windows. headerExtra, when non-empty, is appended
-// to the result header. Refusals are logged and returned in *whyNot; while a
-// run is active it is aborted instead ("button") and false is returned.
-bool BenchRunnerArm(int slot, int speed, int group, const std::string& headerExtra, std::string* whyNot);
+// at 1x, then pauses for its windows. pin, unless BPM_NONE, moves the clock
+// forward to its hour and sets its weather before the settle ("clock pin
+// unavailable" when the clock rate was not found at install). headerExtra,
+// when non-empty, is appended to the result header. Refusals are logged and
+// returned in *whyNot; while a run is active it is aborted instead ("button")
+// and false is returned.
+bool BenchRunnerArm(int slot, int speed, int group, const BenchPinSpec& pin, const std::string& headerExtra,
+                    std::string* whyNot);
 // NULL when BenchRunnerArm could arm now; otherwise why not, with *isFinal
 // true when waiting cannot help (bench unavailable, quit, save load).
 const char* BenchRunnerArmBlocked(bool* isFinal);

@@ -21,3 +21,6 @@ bool BenchCheckAnchor(size_t fnRva, size_t insnOff, const unsigned char* opcode,
 // Weather readout (bench_weather.cpp). False leaves BenchWeatherText at
 // "unknown"; the rest of the facade does not depend on it.
 bool BenchWeatherInstall();
+
+// The sky's total game hours (day * 24 + hour); negative when unknown.
+double BenchGameHoursTotal();

@@ -35,3 +35,8 @@ void BenchPoseDrift(const float targetPos[3], const float targetRot[4], float ta
 // "<name> <strength> wind <speed>", the name with spaces as '_';
 // "none" for an empty name.
 std::string FormatBenchWeather(const std::string& name, float strength, float wind);
+
+// The speed a run ends at when the user unpauses a pause the run made: the
+// speed the user had before the run (the one the pause key resumes at when the
+// user was paused), or 1 when that is not positive.
+float BenchUnpauseSpeed(float userSpeed, float userNormal, bool userPaused);

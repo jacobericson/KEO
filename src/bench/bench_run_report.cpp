@@ -53,6 +53,7 @@ BenchReport BuildBenchRunReport(const BenchScenario& sc, int windows, const Benc
 	            BenchHourText(h.hourStart).c_str(), h.hourEndRead ? BenchHourText(h.hourEnd).c_str() : "-",
 	            h.recordedHour);
 	rep.header = "slot=" + h.slotKey + buf + " weather=" + (h.weather.empty() ? std::string("unknown") : h.weather);
+	rep.header += " pin=" + (h.pin.empty() ? std::string("none") : h.pin);
 	_snprintf_s(buf, sizeof(buf), _TRUNCATE, " chars=%d zones=%d", h.chars, h.zones);
 	rep.header += buf;
 	rep.header += " follow=" + h.follow + (h.orderAbort ? "" : " orderAbort=off");

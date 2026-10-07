@@ -65,3 +65,15 @@ int BenchWindowCount(const BenchScenario& sc)
 	}
 	return n;
 }
+
+void BenchInsertStepAfter(BenchScenario* sc, BenchStepKind after, BenchStepKind kind)
+{
+	for (size_t i = 0; i < sc->steps.size(); ++i)
+	{
+		if (sc->steps[i].kind == after)
+		{
+			sc->steps.insert(sc->steps.begin() + i + 1, BenchMakeStep(kind));
+			return;
+		}
+	}
+}

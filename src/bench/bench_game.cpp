@@ -40,7 +40,9 @@ static_assert(sizeof(Ogre::Quaternion) == 16 && offsetof(Ogre::Quaternion, w) ==
 static_assert(sizeof(Ogre::Vector3) == 12, "Ogre::Vector3 is x, y, z");
 
 // The sky object (RVA_SKY_INSTANCE) and its SkyXController.
+static const size_t SKY_DAY         = 0x08;   // int, raised by the advance when the hour wraps
 static const size_t SKY_CONTROLLER  = 0x20;
+static const size_t SKY_TOTAL_HOURS = 0xA0;   // double, day * 24 + hour, derived every frame
 static const size_t CONTROLLER_HOUR = 0x1C;
 
 // Ogre returns both by value, through a hidden pointer after `this`.
@@ -55,6 +57,8 @@ static unsigned*         s_userPauseGuard = NULL;
 static void* const*      s_optionsWindow  = NULL;
 static const uintptr_t*  s_skyInstance    = NULL;
 static bool              s_followReady    = false;
+static float*            s_clockRate      = NULL;   // NULL: the clock pin is off
+static float             s_clockDefault   = 0.0f;
 
 bool BenchSameAddress(const void* klibAddr, size_t rva, const char* name)
 {
@@ -84,6 +88,29 @@ static bool Fail(std::string* whyNot, const char* reason)
 		*whyNot = reason;
 	LogMsg(std::string("Bench: game facade off (") + reason + ")");
 	return false;
+}
+
+// The clock rate's only reader, the day's increment beside it, and the shipped
+// value (another plugin's patch of the same constant refuses the pin). NULL
+// when the pin can run, else why not.
+static const char* InstallClock()
+{
+	static const unsigned char MULSS_XMM0_RIP[] = { 0xF3, 0x0F, 0x59, 0x05 };
+	static const unsigned char INC_DAY[]        = { 0xFF, 0x47, 0x08 };
+	s_clockRate = NULL;
+	if (!BenchCheckAnchor(RVA_SKY_ADVANCE, OFF_SKY_ADVANCE_RATE_READ, MULSS_XMM0_RIP, sizeof(MULSS_XMM0_RIP),
+	                      RVA_CLOCK_RATE, "clock rate"))
+		return "reader";
+	if (memcmp(GameAddr(RVA_SKY_DAY_INCREMENT), INC_DAY, sizeof(INC_DAY)) != 0)
+		return "day";
+	float* rate = (float*)(gameBase + RVA_CLOCK_RATE);
+	unsigned bits;
+	memcpy(&bits, rate, sizeof(bits));
+	if (bits != CLOCK_RATE_BITS)
+		return "value";
+	s_clockDefault = *rate;
+	s_clockRate = rate;
+	return NULL;
 }
 
 bool BenchGameInstall(std::string* whyNot)
@@ -131,6 +158,9 @@ bool BenchGameInstall(std::string* whyNot)
 
 	if (!BenchWeatherInstall())
 		LogMsg("Bench: weather readout off, runs record weather=unknown");
+	const char* clockWhy = InstallClock();
+	if (clockWhy)
+		LogMsg(std::string("Bench: clock pin off (") + clockWhy + ")");
 	s_followReady = BENCH_COVERED(PlayerInterface::startTrackCharacter, RVA_PI_START_TRACK_CHARACTER) &&
 	                BENCH_COVERED(hand::getRootObject, RVA_HAND_GET_ROOT_OBJECT);
 	if (!s_followReady)
@@ -428,18 +458,88 @@ bool BenchWindowInForeground()
 	return pid == GetCurrentProcessId();
 }
 
-// ---- hour (read only) ----
+// ---- the clock ----
+
+// The sky object, once its controller is the SkyX one; 0 when unknown.
+static uintptr_t Sky(uintptr_t* controller)
+{
+	if (!s_ready)
+		return 0;
+	uintptr_t sky = *s_skyInstance;
+	if (!BenchPlausible((void*)sky))
+		return 0;
+	uintptr_t ctl = *(const uintptr_t*)(sky + SKY_CONTROLLER);
+	if (!BenchPlausible((void*)ctl) || *(const uintptr_t*)ctl != gameBase + RVA_SKYX_CONTROLLER_VTABLE)
+		return 0;
+	if (controller)
+		*controller = ctl;
+	return sky;
+}
 
 float BenchGetHour()
 {
-	if (!s_ready)
-		return -1.0f;
-	uintptr_t sky = *s_skyInstance;
-	if (!BenchPlausible((void*)sky))
-		return -1.0f;
-	uintptr_t ctl = *(const uintptr_t*)(sky + SKY_CONTROLLER);
-	if (!BenchPlausible((void*)ctl) || *(const uintptr_t*)ctl != gameBase + RVA_SKYX_CONTROLLER_VTABLE)
+	uintptr_t ctl = 0;
+	if (!Sky(&ctl))
 		return -1.0f;
 	float h = *(const float*)(ctl + CONTROLLER_HOUR);
 	return _finite(h) && h >= 0.0f && h <= 24.0f ? h : -1.0f;
+}
+
+int BenchGetDay()
+{
+	uintptr_t sky = Sky(NULL);
+	if (!sky)
+		return -1;
+	int d = *(const int*)(sky + SKY_DAY);
+	return d >= 0 ? d : -1;
+}
+
+double BenchGameHoursTotal()
+{
+	uintptr_t sky = Sky(NULL);
+	if (!sky)
+		return -1.0;
+	double t = *(const double*)(sky + SKY_TOTAL_HOURS);
+	return _finite(t) && t >= 0.0 ? t : -1.0;
+}
+
+float BenchGetPausedResumeSpeed()
+{
+	if (!s_ready || !(*s_userPauseGuard & 1))
+		return -1.0f;
+	float s = *s_userPauseSpeed;
+	return _finite(s) ? s : -1.0f;
+}
+
+bool BenchClockReady()
+{
+	return s_ready && s_clockRate != NULL;
+}
+
+float BenchClockDefaultRate()
+{
+	return s_clockDefault;
+}
+
+float BenchClockRate()
+{
+	return BenchClockReady() ? *(volatile const float*)s_clockRate : s_clockDefault;
+}
+
+bool BenchSetClockRate(float rate)
+{
+	if (!BenchClockReady() || !IsMainThread() || !_finite(rate) || rate < 0.0f || rate > 24.0f)
+		return false;
+	if (*(volatile const float*)s_clockRate == rate)
+		return true;
+	DWORD old = 0;
+	if (!VirtualProtect(s_clockRate, sizeof(float), PAGE_READWRITE, &old))
+		return false;
+	// One aligned four-byte store; the only reader runs on this thread.
+	LONG bits;
+	memcpy(&bits, &rate, sizeof(bits));
+	InterlockedExchange((volatile LONG*)s_clockRate, bits);
+	DWORD ignored = 0;
+	VirtualProtect(s_clockRate, sizeof(float), old, &ignored);
+	return *(volatile const float*)s_clockRate == rate;
 }

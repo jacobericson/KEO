@@ -295,6 +295,7 @@ struct StubRunner
 	bool                     active;
 	int                      arms;
 	int                      lastSlot, lastSpeed, lastGroup;
+	BenchPinSpec             lastPin;
 	std::string              lastExtra;
 	const char*              refuse;        // the next arm's refusal, or NULL
 	const char*              blocked;       // armBlocked's answer
@@ -304,7 +305,7 @@ struct StubRunner
 };
 static StubRunner g_sr;
 
-static bool StubArm(int slot, int speed, int group, const std::string& extra, std::string* why)
+static bool StubArm(int slot, int speed, int group, const BenchPinSpec& pin, const std::string& extra, std::string* why)
 {
 	if (g_sr.refuse)
 	{
@@ -317,6 +318,7 @@ static bool StubArm(int slot, int speed, int group, const std::string& extra, st
 	g_sr.lastSpeed = speed;
 	g_sr.lastGroup = group;
 	g_sr.lastExtra = extra;
+	g_sr.lastPin = pin;
 	return true;
 }
 static bool StubActive() { return g_sr.active; }
@@ -342,6 +344,7 @@ static void ResetStub()
 	g_sr.arms = 0;
 	g_sr.lastSlot = g_sr.lastSpeed = g_sr.lastGroup = -1;
 	g_sr.lastExtra.clear();
+	g_sr.lastPin = BenchPinNone();
 	g_sr.refuse = NULL;
 	g_sr.blocked = NULL;
 	g_sr.blockedFinal = false;
@@ -782,7 +785,7 @@ static void BenchRunReportTests()
 	h.banner = "render=3/3 gate=ok bench=ok";
 	h.qpcFreq = 10000000;
 	BenchReport rep = BuildBenchRunReport(sc, 2, h, "swamp-x", "save load (window 1)");
-	Check(rep.header == "slot=swamp speed=20 hour=12.50->- recordedHour=13.00 weather=unknown chars=5 zones=31 "
+	Check(rep.header == "slot=swamp speed=20 hour=12.50->- recordedHour=13.00 weather=unknown pin=none chars=5 zones=31 "
 	                    "follow=none orderAbort=off dropped=0 render=3/3 gate=ok bench=ok qpcFreq=10000000 " + sc.headerExtra &&
 	      sc.headerExtra.find("levers=reflectionHalfRate,particleOffscreenSkip,particleStepCap,") == 0,
 	      "run report header: save load, order abort off");
@@ -894,7 +897,7 @@ static void BenchSecondScenarioTests()
 	h.qpcFreq = 100;
 	std::vector<std::string> lines = FormatBenchReport(BuildBenchRunReport(sc, 2, h, "custom-x", "ok"));
 	Check(lines.size() == 6, "second scenario: header, 2 sets, 2 windows, end");
-	Check(lines[0] == "Bench result custom-x: slot=custom speed=1 hour=6.00->6.00 recordedHour=6.00 weather=unknown "
+	Check(lines[0] == "Bench result custom-x: slot=custom speed=1 hour=6.00->6.00 recordedHour=6.00 weather=unknown pin=none "
 	                  "chars=1 zones=9 follow=none counted=yes bench=ok qpcFreq=100", "second scenario: header fields");
 	Check(lines[3] == "Bench window 0 a pass1: frames=0 mean=0.00ms low1=0.00ms count=2" &&
 	      lines[4] == "Bench window 1 b pass1: frames=0 mean=0.00ms low1=0.00ms count=3",
@@ -997,6 +1000,104 @@ static void BenchSweepStageTests()
 		g_benchSlots[i].recorded = false;
 }
 
+static void BenchPinSweepTests()
+{
+	BenchSweepRunner runner = { &StubArm, &StubActive, &StubAbort, &StubBlocked, &StubLog, &StubGroup };
+	BenchSweepSetRunner(runner);
+	for (int i = 0; i < BENCH_SLOT_COUNT; ++i)
+		g_benchSlots[i].recorded = true;
+	std::vector<std::string> bad, extra;
+	bool def = false;
+
+	ResetStub();
+	SetStage("bench.sweep.1", "city:1:a@22.5f/Sand_stream_ambient=0.70, road:20, sand:20:b@rec/-");
+	Check(BenchSweepLegCount() == 3 && BenchSweepLegAt(0).pin.mode == BPM_FREEZE &&
+	      std::fabs(BenchSweepLegAt(0).pin.hour - 22.5f) < 1e-4f &&
+	      strcmp(BenchSweepLegAt(0).pin.weather, "Sand_stream_ambient") == 0 &&
+	      BenchSweepLegAt(2).pin.rec && BenchSweepLegAt(2).pin.noWeather && strcmp(BenchSweepLegAt(2).group, "b") == 0,
+	      "sweep: a leg's pin is kept with the leg");
+	Check(BenchSweepListText() == "city:1:a@22.50f/Sand_stream_ambient=0.70,road:20,sand:20:b@recr/-",
+	      "sweep: the list text carries the pin");
+	Check(BenchSweepStart() && g_sr.lastPin.mode == BPM_FREEZE && std::fabs(g_sr.lastPin.hour - 22.5f) < 1e-4f &&
+	      std::fabs(g_sr.lastPin.strength - 0.7f) < 1e-4f, "sweep: a leg's pin is kept with the leg");
+	StubEnd(true, "ok");
+	BenchSweepMainThreadTick(1.0);
+	Check(g_sr.arms == 2 && g_sr.lastSlot == BENCH_SLOT_ROAD && g_sr.lastPin.mode == BPM_NONE,
+	      "sweep: a leg without a pin arms with none");
+	StubEnd(false, "button");
+	BenchSweepMainThreadTick(2.0);
+
+	ResetStub();
+	SetStage("bench.sweep.1", "city:1@25,road:1@12q,swamp:1@12/a b,sand:1@6r/fog_islands");
+	Check(BenchSweepLegCount() == 1 && BenchSweepLegAt(0).slot == BENCH_SLOT_SAND &&
+	      BenchSweepLegAt(0).pin.mode == BPM_RUN,
+	      "sweep: a leg with a bad pin is dropped with a line");
+	Check(g_sr.lines.size() == 3 &&
+	      g_sr.lines[0] == "Bench: bench.sweep.1 entry 'city:1@25' ignored (a slot:speed[:group] leg is expected, "
+	                       "speed 0, 1 or 20; pin: the hour is past 24)" &&
+	      g_sr.lines[1].find("'road:1@12q'") != std::string::npos && g_sr.lines[1].find("; pin: ") != std::string::npos,
+	      "sweep: a leg with a bad pin is dropped with a line");
+	bad.clear();
+	Check(ParseBenchSweepKey("bench.sweep", "city:1@x,road:20@6", &bad, &extra, &def) && bad.size() == 1 &&
+	      bad[0] == "city:1@x" && BenchSweepLegCount() == 1, "sweep: a leg with a bad pin is dropped with a line");
+	ParseBenchSweepKey("bench.sweep", "", &bad, &extra, &def);
+
+	// More group keys than the limit: the one past it is named, and a stage naming it says why.
+	ResetStub();
+	for (int i = 0; i <= BENCH_GROUP_TEXT_MAX; ++i)
+	{
+		char name[16];
+		sprintf_s(name, sizeof(name), "q%d", i);
+		ParseBenchSweepFamilyKey(std::string("bench.group.") + name, "each/1/3+25:reflectionHalfRate=true", &StubLog);
+	}
+	Check(BENCH_GROUP_TEXT_MAX == 64 && BenchGroupTextCount() == 64 && g_sr.lines.size() == 1 &&
+	      g_sr.lines[0] == "Bench: bench.group.q64 ignored (past the 64-group limit)" &&
+	      BenchGroupTextDroppedCount() == 1 && strcmp(BenchGroupTextDroppedName(0), "q64") == 0,
+	      "sweep: a group key past the limit is named in one line");
+	ParseBenchSweepFamilyKey("bench.group.q64", "each/1/3+25:particleStepCap=true", &StubLog);
+	Check(BenchGroupTextDroppedCount() == 1, "sweep: a group key past the limit is named in one line");
+	SetStage("bench.sweep.1", "city:1:q64");
+	ResetStub();
+	Check(!BenchSweepStart() && g_sr.arms == 0 &&
+	      LastLine("Bench sweep: refused (group 'q64' unknown (past the 64-group limit at startup))"),
+	      "sweep: the refusal says a group was past the limit");
+	SetStage("bench.sweep.1", "city:1:zz");
+	ResetStub();
+	Check(!BenchSweepStart() && LastLine("Bench sweep: refused (group 'zz' unknown)"),
+	      "sweep: the refusal says a group was past the limit");
+	ParseBenchSweepFamilyKey("bench.group.q0", "", &StubLog);
+	ParseBenchSweepFamilyKey("bench.group.q64", "each/1/3+25:reflectionHalfRate=true", &StubLog);
+	Check(BenchGroupTextCount() == 64 && BenchGroupTextDroppedCount() == 0,
+	      "sweep: a later accepted group is no longer reported past the limit");
+	ParseBenchSweepFamilyKey("bench.group.q65", "each/1/3+25:reflectionHalfRate=true", &StubLog);
+	Check(BenchGroupTextDroppedCount() == 1,
+	      "sweep: a new overflowing group is recorded after a recovered one");
+	ParseBenchSweepFamilyKey("bench.group.q65", "", &StubLog);
+	Check(BenchGroupTextDroppedCount() == 0,
+	      "sweep: an explicitly cleared group is no longer reported past the limit");
+	while (BenchGroupTextCount() > 0)
+		ParseBenchSweepFamilyKey(std::string("bench.group.") + BenchGroupTextName(0), "", &StubLog);
+	SetStage("bench.sweep.1", "");
+	for (int i = 0; i < BENCH_SLOT_COUNT; ++i)
+		g_benchSlots[i].recorded = false;
+
+	const char* slot = "slot: bench.<slot>.weather parses";
+	BenchSlot slots[BENCH_SLOT_COUNT];
+	memset(slots, 0, sizeof(slots));
+	Check(ParseBenchSlotKey("bench.city.weather", "Sand_stream_ambient=0.70", slots) &&
+	      strcmp(slots[1].weather, "Sand_stream_ambient") == 0 && std::fabs(slots[1].weatherStrength - 0.7f) < 1e-4f,
+	      slot);
+	Check(ParseBenchSlotKey("bench.road.weather", "fog_islands", slots) && strcmp(slots[2].weather, "fog_islands") == 0 &&
+	      slots[2].weatherStrength < 0.0f, slot);
+	Check(!ParseBenchSlotKey("bench.road.weather", "a b", slots) && !ParseBenchSlotKey("bench.road.weather", "x=2", slots) &&
+	      !ParseBenchSlotKey("bench.road.weather", "-", slots) && strcmp(slots[2].weather, "fog_islands") == 0, slot);
+	Check(ParseBenchSlotKey("bench.road.weather", "", slots) && slots[2].weather[0] == 0, slot);
+
+	const char* unpause = "unpause: a bench pause ended by the user resumes at the user's speed";
+	Check(BenchUnpauseSpeed(5.0f, 3.0f, false) == 5.0f && BenchUnpauseSpeed(0.0f, 3.0f, true) == 3.0f, unpause);
+	Check(BenchUnpauseSpeed(0.0f, 0.0f, false) == 1.0f && BenchUnpauseSpeed(-2.0f, 3.0f, false) == 1.0f, unpause);
+}
+
 int main()
 {
 	BenchSlotTests();
@@ -1006,6 +1107,7 @@ int main()
 	BenchSweepKeyTests();
 	BenchSweepSequencerTests();
 	BenchSweepStageTests();
+	BenchPinSweepTests();
 	BenchStatsTests();
 	BenchReportTests();
 	BenchGameMathTests();

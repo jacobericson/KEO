@@ -470,6 +470,30 @@ static void DevOnlyTests()
 	ClearGroups();
 }
 
+static void CapTests()
+{
+	ResetRunning();
+	ClearGroups();
+	for (int i = 0; i < BENCH_GROUP_TEXT_MAX; ++i)
+	{
+		std::ostringstream name;
+		name << "g" << i;
+		SetGroup(name.str(), "each/1/3+25:reflectionHalfRate=true");
+	}
+	g_lines.clear();
+	BenchGroupsResolve(&TestLog);
+	Check(BENCH_GROUP_TEXT_MAX == 64 && BenchGroupCount() == 64 && BenchGroupFind("g0", NULL) == 0 &&
+	      BenchGroupFind("g63", NULL) == 63 && !HasLineWith("not resolved"), "group: 64 groups resolve");
+
+	SetGroup("g64", "each/1/3+25:reflectionHalfRate=true");
+	g_lines.clear();
+	BenchGroupsResolve(&TestLog);
+	Check(BenchGroupCount() == 64 && BenchGroupFind("g64", NULL) == -1 &&
+	      HasLine("Bench: group g64 not resolved (past the 64-group limit)"),
+	      "group: a group past the limit is named where the groups resolve");
+	ClearGroups();
+}
+
 int main()
 {
 	ParseTests();
@@ -479,5 +503,6 @@ int main()
 	ApplyTests();
 	BuildTests();
 	DevOnlyTests();
+	CapTests();
 	return CheckExit(SUITE_NAME);
 }

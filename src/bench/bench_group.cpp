@@ -287,7 +287,11 @@ static std::string GroupRefuses(const Group& g, const ConfigKey* k, const unsign
 	if (g.leverCount >= BENCH_GROUP_LEVERS)
 		return "(past 16)";
 	if (HeldIndex(k) < 0 && s_heldCount >= BENCH_GROUP_HELD)
-		return "(past 32 held keys)";
+	{
+		std::ostringstream ss;
+		ss << "(past " << BENCH_GROUP_HELD << " held keys)";
+		return ss.str();
+	}
 	return "";
 }
 
@@ -560,6 +564,13 @@ void BenchGroupsResolve(ConfigLogFn log)
 	}
 	for (int g = 0; g < s_groupCount; ++g)
 		LogGroupLine(s_groups[g]);
+	for (int i = 0; i < BenchGroupTextDroppedCount(); ++i)
+	{
+		std::ostringstream ss;
+		ss << "Bench: group " << BenchGroupTextDroppedName(i) << " not resolved (past the " << BENCH_GROUP_TEXT_MAX
+		   << "-group limit)";
+		Log(ss.str());
+	}
 }
 
 int BenchGroupCount()

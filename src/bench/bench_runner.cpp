@@ -2,6 +2,7 @@
 #include "bench/bench_game.h"
 #include "bench/bench_game_math.h"
 #include "bench/bench_group.h"
+#include "bench/bench_pin.h"
 #include "bench/bench_recorders.h"
 #include "bench/bench_report.h"
 #include "bench/bench_restore.h"
@@ -39,6 +40,9 @@ struct Run
 	bool          stepEntered;
 	double        stepStart;
 	std::string   abortReason;   // set outside the tick, acted on by it
+	BenchPinSpec  pin;           // as resolved at arm; mode BPM_NONE when unpinned
+	std::string   pinText;       // the header's pin=
+	double        posedAt;
 
 	// The user's state, taken when the countdown ends.
 	bool         snapped;
@@ -109,6 +113,9 @@ void ResetRun(Run& r)
 	r.stepEntered = false;
 	r.stepStart = 0.0;
 	r.abortReason.clear();
+	r.pin = BenchPinNone();
+	r.pinText = "none";
+	r.posedAt = 0.0;
 	r.snapped = false;
 	r.userSpeed = r.userNormalSpeed = 1.0f;
 	r.userPaused = false;
@@ -145,6 +152,7 @@ void WriteReport(const Run& r, const std::string& endReason, bool worldGone, con
 	h.hourEnd = worldGone ? -1.0f : BenchGetHour();
 	h.recordedHour = r.target.hour;
 	h.weather = r.weather;
+	h.pin = r.pinText;
 	h.chars = r.chars;
 	h.zones = r.zones;
 	h.follow = follow;
@@ -160,9 +168,11 @@ void WriteReport(const Run& r, const std::string& endReason, bool worldGone, con
 // Every end goes through here: restore what the run changed, log, report.
 // After a save load the world is a new one: the scenario's settings are
 // put back at once, the speed and keyboard-camera flag once the load is over,
-// and the pose and follow not at all.
+// and the pose and follow not at all. The clock's rate goes back first, at
+// once whatever the end: it is not world state.
 void EndRun(EndKind kind, const std::string& reason)
 {
+	BenchPinRelease();
 	Run& r = *s_run;
 	bool worldGone = kind == END_SAVE_LOAD;
 
@@ -207,24 +217,10 @@ void EndRun(EndKind kind, const std::string& reason)
 		}
 	}
 
-	bool speedLeft = false, resumeSet = false;
+	BenchSpeedEnd se = { false, false, false, 0.0f, 0.0f, 0.0f };
 	if (r.speedSet)
-	{
-		float speed = r.userPaused ? r.userNormalSpeed : r.userSpeed;
-		if (kind == END_USER_SPEED)
-		{
-			// A pause (the key or a dialogue) saved the run's speed as the one to
-			// resume at; the user's goes back in its place. A speed change stands.
-			speedLeft = true;
-			resumeSet = !(BenchGetSpeed() > 0.0f) && BenchSetPausedResumeSpeed(speed);
-		}
-		else if (worldGone || !BenchRestoreGateClear(s_saveLoading) || !BenchRestoreSpeed(speed, r.userPaused))
-		{
-			pend.speed = true;
-			pend.speedValue = speed;
-			pend.paused = r.userPaused;
-		}
-	}
+		BenchEndSpeed(kind != END_USER_SPEED ? BSE_RESTORE : reason == "unpaused" ? BSE_USER_UNPAUSE : BSE_USER_CHANGE,
+		              r.userSpeed, r.userNormalSpeed, r.userPaused, worldGone, s_saveLoading, &pend, &se);
 	bool pending = pend.kbd || pend.speed;
 	if (pending)
 		BenchRestoreQueue(pend);
@@ -250,9 +246,12 @@ void EndRun(EndKind kind, const std::string& reason)
 		WriteReport(r, endReason, worldGone, follow);
 	}
 
-	if (resumeSet)
+	if (se.unpaused)
+		Logf("Bench: unpaused at %.2f (the pause key resumes at %.2f), speed set to the user's %.2f qpc=%lld",
+		     se.unpausedAt, se.pauseKey, se.set, Qpc());
+	else if (se.resumeSet)
 		Logf("Bench: speed left paused, resumes at %.2f qpc=%lld", r.userPaused ? r.userNormalSpeed : r.userSpeed, Qpc());
-	else if (speedLeft)
+	else if (se.left)
 		Logf("Bench: speed left at the user's choice (%.2f) qpc=%lld", BenchGetSpeed(), Qpc());
 	if (pending)
 		Logf("Bench: restore pending (%s) qpc=%lld",
@@ -305,13 +304,13 @@ bool KeepPose(Run& r, BenchFrameSample* sample)
 
 // ---- steps ----
 
-// A speed other than the run's is the user's own change (or a pause): the
-// run ends and leaves it. False when the run ended here.
+// A speed other than the run's is the user's own change, a pause, or the end
+// of a pause the run made ("unpaused"): the run ends. False when it ended here.
 bool KeepSpeed(Run& r)
 {
 	if (SpeedIs(r.holdSpeed))
 		return true;
-	EndRun(END_USER_SPEED, BenchGetSpeed() > 0.0f ? "speed changed" : "paused");
+	EndRun(END_USER_SPEED, !(BenchGetSpeed() > 0.0f) ? "paused" : r.holdSpeed == 0.0f ? "unpaused" : "speed changed");
 	return false;
 }
 
@@ -383,7 +382,8 @@ void TickSetPose(Run& r)
 		return;
 	}
 	r.posed = true;
-	r.nextReachCheck = ElapsedSec() + REACH_CHECK_SEC;
+	r.posedAt = ElapsedSec();
+	r.nextReachCheck = r.posedAt + REACH_CHECK_SEC;
 	Logf("Bench: posed nearest=%.0f qpc=%lld", d, Qpc());
 	Next(r);
 }
@@ -409,6 +409,27 @@ void TickSetSpeed(Run& r)
 	}
 	if (t - r.stepStart > SPEED_LIMIT_SEC)
 		EndRun(END_ABORT, "speed change blocked");
+}
+
+// The leg's hour and weather, at the run's speed and before the settle; a
+// user pause or speed change ends the run at once.
+void TickPin(Run& r)
+{
+	double t = ElapsedSec();
+	if (!r.stepEntered)
+	{
+		r.stepEntered = true;
+		BenchPinBegin(r.pin, r.holdSpeed, t);   // when refused, the step ends the run
+		r.pinText = BenchPinHeaderText();
+	}
+	if (!KeepSpeed(r))
+		return;
+	std::string why;
+	int done = BenchPinStep(t, r.posedAt, &why);
+	if (done > 0)
+		Next(r);
+	else if (done < 0)
+		EndRun(why.compare(0, 8, "weather ") == 0 || why == "no weather" ? END_REFUSE : END_ABORT, why);
 }
 
 // The speed was set running, so the end's restore unpauses to the user's; the
@@ -529,21 +550,9 @@ void TickWindow(Run& r, const BenchStep& step, const BenchFrameSample& f)
 		}
 		r.windowOpen = false;
 		r.measuring = false;
-		Logf("Bench: window %d %s pass%d end qpc=%lld%s", r.window, setName, step.pass + 1, Qpc(), fields.c_str());
+		Logf("Bench: window %d %s pass%d end qpc=%lld%s hour=%s", r.window, setName, step.pass + 1, Qpc(),
+		     fields.c_str(), BenchHourText(BenchGetHour()).c_str());
 		Next(r);
-	}
-}
-
-// A paused run's pause step goes right after its settle.
-void InsertPause(BenchScenario* sc)
-{
-	for (size_t i = 0; i < sc->steps.size(); ++i)
-	{
-		if (sc->steps[i].kind == BS_SETTLE)
-		{
-			sc->steps.insert(sc->steps.begin() + i + 1, BenchMakeStep(BS_PAUSE));
-			return;
-		}
 	}
 }
 
@@ -634,7 +643,8 @@ const char* BenchRunnerArmBlocked(bool* isFinal)
 	return NULL;
 }
 
-bool BenchRunnerArm(int slot, int speed, int group, const std::string& headerExtra, std::string* whyNot)
+bool BenchRunnerArm(int slot, int speed, int group, const BenchPinSpec& pin, const std::string& headerExtra,
+                    std::string* whyNot)
 {
 	if (!IsMainThread())
 		return false;
@@ -672,6 +682,8 @@ bool BenchRunnerArm(int slot, int speed, int group, const std::string& headerExt
 		why = "no such scenario";
 	else if (!build(params, &r.sc, &why))
 		why = why ? why : "scenario refused";
+	if (!why && pin.mode != BPM_NONE && !BenchClockReady())
+		why = "clock pin unavailable";
 	if (!why && !(why = StartGate(&isFinal)))
 	{
 		float d = BenchNearestPlayerDistance(g_benchSlots[slot].pose.pos);
@@ -679,7 +691,13 @@ bool BenchRunnerArm(int slot, int speed, int group, const std::string& headerExt
 			why = "no player character within reach";
 	}
 	if (!why && speed == 0)
-		InsertPause(&r.sc);
+		BenchInsertStepAfter(&r.sc, BS_SETTLE, BS_PAUSE);
+	if (!why && pin.mode != BPM_NONE)
+	{
+		BenchPinResolve(pin, g_benchSlots[slot].hour, g_benchSlots[slot].weather, g_benchSlots[slot].weatherStrength, &r.pin);
+		r.pinText = FormatBenchPinSpec(r.pin);
+		BenchInsertStepAfter(&r.sc, BS_SET_SPEED, BS_PIN);
+	}
 	if (why)
 	{
 		Logf("Bench: refused %s qpc=%lld", why, Qpc());
@@ -711,13 +729,15 @@ void BenchMainThreadTick(bool saveLoading)
 	double frameMs = s_lastTick ? (double)(now - s_lastTick) * 1000.0 / (double)qpcFrequency.QuadPart : 0.0;
 	s_lastTick = now;
 
-	// At quit the world is being torn down: drop everything, call nothing.
+	// At quit the world is being torn down: drop everything, call nothing in
+	// the game; the clock's rate, process memory, goes back.
 	if (g_navMeshStopSeen)
 	{
 		bool wasActive = BenchRunnerActive();
 		if (!s_quitSeen && (wasActive || BenchRestorePending()))
 			Logf("Bench: run dropped at quit qpc=%lld", now);
 		s_quitSeen = true;
+		BenchPinRelease();
 		BenchRestoreDrop();
 		if (s_run)
 			s_run->active = false;
@@ -727,6 +747,7 @@ void BenchMainThreadTick(bool saveLoading)
 	}
 
 	BenchRestoreTick(saveLoading);
+	BenchPinIdleTick();
 	if (!BenchRunnerActive())
 		return;
 
@@ -757,11 +778,18 @@ void BenchMainThreadTick(bool saveLoading)
 		return;
 
 	const BenchStep& step = r.sc.steps[r.step];
+	const char* pinLost = step.kind >= BS_SETTLE && step.kind <= BS_WINDOW ? BenchPinHoldLost() : NULL;
+	if (pinLost)
+	{
+		EndRun(END_ABORT, std::string("pin lost (") + pinLost + ")");
+		return;
+	}
 	switch (step.kind)
 	{
 	case BS_ARM:      TickArm(r); break;
 	case BS_SET_POSE: TickSetPose(r); break;
 	case BS_SET_SPEED: TickSetSpeed(r); break;
+	case BS_PIN:      TickPin(r); break;
 	case BS_SETTLE:   TickSettle(r, f); break;
 	case BS_PAUSE:    TickPause(r); break;
 	case BS_WINDOW:   TickWindow(r, step, f); break;
