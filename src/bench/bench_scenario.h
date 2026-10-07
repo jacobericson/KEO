@@ -10,6 +10,7 @@ enum BenchStepKind
 	BS_SET_POSE,
 	BS_SET_SPEED,
 	BS_SETTLE,     // wait for the world to settle around the pose
+	BS_PAUSE,      // pause the game for the windows (runner-owned)
 	BS_WINDOW,     // apply a settings set, discard, then measure
 	BS_RESTORE
 };

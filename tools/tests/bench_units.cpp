@@ -294,7 +294,7 @@ struct StubRunner
 {
 	bool                     active;
 	int                      arms;
-	int                      lastSlot, lastSpeed;
+	int                      lastSlot, lastSpeed, lastGroup;
 	std::string              lastExtra;
 	const char*              refuse;        // the next arm's refusal, or NULL
 	const char*              blocked;       // armBlocked's answer
@@ -304,7 +304,7 @@ struct StubRunner
 };
 static StubRunner g_sr;
 
-static bool StubArm(int slot, int speed, const std::string& extra, std::string* why)
+static bool StubArm(int slot, int speed, int group, const std::string& extra, std::string* why)
 {
 	if (g_sr.refuse)
 	{
@@ -315,6 +315,7 @@ static bool StubArm(int slot, int speed, const std::string& extra, std::string* 
 	g_sr.active = true;
 	g_sr.lastSlot = slot;
 	g_sr.lastSpeed = speed;
+	g_sr.lastGroup = group;
 	g_sr.lastExtra = extra;
 	return true;
 }
@@ -322,18 +323,34 @@ static bool StubActive() { return g_sr.active; }
 static void StubAbort(const char* reason) { g_sr.aborted = reason; }
 static const char* StubBlocked(bool* isFinal) { *isFinal = g_sr.blockedFinal; return g_sr.blocked; }
 static void StubLog(const std::string& line) { g_sr.lines.push_back(line); }
+// Groups a, b and c resolve to 0, 1 and 2; e is empty; any other is unknown.
+static int StubGroup(const char* name, const char** why)
+{
+	static const char* const kNames[] = { "a", "b", "c" };
+	for (int i = 0; i < 3; ++i)
+	{
+		if (strcmp(name, kNames[i]) == 0)
+			return i;
+	}
+	*why = strcmp(name, "e") == 0 ? "empty" : "unknown";
+	return -1;
+}
 
 static void ResetStub()
 {
 	g_sr.active = false;
 	g_sr.arms = 0;
-	g_sr.lastSlot = g_sr.lastSpeed = -1;
+	g_sr.lastSlot = g_sr.lastSpeed = g_sr.lastGroup = -1;
 	g_sr.lastExtra.clear();
 	g_sr.refuse = NULL;
 	g_sr.blocked = NULL;
 	g_sr.blockedFinal = false;
 	g_sr.aborted.clear();
 	g_sr.lines.clear();
+	// Any parse starts the stages over, so each case starts at stage 1, leg 1.
+	std::vector<std::string> bad, extra;
+	bool def = false;
+	ParseBenchSweepKey("bench.sweep", "", &bad, &extra, &def);
 }
 
 // What the runner does at a run's end: goes idle, then calls back.
@@ -350,7 +367,7 @@ static bool LastLine(const char* text)
 
 static void BenchSweepSequencerTests()
 {
-	BenchSweepRunner runner = { &StubArm, &StubActive, &StubAbort, &StubBlocked, &StubLog };
+	BenchSweepRunner runner = { &StubArm, &StubActive, &StubAbort, &StubBlocked, &StubLog, &StubGroup };
 	BenchSweepSetRunner(runner);
 	std::vector<std::string> bad, extra;
 	bool def = false;
@@ -370,7 +387,7 @@ static void BenchSweepSequencerTests()
 	g_benchSlots[1].speed = 1;
 	ResetStub();
 	Check(BenchSweepStart() && BenchSweepActive() && g_sr.arms == 1, "start arms the first leg");
-	Check(g_sr.lastSlot == 0 && g_sr.lastSpeed == 1 && g_sr.lastExtra == "sweep=1/6", "leg 1: swamp 1x, tagged 1/6");
+	Check(g_sr.lastSlot == 0 && g_sr.lastSpeed == 1 && g_sr.lastExtra == "sweep=1/6 stage=1/1", "leg 1: swamp 1x, tagged 1/6");
 	Check(BenchSweepLegNumber() == 1 && BenchSweepLegTotal() == 6, "progress 1/6");
 	Check(!BenchSweepStart() && LastLine("Bench sweep: refused (a run is active)"), "a second start is refused");
 
@@ -384,8 +401,8 @@ static void BenchSweepSequencerTests()
 		StubEnd(true, "ok");
 		BenchSweepMainThreadTick(now);
 		now += 1.0;
-		char tag[16];
-		sprintf_s(tag, sizeof(tag), "sweep=%d/6", leg + 1);
+		char tag[32];
+		sprintf_s(tag, sizeof(tag), "sweep=%d/6 stage=1/1", leg + 1);
 		Check(g_sr.arms == leg + 1 && g_sr.lastSlot == kSlot[leg] && g_sr.lastSpeed == kSpeed[leg] && g_sr.lastExtra == tag,
 		      "ok end: the next leg armed at its slot and speed");
 		Check(BenchSweepLegNumber() == leg + 1, "progress follows the legs");
@@ -393,7 +410,7 @@ static void BenchSweepSequencerTests()
 	Check(g_benchSlots[1].speed == 1, "a leg's speed never changes the slot's");
 	StubEnd(true, "ok");
 	BenchSweepMainThreadTick(now);
-	Check(!BenchSweepActive() && g_sr.arms == 6 && LastLine("Bench sweep: done 6 legs"), "the last ok end completes the sweep");
+	Check(!BenchSweepActive() && g_sr.arms == 6 && LastLine("Bench sweep: done 1 stages"), "the last ok end completes the sweep");
 	Check(BenchSweepLegNumber() == 0 && BenchSweepLegTotal() == 0, "idle after the sweep");
 
 	// Any other end stops the sweep with the run's reason.
@@ -403,14 +420,14 @@ static void BenchSweepSequencerTests()
 	BenchSweepMainThreadTick(10.0);
 	StubEnd(false, "player order");
 	BenchSweepMainThreadTick(11.0);
-	Check(!BenchSweepActive() && g_sr.arms == 2 && LastLine("Bench sweep: stopped at 2/6 (player order)"),
+	Check(!BenchSweepActive() && g_sr.arms == 2 && LastLine("Bench sweep: stopped at 2/6 (player order), Sweep resumes there"),
 	      "an abort stops the sweep at its leg");
 
 	ResetStub();
 	BenchSweepStart();
 	StubEnd(false, "save load");
 	BenchSweepMainThreadTick(12.0);
-	Check(!BenchSweepActive() && LastLine("Bench sweep: stopped at 1/6 (save load)"), "a save load stops the sweep");
+	Check(!BenchSweepActive() && LastLine("Bench sweep: stopped at 1/6 (save load), Sweep resumes there"), "a save load stops the sweep");
 
 	// A button: the leg's run is aborted, and the sweep stops once it ends.
 	ResetStub();
@@ -419,13 +436,13 @@ static void BenchSweepSequencerTests()
 	Check(g_sr.aborted == "button" && BenchSweepActive() && BenchSweepLegNumber() == 0, "button: run aborted, sweep stopping");
 	StubEnd(false, "button");
 	BenchSweepMainThreadTick(13.0);
-	Check(!BenchSweepActive() && LastLine("Bench sweep: stopped at 1/6 (button)"), "button: stopped once the run ended");
+	Check(!BenchSweepActive() && LastLine("Bench sweep: stopped at 1/6 (button), Sweep resumes there"), "button: stopped once the run ended");
 
 	// The first leg refused by the runner (e.g. out of reach).
 	ResetStub();
 	g_sr.refuse = "no player character within reach";
 	Check(!BenchSweepStart() && !BenchSweepActive() &&
-	      LastLine("Bench sweep: stopped at 1/6 (no player character within reach)"), "first leg refused: stopped");
+	      LastLine("Bench sweep: stopped at 1/6 (no player character within reach), Sweep resumes there"), "first leg refused: stopped");
 
 	// A later leg refused at arm.
 	ResetStub();
@@ -433,7 +450,7 @@ static void BenchSweepSequencerTests()
 	StubEnd(true, "ok");
 	g_sr.refuse = "no player character within reach";
 	BenchSweepMainThreadTick(14.0);
-	Check(!BenchSweepActive() && LastLine("Bench sweep: stopped at 2/6 (no player character within reach)"),
+	Check(!BenchSweepActive() && LastLine("Bench sweep: stopped at 2/6 (no player character within reach), Sweep resumes there"),
 	      "a later leg refused: stopped at that leg");
 
 	// Between legs the sweep waits for a transient block, up to the limit.
@@ -446,13 +463,13 @@ static void BenchSweepSequencerTests()
 	Check(BenchSweepActive() && g_sr.arms == 1 && BenchSweepLegNumber() == 2, "gap: waits while blocked");
 	g_sr.blocked = NULL;
 	BenchSweepMainThreadTick(100.0 + BENCH_SWEEP_GAP_LIMIT_SEC - 0.5);
-	Check(g_sr.arms == 2 && g_sr.lastExtra == "sweep=2/6", "gap: arms once the block clears");
+	Check(g_sr.arms == 2 && g_sr.lastExtra == "sweep=2/6 stage=1/1", "gap: arms once the block clears");
 
 	StubEnd(true, "ok");
 	g_sr.blocked = "restore pending";
 	BenchSweepMainThreadTick(200.0);
 	BenchSweepMainThreadTick(200.0 + BENCH_SWEEP_GAP_LIMIT_SEC + 0.5);
-	Check(!BenchSweepActive() && LastLine("Bench sweep: stopped at 3/6 (restore pending)"), "gap: stops past the limit");
+	Check(!BenchSweepActive() && LastLine("Bench sweep: stopped at 3/6 (restore pending), Sweep resumes there"), "gap: stops past the limit");
 
 	ResetStub();
 	BenchSweepStart();
@@ -460,7 +477,7 @@ static void BenchSweepSequencerTests()
 	g_sr.blocked = "save load in flight";
 	g_sr.blockedFinal = true;
 	BenchSweepMainThreadTick(300.0);
-	Check(!BenchSweepActive() && LastLine("Bench sweep: stopped at 2/6 (save load in flight)"), "gap: a final block stops at once");
+	Check(!BenchSweepActive() && LastLine("Bench sweep: stopped at 2/6 (save load in flight), Sweep resumes there"), "gap: a final block stops at once");
 
 	// A button between legs stops at once; nothing is left to abort.
 	ResetStub();
@@ -469,7 +486,7 @@ static void BenchSweepSequencerTests()
 	g_sr.blocked = "restore pending";
 	BenchSweepMainThreadTick(400.0);
 	BenchSweepAbort("button");
-	Check(!BenchSweepActive() && g_sr.aborted.empty() && LastLine("Bench sweep: stopped at 2/6 (button)"),
+	Check(!BenchSweepActive() && g_sr.aborted.empty() && LastLine("Bench sweep: stopped at 2/6 (button), Sweep resumes there"),
 	      "button in the gap: stopped at once");
 
 	// A single run's end outside a sweep is ignored.
@@ -884,6 +901,102 @@ static void BenchSecondScenarioTests()
 	      "second scenario: its recorder's fields, no frame times");
 }
 
+static void SetStage(const char* key, const char* val)
+{
+	ParseBenchSweepFamilyKey(key, val, &StubLog);
+}
+
+static void BenchSweepStageTests()
+{
+	BenchSweepRunner runner = { &StubArm, &StubActive, &StubAbort, &StubBlocked, &StubLog, &StubGroup };
+	BenchSweepSetRunner(runner);
+	for (int i = 0; i < BENCH_SLOT_COUNT; ++i)
+		g_benchSlots[i].recorded = true;
+	std::vector<std::string> bad, extra;
+	bool def = false;
+
+	// A leg's third field names a group; speed 0 is the paused leg.
+	bad.clear();
+	Check(ParseBenchSweepKey("bench.sweep", "city:0:paused, swamp:20:ai ,road:1,city:0:Bad,sand:1:abcdefghijklm", &bad,
+	                         &extra, &def) && !def,
+	      "sweep: a leg names a group and speed 0");
+	Check(BenchSweepLegCount() == 3 && BenchSweepLegAt(0).speed == 0 && strcmp(BenchSweepLegAt(0).group, "paused") == 0 &&
+	      BenchSweepLegAt(1).speed == 20 && strcmp(BenchSweepLegAt(1).group, "ai") == 0 && BenchSweepLegAt(2).group[0] == 0 &&
+	      bad.size() == 2 && BenchSweepListText() == "city:0:paused,swamp:20:ai,road:1",
+	      "sweep: a leg names a group and speed 0");
+
+	// Stage keys in number order, whatever the INI order; bench.sweep ignored.
+	ResetStub();
+	ParseBenchSweepKey("bench.sweep", "sand:1", &bad, &extra, &def);
+	SetStage("bench.sweep.3", "road:1:b");
+	SetStage("bench.sweep.1", "city:1:a, swamp:20:a ,custom:0:c");
+	SetStage("bench.sweep.9", "city:1");
+	Check(LastLine("Bench: bench.sweep.9 ignored (the stages are bench.sweep.1 to bench.sweep.8)"),
+	      "stage: bench.sweep.<n> keys are the stages, in number order");
+	Check(BenchSweepLegCount() == 3 && BenchSweepListText() == "city:1:a,swamp:20:a,custom:0:c",
+	      "stage: bench.sweep.<n> keys are the stages, in number order");
+	g_sr.lines.clear();
+	Check(BenchSweepStart() && g_sr.arms == 1 && g_sr.lastSlot == BENCH_SLOT_CITY && g_sr.lastGroup == 0,
+	      "stage: bench.sweep.<n> keys are the stages, in number order");
+	Check(g_sr.lines.size() >= 3 && g_sr.lines[0] == "Bench sweep: bench.sweep ignored (bench.sweep.<n> keys are set)",
+	      "stage: bench.sweep is ignored while any stage key is set");
+	Check(g_sr.lines.size() >= 3 &&
+	      g_sr.lines[1] == "Bench sweep: started stage 1/2 at leg 1/3 city:1:a,swamp:20:a,custom:0:c",
+	      "stage: bench.sweep.<n> keys are the stages, in number order");
+	Check(g_sr.lastExtra == "sweep=1/3 stage=1/2", "stage: the header names the leg and the stage");
+
+	// Leg 2 ends badly: stopped, and the next press resumes there.
+	StubEnd(true, "ok");
+	BenchSweepMainThreadTick(1.0);
+	Check(g_sr.lastExtra == "sweep=2/3 stage=1/2" && g_sr.lastSpeed == 20 && g_sr.lastGroup == 0,
+	      "stage: the header names the leg and the stage");
+	StubEnd(false, "player order");
+	BenchSweepMainThreadTick(2.0);
+	Check(!BenchSweepActive() && LastLine("Bench sweep: stopped at 2/3 (player order), Sweep resumes there"),
+	      "stage: Sweep resumes a stopped stage at the stopped leg");
+	Check(BenchSweepListText() == "city:1:a,swamp:20:a,custom:0:c",
+	      "stage: Sweep resumes a stopped stage at the stopped leg");
+	Check(BenchSweepStart() && g_sr.arms == 3 && g_sr.lastSlot == BENCH_SLOT_SWAMP && g_sr.lastExtra == "sweep=2/3 stage=1/2",
+	      "stage: Sweep resumes a stopped stage at the stopped leg");
+	Check(g_sr.lines.size() >= 2 &&
+	      g_sr.lines[g_sr.lines.size() - 2] == "Bench sweep: started stage 1/2 at leg 2/3 city:1:a,swamp:20:a,custom:0:c",
+	      "stage: Sweep resumes a stopped stage at the stopped leg");
+
+	// The stage runs out; the next press runs stage 2, then back to stage 1.
+	StubEnd(true, "ok");
+	BenchSweepMainThreadTick(3.0);
+	Check(g_sr.lastSlot == BENCH_SLOT_CUSTOM && g_sr.lastSpeed == 0 && g_sr.lastGroup == 2,
+	      "stage: Sweep runs the next stage after a stage is done");
+	StubEnd(true, "ok");
+	BenchSweepMainThreadTick(4.0);
+	Check(!BenchSweepActive() && LastLine("Bench sweep: stage 1/2 done") && BenchSweepListText() == "road:1:b",
+	      "stage: Sweep runs the next stage after a stage is done");
+	Check(BenchSweepStart() && g_sr.lastSlot == BENCH_SLOT_ROAD && g_sr.lastGroup == 1 &&
+	      g_sr.lastExtra == "sweep=1/1 stage=2/2", "stage: Sweep runs the next stage after a stage is done");
+	StubEnd(true, "ok");
+	BenchSweepMainThreadTick(5.0);
+	Check(!BenchSweepActive() && LastLine("Bench sweep: done 2 stages") &&
+	      BenchSweepListText() == "city:1:a,swamp:20:a,custom:0:c", "stage: Sweep runs the next stage after a stage is done");
+
+	// A group that does not resolve refuses the whole stage before any arm.
+	SetStage("bench.sweep.1", "city:1:a,road:1:zz");
+	ResetStub();
+	Check(!BenchSweepStart() && g_sr.arms == 0 && !BenchSweepActive() &&
+	      LastLine("Bench sweep: refused (group 'zz' unknown)"), "stage: an unknown group refuses the stage, nothing armed");
+	SetStage("bench.sweep.1", "city:1:e");
+	ResetStub();
+	Check(!BenchSweepStart() && g_sr.arms == 0 && LastLine("Bench sweep: refused (group 'e' empty)"),
+	      "stage: an unknown group refuses the stage, nothing armed");
+
+	SetStage("bench.sweep.1", "");
+	SetStage("bench.sweep.3", "");
+	ParseBenchSweepKey("bench.sweep", "", &bad, &extra, &def);
+	Check(BenchSweepListText() == "swamp:1,swamp:20,city:1,city:20,sand:1,sand:20",
+	      "stage: bench.sweep.<n> keys are the stages, in number order");
+	for (int i = 0; i < BENCH_SLOT_COUNT; ++i)
+		g_benchSlots[i].recorded = false;
+}
+
 int main()
 {
 	BenchSlotTests();
@@ -892,6 +1005,7 @@ int main()
 	BenchCombinedTests();
 	BenchSweepKeyTests();
 	BenchSweepSequencerTests();
+	BenchSweepStageTests();
 	BenchStatsTests();
 	BenchReportTests();
 	BenchGameMathTests();

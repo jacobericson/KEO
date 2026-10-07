@@ -397,6 +397,14 @@ bool BenchRestoreSpeed(float speed, bool paused)
 	return true;
 }
 
+bool BenchPause()
+{
+	if (!(s_ready && IsMainThread() && BenchPlausible(ou) && BenchMenusClear()))
+		return false;
+	ou->userPause(true);
+	return true;
+}
+
 bool BenchSetPausedResumeSpeed(float speed)
 {
 	if (!s_ready || !IsMainThread() || !_finite(speed) || !(speed > 0.0f) || speed > 1000.0f)

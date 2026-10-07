@@ -15,11 +15,13 @@ void BenchRunnerSetBanner(const std::string& tokens);
 
 bool BenchAvailable();                 // BenchRunnerInstall succeeded
 std::string BenchUnavailableReason();  // the install's refusal reason; empty when available
-// Arms a run of the slot at speed (1 or 20); the slot itself is left
-// unchanged. headerExtra, when non-empty, is appended to the result header.
-// Refusals are logged and returned in *whyNot; while a run is active it is
-// aborted instead ("button") and false is returned.
-bool BenchRunnerArm(int slot, int speed, const std::string& headerExtra, std::string* whyNot);
+// Arms a run of the slot at speed (0, 1 or 20); the slot itself is left
+// unchanged. group is a resolved benchmark group, whose scenario the run
+// takes, or -1 for the slot's own; speed 0 needs a group, and its run settles
+// at 1x, then pauses for its windows. headerExtra, when non-empty, is appended
+// to the result header. Refusals are logged and returned in *whyNot; while a
+// run is active it is aborted instead ("button") and false is returned.
+bool BenchRunnerArm(int slot, int speed, int group, const std::string& headerExtra, std::string* whyNot);
 // NULL when BenchRunnerArm could arm now; otherwise why not, with *isFinal
 // true when waiting cannot help (bench unavailable, quit, save load).
 const char* BenchRunnerArmBlocked(bool* isFinal);

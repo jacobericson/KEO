@@ -27,11 +27,15 @@ float BenchGetUserNormalSpeed();            // the speed the pause key resumes a
 // Both refuse (false, nothing changed) unless BenchMenusClear(): a speed
 // above 0 clears any pause, including the escape menu's. BenchSetSpeed also
 // refuses 0: setGameSpeed(0) pauses without the pause key's saved speed, so
-// the bench pauses only through BenchRestoreSpeed.
+// the bench pauses only through userPause (BenchRestoreSpeed, BenchPause).
 bool  BenchSetSpeed(float speed);           // GameWorld::setGameSpeed(speed, false), speed > 0
 // setGameSpeed(speed, false), then userPause(true) when the user was paused,
 // so the pause key resumes at speed.
 bool  BenchRestoreSpeed(float speed, bool paused);
+// The game's own pause, userPause(true): it saves the speed the pause key
+// resumes at and zeroes frameSpeedMult; never togglePause alone. False
+// (nothing changed) unless BenchMenusClear().
+bool  BenchPause();
 // While paused: makes the pause key (and anything else calling
 // userPause(false)) resume at speed, without unpausing. False when refused.
 bool  BenchSetPausedResumeSpeed(float speed);

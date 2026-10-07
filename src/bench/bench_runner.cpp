@@ -1,6 +1,7 @@
 #include "bench/bench_runner.h"
 #include "bench/bench_game.h"
 #include "bench/bench_game_math.h"
+#include "bench/bench_group.h"
 #include "bench/bench_recorders.h"
 #include "bench/bench_report.h"
 #include "bench/bench_restore.h"
@@ -50,6 +51,7 @@ struct Run
 
 	// What the run has changed, so an early end restores only that.
 	bool settingsChanged, kbdSet, posed, speedSet;
+	float holdSpeed;         // the speed KeepSpeed holds: the set speed, 0 once paused
 
 	double clearSince;       // BS_ARM: menus clear since
 	int    countdownShown;
@@ -113,6 +115,7 @@ void ResetRun(Run& r)
 	r.userKbd = true;
 	r.haveFollow = false;
 	r.settingsChanged = r.kbdSet = r.posed = r.speedSet = false;
+	r.holdSpeed = 1.0f;
 	r.clearSince = -1.0;
 	r.countdownShown = -1;
 	r.stableSince = -1.0;
@@ -306,7 +309,7 @@ bool KeepPose(Run& r, BenchFrameSample* sample)
 // run ends and leaves it. False when the run ended here.
 bool KeepSpeed(Run& r)
 {
-	if (SpeedIs((float)r.target.speed))
+	if (SpeedIs(r.holdSpeed))
 		return true;
 	EndRun(END_USER_SPEED, BenchGetSpeed() > 0.0f ? "speed changed" : "paused");
 	return false;
@@ -394,15 +397,42 @@ void TickSetSpeed(Run& r)
 		r.stepEntered = true;
 		r.stepStart = t;
 	}
-	if (BenchMenusClear() && BenchTransitionClear() && BenchSetSpeed((float)r.target.speed))
+	// A paused run settles at 1x; BS_PAUSE pauses it after the settle.
+	int speed = r.target.speed > 1 ? r.target.speed : 1;
+	if (BenchMenusClear() && BenchTransitionClear() && BenchSetSpeed((float)speed))
 	{
 		r.speedSet = true;
-		Logf("Bench: speed %d qpc=%lld", r.target.speed, Qpc());
+		r.holdSpeed = (float)speed;
+		Logf("Bench: speed %d qpc=%lld", speed, Qpc());
 		Next(r);
 		return;
 	}
 	if (t - r.stepStart > SPEED_LIMIT_SEC)
 		EndRun(END_ABORT, "speed change blocked");
+}
+
+// The speed was set running, so the end's restore unpauses to the user's; the
+// pause key resumes at the user's speed too, not the run's 1x.
+void TickPause(Run& r)
+{
+	double t = ElapsedSec();
+	if (!r.stepEntered)
+	{
+		r.stepEntered = true;
+		r.stepStart = t;
+	}
+	if (!KeepSpeed(r))
+		return;
+	if (BenchPause())
+	{
+		BenchSetPausedResumeSpeed(r.userSpeed);
+		r.holdSpeed = 0.0f;
+		Logf("Bench: paused qpc=%lld", Qpc());
+		Next(r);
+		return;
+	}
+	if (t - r.stepStart > SPEED_LIMIT_SEC)
+		EndRun(END_ABORT, "pause refused");
 }
 
 void TickSettle(Run& r, const BenchFrameSample& f)
@@ -504,6 +534,19 @@ void TickWindow(Run& r, const BenchStep& step, const BenchFrameSample& f)
 	}
 }
 
+// A paused run's pause step goes right after its settle.
+void InsertPause(BenchScenario* sc)
+{
+	for (size_t i = 0; i < sc->steps.size(); ++i)
+	{
+		if (sc->steps[i].kind == BS_SETTLE)
+		{
+			sc->steps.insert(sc->steps.begin() + i + 1, BenchMakeStep(BS_PAUSE));
+			return;
+		}
+	}
+}
+
 // Why no run can start now, whatever the slot (NULL: one can); *isFinal: waiting cannot help.
 const char* StartGate(bool* isFinal)
 {
@@ -591,7 +634,7 @@ const char* BenchRunnerArmBlocked(bool* isFinal)
 	return NULL;
 }
 
-bool BenchRunnerArm(int slot, int speed, const std::string& headerExtra, std::string* whyNot)
+bool BenchRunnerArm(int slot, int speed, int group, const std::string& headerExtra, std::string* whyNot)
 {
 	if (!IsMainThread())
 		return false;
@@ -614,20 +657,29 @@ bool BenchRunnerArm(int slot, int speed, const std::string& headerExtra, std::st
 	BenchScenarioParams params = { BENCH_DISCARD_SEC, BENCH_MEASURE_SEC };
 	if (slot < 0 || slot >= BENCH_SLOT_COUNT)
 		why = "no such slot";
-	else if (speed != 1 && speed != 20)
+	else if (speed != 0 && speed != 1 && speed != 20)
 		why = "no such speed";
+	else if (speed == 0 && group < 0)
+		why = "a paused run needs a group";
 	else if (!g_benchSlots[slot].recorded)
 		why = "slot not recorded";
+	else if (group >= 0)
+	{
+		if (!BuildBenchGroupAB(group, &r.sc, &why))
+			why = why ? why : "scenario refused";
+	}
 	else if (!(build = BenchScenarioBuilder(g_benchSlots[slot].scenario)))
 		why = "no such scenario";
 	else if (!build(params, &r.sc, &why))
 		why = why ? why : "scenario refused";
-	else if (!(why = StartGate(&isFinal)))
+	if (!why && !(why = StartGate(&isFinal)))
 	{
 		float d = BenchNearestPlayerDistance(g_benchSlots[slot].pose.pos);
 		if (d < 0.0f || d > BENCH_CAMERA_REACH)
 			why = "no player character within reach";
 	}
+	if (!why && speed == 0)
+		InsertPause(&r.sc);
 	if (why)
 	{
 		Logf("Bench: refused %s qpc=%lld", why, Qpc());
@@ -711,6 +763,7 @@ void BenchMainThreadTick(bool saveLoading)
 	case BS_SET_POSE: TickSetPose(r); break;
 	case BS_SET_SPEED: TickSetSpeed(r); break;
 	case BS_SETTLE:   TickSettle(r, f); break;
+	case BS_PAUSE:    TickPause(r); break;
 	case BS_WINDOW:   TickWindow(r, step, f); break;
 	case BS_RESTORE:  EndRun(END_OK, "ok"); break;
 	}
