@@ -424,6 +424,25 @@ const size_t RVA_CHARACTER_ADD_JOB = 0x5C8310;  // Character::addJob(task, subje
 const size_t RVA_SPEED_GROUP_GET_SPEED = 0x7F4BA0;  // SpeedGroup::getSpeed(group, who): AI back thread and main thread
 const size_t RVA_DOOR_HIT_FILTER_VTABLE    = 0x16C9188; // DoorHitFilter's vftable, the snap's filter
 const size_t RVA_IS_ZONE_STILL_LOADING  = 0x3AC810; // documented
+// The player-placement town fix (src/fixes/world/town_claim.cpp). The builder's IDB name,
+// createCharacterObject_callers__sub_1404D6810, is wrong: it places one previewed building.
+const size_t RVA_BUILDER_PLACE              = 0x4D6810;
+const size_t RVA_CREATE_BUILDING            = 0x57C1E0;   // RootObjectFactory::createBuilding
+const size_t RVA_SET_MOUNTED_CALLBACK_VTABLE = 0x16DE9D0; // SetMountedBuildingCallback's vftable
+
+// The throw-out fix (src/fixes/world/throwout.cpp, throwout_finder.cpp).
+const size_t RVA_CHAR_GET_DROPPED              = 0x5CC110;  // Character::getDropped
+const size_t RVA_TAKE_OUTSIDE_TICK             = 0x3356A0;  // Task_TakeIntruderOutside(Town) slot 7
+const size_t RVA_TAKE_OUTSIDE_PATH_IMPOSSIBLE  = 0x33DA20;  // Task_TakeIntruderOutside(Town) slot 5
+const size_t RVA_TAKE_OUTSIDE_TOWN_VFTABLE     = 0x16BDA48; // Task_TakeIntruderOutsideTown's vftable, at the task's offset 0
+const size_t RVA_FIND_KO_INTRUDER_TOWN         = 0x99B380;  // AI::findKOIntruder_town
+const size_t RVA_GATE_CODE_AT                  = 0x2EA5A0;  // int(gates, const Vector3*): -1 during a gate pass
+const size_t RVA_GLOBAL_GATES                  = 0x212D358; // the gates singleton the code above reads
+const size_t RVA_SENSE_ITR_CTOR                = 0x852A90;  // SenseItr::SenseItr (protected in KenshiLib)
+const size_t RVA_SENSE_ITR_GET_CHARACTER       = 0x290970;
+const size_t RVA_SENSE_ITR_INCREMENT           = 0x8527D0;
+const size_t RVA_CHAR_GET_OWNERSHIPS           = 0x794B00;
+const size_t RVA_OWNERSHIPS_IS_MY_TOWN         = 0x620750;
 
 // Global data RVAs
 const size_t RVA_GLOBAL_SECTION_MGR  = 0x2133560;  // pauseState.navmesh (SectionManager*)
@@ -448,6 +467,51 @@ KLIB_ASSERT_OFFSET(GameWorld_frameSpeedMult, OFF_GAMEWORLD_FRAME_SPEED_MULT);
 // pass-through, for its caller's thread id only (destroyListOE diagnostic).
 const size_t RVA_DESTROYLIST_INSERT  = 0x799BE0;
 
+// Gameplay fixes: the deferred wall splice.
+const size_t RVA_WALL_ADD_PROGRESS = 0x5594A0;   // WallBuilding::addConstructionProgress (hooked; vtable slot 70)
+const size_t RVA_QUEUES_ARE_CLEAR_MT = 0x173F70; // PhysicsInterface::queuesAreClearMT (main thread)
+const size_t RVA_NAVMESH_GENERATE_AABB = 0x3A6580; // NavMesh::generate(const Ogre::Aabb&)
+const size_t RVA_ZONEMAP_HANDLE_GET_OBJECT = 0x9F8050; // ZoneMapHandleContainerList::getObject
 
+
+
+// Backpack-first (src/inventory/backpack_first.cpp, backpack_reader.cpp).
+const size_t RVA_CHARACTER_GIVE_ITEM            = 0x5CA970;  // Character::giveItem, vtable slot 45 of Character/CharacterHuman/CharacterAnimal
+const size_t RVA_INVENTORY_GET_SECTION_OF_TYPE  = 0x7453B0;  // Inventory::getSectionOfType: a walk of the search-order list
+const size_t RVA_INVSECTION_LIMITED_COMPATIBLE  = 0x74B0F0;  // InventorySection::isLimitedSlotCompatible(Item*)
+const size_t RVA_INVENTORY_IS_EMPTY             = 0x745E70;  // Inventory::isEmpty: _allItems.count == 0
+const size_t RVA_INVENTORY_SEARCH_COUNT_CHECK   = 0x745DF9;  // Inventory::getAllSectionsOfType's cmp [rcx+70h], ebx: sectionsInSearchOrder.count
+const size_t RVA_GIVE_ITEM_INVENTORY_CHECK      = 0x5CA980;  // giveItem's `cmp qword [rcx+2E8h],0`: Character::inventory
+const size_t RVA_GET_BACKPACK_ITEMS_CHECK       = 0x70CF01;  // InventoryGUI::getBackpack's items _Mylast/_Myfirst reads
+const size_t RVA_BACKPACK_TYPE_CHECK            = 0x5CA92E;  // the worn-backpack test's `objectType == CONTAINER`
+const size_t RVA_CHARACTER_IS_ANIMAL_CHECK      = 0x5C921C;  // Character::getMagicHungerSetting's `call [rax+248h]`: Character::isAnimal
+
+// Backpack-first sidecar and re-key (src/inventory/backpack_sidecar.cpp).
+const size_t RVA_SFS_SAVE_GAME                 = 0x473380;  // SaveFileSystem::saveGame(savePath): the temp folder's copy
+const size_t RVA_SFS_LOAD_GAME                 = 0x474340;  // SaveFileSystem::loadGame(savePath): newGame, then indexes the save
+const size_t RVA_SFS_NEW_GAME                  = 0x470D00;  // SaveFileSystem::newGame
+const size_t RVA_SFS_WRITE_FILE                = 0x471970;  // SaveFileSystem::writeFile(name) -> temp-folder path (std::string by retstr)
+const size_t RVA_SFS_READ_FILE                 = 0x470C20;  // SaveFileSystem::readFile(name) -> path, empty when absent
+const size_t RVA_HANDLE_MANAGER_GET_CHARACTER  = 0x14D8A0;  // HandleManager::getCharacter(hand, deadOnes, redirect)
+const size_t RVA_GLOBAL_HANDLE_MANAGER         = 0x2132F30; // the HandleManager instance (IDB `moreData`)
+const size_t RVA_HAND_VFTABLE                  = 0x16842D0; // hand's vftable; slot 0 is operator== (the redirect lookup's compare)
+// Gameplay fixes: the backpack's food and dialogue checks.
+const size_t RVA_SCORE_FIND_FOOD_ON_GROUND   = 0x5972A0;  // AI::scoreFindFoodOnGround (hooked)
+const size_t RVA_INVENTORY_GET_NUM_FOOD_ITEMS = 0x334480; // Inventory::getNumFoodItems(Character*)
+const size_t RVA_INVENTORY_HAS_ITEM_FUNCTION = 0x7456C0;  // Inventory::hasItemFunction
+const size_t RVA_J_INVENTORY_HAS_ITEM_FUNCTION = 0x4B812; // j_Inventory__hasItemFunction: `jmp Inventory::hasItemFunction` (E9 rel32), the call checkConditions makes
+// Gameplay fixes: machine operators and haul sizes.
+const size_t RVA_OPERATOR_WANT_GONE = 0x5A2200;  // AI::haveSomeResourcesFromThisMachineButWantThemGoneIfPossible (hooked)
+const size_t RVA_HAUL_AMOUNT        = 0x356D50;  // Task_EmptyMachine vtable slot 5, the haul amount (hooked, DEV)
+const size_t RVA_AI_BUILDING_HAS_POWER = 0x596020;
+const size_t RVA_AI_MACHINE_INPUT_INVALID = 0x596B40;
+const size_t RVA_HANDLES_ANYTHING_BUT_BASE = 0x2676A0;  // HandleManager::getAnythingButBase
+const size_t RVA_CHARACTER_WANTS_TO_EAT_NOW = 0x5C74E0;
+
+// Backpack-first checkbox (src/inventory/backpack_window.cpp).
+const size_t RVA_BACKPACK_LAYOUT_SETUP_SECTIONS = 0x1502E0;  // BackpackInventoryLayout::setupSections (layout vtable slot 1)
+const size_t RVA_LAYOUT_MAIN_WIDGET_CHECK       = 0x14E90C;  // GenericFixedInventoryLayout::setSize's `mov rcx,[rdi+8]`: mMainWidget
+const size_t RVA_BACKPACK_OWNER_READ_CHECK      = 0x70D5B5;  // openBackpackButton's `mov r11,[rbx+50h]`: InventoryGUI::callbackObject
+const size_t RVA_BACKPACK_OWNER_WRITE_CHECK     = 0x70D5CA;  // openBackpackButton's `mov [rdi+230h],r11`: ContainerItem::callbackOwner
 
 #endif // KEO_RVA_H

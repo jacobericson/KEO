@@ -316,7 +316,8 @@ def tree_files():
 
 
 def check_python_coverage():
-    """Every git-tracked tools/**/test_*.py is listed or excluded, and no when= glob is stale."""
+    """Every git-tracked tools/**/test_*.py is listed or excluded, and no when= glob is stale. The
+    count it prints also covers every listed module outside tools/, so it agrees with the runner's."""
     errors, rows, excluded = [], [], set()
     for path in PY_LISTS:
         if not os.path.isfile(path):
@@ -341,6 +342,12 @@ def check_python_coverage():
         print("check_test_guards: matched no tools/**/test_*.py -- the search is stale")
         return False
     missing = [p for p in tests if p.lower() not in listed and p.lower() not in excluded]
+    found = dict((p.lower(), p) for p in tests)
+    for r in rows:
+        rel = to_slash(r.rel)
+        if rel.lower() not in found and os.path.isfile(rel):
+            found[rel.lower()] = rel
+    tests = sorted(found.values())
     stale = sorted(p for p in excluded if not os.path.isfile(p))
     lowered = [p.lower() for p in files]
     dead = ["%s: %s" % (r.stem, g) for r in rows for g in (r.when or [])

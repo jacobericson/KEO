@@ -441,35 +441,51 @@ class SlotsTest(unittest.TestCase):
         self.assertFalse(os.environ.get('KEO_HEAVY_HELD'))
 
     def test_environ_copies_never_race_the_marker(self):
+        # Runs until both sides reach their count and at least 1.5 s have passed, capped at WAIT:
+        # a starved host only slows the test, a churn that stalls still fails on the count, and a
+        # fast host still races the marker for long enough to catch a missed one.
         os.environ['KEO_HEAVY_SLOTS'] = '1'
-        stop = time.monotonic() + 1.5
+        need = 50
+        floor = time.monotonic() + 1.5
+        cap = time.monotonic() + WAIT
+        done = threading.Event()
+        lock = threading.Lock()
         errors, counts = [], {'churn': 0, 'copy': 0}
+
+        def bump(key):
+            with lock:
+                counts[key] += 1
+                if counts['churn'] >= need and counts['copy'] >= need and time.monotonic() >= floor:
+                    done.set()
+
+        def running():
+            return not done.is_set() and time.monotonic() < cap
 
         def churn():
             try:
-                while time.monotonic() < stop:
+                while running():
                     with slots.heavy('churn'):
                         pass
-                    counts['churn'] += 1
+                    bump('churn')
             except BaseException as ex:
                 errors.append(repr(ex))
 
         def copy():
             try:
-                while time.monotonic() < stop:
+                while running():
                     slots.child_env()
                     dict(os.environ)
                     os.environ.copy()
-                    counts['copy'] += 1
+                    bump('copy')
             except BaseException as ex:
                 errors.append(repr(ex))
 
         threads = run_threads(churn, 1) + run_threads(copy, 3)
         for t in threads:
-            t.join(WAIT)
+            t.join(2 * WAIT)
         self.assertEqual(errors, [])
-        self.assertGreater(counts['churn'], 50)
-        self.assertGreater(counts['copy'], 50)
+        self.assertGreaterEqual(counts['churn'], need)
+        self.assertGreaterEqual(counts['copy'], need)
 
     def test_wait_line_once_then_every_interval(self):
         e = self.env(KEO_HEAVY_SLOTS=1)
