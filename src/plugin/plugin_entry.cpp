@@ -36,6 +36,7 @@
 #include "diag/exit_capture.h"
 #include "fixes/physx/physx_query_guard.h"
 #include "fixes/stitch/stitch_byte_guard.h"
+#include "navmesh/construction/wall_splice.h"
 #include "fixes/streaming/section_key_ring.h"
 #include "plugin/crash_record.h"
 
@@ -443,6 +444,11 @@ void InstallHooksAndGuards(const EntryCtx& ctx)
 	// reason. Its eight bytes cannot be written atomically, so it must arm
 	// here, before the navmesh and its path thread exist.
 	InstallStitchByteGuard(ctx.gateOk);
+
+	// Five bytes mid-function, off the gate banner; written before any world exists, and only
+	// when the progress detour installed, so the vanilla splice is never removed without its
+	// replacement.
+	navmesh::InstallWallSpliceNop(ctx.gateOk);
 
 	// Worker threads created lazily on first hook_dispatchJob call
 	// (Havok world not yet initialized at plugin load time)

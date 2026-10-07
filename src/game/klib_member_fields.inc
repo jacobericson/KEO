@@ -271,6 +271,8 @@ KLIB_FIELD(PhysicsInterface_hullsToMake_mainThreadData_count, PhysicsInterface, 
 KLIB_FIELD(PhysicsInterface_hullsToDestroy_mainThreadData_count, PhysicsInterface, hullsToDestroy.mainThreadData.count, 512, 4)
 KLIB_FIELD(PhysicsInterface_actorsToDestroy_mainThreadData_count, PhysicsInterface, actorsToDestroy.mainThreadData.count, 680, 4)
 KLIB_FIELD(PhysicsInterface_terrainToLoad_mainThreadData_count, PhysicsInterface, terrainToLoad.mainThreadData.count, 760, 4)
+KLIB_FIELD(PhysicsInterface_hullsToChangeGroup_mainThreadData_count, PhysicsInterface, hullsToChangeGroup.mainThreadData.count, 568, 4)
+KLIB_FIELD(PhysicsInterface_hullsToChangeGroup_backThreadData_count, PhysicsInterface, hullsToChangeGroup.backThreadData.count, 592, 4)
 KLIB_FIELD(NavMeshGenerator_queue_front, NavMeshGenerator, queue.front, 136, 8)
 KLIB_FIELD(NavMeshGenerator_queue_back, NavMeshGenerator, queue.back, 144, 8)
 KLIB_FIELD(NavMeshGenerator_queue_mutex, NavMeshGenerator, queue.mutex, 152, 32)
