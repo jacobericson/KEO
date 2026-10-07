@@ -37,6 +37,17 @@ bool D3dStateSkips(bool held, bool boundSet, bool descEqual, bool refEqual)
 	return held && boundSet && descEqual && refEqual;
 }
 
+bool D3dDrawsNothing(const void* op)
+{
+	const unsigned char* vd = *(const unsigned char* const*)((const unsigned char*)op + RO_VERTEX_DATA);
+	return vd == NULL || *(const unsigned long long*)(vd + VD_VERTEX_COUNT) == 0;
+}
+
+bool D3dShadowTaken(bool consumed, bool boundSet)
+{
+	return consumed && boundSet;
+}
+
 D3dBefore D3dStateBefore(unsigned char* rs, D3dShadows* sh, long epoch)
 {
 	D3dBefore b = { 0, 0, 0, false };
@@ -85,6 +96,12 @@ void D3dStateAfter(const unsigned char* rs, D3dShadows* sh, unsigned recreate)
 			continue;
 		const D3dStateLayout l = D3dLayout(i);
 		D3dShadow& s = sh->s[i];
+		const bool bound = *(const unsigned long long*)(rs + l.bound) != 0;
+		if (!D3dShadowTaken(rs[l.changed] == 0, bound))
+		{
+			s.held = false;
+			continue;
+		}
 		memcpy(s.desc, rs + l.desc, l.size);
 		if (i == D3D_DEPTH)
 			s.ref = *(const unsigned*)(rs + RS_STENCIL_REF);

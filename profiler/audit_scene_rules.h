@@ -1,7 +1,7 @@
 // audit_scene_rules.h - The scene and render probes' pure rules: a transforms level's size bin, a
 // visible object's class by two vtable slots, the render queues a cull fork walks, the state-object
-// would-skip test, the pass-group map walk and a barrier worker's kind. No Windows or game header, so
-// the host tests build it.
+// would-skip test, the empty-draw and consumed-flag tests, the pass-group map walk and a barrier
+// worker's kind. No Windows or game header, so the host tests build it.
 
 #ifndef KENSHI_FRAME_AUDIT_SCENE_RULES_H
 #define KENSHI_FRAME_AUDIT_SCENE_RULES_H
@@ -58,6 +58,30 @@ inline void CountQueues(const unsigned char* blocks, size_t stride, size_t count
 inline bool WouldSkip(bool flagged, bool shadowHeld, bool boundSet, bool descEqual, bool refEqual)
 {
 	return flagged && shadowHeld && boundSet && descEqual && refEqual;
+}
+
+// RenderOperation's vertex data pointer and VertexData's vertex count (a qword), as _render's first two
+// tests read them.
+const size_t OP_VERTEX_DATA = 0x0, VD_VERTEX_COUNT = 0x30;
+
+// _render returns before its state section when the operation has no vertex data or no vertices: it
+// consumes no changed flag and binds nothing.
+inline bool DrawsNothing(const void* op)
+{
+	const unsigned char* vd = *(const unsigned char* const*)((const unsigned char*)op + OP_VERTEX_DATA);
+	return vd == NULL || *(const unsigned long long*)(vd + VD_VERTEX_COUNT) == 0;
+}
+
+// A flagged state counts as remade only when the draw consumed its changed flag (the byte reads 0 after).
+inline bool FlagConsumed(unsigned char changedAfter)
+{
+	return changedAfter == 0;
+}
+
+// Its description becomes the bound object's only when the flag was consumed and an object is bound.
+inline bool TakesShadow(unsigned char changedAfter, bool boundSet)
+{
+	return FlagConsumed(changedAfter) && boundSet;
 }
 
 // A barrier worker by the semaphore it waits on or releases: unclassed until both of the main

@@ -1,9 +1,10 @@
 // audit_d3d.cpp - The scene and render probes' D3D11 half (SceneDetail=1), on the main thread: the
 // render system's state flags read around each draw, outside the draw's timing (how often a
 // flagged blend, rasterizer or depth-stencil state's description equals the one the still-bound
-// object was made from), and three call-site rows in RenderSystem_Direct3D11_x64.dll: the blend and
-// sampler state creations and the render-target change's ClearState, which also forgets the
-// remembered descriptions. The rows go in only for the module build the offsets were read from.
+// object was made from, for the draws that reach _render's state section), and three call-site
+// rows in RenderSystem_Direct3D11_x64.dll: the blend and sampler state creations and the
+// render-target change's ClearState, which also forgets the remembered descriptions. The rows go
+// in only for the module build the offsets were read from.
 // No hook or callback takes a lock, allocates, or logs.
 
 #include "audit_scene.h"
@@ -112,6 +113,7 @@ void D3dStateEnter(void* rs, D3dFlags* f)
 	f->raster  = p[RS_RASTER_CHANGED];
 	f->depth   = p[RS_DEPTH_CHANGED];
 	f->sampler = p[RS_SAMPLERS_CHANGED];
+	f->same    = 0;
 	if (!g_cur.open)
 		return;
 	if (f->sampler)
@@ -123,16 +125,16 @@ void D3dStateEnter(void* rs, D3dFlags* f)
 			continue;
 		const StateLayout& st = s_states[i];
 		const Shadow& sh = s_shadow[i];
-		++s_fr.chg[i];
 		bool bound = *(const uintptr_t*)(p + st.bound) != 0;
 		bool desc  = memcmp(p + st.desc, sh.desc, st.size) == 0;
 		bool ref   = i == STATE_DEPTH ? *(const unsigned*)(p + RS_STENCIL_REF) == sh.ref : true;
 		if (scenerules::WouldSkip(true, sh.held, bound, desc, ref))
-			++s_fr.same[i];
+			f->same |= (unsigned char)(1u << i);
 	}
 }
 
-// After the draw: each flagged state's object is now bound, made from the description it read.
+// After the draw: a flagged state the draw consumed is counted, and its description becomes the
+// shadow when an object is bound; any other flagged state's shadow is dropped.
 void D3dStateExit(void* rs, const D3dFlags& f)
 {
 	const unsigned char* p = (const unsigned char*)rs;
@@ -143,6 +145,18 @@ void D3dStateExit(void* rs, const D3dFlags& f)
 			continue;
 		const StateLayout& st = s_states[i];
 		Shadow& sh = s_shadow[i];
+		const unsigned char after = p[st.changed];
+		if (g_cur.open && scenerules::FlagConsumed(after))
+		{
+			++s_fr.chg[i];
+			if (f.same & (1u << i))
+				++s_fr.same[i];
+		}
+		if (!scenerules::TakesShadow(after, *(const uintptr_t*)(p + st.bound) != 0))
+		{
+			sh.held = false;
+			continue;
+		}
 		memcpy(sh.desc, p + st.desc, st.size);
 		if (i == STATE_DEPTH)
 			sh.ref = *(const unsigned*)(p + RS_STENCIL_REF);

@@ -86,6 +86,13 @@ static void hook_D3DRender(void* rs, const void* op)
 		s_origRender(rs, op);
 		return;
 	}
+	// _render returns before its state section for this operation: forwarded
+	// with the flags and shadows untouched, and not counted.
+	if (D3dDrawsNothing(op))
+	{
+		s_origRender(rs, op);
+		return;
+	}
 	const D3dBefore b = D3dStateBefore((unsigned char*)rs, &s_shadows, s_epoch);
 	++s_calls;
 	if (b.dropped)

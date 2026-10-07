@@ -74,6 +74,17 @@ static void SimOriginal(FakeRs* rs)
 	}
 }
 
+// The detour's main-thread path while on; for a dropped operation the
+// original returns before its state section.
+static void SimDetour(FakeRs* rs, D3dShadows* sh, long epoch, const void* op)
+{
+	if (D3dDrawsNothing(op))
+		return;
+	D3dBefore b = D3dStateBefore(rs->p(), sh, epoch);
+	SimOriginal(rs);
+	D3dStateAfter(rs->p(), sh, b.recreate);
+}
+
 // One pass with every state flagged: all three made, bound and shadowed.
 static void Prime(FakeRs* rs, D3dShadows* sh, long epoch)
 {
@@ -96,6 +107,8 @@ static void CheckRule()
 	Check(!D3dStateSkips(false, true, true, true), "rule: no shadow is never kept");
 	Check(!D3dStateSkips(true, true, false, true), "rule: a changed description is not kept");
 	Check(!D3dStateSkips(true, true, true, false), "rule: a changed stencil reference is not kept");
+	Check(D3dShadowTaken(true, true) && !D3dShadowTaken(false, true) && !D3dShadowTaken(true, false),
+	      "rule: a shadow is taken only from a consumed flag with an object bound");
 }
 
 // Drops every shadow when the key part changed by `change` differs.
@@ -234,6 +247,67 @@ static void CheckAfter()
 	Check(b.flagged == 7 && b.skipped == 7 && b.recreate == 0 && GetQ(&rs, RS_BLEND_BOUND) == blend
 	      && GetQ(&rs, RS_RASTER_BOUND) == raster && GetQ(&rs, RS_DEPTH_BOUND) == depth,
 	      "after: two passes with one material keep all three states the second time");
+
+	Fresh(&rs, &sh);
+	Prime(&rs, &sh, 1);
+	Flag(&rs, D3D_BLEND);
+	rs.p()[RS_BLEND_DESC] ^= 0x01;
+	b = D3dStateBefore(rs.p(), &sh, 1);
+	D3dStateAfter(rs.p(), &sh, b.recreate);
+	Check(b.recreate == 1 && !sh.s[D3D_BLEND].held && Flagged(&rs, D3D_BLEND),
+	      "after: a recreated state whose flag the original left set takes no shadow");
+	b = D3dStateBefore(rs.p(), &sh, 1);
+	Check(b.recreate == 1 && b.skipped == 0 && Flagged(&rs, D3D_BLEND),
+	      "after: the next draw remakes a state that took no shadow");
+
+	Fresh(&rs, &sh);
+	Prime(&rs, &sh, 1);
+	Flag(&rs, D3D_RASTER);
+	rs.p()[RS_RASTER_DESC] ^= 0x01;
+	b = D3dStateBefore(rs.p(), &sh, 1);
+	SimOriginal(&rs);
+	PutQ(&rs, RS_RASTER_BOUND, 0);
+	D3dStateAfter(rs.p(), &sh, b.recreate);
+	Check(b.recreate == 2 && !Flagged(&rs, D3D_RASTER) && !sh.s[D3D_RASTER].held,
+	      "after: a recreated state with nothing bound takes no shadow");
+}
+
+static void CheckEarlyExit()
+{
+	unsigned long long vd[7];
+	memset(vd, 0, sizeof(vd));
+	const void* op[1] = { NULL };
+	Check(D3dDrawsNothing(op), "early exit: an operation with no vertex data draws nothing");
+	op[0] = vd;
+	Check(D3dDrawsNothing(op), "early exit: an operation with no vertices draws nothing");
+	vd[6] = 4;
+	Check(!D3dDrawsNothing(op), "early exit: an operation with vertices reaches the state section");
+
+	FakeRs rs;
+	D3dShadows sh;
+	Fresh(&rs, &sh);
+	Prime(&rs, &sh, 1);
+	Flag(&rs, D3D_BLEND);
+	rs.p()[RS_BLEND_DESC] ^= 0x01;
+	Flag(&rs, D3D_DEPTH);
+	FakeRs rsBefore;
+	memcpy(&rsBefore, &rs, sizeof(rs));
+	D3dShadows shBefore;
+	memcpy(&shBefore, &sh, sizeof(sh));
+	vd[6] = 0;
+	SimDetour(&rs, &sh, 1, op);
+	op[0] = NULL;
+	SimDetour(&rs, &sh, 1, op);
+	Check(memcmp(&rs, &rsBefore, sizeof(rs)) == 0 && memcmp(&sh, &shBefore, sizeof(sh)) == 0
+	      && Flagged(&rs, D3D_BLEND) && Flagged(&rs, D3D_DEPTH),
+	      "early exit: a dropped operation leaves the flags and shadows untouched");
+
+	op[0] = vd;
+	vd[6] = 4;
+	SimDetour(&rs, &sh, 1, op);
+	Check(!Flagged(&rs, D3D_BLEND) && sh.s[D3D_BLEND].held
+	      && memcmp(sh.s[D3D_BLEND].desc, rs.p() + RS_BLEND_DESC, 264) == 0,
+	      "early exit: the next drawing operation remakes the state and takes its shadow");
 }
 
 static void CheckLayout()
@@ -259,6 +333,7 @@ int main()
 	CheckRule();
 	CheckBefore();
 	CheckAfter();
+	CheckEarlyExit();
 	CheckLayout();
 	return CheckExit(SUITE_NAME);
 }

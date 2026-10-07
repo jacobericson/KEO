@@ -30,6 +30,11 @@ const size_t RS_RASTER_BOUND   = 0x740;
 const size_t RS_DEPTH_BOUND    = 0x748;
 const size_t RS_STATE_END      = 0x750;
 
+// RenderOperation's vertex data pointer and VertexData's vertex count (a
+// qword), as _render's first two tests read them.
+const size_t RO_VERTEX_DATA    = 0x0;
+const size_t VD_VERTEX_COUNT   = 0x30;
+
 enum D3dState { D3D_BLEND, D3D_RASTER, D3D_DEPTH, D3D_STATES };
 const size_t D3D_DESC_MAX = 264;
 
@@ -62,6 +67,14 @@ void D3dShadowsReset(D3dShadows* sh);
 // description and reference are unchanged.
 bool D3dStateSkips(bool held, bool boundSet, bool descEqual, bool refEqual);
 
+// _render returns before its state section when the operation has no vertex
+// data or no vertices: it consumes no changed byte and binds nothing.
+bool D3dDrawsNothing(const void* op);
+
+// After the original, a recreated state's description becomes its shadow
+// only when the original consumed its changed byte and an object is bound.
+bool D3dShadowTaken(bool consumed, bool boundSet);
+
 // Bit (1 << state) masks.
 struct D3dBefore
 {
@@ -74,8 +87,9 @@ struct D3dBefore
 // context or epoch differs from the shadows' key; then, per flagged state,
 // clears its changed byte (a skip) or marks its shadow not held.
 D3dBefore D3dStateBefore(unsigned char* rs, D3dShadows* sh, long epoch);
-// After the original returned: each recreated state's description (and the
-// stencil reference) becomes its held shadow.
+// After the original returned: each recreated state whose changed byte reads
+// 0 and whose mirror is set takes its description (and the stencil
+// reference) as its held shadow; any other recreated state holds none.
 void D3dStateAfter(const unsigned char* rs, D3dShadows* sh, unsigned recreate);
 
 #endif // KEO_RENDER_D3D_STATE_POLICY_H

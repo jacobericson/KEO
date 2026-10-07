@@ -9,10 +9,11 @@
 namespace kenshiframeaudit_detail
 {
 
-// The render system's state flags at a draw's entry.
+// The render system's state flags at a draw's entry, and which of them would have kept their object.
 struct D3dFlags
 {
 	unsigned char blend, raster, depth, sampler;
+	unsigned char same;   // bit i: state i would have kept its bound object at entry
 };
 
 void InstallScene();                       // startup, after InstallOffMain (main thread)

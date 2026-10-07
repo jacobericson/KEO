@@ -6,6 +6,7 @@
 #include "audit_steady.h"
 #include "audit_offmain.h"
 #include "audit_scene.h"
+#include "audit_scene_rules.h"
 
 namespace kenshiframeaudit_detail {
 
@@ -406,10 +407,10 @@ VoidThis_t    oOldAnims    = NULL;
 D3DBind_t     oD3DBind     = NULL;
 RsRender_t    oD3DRender   = NULL;
 
-// Workers call this too (it is the fork/join): they pass straight through.
+// The main thread's fork and join; Ogre's workers inline their own syncs and never reach the export.
 void hk_BarrierSync(void* barrier)
 {
-	// Ogre's worker threads reach the barrier too: the CPU sampler names them by it.
+	// Another thread that reaches the export passes straight through; the CPU sampler names it by the call.
 	if (g_cfg.cpuSample && !IsMain())
 		CpuNoteOgreWorker();
 	if (g_cfg.sceneDetail && IsMain() && g_cur.open)
@@ -473,9 +474,10 @@ void hk_D3DBind(void* rs, int type, void* params, unsigned __int64 mask)
 
 void hk_D3DRender(void* rs, const void* op)
 {
-	// The state reads sit outside the timed window; the shadows follow every main-thread draw.
-	bool st = D3dStateOn() && IsMain();
-	D3dFlags fl = { 0, 0, 0, 0 };
+	// The state reads sit outside the timed window; the shadows follow every main-thread draw that
+	// reaches _render's state section.
+	bool st = D3dStateOn() && IsMain() && !scenerules::DrawsNothing(op);
+	D3dFlags fl = { 0, 0, 0, 0, 0 };
 	if (st)
 		D3dStateEnter(rs, &fl);
 	if (!RenderTracking())

@@ -5,6 +5,7 @@
 #ifdef KEO_DEBUG
 
 #include "render/scene_lever_policy.h"
+#include "render/ogre_worker_policy.h"
 #include "render/module_hooks.h"
 #include "fixes/fixes_config.h"
 #include "fixes/near_page.h"
@@ -24,6 +25,12 @@ static const char* const kBaseCullExport =
 static const uintptr_t RVA_BARRIER_SYNC   = 0x3DFF40;
 static const uintptr_t RVA_UPDATE_VB      = 0x130490;
 static const uintptr_t RVA_BASE_CULL      = 0x274C0;
+
+// This switch reads the same OgreMain build as the join spin and the worker priority, and the same
+// Barrier::sync export as the join spin.
+static_assert(OGRE_SCENE_BUILD_STAMP == OGRE_TIMESTAMP && OGRE_SCENE_BUILD_SIZE == OGRE_IMAGE_SIZE,
+              "one OgreMain build for every render switch");
+static_assert(RVA_BARRIER_SYNC == OGRE_BARRIER_SYNC_RVA, "one Barrier::sync export address");
 
 static const size_t kStubPageBytes = 4096;
 static const size_t kStubSpacing   = 32;

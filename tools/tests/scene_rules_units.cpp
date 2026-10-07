@@ -52,6 +52,26 @@ static void Skips()
 	Check(!WouldSkip(false, true, true, true, true), "an unflagged state is not counted");
 }
 
+static void EmptyDraws()
+{
+	unsigned long long vd[7];
+	memset(vd, 0, sizeof(vd));
+	const void* op[1] = { NULL };
+	Check(DrawsNothing(op), "an operation with no vertex data draws nothing");
+	op[0] = vd;
+	Check(DrawsNothing(op), "an operation with no vertices draws nothing");
+	vd[6] = 4;   // the vertex count at +0x30
+	Check(!DrawsNothing(op), "an operation with vertices reaches the state section");
+}
+
+static void Consumed()
+{
+	Check(FlagConsumed(0) && !FlagConsumed(1), "a change counts only when the draw consumed the flag");
+	Check(TakesShadow(0, true), "a consumed flag with an object bound takes the shadow");
+	Check(!TakesShadow(1, true), "a flag the draw left set takes no shadow");
+	Check(!TakesShadow(0, false), "nothing bound takes no shadow");
+}
+
 static void Slots()
 {
 	Check(SlotKind(0x20, 0x10, 0) == SLOT_UNCLASSED && SlotKind(0x10, 0, 0x20) == SLOT_UNCLASSED,
@@ -109,6 +129,8 @@ int main()
 	Classes();
 	Queues();
 	Skips();
+	EmptyDraws();
+	Consumed();
 	Slots();
 	Map();
 	return CheckExit("scene_rules_units");
