@@ -2,6 +2,7 @@
 // Startup thread installs hooks; diagnostics queue under g_lineCS alone.
 
 #include "audit_detail.h"
+#include "audit_steady.h"
 
 #include "base/klib_include.h"
 #include <core/Functions.h>
@@ -285,6 +286,8 @@ bool InstallExeHooks()
 		g_moveHooked = HookAt("charMovementUpdate", exe, ExeAddr(RVA_CHARMOVE_UPD), PRO_CHARMOVE_UPD,
 		                      (void*)&hk_MoveUpdate, (void**)&oMoveUpdate);
 	}
+	if (g_cfg.steadyDetail)
+		InstallSteadyHooks();
 	HookAt("zoneLifecycle", exe, ExeAddr(RVA_ZONE_LIFECYCLE), PRO_ZONE_LIFECYCLE,
 	       (void*)&hk_ZoneLifecycle, (void**)&oZoneLifecycle);
 
@@ -347,6 +350,8 @@ int InstallSites(int* total)
 			continue;
 		bool physx = tag >= ST_PHYS_DETAIL_FIRST;
 		if (physx && !g_cfg.physxDetail)
+			continue;
+		if (SteadySiteTag(tag) && !g_cfg.steadyDetail)
 			continue;
 		if (NameDisabled(g_sites[i].name))
 		{

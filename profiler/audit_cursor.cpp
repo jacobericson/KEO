@@ -362,6 +362,18 @@ CallSiteProbe::Site g_sites[] =
 	{ "zcMaint",    0xA120C6, 0x431DF, SHAPE_INT,   ST_ZC_MAINT },    // SectionManager::maintenanceTimer (2 s)
 	// DeferredLightingPass::execute (0x2D9500) -> light renderer 0x2D8500 (lights + CSM).
 	{ "lights",     0x2D953D, 0x0A911, SHAPE_INT,   ST_LIGHTS },
+	// Nested in `chars` (SteadyDetail): GameWorld::charsUpdate's (0x7862F0) per-character calls.
+	// periodicUpdate's site loads rax from [rdi] and rcx from rdi: the same object, hence looseVirtual=1.
+	{ "chPeriodic", 0x7863FF, 0,       SHAPE_INT,   ST_CH_PERIODIC, 0xE8, 0, 1 },  // Character::periodicUpdate, at most 8 a frame
+	{ "chFour",     0x786563, 0x48CD4, SHAPE_INT,   ST_CH_FOUR },     // Character::fourFrameUpdate, visible characters
+	{ "chFourOff",  0x7864FC, 0x48CD4, SHAPE_INT,   ST_CH_FOUR },     // ... the off-screen ones (at most 6 a frame)
+	{ "chPost",     0x7866A7, 0,       SHAPE_INT,   ST_CH_POST, 0x268 },          // Character::postUpdate, every character
+	{ "chRemoval",  0x78663A, 0x158CF, SHAPE_INT,   ST_CH_DEATH },    // GameWorld::processUpdateRemovalList
+	{ "chDeath",    0x786642, 0x1D6B0, SHAPE_INT,   ST_CH_DEATH },    // GameWorld::charsUpdateDeathParade
+	// Nested in `factions` (SteadyDetail): FactionManager::updateMT (0x2E74B0) and Faction::update (0x6BA9B0).
+	{ "fcUpdate",   0x2E74EB, 0x262A6, SHAPE_FLOAT, ST_FC_UPDATE },   // Faction::update, every faction
+	{ "fcActive",   0x6BA9E8, 0x3F9D1, SHAPE_FLOAT, ST_FC_ACTIVE },   // Faction::updateActivePlatoons
+	{ "fcPeriodic", 0x2E750F, 0x0937C, SHAPE_INT,   ST_FC_PERIODIC }, // Faction::periodicUpdateMT, one faction a frame
 	// RenderTimeBackthread body (AI thread)
 	{ "aiZone",     0x786E41, 0x202CF, SHAPE_INT,   ST_AIZONE },
 	{ "aiContent",  0x786EF0, 0x455A2, SHAPE_INT,   ST_AICONTENT },
@@ -380,6 +392,9 @@ CallSiteProbe::Site g_sites[] =
 	// Inside threadedUpdate 0x5C71A0 (list 1): AI task-system flush, animation.
 	{ "aiFlush",    0x5C7260, 0x0F65F, SHAPE_INT,   ST_AIFLUSH },
 	{ "aiAnim",     0x5C7274, 0x207B1, SHAPE_FLOAT, ST_AIANIM },      // AnimationClass::update (xmm1 = dt)
+	// Inside Faction::periodicUpdateThreaded (0x6B9580, every faction, every AI run, SteadyDetail):
+	// one active platoon's periodicUpdate_unloaded (Platoon vtable +0xE0).
+	{ "afPlatoonU", 0x6B95F7, 0,       SHAPE_INT,   ST_AF_PLATOONU, 0xE0 },
 	// PhysicsActual body (physics thread)
 	{ "physLock",   0x7DC514, 0x25FCC, SHAPE_INT,   ST_PHYSLOCK },    // timed_lock(+0x98) before the step
 	{ "physPre",    0x7DC536, 0x0A78B, SHAPE_INT,   ST_PHYSPRE },     // threaded-object pre-step (0x4CBB90)
@@ -478,7 +493,8 @@ void OnProbeExit(int id, CallSiteProbe::U64 ret, LONGLONG t0, LONGLONG t1)
 		case ST_AIFORCED:   g_ai.forced += d; break;
 		case ST_AIFLUSH:    g_ai.l1Flush += d; break;
 		case ST_AIANIM:     g_ai.l1Anim += d; break;
-		default:            g_ai.vis += d; ++g_ai.visCalls; break;
+		case ST_AF_PLATOONU: g_ai.platU += d; break;
+		default:           g_ai.vis += d; ++g_ai.visCalls; break;
 		}
 		return;
 	}
@@ -510,6 +526,13 @@ void OnProbeExit(int id, CallSiteProbe::U64 ret, LONGLONG t0, LONGLONG t1)
 	case ST_ZC_SECT:
 	case ST_ZC_MAINT:   g_cur.sub[SUBT_ZCSECT]    += d; break;
 	case ST_LIGHTS:     g_cur.sub[SUBT_LIGHTS]    += d; break;
+	case ST_CH_PERIODIC: g_cur.sd[SDT_CHPERIODIC] += d; break;
+	case ST_CH_FOUR:     g_cur.sd[SDT_CHFOUR]     += d; break;
+	case ST_CH_POST:     g_cur.sd[SDT_CHPOST]     += d; break;
+	case ST_CH_DEATH:    g_cur.sd[SDT_CHDEATH]    += d; break;
+	case ST_FC_UPDATE:   g_cur.sd[SDT_FCUPDATE]   += d; break;
+	case ST_FC_ACTIVE:   g_cur.sd[SDT_FCACTIVE]   += d; break;
+	case ST_FC_PERIODIC: g_cur.sd[SDT_FCPERIODIC] += d; break;
 	case ST_AIKICK:    g_cur.aiKickT = t0; break;
 	case ST_PHYSKICK:  g_phys.kickT  = t0; break;
 	case ST_BIRDSKICK: g_birds.kickT = t0; break;

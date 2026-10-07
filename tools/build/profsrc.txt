@@ -29,5 +29,6 @@ profiler\hulls_fault.cpp
 profiler\hulls_report.cpp
 profiler\hulls_install.cpp
 profiler\audit_cpu.cpp
+profiler\audit_steady.cpp
 src\base\ini_text.cpp
 src\base\legacy_ini_import.cpp

@@ -21,6 +21,8 @@ void RunWorkerBody(ThreadSlot& s, ThreadBody_t orig, void* self, float ft, bool 
 		s.env = s.forced = 0;
 		s.tu = s.tu4 = s.tup = s.tuMax = 0;
 		s.l1Task = s.l1Move = s.l1Flush = s.l1Anim = 0;
+		s.rel = s.platU = 0;
+		s.relCalls = s.relNodes = 0;
 		s.ntask = 0;
 		s.visCalls = 0;
 		s.l1 = *(const int*)((const char*)self + AI_LIST_TU);

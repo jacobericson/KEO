@@ -71,6 +71,9 @@ const size_t FM_DATA       = 0x10;
 KLIB_ASSERT_OFFSET(FactionManager_participants_stuff, FM_DATA);
 const size_t FACTION_ACTIVE_PLATOONS = 0x210;   // activePlatoons.count (lektor at 0x208)
 KLIB_ASSERT_OFFSET(Faction_activePlatoons_count, FACTION_ACTIVE_PLATOONS);
+const size_t FACTION_UNLOADED_PLATOONS = 0x228; // unloadedPlatoons.count (the lektor after activePlatoons)
+static_assert(FACTION_UNLOADED_PLATOONS == KLIB_OFF_Faction_activePlatoons + KLIB_WIDTH_Faction_activePlatoons + KLIB_OFF_FactionLektor_count,
+              "FACTION_UNLOADED_PLATOONS composed parity");
 
 const size_t PLAYER_CAMERA   = 0x30;  // CameraClass*
 KLIB_ASSERT_OFFSET(PlayerInterface_camera, PLAYER_CAMERA);
@@ -363,7 +366,10 @@ const size_t RVA_PREV_MLEFT   = 0x2132282;  // byte: last frame's mLeft
 	X(CURCALLS, "curCalls") X(CURSTILL, "curStill") X(CURSMALL, "curSmall") X(CURLARGE, "curLarge") \
 	X(CURMOVED, "curMoved") X(CURBTN, "curBtn") X(CUREDGE, "curEdge") X(CURMOD, "curMod") \
 	X(CURPHYS, "curPhys") X(CURHITS, "curHits") X(CURCHAR, "curChar") X(RAY2CALLS, "ray2Calls") \
-	X(CURINPUT, "curInput")
+	X(CURINPUT, "curInput") \
+	X(CUN, "cuN") X(CUPLAYERN, "cuPlayerN") X(CPN, "cpN") X(CPPLAYERN, "cpPlayerN") \
+	X(FMLOOKUPS, "fmLookups") X(FMBUILDS, "fmBuilds") X(RELCALLS, "relCalls") X(RELNODES, "relNodes") \
+	X(FACTIONSN, "factionsN") X(UNLPLATOONS, "unloadedPlatoons") X(PLAYERS, "players")
 
 #define AUDIT_ENUM_C(id, name) C_##id,
 #define AUDIT_NAME(id, name) name,
@@ -375,7 +381,8 @@ enum Count  { AUDIT_COUNTS(AUDIT_ENUM_C) NUM_COUNTS };
 inline bool CountIsEvent(int c)
 {
 	return c == C_UNLOADS || c == C_SQUADS || c == C_FXNEW || c == C_FXDEL ||
-	       (c >= C_CURCALLS && c <= C_RAY2CALLS);
+	       (c >= C_CURCALLS && c <= C_RAY2CALLS) ||
+	       c == C_FMLOOKUPS || c == C_FMBUILDS || c == C_RELCALLS;
 }
 
 // Bit masks (OR-ed per second, left out of the means).
@@ -539,10 +546,14 @@ enum SiteTag
 	ST_MOUSESCAN, ST_MOUSERAY, ST_CAMRAY, ST_MOUSERAY2, ST_CURSORT,
 	ST_ZC_CONTENT, ST_ZC_MISC, ST_ZC_ACT, ST_ZC_DEACT, ST_ZC_SECT, ST_ZC_MAINT,
 	ST_LIGHTS,
+	// Main thread, SteadyDetail: nested inside the chars and factions sections.
+	ST_CH_PERIODIC, ST_CH_FOUR, ST_CH_POST, ST_CH_DEATH, ST_FC_UPDATE, ST_FC_ACTIVE, ST_FC_PERIODIC,
 	// AI thread (RenderTimeBackthread body, and threadedUpdate inside list 1).
 	ST_AI_FIRST,
 	ST_AIZONE = ST_AI_FIRST, ST_AICONTENT, ST_AIFACTIONS, ST_AIVIS1, ST_AIVIS2,
 	ST_AITU, ST_AITU4, ST_AITUP, ST_AIENV, ST_AIFORCED, ST_AIFLUSH, ST_AIANIM,
+	// AI thread, SteadyDetail: inside FactionManager::updateThreaded.
+	ST_AF_PLATOONU,
 	// Physics thread (PhysicsActual body).
 	ST_PHYS_FIRST,
 	ST_PHYSLOCK = ST_PHYS_FIRST, ST_PHYSPRE, ST_PHYSPOST,

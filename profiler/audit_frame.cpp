@@ -3,9 +3,13 @@
 // Status lines use the output queue, which takes g_lineCS alone.
 
 #include "audit_detail.h"
+#include "audit_steady.h"
 #include <time.h>
 
 namespace kenshiframeaudit_detail {
+// Read once a second by OncePerSecond, copied into every frame (main thread).
+static int s_factionsN = 0, s_unloadedPlatoons = 0, s_players = 0;
+
 void OpenFrame(LONGLONG t, bool viaRenderOneFrame)
 {
 	memset(&g_cur, 0, sizeof(g_cur));
@@ -23,6 +27,7 @@ void OpenFrame(LONGLONG t, bool viaRenderOneFrame)
 	g_cur.birdsWake = g_cur.birdsRun = g_cur.birdsWindow = g_cur.physWake = g_cur.physRun = nan;
 	g_cur.physLock = g_cur.physPre = g_cur.physSim = g_cur.physPost = nan;
 	g_cur.dtMs = g_cur.speed = nan;
+	g_cur.relMs = g_cur.afPlatoonU = nan;
 
 	// No scene call spans a frame boundary; an exception can leave one open.
 	g_depth    = 0;
@@ -277,6 +282,10 @@ void CloseFrame(LONGLONG tNext)
 		r.c[C_ZOUTB]       = g_zLoaded > c.setB ? g_zLoaded - c.setB : 0;
 		r.c[C_UNLOADS]     = c.unloads;
 		r.c[C_PLATOONS]    = g_platoons;
+		r.c[C_FACTIONSN]   = s_factionsN;
+		r.c[C_UNLPLATOONS] = s_unloadedPlatoons;
+		r.c[C_PLAYERS]     = s_players;
+		SteadyFrameTotals(c, r);
 	}
 	r.c[C_DRAWS]       = c.draws;
 	r.c[C_SHADOWDRAWS] = c.shadowDraws;
@@ -369,6 +378,7 @@ void CollectAi()
 	if (g_moveHooked)          g_cur.aiL1Move  = TicksToMs(s.l1Move);
 	if (g_haveTag[ST_AIFLUSH]) g_cur.aiL1Flush = TicksToMs(s.l1Flush);
 	if (g_haveTag[ST_AIANIM])  g_cur.aiL1Anim  = TicksToMs(s.l1Anim);
+	SteadyCollectAi(s);
 
 	// Task classes of this run into the per-class counters.
 	for (int i = 0; i < s.ntask && i < ThreadSlot::MAX_TASKS; ++i)
@@ -542,7 +552,7 @@ void OncePerSecond()
 
 	uintptr_t gw = KlibAddress(g_base, RVA_GAMEWORLD);
 
-	int platoons = 0;
+	int platoons = 0, unloaded = 0, factions = 0, players = 0;
 	uintptr_t fm = *(uintptr_t*)(KLIB_MEMBER(5, gw, GameWorld_factionMgr, GW_FACTIONMGR));
 	if (PlausiblePtr(fm))
 	{
@@ -550,15 +560,20 @@ void OncePerSecond()
 		uintptr_t data = *(const uintptr_t*)(KLIB_MEMBER(5, fm, FactionManager_participants_stuff, FM_DATA));
 		if (count <= 4096 && PlausiblePtr(data))
 		{
+			factions = (int)count;
 			const uintptr_t* list = (const uintptr_t*)data;
 			for (unsigned i = 0; i < count; ++i)
 			{
-				if (PlausiblePtr(list[i]))
-					platoons += *(const int*)(KLIB_MEMBER(5, list[i], Faction_activePlatoons_count, FACTION_ACTIVE_PLATOONS));
+				if (!PlausiblePtr(list[i]))
+					continue;
+				platoons += *(const int*)(KLIB_MEMBER(5, list[i], Faction_activePlatoons_count, FACTION_ACTIVE_PLATOONS));
+				unloaded += *(const int*)(list[i] + FACTION_UNLOADED_PLATOONS);
 			}
 		}
 	}
 	g_platoons = platoons;
+	s_factionsN = factions;
+	s_unloadedPlatoons = unloaded;
 
 	g_camAlt = Nan();
 	uintptr_t player = *(uintptr_t*)(KLIB_MEMBER(5, gw, GameWorld_player, GW_PLAYER));
@@ -567,7 +582,9 @@ void OncePerSecond()
 		uintptr_t cam = *(const uintptr_t*)(KLIB_MEMBER(5, player, PlayerInterface_camera, PLAYER_CAMERA));
 		if (PlausiblePtr(cam))
 			g_camAlt = *(const float*)(KLIB_MEMBER(5, cam, CameraClass_altitude, CAMERA_ALTITUDE));
+		players = *(const int*)(KLIB_MEMBER(5, player, PlayerInterface_playerCharacters_count, 0x2B8));
 	}
+	s_players = players;
 
 	if (!g_headerDone)
 	{

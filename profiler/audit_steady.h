@@ -1,5 +1,6 @@
 // audit_steady.h - What the rest of the frame audit calls in the per-thread CPU sampler
-// (audit_cpu.cpp). Included after audit_detail.h by the audit's own sources.
+// (audit_cpu.cpp) and the steady-state cost probes (audit_steady.cpp). Included after
+// audit_detail.h by the audit's own sources.
 
 #ifndef KENSHI_FRAME_AUDIT_STEADY_H
 #define KENSHI_FRAME_AUDIT_STEADY_H
@@ -16,6 +17,18 @@ void CpuNoteRole(int role);
 void CpuNoteOgreWorker();
 // Reporter thread, every pass: one sample a second once the TSC rate is known.
 void CpuSampleTick();
+
+// ---- Steady-state cost probes (SteadyDetail) ----
+// A call-site row that only SteadyDetail installs.
+bool SteadySiteTag(int tag);
+// Startup, from InstallExeHooks: the six entry hooks.
+void InstallSteadyHooks();
+// "on", "partial" or "off"; meaningful once InstallSites has run.
+const char* SteadyStatus();
+// Main thread, in CollectAi once the AI slot is consistent.
+void SteadyCollectAi(const ThreadSlot& s);
+// Main thread, in CloseFrame's in-game block: the detail metrics and counts into the record.
+void SteadyFrameTotals(const CurFrame& c, FrameRec& r);
 
 } // kenshiframeaudit_detail
 

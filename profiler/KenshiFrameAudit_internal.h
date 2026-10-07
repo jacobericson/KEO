@@ -88,6 +88,10 @@ inline double SinceStart(LONGLONG t)
 	X(SUB_MOUSESCAN, "mouseScan") X(SUB_MOUSERAY, "mouseRay") X(SUB_CAMRAY, "camRay") \
 	X(SUB_MOUSERAY2, "mouseRay2") X(SUB_CURRAY, "curRay") X(SUB_CURSORT, "curSort") X(SUB_CURCAST, "curCast") \
 	X(SUB_ZCVAN, "zcVan") X(SUB_ZCMOD, "zcMod") X(SUB_ZCCONTENT, "zcContent") X(SUB_ZCSECT, "zcSect") \
+	X(SD_CU, "cuMs") X(SD_CUPLAYER, "cuPlayerMs") X(SD_CUANIM, "cuAnimMs") X(SD_CP, "cpMs") \
+	X(SD_CPPLAYER, "cpPlayerMs") X(SD_CPANIM, "cpAnimMs") X(SD_CHPERIODIC, "chPeriodic") \
+	X(SD_CHFOUR, "chFour") X(SD_CHPOST, "chPost") X(SD_CHDEATH, "chDeath") X(SD_FCUPDATE, "fcUpdate") \
+	X(SD_FCACTIVE, "fcActive") X(SD_FCPERIODIC, "fcPeriodic") X(SD_FMBUILD, "fmBuildMs") \
 	X(R_CULL, "rCull") X(R_SCENE, "rScene") X(R_SHADOW, "rShadow") X(R_QUEUE, "rQueue") \
 	X(R_SUBMIT, "rSubmit") X(R_RSO, "rRso") X(R_SETPASS, "rSetPass") X(R_BIND, "rBind") \
 	X(R_D3D, "rD3D") X(R_SYNC, "rSync") X(R_OLDANIM, "rOldAnim") X(R_LIGHTS, "rLights") \
@@ -96,7 +100,7 @@ inline double SinceStart(LONGLONG t)
 	X(AI_CONTENT, "aiContent") X(AI_FACTIONS, "aiFactions") X(AI_ENV, "aiEnv") X(AI_VIS, "aiVis") \
 	X(AI_TU, "aiTU") X(AI_TU4, "aiTU4") X(AI_TUP, "aiTUP") X(AI_FORCED, "aiForced") X(AI_TUMAX, "aiTUmax") \
 	X(AI_L1TASK, "aiL1Task") X(AI_L1MOVE, "aiL1Move") X(AI_L1FLUSH, "aiL1Flush") X(AI_L1ANIM, "aiL1Anim") \
-	X(AI_OTHER, "aiOther") X(AI_RESID, "aiResid") \
+	X(AI_OTHER, "aiOther") X(AI_RESID, "aiResid") X(AI_REL, "relMs") X(AI_PLATU, "afPlatoonU") \
 	X(BIRDS_WAKE, "birdsWake") X(BIRDS_RUN, "birdsRun") X(BIRDS_WINDOW, "birdsWindow") \
 	X(PHYS_WAKE, "physWake") X(PHYS_RUN, "physRun") X(PHYS_LOCK, "physLock") X(PHYS_PRE, "physPre") \
 	X(PHYS_SIM, "physSim") X(PHYS_POST, "physPost") \
@@ -121,6 +125,15 @@ enum SubTick
 	SUBT_ZCCONTENT, SUBT_ZCMISC, SUBT_ZCACT, SUBT_ZCSECT,
 	SUBT_LIGHTS,
 	SUBT_COUNT
+};
+
+// SteadyDetail probe ticks on the main thread, per frame (nested: no section's sum).
+enum SdTick
+{
+	SDT_CU, SDT_CUPLAYER, SDT_CUANIM, SDT_CP, SDT_CPPLAYER, SDT_CPANIM,
+	SDT_CHPERIODIC, SDT_CHFOUR, SDT_CHPOST, SDT_CHDEATH,
+	SDT_FCUPDATE, SDT_FCACTIVE, SDT_FCPERIODIC,
+	SDT_COUNT
 };
 
 // One SceneManager::_renderPhase02 call (a compositor scene pass, or one CSM
@@ -196,6 +209,7 @@ struct Config
 	bool        listeners;          // per-class frame-listener timing
 	bool        hullDiag;           // PhysX hull destroy-queue diagnostic
 	bool        cpuSample;          // per-thread CPU time: _cpu.csv and [AUDIT-THREADS]
+	bool        steadyDetail;       // character, faction and formation cost probes
 };
 
 
@@ -218,6 +232,8 @@ struct ThreadSlot
 	int           physQueued[PO_COUNT];           // queues at threadJunkPreBT entry
 	int           physCalls[PO_COUNT];            // actual operations at probed call sites
 	int           physHulls;                      // registered hulls at pre-step entry
+	LONGLONG      rel, platU;                     // FactionRelations::update; one platoon's unloaded update (AI)
+	int           relCalls, relNodes;             // relations updates and the map entries they walked
 	// CharBody::update time by the task class running it (task vtable).
 	static const int MAX_TASKS = 24;
 	const void*   taskVt[MAX_TASKS];
@@ -266,10 +282,14 @@ struct CurFrame
 
 	LONGLONG aiKickT, aiJoinT0, aiJoinT1, birdsJoinT0;
 	float    aiWake, aiRun, aiWindow, aiZone, aiContent, aiFactions, aiVis, aiOther, aiResid;
+	float    relMs, afPlatoonU;
 	float    birdsWake, birdsRun, birdsWindow, physWake, physRun;
 	int      aiL1, aiL4, aiLP, visCalls;
 
 	int      chars, dead, full, setB, zoneState;
+	LONGLONG sd[SDT_COUNT];                       // SteadyDetail probe ticks
+	int      cuN, cuPlayerN, cpN, cpPlayerN, relCalls, relNodes;
+	int      animParent;                          // the character update running the animation update
 
 	bool     fxCensused;                          // the effect census ran this frame
 	int      fx, fxSys, fxVis, fxStop, fxParts, fxNew, fxDel;
