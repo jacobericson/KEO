@@ -108,9 +108,11 @@ class TestRunnerControls(unittest.TestCase):
 
 REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir))
 LOCAL_DIRS = ('tools/tests', 'tools/build')
-# A Python import (a plain statement or one inside a scratch module's source string), or a .py or
-# .h file the code names (a script it runs, a header its scratch suites include).
-REFERENCE_RE = re.compile(r'(?:\bimport\s+|\bfrom\s+)(\w+)|\b(\w+\.(?:py|h))\b')
+# A Python import (a plain statement, every name of `import a, b`, or one inside a scratch module's
+# source string), or a .py or .h file the code names (a script it runs, a header its scratch suites
+# include). Batch files are left out: the runners' docstrings name build_tests.bat, which calls
+# them, and no control runs one.
+REFERENCE_RE = re.compile(r'(?:\bimport\s+|\bfrom\s+)(\w+(?:\s*,\s*\w+)*)|\b(\w+\.(?:py|h))\b')
 
 
 def listed_test_modules():
@@ -131,13 +133,14 @@ def references(rel, skip):
     with open(os.path.join(REPO, rel), 'r', encoding='utf-8') as f:
         text = f.read()
     out = set()
-    for module, name in REFERENCE_RE.findall(text):
-        name = name or module + '.py'
-        if os.path.splitext(name)[0] in skip:
-            continue
-        for folder in LOCAL_DIRS:
-            if os.path.isfile(os.path.join(REPO, folder, name)):
-                out.add('%s/%s' % (folder, name))
+    for modules, name in REFERENCE_RE.findall(text):
+        names = [name] if name else [m.strip() + '.py' for m in modules.split(',')]
+        for name in names:
+            if os.path.splitext(name)[0] in skip:
+                continue
+            for folder in LOCAL_DIRS:
+                if os.path.isfile(os.path.join(REPO, folder, name)):
+                    out.add('%s/%s' % (folder, name))
     return out
 
 
