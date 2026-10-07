@@ -70,3 +70,18 @@ void* PatchImportSlot(HMODULE importer, const char* exporterDll, const char* sym
 		return NULL;
 	return prev;
 }
+
+bool ReadModuleImageId(HMODULE m, DWORD* stamp, DWORD* size)
+{
+	if (!m)
+		return false;
+	const IMAGE_DOS_HEADER* dos = (const IMAGE_DOS_HEADER*)m;
+	if (dos->e_magic != IMAGE_DOS_SIGNATURE)
+		return false;
+	const IMAGE_NT_HEADERS64* nt = (const IMAGE_NT_HEADERS64*)((const char*)m + dos->e_lfanew);
+	if (nt->Signature != IMAGE_NT_SIGNATURE)
+		return false;
+	if (stamp) *stamp = nt->FileHeader.TimeDateStamp;
+	if (size) *size = nt->OptionalHeader.SizeOfImage;
+	return true;
+}

@@ -26,3 +26,7 @@ bool  InstallModuleHook(const ModuleSite& site, void* detour, void** orig, bool*
 // expectedCurrent doesn't match what was actually there.
 void* PatchImportSlot(HMODULE importer, const char* exporterDll, const char* symbol,
                       void* replacement, void* expectedCurrent);
+
+// The loaded module's PE header: its TimeDateStamp and SizeOfImage. False
+// when the DOS or NT signature is wrong.
+bool  ReadModuleImageId(HMODULE m, DWORD* stamp, DWORD* size);
