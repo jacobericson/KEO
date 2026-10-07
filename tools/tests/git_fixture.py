@@ -4,13 +4,17 @@
 the first of its configuration: the template is `git init` from an empty template directory (no
 sample hooks) plus the same config rows in the same order, and each new repository is a copy of
 its `.git`. The templates are removed when the process exits. read_head answers
-`git rev-parse HEAD` from the repository's files where it can, also without a process.
+`git rev-parse HEAD` from the repository's files where it can, also without a process. rmtree
+removes a folder of test repositories, read-only object files included.
 """
 import atexit
 import os
 import shutil
+import stat
 import subprocess
+import sys
 import tempfile
+import time
 
 # Variables that would point git at a repository other than the one being made.
 _REPO_VARS = ('GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY')
@@ -20,10 +24,42 @@ _templates = {}
 _scratch = []
 
 
+# Waits before each retry of a refused removal: a scanner or indexer can hold a file git just wrote
+# for a moment. The attempt after the last wait raises.
+_RETRY_DELAYS = (0, 0.05, 0.1, 0.2, 0.4)
+
+
+def _writable_retry(func, path, _exc):
+    for delay in _RETRY_DELAYS:
+        time.sleep(delay)
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+            return
+        except FileNotFoundError:
+            return
+        except PermissionError:
+            pass
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
+
+def rmtree(path):
+    """Removes a tree holding git repositories. Git makes its object files read-only, which
+    Windows refuses to delete, so each refused entry is made writable and removed again; any other
+    failure raises. A path that is already gone is not an error."""
+    if not os.path.lexists(path):
+        return
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=_writable_retry)
+    else:
+        shutil.rmtree(path, onerror=_writable_retry)
+
+
 def _make_template(branch, config):
     if not _scratch:
         _scratch.append(tempfile.mkdtemp(prefix='git-fixture-'))
-        atexit.register(shutil.rmtree, _scratch[0], True)
+        atexit.register(rmtree, _scratch[0])
     base = tempfile.mkdtemp(dir=_scratch[0])
     empty = os.path.join(base, 'empty')
     repo = os.path.join(base, 'repo')
