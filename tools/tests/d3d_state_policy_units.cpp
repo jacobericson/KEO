@@ -254,52 +254,11 @@ static void CheckLayout()
 	      "layout: the mirrors lie inside the fake render system");
 }
 
-static void PutU32(unsigned char* p, unsigned long v)
-{
-	p[0] = (unsigned char)v; p[1] = (unsigned char)(v >> 8);
-	p[2] = (unsigned char)(v >> 16); p[3] = (unsigned char)(v >> 24);
-}
-
-static void MakePe(unsigned char* img, size_t len, unsigned long lfanew, unsigned magic)
-{
-	memset(img, 0, len);
-	img[0] = 'M'; img[1] = 'Z';
-	PutU32(img + 0x3C, lfanew);
-	if (lfanew + 0x58 > len)
-		return;
-	unsigned char* pe = img + lfanew;
-	pe[0] = 'P'; pe[1] = 'E';
-	PutU32(pe + 8, D3D_STATE_BUILD_STAMP);
-	pe[24] = (unsigned char)magic; pe[25] = (unsigned char)(magic >> 8);
-	PutU32(pe + 80, D3D_STATE_BUILD_SIZE);
-}
-
-static void CheckPe()
-{
-	unsigned char img[0x200];
-	unsigned long stamp = 0, size = 0;
-
-	MakePe(img, sizeof(img), 0x80, 0x20B);
-	Check(D3dPeStampAndSize(img, sizeof(img), &stamp, &size) && stamp == D3D_STATE_BUILD_STAMP
-	      && size == D3D_STATE_BUILD_SIZE, "pe: a PE32+ header gives its stamp and size");
-
-	MakePe(img, sizeof(img), 0x1C0, 0x20B);
-	Check(!D3dPeStampAndSize(img, sizeof(img), &stamp, &size), "pe: a header past the buffer is refused");
-
-	MakePe(img, sizeof(img), 0x80, 0x10B);
-	Check(!D3dPeStampAndSize(img, sizeof(img), &stamp, &size), "pe: a PE32 header is refused");
-
-	MakePe(img, sizeof(img), 0x80, 0x20B);
-	img[0] = 'X';
-	Check(!D3dPeStampAndSize(img, sizeof(img), &stamp, &size), "pe: no MZ is refused");
-}
-
 int main()
 {
 	CheckRule();
 	CheckBefore();
 	CheckAfter();
 	CheckLayout();
-	CheckPe();
 	return CheckExit(SUITE_NAME);
 }

@@ -149,8 +149,8 @@ const char* OgreSceneBuildRefusal(HMODULE ogre)
 {
 	if (!ogre)
 		return "no module";
-	unsigned long stamp = 0, size = 0;
-	if (!OgrePeStampAndSize((const unsigned char*)ogre, 0x1000, &stamp, &size)
+	DWORD stamp = 0, size = 0;
+	if (!ReadModuleImageId(ogre, &stamp, &size)
 	    || stamp != OGRE_SCENE_BUILD_STAMP || size != OGRE_SCENE_BUILD_SIZE)
 		return "build mismatch";
 	const uintptr_t base = (uintptr_t)ogre;

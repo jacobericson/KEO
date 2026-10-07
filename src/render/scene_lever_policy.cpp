@@ -244,26 +244,3 @@ RqClearAction RqClearStep(int mode, int applied)
 		return RQ_RESTORE;
 	return RQ_NONE;
 }
-
-bool OgrePeStampAndSize(const unsigned char* image, size_t len, unsigned long* stamp, unsigned long* size)
-{
-	if (len < 0x40 || image[0] != 'M' || image[1] != 'Z')
-		return false;
-	int32_t lfanew;
-	memcpy(&lfanew, image + 0x3C, sizeof(lfanew));
-	if (lfanew < 0 || (size_t)lfanew + 0x58 > len)
-		return false;
-	const unsigned char* pe = image + lfanew;
-	if (pe[0] != 'P' || pe[1] != 'E' || pe[2] != 0 || pe[3] != 0)
-		return false;
-	unsigned short magic;
-	memcpy(&magic, pe + 24, sizeof(magic));
-	if (magic != 0x20B)
-		return false;
-	uint32_t s, z;
-	memcpy(&s, pe + 8, sizeof(s));
-	memcpy(&z, pe + 80, sizeof(z));
-	*stamp = (unsigned long)s;
-	*size = (unsigned long)z;
-	return true;
-}

@@ -91,26 +91,3 @@ void D3dStateAfter(const unsigned char* rs, D3dShadows* sh, unsigned recreate)
 		s.held = true;
 	}
 }
-
-static unsigned long ReadU32(const unsigned char* p)
-{
-	return (unsigned long)p[0] | ((unsigned long)p[1] << 8) | ((unsigned long)p[2] << 16)
-	     | ((unsigned long)p[3] << 24);
-}
-
-bool D3dPeStampAndSize(const unsigned char* image, size_t len, unsigned long* stamp, unsigned long* size)
-{
-	if (!image || len < 0x40 || image[0] != 'M' || image[1] != 'Z')
-		return false;
-	const long lfanew = (long)ReadU32(image + 0x3C);
-	if (lfanew < 0 || (size_t)lfanew + 0x58 > len)
-		return false;
-	const unsigned char* pe = image + lfanew;
-	if (pe[0] != 'P' || pe[1] != 'E' || pe[2] != 0 || pe[3] != 0)
-		return false;
-	if (pe[24] != 0x0B || pe[25] != 0x02)
-		return false;
-	*stamp = ReadU32(pe + 8);
-	*size = ReadU32(pe + 80);
-	return true;
-}

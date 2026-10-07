@@ -112,8 +112,4 @@ InstUpload InstUploadDecide(bool mainThread, const unsigned char* batch);
 enum RqClearAction { RQ_NONE, RQ_SET_ON, RQ_RESTORE };
 RqClearAction RqClearStep(int mode, int applied);
 
-// A PE image's TimeDateStamp and SizeOfImage from its first len bytes; false
-// for anything but a PE32+ header inside len.
-bool OgrePeStampAndSize(const unsigned char* image, size_t len, unsigned long* stamp, unsigned long* size);
-
 #endif // KEO_RENDER_SCENE_LEVER_POLICY_H

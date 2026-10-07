@@ -78,8 +78,4 @@ D3dBefore D3dStateBefore(unsigned char* rs, D3dShadows* sh, long epoch);
 // stencil reference) becomes its held shadow.
 void D3dStateAfter(const unsigned char* rs, D3dShadows* sh, unsigned recreate);
 
-// A PE image's TimeDateStamp and SizeOfImage from its first len bytes; false
-// for anything but a PE32+ header inside len.
-bool D3dPeStampAndSize(const unsigned char* image, size_t len, unsigned long* stamp, unsigned long* size);
-
 #endif // KEO_RENDER_D3D_STATE_POLICY_H

@@ -38,7 +38,6 @@ static const ModuleSite s_initSite =
 
 static const uintptr_t D3D11_START_PLUGIN_RVA = 0x4D30;
 static const uintptr_t D3D11_STOP_PLUGIN_RVA  = 0x4D80;
-static const size_t    D3D11_HEADER_BYTES     = 0x1000;
 
 typedef void (*Render_t)(void* rs, const void* op);
 typedef void (*SetRt_t)(void* rs, void* target);
@@ -164,9 +163,9 @@ static const char* CheckBuild(HMODULE m)
 {
 	if (!m)
 		return "no module";
-	unsigned long stamp = 0, size = 0;
+	DWORD stamp = 0, size = 0;
 	const uintptr_t base = (uintptr_t)m;
-	if (!D3dPeStampAndSize((const unsigned char*)m, D3D11_HEADER_BYTES, &stamp, &size)
+	if (!ReadModuleImageId(m, &stamp, &size)
 	    || stamp != D3D_STATE_BUILD_STAMP || size != D3D_STATE_BUILD_SIZE
 	    || (uintptr_t)GetProcAddress(m, "dllStartPlugin") != base + D3D11_START_PLUGIN_RVA
 	    || (uintptr_t)GetProcAddress(m, "dllStopPlugin") != base + D3D11_STOP_PLUGIN_RVA)

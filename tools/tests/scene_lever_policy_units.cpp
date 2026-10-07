@@ -495,44 +495,6 @@ static void TestRq()
 	Check(RqClearStep(7, 0) == RQ_NONE && RqClearStep(7, 1) == RQ_RESTORE, "rq: an unknown mode reads as off");
 }
 
-// ---- pe -----------------------------------------------------------------
-
-static unsigned char g_image[0x400];
-
-static void BuildPe(unsigned short magic, long lfanew)
-{
-	memset(g_image, 0, sizeof(g_image));
-	g_image[0] = 'M';
-	g_image[1] = 'Z';
-	const int32_t lf = (int32_t)lfanew;
-	memcpy(g_image + 0x3C, &lf, sizeof(lf));
-	if (lfanew < 0 || lfanew + 0x58 > (long)sizeof(g_image))
-		return;
-	unsigned char* pe = g_image + lfanew;
-	pe[0] = 'P';
-	pe[1] = 'E';
-	const uint32_t stamp = 0x5CA5F929u, size = 0x9C9000u;
-	memcpy(pe + 8, &stamp, sizeof(stamp));
-	memcpy(pe + 24, &magic, sizeof(magic));
-	memcpy(pe + 80, &size, sizeof(size));
-}
-
-static void TestPe()
-{
-	unsigned long stamp = 0, size = 0;
-	BuildPe(0x20B, 0x100);
-	Check(OgrePeStampAndSize(g_image, sizeof(g_image), &stamp, &size)
-	      && stamp == OGRE_SCENE_BUILD_STAMP && size == OGRE_SCENE_BUILD_SIZE,
-	      "pe: a PE32+ header gives its stamp and size");
-	BuildPe(0x20B, 0x100);
-	Check(!OgrePeStampAndSize(g_image, 0x100 + 0x57, &stamp, &size), "pe: a header past the buffer is refused");
-	BuildPe(0x10B, 0x100);
-	Check(!OgrePeStampAndSize(g_image, sizeof(g_image), &stamp, &size), "pe: a PE32 header is refused");
-	BuildPe(0x20B, 0x100);
-	g_image[0] = 'N';
-	Check(!OgrePeStampAndSize(g_image, sizeof(g_image), &stamp, &size), "pe: no MZ is refused");
-}
-
 int main()
 {
 	TestR8();
@@ -545,6 +507,5 @@ int main()
 	TestSite();
 	TestInst();
 	TestRq();
-	TestPe();
 	return CheckExit("scene_lever_policy_units");
 }
