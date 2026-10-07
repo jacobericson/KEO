@@ -34,12 +34,14 @@ unsigned NfmClusterKey(unsigned faceKey, int cluster)
 	return ((unsigned)cluster & 0x3FFFFFu) | (faceKey & 0xFFC00000u);
 }
 
-NfmKey NfmMakeKey(unsigned goalFace, unsigned startFace, int startCluster, unsigned diameterBits, bool costModifier)
+NfmKey NfmMakeKey(unsigned goalFace, unsigned startFace, int startCluster, unsigned diameterBits, bool costModifier,
+                  unsigned waterCostBits)
 {
 	NfmKey k;
 	k.goal = goalFace;
 	k.diameter = diameterBits;
 	k.flags = costModifier ? NFM_COST_MODIFIER : 0u;
+	k.waterCost = costModifier ? waterCostBits : 0u;
 	unsigned cluster = NfmClusterKey(startFace, startCluster);
 	if (cluster == NFM_NO_KEY)
 	{
@@ -55,7 +57,8 @@ NfmKey NfmMakeKey(unsigned goalFace, unsigned startFace, int startCluster, unsig
 
 bool NfmKeyEqual(const NfmKey& a, const NfmKey& b)
 {
-	return a.goal == b.goal && a.start == b.start && a.diameter == b.diameter && a.flags == b.flags;
+	return a.goal == b.goal && a.start == b.start && a.diameter == b.diameter && a.flags == b.flags
+	    && a.waterCost == b.waterCost;
 }
 
 unsigned NfmHash(const NfmKey& k)
@@ -64,7 +67,8 @@ unsigned NfmHash(const NfmKey& k)
 	h = Mix(h, k.goal);
 	h = Mix(h, k.start);
 	h = Mix(h, k.diameter);
-	return Mix(h, k.flags);
+	h = Mix(h, k.flags);
+	return Mix(h, k.waterCost);
 }
 
 NfmDrop NfmStale(const NfmEntry& e, const NfmEpoch& now, long long nowTicks, long long ttlTicks)
@@ -117,7 +121,7 @@ NfmLookup NfmFind(NfmTable* t, const NfmKey& k, unsigned startFace, const NfmEpo
 }
 
 bool NfmInsert(NfmTable* t, const NfmKey& k, unsigned startFace, const NfmEpoch& epoch,
-               long long nowTicks, long long serviceTicks)
+               long long nowTicks, long long serviceTicks, int status, int cause)
 {
 	unsigned home = NfmHash(k);
 	int target = -1, freeSlot = -1, oldest = -1;
@@ -152,6 +156,8 @@ bool NfmInsert(NfmTable* t, const NfmKey& k, unsigned startFace, const NfmEpoch&
 	e.epoch = epoch;
 	e.insertTicks = nowTicks;
 	e.serviceTicks = serviceTicks;
+	e.status = status;
+	e.cause = cause;
 	if (!e.used)
 	{
 		e.used = 1;
@@ -183,7 +189,30 @@ void NfmClear(NfmTable* t)
 
 bool NfmShouldInsert(int status, int cause, int iterations)
 {
-	return status == 3 && cause == 3 && iterations >= NFM_MIN_INSERT_ITER;
+	return (status == 2 || (status == 3 && cause == 3)) && iterations >= NFM_MIN_INSERT_ITER;
+}
+
+bool NfmUnreachableInputCovered(const void* input)
+{
+	if (!input)
+		return false;
+	const unsigned char* in = (const unsigned char*)input;
+	// The character wrapper leaves these constructor defaults unchanged.
+	return *(const unsigned*)(in + NFM_IN_MAX_LENGTH) == 0x7F7FFFEEu
+	    && *(const float*)(in + NFM_IN_SPHERE) < 0.0f
+	    && *(const float*)(in + NFM_IN_CAPSULE) < 0.0f;
+}
+
+void NfmReplay(const NfmEntry& entry, void* output)
+{
+	unsigned char* out = (unsigned char*)output;
+	out[NFM_OUT_STATUS] = (unsigned char)entry.status;
+	out[NFM_OUT_CAUSE] = (unsigned char)entry.cause;
+}
+
+bool NfmWrongClass(int recordedStatus, int status)
+{
+	return !NfmWrong(status) && status != recordedStatus;
 }
 
 bool NfmWrong(int status)

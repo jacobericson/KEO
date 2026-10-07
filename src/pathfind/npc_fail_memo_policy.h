@@ -27,6 +27,10 @@ const size_t NFM_IN_START_FACE  = 0x30;
 const size_t NFM_IN_GOAL_KEYS   = 0x38;   // hkArray<unsigned>: the data, then the int count at +8
 const size_t NFM_IN_AGENT_DIAM  = 0x4C;
 const size_t NFM_IN_COST_MOD    = 0x70;
+const size_t NFM_IN_MAX_LENGTH  = 0x90;
+const size_t NFM_IN_SPHERE      = 0x94;
+const size_t NFM_IN_CAPSULE     = 0x98;
+const size_t NFM_MOD_WATER_COST = 0x20;   // WaterCostModifier scalar, replicated across its vector
 const size_t NFM_OUT_STATUS     = 0x3C;
 const size_t NFM_OUT_CAUSE      = 0x3D;
 
@@ -57,12 +61,14 @@ struct NfmKey
 	unsigned start;     // the start's cluster key, or its face key with NFM_START_FACE
 	unsigned diameter;  // the agent diameter's bits
 	unsigned flags;
+	unsigned waterCost; // modifier scalar bits, zero without a modifier
 };
 
 // The engine's cluster key for a face: the cluster index with the face's section in the high ten
 // bits. NFM_NO_KEY when the face has no cluster.
 unsigned NfmClusterKey(unsigned faceKey, int cluster);
-NfmKey   NfmMakeKey(unsigned goalFace, unsigned startFace, int startCluster, unsigned diameterBits, bool costModifier);
+NfmKey   NfmMakeKey(unsigned goalFace, unsigned startFace, int startCluster, unsigned diameterBits, bool costModifier,
+                    unsigned waterCostBits = 0);
 bool     NfmKeyEqual(const NfmKey& a, const NfmKey& b);
 unsigned NfmHash(const NfmKey& k);
 
@@ -81,6 +87,8 @@ struct NfmEntry
 	NfmEpoch  epoch;
 	long long insertTicks;
 	long long serviceTicks;   // what the inserting search cost
+	int       status;
+	int       cause;
 	int       used;
 };
 
@@ -107,12 +115,17 @@ NfmLookup NfmFind(NfmTable* t, const NfmKey& k, unsigned startFace, const NfmEpo
 // Records a failure: refreshes the key's slot, else takes the first free slot of the probe window,
 // else the one inserted longest ago. True when it took a free slot.
 bool NfmInsert(NfmTable* t, const NfmKey& k, unsigned startFace, const NfmEpoch& epoch,
-               long long nowTicks, long long serviceTicks);
+               long long nowTicks, long long serviceTicks, int status, int cause);
 bool NfmErase(NfmTable* t, const NfmKey& k);
 void NfmClear(NfmTable* t);
 
-// A node-cap failure (status 3, cause 3) of at least NFM_MIN_INSERT_ITER iterations.
+// Node-cap (3/3) or exhaustive unreachable (2) failures past the same iteration floor.
 bool NfmShouldInsert(int status, int cause, int iterations);
+// Bounded searches depend on positions that the key does not capture.
+bool NfmUnreachableInputCovered(const void* input);
+// Writes only the recorded status and cause into an initialized, empty output.
+void NfmReplay(const NfmEntry& entry, void* output);
+bool NfmWrongClass(int recordedStatus, int status);
 // Observe's verdict on a would-hit: a real success means the memo would have been wrong.
 bool NfmWrong(int status);
 long long NfmTtlTicks(long long ticksPerSecond, bool doorSeen);

@@ -18,11 +18,13 @@ struct NpcFailMemoCall
 	NfmEpoch epoch;
 	int      wouldHit;    // observe: a live entry matched
 	int      exactFace;   // ... and its start face is this search's own
+	int      recordedStatus;
+	int      unreachableCovered;
 };
 
 #ifdef KEO_DEBUG
 // Path thread, inside the A* detour once the request's labels are taken. True when the memo
-// answered: status 3 and cause 3 are in the output and the A* must not run.
+// answered: the recorded failure status and cause are in the output and the A* must not run.
 bool NpcFailMemoBefore(void* collection, void* input, void* output, AstarCallerClass cls,
                        bool playerTag, bool waved, NpcFailMemoCall* call);
 // Path thread, after the A*: observe's check and the insert; for a capped character search, the

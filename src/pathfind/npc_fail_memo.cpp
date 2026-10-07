@@ -25,6 +25,7 @@ static LONGLONG          s_qpf = 0;            // set once at install
 
 // Window counters: the path thread adds, the main thread reads and zeroes them for each line.
 static volatile LONG   s_hit = 0, s_miss = 0, s_ins = 0, s_agree = 0, s_wrong = 0, s_wrongCluster = 0;
+static volatile LONG   s_insU = 0, s_hitU = 0, s_wrongClass = 0;
 static volatile LONG   s_byFace = 0, s_skip = 0, s_entries = 0;
 static volatile LONG   s_bumpSections = 0, s_bumpDoor = 0, s_bumpReset = 0, s_bumpTtl = 0;
 static volatile LONG64 s_savedTicks = 0;
@@ -56,6 +57,8 @@ bool NpcFailMemoBefore(void* collection, void* input, void* output, AstarCallerC
 	call->mode = NFM_OFF;
 	call->wouldHit = 0;
 	call->exactFace = 0;
+	call->recordedStatus = 0;
+	call->unreachableCovered = 0;
 	int mode = (int)s_mode;
 	if (!NfmCovers(mode, cls, playerTag, waved) || !collection || !input || !output)
 		return false;
@@ -77,8 +80,10 @@ bool NpcFailMemoBefore(void* collection, void* input, void* output, AstarCallerC
 	unsigned startFace = *(const unsigned*)(in + NFM_IN_START_FACE);
 	int cluster = -1, data = -1;
 	NfmReadFace(collection, startFace, &cluster, &data);
+	const unsigned char* modifier = *(const unsigned char* const*)(in + NFM_IN_COST_MOD);
 	call->key = NfmMakeKey(goals[0], startFace, cluster, *(const unsigned*)(in + NFM_IN_AGENT_DIAM),
-	                       *(void* const*)(in + NFM_IN_COST_MOD) != NULL);
+	                       modifier != NULL, modifier ? *(const unsigned*)(modifier + NFM_MOD_WATER_COST) : 0u);
+	call->unreachableCovered = NfmUnreachableInputCovered(input) ? 1 : 0;
 	if (call->key.flags & NFM_START_FACE)
 		InterlockedIncrement(&s_byFace);
 	call->startFace = startFace;
@@ -92,21 +97,23 @@ bool NpcFailMemoBefore(void* collection, void* input, void* output, AstarCallerC
 	if (look.dropped[NFM_DROP_TTL])
 		InterlockedExchangeAdd(&s_bumpTtl, look.dropped[NFM_DROP_TTL]);
 	InterlockedExchange(&s_entries, s_table.entries);
-	if (look.index < 0)
+	if (look.index < 0 || (s_table.e[look.index].status == 2 && !call->unreachableCovered))
 	{
 		InterlockedIncrement(&s_miss);
 		return false;
 	}
+	const NfmEntry& entry = s_table.e[look.index];
 	InterlockedIncrement(&s_hit);
+	if (entry.status == 2)
+		InterlockedIncrement(&s_hitU);
 	if (mode == NFM_OBSERVE)
 	{
 		call->wouldHit = 1;
 		call->exactFace = look.exactFace;
+		call->recordedStatus = entry.status;
 		return false;
 	}
-	unsigned char* out = (unsigned char*)output;
-	out[NFM_OUT_STATUS] = 3;
-	out[NFM_OUT_CAUSE] = 3;
+	NfmReplay(entry, output);
 	InterlockedExchangeAdd64(&s_savedTicks, s_table.e[look.index].serviceTicks);
 	return true;
 }
@@ -150,13 +157,17 @@ void NpcFailMemoAfter(const NpcFailMemoCall* call, void* collection, void* input
 		else
 		{
 			InterlockedIncrement(&s_agree);
+			if (NfmWrongClass(call->recordedStatus, status))
+				InterlockedIncrement(&s_wrongClass);
 			InterlockedExchangeAdd64(&s_savedTicks, ticks);
 		}
 	}
-	if (NfmShouldInsert(status, cause, iterations))
+	if (NfmShouldInsert(status, cause, iterations) && (status != 2 || call->unreachableCovered))
 	{
-		NfmInsert(&s_table, call->key, call->startFace, call->epoch, NowTicks(), ticks);
+		NfmInsert(&s_table, call->key, call->startFace, call->epoch, NowTicks(), ticks, status, cause);
 		InterlockedIncrement(&s_ins);
+		if (status == 2)
+			InterlockedIncrement(&s_insU);
 	}
 	InterlockedExchange(&s_entries, s_table.entries);
 }
@@ -191,7 +202,10 @@ static void PrintMemoLine()
 	   << " byFace=" << byFace << " skip=" << skip
 	   << " door=" << (s_doorSeen ? "on" : "refused")
 	   << " ttl=" << (s_doorSeen ? NFM_TTL_SECONDS : NFM_TTL_NO_DOOR_SECONDS) << "s"
-	   << " findPathFull=" << (AstarCostHookInstalled() ? "on" : "off");
+	   << " findPathFull=" << (AstarCostHookInstalled() ? "on" : "off")
+	   << " insU=" << InterlockedExchange(&s_insU, 0)
+	   << " hitU=" << InterlockedExchange(&s_hitU, 0)
+	   << " wrongClass=" << InterlockedExchange(&s_wrongClass, 0);
 	LogMsg(ss.str());
 }
 

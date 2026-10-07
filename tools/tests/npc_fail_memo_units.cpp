@@ -118,7 +118,7 @@ static void CheckTable()
 	NfmKey other = NfmMakeKey(101u, 200u, 3, 0x40000000u, false);
 
 	NfmClear(&s_table);
-	NfmInsert(&s_table, k, 200u, e0, 100, 50);
+	NfmInsert(&s_table, k, 200u, e0, 100, 50, 3, 3);
 	NfmLookup l = NfmFind(&s_table, k, 200u, e0, 200, ttl);
 	Check(l.index >= 0 && l.exactFace == 1 && s_table.e[l.index].serviceTicks == 50, "table: a failure inserted is found");
 	l = NfmFind(&s_table, k, 201u, e0, 200, ttl);
@@ -127,20 +127,20 @@ static void CheckTable()
 
 	l = NfmFind(&s_table, k, 200u, Epoch(2u, 0, 0), 200, ttl);
 	Check(l.index < 0 && l.dropped[NFM_DROP_SECTIONS] == 1 && s_table.entries == 0, "table: a navmesh change retires the entry");
-	NfmInsert(&s_table, k, 200u, e0, 100, 50);
+	NfmInsert(&s_table, k, 200u, e0, 100, 50, 3, 3);
 	l = NfmFind(&s_table, k, 200u, Epoch(1u, 1, 0), 200, ttl);
 	Check(l.index < 0 && l.dropped[NFM_DROP_DOOR] == 1, "table: a door change retires the entry");
-	NfmInsert(&s_table, k, 200u, e0, 100, 50);
+	NfmInsert(&s_table, k, 200u, e0, 100, 50, 3, 3);
 	l = NfmFind(&s_table, k, 200u, Epoch(1u, 0, 1), 200, ttl);
 	Check(l.index < 0 && l.dropped[NFM_DROP_RESET] == 1, "table: a new reset generation retires the entry");
-	NfmInsert(&s_table, k, 200u, e0, 100, 50);
+	NfmInsert(&s_table, k, 200u, e0, 100, 50, 3, 3);
 	Check(NfmFind(&s_table, k, 200u, e0, 100 + ttl - 1, ttl).index >= 0, "table: an entry younger than the time-to-live answers");
 	l = NfmFind(&s_table, k, 200u, e0, 100 + ttl, ttl);
 	Check(l.index < 0 && l.dropped[NFM_DROP_TTL] == 1, "table: an entry 15 s old retires");
 
 	NfmClear(&s_table);
-	NfmInsert(&s_table, k, 200u, e0, 100, 50);
-	bool fresh = NfmInsert(&s_table, k, 200u, e0, 300, 60);
+	NfmInsert(&s_table, k, 200u, e0, 100, 50, 3, 3);
+	bool fresh = NfmInsert(&s_table, k, 200u, e0, 300, 60, 3, 3);
 	l = NfmFind(&s_table, k, 200u, e0, 310, ttl);
 	Check(!fresh && s_table.entries == 1 && l.index >= 0 && s_table.e[l.index].insertTicks == 300,
 	      "table: a second failure refreshes the key's slot");
@@ -152,7 +152,7 @@ static void CheckTable()
 	for (unsigned i = 0; i < 1000; ++i)
 	{
 		last = NfmMakeKey(1000u + i, 7u, 1, 0x40000000u, false);
-		NfmInsert(&s_table, last, 7u, e0, (long long)i, 1);
+		NfmInsert(&s_table, last, 7u, e0, (long long)i, 1, 3, 3);
 	}
 	int used = 0;
 	for (int i = 0; i < NFM_TABLE_SIZE; ++i)
@@ -161,9 +161,70 @@ static void CheckTable()
 	Check(NfmFind(&s_table, last, 7u, e0, 1000, ttl).index >= 0, "table: the newest failure is always kept");
 
 	Check(NfmShouldInsert(3, 3, 20000) && !NfmShouldInsert(3, 3, 19999) && !NfmShouldInsert(3, 1, 50000)
-	      && !NfmShouldInsert(2, 0, 50000), "insert: only a node-cap failure of at least 20000 iterations");
+	      , "insert: a node-cap failure needs its cause and at least 20000 iterations");
+	Check(NfmShouldInsert(2, 0, 20000), "memo: an exhaustive unreachable search past the threshold is inserted");
+	Check(!NfmShouldInsert(2, 0, 19999), "memo: a cheap unreachable search is not inserted");
+	Check(!NfmShouldInsert(0, 0, 50000) && !NfmShouldInsert(1, 0, 50000)
+	      && !NfmShouldInsert(4, 0, 50000) && !NfmShouldInsert(5, 0, 50000),
+	      "memo: incomplete, successful, truncated and invalid outputs never insert");
 	Check(NfmWrong(1) && !NfmWrong(2) && !NfmWrong(3), "observe: only a success is wrong");
 	Check(NfmTtlTicks(TPS, true) == 15 * TPS && NfmTtlTicks(TPS, false) == 5 * TPS, "ttl: 15 s with door changes seen, 5 s without");
+}
+
+
+static void CheckReplay()
+{
+	NfmClear(&s_table);
+	NfmKey k = NfmMakeKey(100u, 200u, 3, 0x40000000u, false);
+	NfmEpoch epoch = Epoch(1u, 0, 0);
+	NfmInsert(&s_table, k, 200u, epoch, 100, 50, 2, 0);
+	NfmLookup look = NfmFind(&s_table, k, 200u, epoch, 101, 15000);
+	unsigned char output[0x40];
+	memset(output, 0xA5, sizeof(output));
+	NfmReplay(s_table.e[look.index], output);
+	Check(output[NFM_OUT_STATUS] == 2 && output[NFM_OUT_CAUSE] == 0,
+	      "memo: an entry replays the status and cause it recorded");
+	bool untouched = true;
+	for (size_t i = 0; i < sizeof(output); ++i)
+		if (i != NFM_OUT_STATUS && i != NFM_OUT_CAUSE)
+			untouched = untouched && output[i] == 0xA5;
+	Check(untouched, "memo: replay changes no other output field");
+	NfmInsert(&s_table, k, 200u, epoch, 102, 60, 3, 3);
+	NfmReplay(s_table.e[look.index], output);
+	Check(output[NFM_OUT_STATUS] == 3 && output[NFM_OUT_CAUSE] == 3 && s_table.entries == 1,
+	      "memo: a refreshed entry takes the new search's status");
+	NfmInsert(&s_table, k, 200u, epoch, 103, 70, 2, 0);
+	NfmReplay(s_table.e[look.index], output);
+	Check(output[NFM_OUT_STATUS] == 2 && output[NFM_OUT_CAUSE] == 0,
+	      "memo: a node-cap entry refreshes to unreachable too");
+	Check(NfmWrongClass(2, 3) && NfmWrongClass(3, 2) && !NfmWrongClass(2, 2)
+	      && !NfmWrongClass(3, 3) && !NfmWrongClass(2, 1),
+	      "observe: only a different failed status is wrongClass");
+}
+
+static void CheckInputCoverage()
+{
+	__declspec(align(16)) unsigned char input[0xA0];
+	memset(input, 0, sizeof(input));
+	PutInt(input, NFM_IN_MAX_LENGTH, 0x7F7FFFEE);
+	PutInt(input, NFM_IN_SPHERE, (int)0xBF800000u);
+	PutInt(input, NFM_IN_CAPSULE, (int)0xBF800000u);
+	Check(NfmUnreachableInputCovered(input), "memo: the unbounded character input covers unreachable");
+	PutInt(input, NFM_IN_SPHERE, 0);
+	Check(!NfmUnreachableInputCovered(input), "memo: a search sphere excludes unreachable");
+	PutInt(input, NFM_IN_SPHERE, (int)0xBF800000u);
+	PutInt(input, NFM_IN_CAPSULE, 0x3F800000);
+	Check(!NfmUnreachableInputCovered(input), "memo: a search capsule excludes unreachable");
+	PutInt(input, NFM_IN_CAPSULE, (int)0xBF800000u);
+	PutInt(input, NFM_IN_MAX_LENGTH, 0x447A0000);
+	Check(!NfmUnreachableInputCovered(input), "memo: a maximum path cost excludes unreachable");
+	Check(!NfmUnreachableInputCovered(NULL), "memo: missing input excludes unreachable");
+	NfmKey a = NfmMakeKey(100u, 200u, 3, 0x40000000u, true, 0x40000000u);
+	NfmKey b = NfmMakeKey(100u, 200u, 3, 0x40000000u, true, 0x40400000u);
+	Check(!NfmKeyEqual(a, b), "key: different water costs cannot alias despite sharing the modifier flag");
+	Check(NfmKeyEqual(NfmMakeKey(100u, 200u, 3, 0x40000000u, false, 1u),
+	                  NfmMakeKey(100u, 200u, 3, 0x40000000u, false, 2u)),
+	      "key: absent modifiers ignore unused scalar bits");
 }
 
 static void CheckFaces()
@@ -213,6 +274,8 @@ int main()
 	CheckCovers();
 	CheckKey();
 	CheckTable();
+	CheckReplay();
+	CheckInputCoverage();
 	CheckFaces();
 	CheckFingerprint();
 	return CheckExit(SUITE_NAME);
