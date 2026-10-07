@@ -145,14 +145,17 @@ static void CheckNoTarget()
 	const ConfigFloor cases[] =
 	{
 		{ NULL, 1, "x" }, { "noSuchKey", 1, "x" }, { "preload", 1, "x" },
-		{ "zoneLifeSquadRadius", 5, "x" }, { "zoneLifeSquadRadius", 0, "x" }, { "zoneLifeSquadRadius", -1, "x" }
+		{ "zoneLifeSquadRadius", 5, "x" }, { "zoneLifeSquadRadius", 0, "x" }, { "zoneLifeSquadRadius", -1, "x" },
+		{ "zoneLifeIdleSeconds", 10, "x" }
 	};
 	const char* const names[] =
 	{
 		"a NULL key", "an unknown key", "a checkbox row", "a floor above the row's hi", "a floor at the row's lo",
-		"a floor below the row's lo"
+		"a floor below the row's lo", "a whole-number floor on a decimal row"
 	};
-	for (int c = 0; c < 6; ++c)
+	const int count = (int)(sizeof(cases) / sizeof(cases[0]));
+	Check(count == (int)(sizeof(names) / sizeof(names[0])), "no target: every case has a name");
+	for (int c = 0; c < count; ++c)
 	{
 		SettingsStaging st;
 		Store(&st, 0);
