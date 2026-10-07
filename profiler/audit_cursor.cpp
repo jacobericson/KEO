@@ -3,6 +3,7 @@
 // No probe takes a lock, allocates, or logs.
 
 #include "audit_detail.h"
+#include "audit_offmain.h"
 
 namespace kenshiframeaudit_detail {
 
@@ -90,7 +91,15 @@ void* hk_IsIndoors(const void* point)
 {
 	bool sample = g_cfg.physxDetail && IsMain() && g_cur.open && g_cur.mouseScanDepth > 0;
 	if (!sample)
-		return oIsIndoors(point);
+	{
+		if (!g_cfg.offMainDetail || !IsMain() || !g_cur.open)
+			return oIsIndoors(point);
+		LONGLONG t0 = Now();
+		void* result = oIsIndoors(point);
+		LONGLONG t1 = Now();
+		OffMainIndoorsOther(t1 - t0, PhysicsRunning() != 0);
+		return result;
+	}
 	PhysQueryEnter(PQ_INDOORS, CurrentNpScene());
 	LONGLONG t0 = Now();
 	void* result = oIsIndoors(point);
@@ -433,6 +442,11 @@ void OnProbeEnter(int id, CallSiteProbe::U64 a, CallSiteProbe::U64 b, CallSitePr
                   CallSiteProbe::U64 d)
 {
 	int tag = CallSiteProbe::TagOf(id);
+	if (tag >= ST_OFF_FIRST)
+	{
+		OffMainProbeEnter(tag, a, b, c, d);
+		return;
+	}
 	if (tag >= ST_PHYS_FIRST)
 	{
 		if (!IsMain())
@@ -451,7 +465,7 @@ void OnProbeEnter(int id, CallSiteProbe::U64 a, CallSiteProbe::U64 b, CallSitePr
 	case ST_KILL:      g_cur.flags |= F_PHYSRAN; CollectPhys(); break;
 	case ST_CHARS:
 	case ST_CHARSP:    CollectBirds(); break;
-	case ST_PARTICLES: if (g_fxCensusOn) FxCensus(); break;   // before the particle job
+	case ST_PARTICLES: if (g_fxCensusOn) FxCensus(); OffMainParticlesEnter(); break;   // before the particle job
 	case ST_MOUSERAY:
 		PhysQueryEnter(PQ_MOUSE_ALL, 0);
 		CursorEnter(a, b, c, d);
@@ -479,6 +493,11 @@ void OnProbeEnter(int id, CallSiteProbe::U64 a, CallSiteProbe::U64 b, CallSitePr
 void OnProbeExit(int id, CallSiteProbe::U64 ret, LONGLONG t0, LONGLONG t1)
 {
 	int tag = CallSiteProbe::TagOf(id);
+	if (tag >= ST_OFF_FIRST)
+	{
+		OffMainProbeExit(tag, ret, t0, t1);
+		return;
+	}
 	LONGLONG d = t1 - t0;
 
 	if (tag >= ST_PHYS_FIRST)

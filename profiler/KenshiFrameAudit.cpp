@@ -36,6 +36,7 @@
 #include "base/legacy_ini_import.h"
 #include "audit_detail.h"
 #include "audit_steady.h"
+#include "audit_offmain.h"
 
 namespace audit {
 LONGLONG g_qpcFreq = 1;
@@ -485,6 +486,7 @@ void Audit_Install()
 		sitesOk   = InstallSites(&sitesTotal);
 	}
 	InstallCursor(steam);
+	InstallOffMain(steam);
 	// The census reads exe structures (Steam 1.0.65) at the `particles` site.
 	g_fxCensusOn = g_cfg.particles && g_fxLayoutOk && steam && g_haveTag[ST_PARTICLES];
 
@@ -503,10 +505,10 @@ void Audit_Install()
 		: (g_physBodyHooked && g_haveTag[ST_MOUSERAY] &&
 		   g_physMakeHooks && g_physApplyHooks && g_haveTag[ST_PHYS_FETCH] &&
 		   oIsIndoors ? "on" : "partial");
-	std::string summary = Fmt("[Audit] Installed: hooks %d/%d sites %d/%d page=%p draws=%s render=%s fx=%s cursor=%s physx=%s listeners=%s hulls=%s cpu=%s steady=%s boundary=%s timerExp=%d run=%s%s",
+	std::string summary = Fmt("[Audit] Installed: hooks %d/%d sites %d/%d page=%p draws=%s render=%s fx=%s cursor=%s physx=%s listeners=%s hulls=%s cpu=%s steady=%s offmain=%s boundary=%s timerExp=%d run=%s%s",
 	                          g_hooksOk, g_hooksTotal, sitesOk, sitesTotal, CallSiteProbe::StubPage(),
 	                          g_cfg.draws ? "on" : "off", g_renderOn ? "on" : "off", fx, cursor.c_str(), physx,
-	                          listenerTimer ? "on" : "off", g_hullStatus, g_cfg.cpuSample ? "on" : "off", SteadyStatus(), g_boundaryR ? "renderOneFrame" : "frameStarted",
+	                          listenerTimer ? "on" : "off", g_hullStatus, g_cfg.cpuSample ? "on" : "off", SteadyStatus(), OffMainStatus(), g_boundaryR ? "renderOneFrame" : "frameStarted",
 	                          g_cfg.timerExperiment ? 1 : 0, g_runName.c_str(),
 	                          listeners ? "" : " (frame listeners missing: audit inactive)");
 	AuditLine(summary);

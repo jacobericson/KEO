@@ -4,6 +4,7 @@
 
 #include "audit_detail.h"
 #include "audit_steady.h"
+#include "audit_offmain.h"
 #include <time.h>
 
 namespace kenshiframeaudit_detail {
@@ -292,6 +293,8 @@ void CloseFrame(LONGLONG tNext)
 	r.c[C_SQUADS]      = (int)InterlockedExchange(&g_squadsPending, 0);
 	if (g_fxHooked)
 		FxFrameTotals(r);   // every frame, so each delta covers one frame
+	if (g_cfg.offMainDetail)
+		OffMainFrameTotals(r);   // every frame, so the per-frame totals cover one frame
 	if (c.fxCensused)
 	{
 		double perMs = g_tscPerMs;
@@ -617,6 +620,8 @@ void OncePerSecond()
 		AuditLine("[AUDIT-HDR] settings " + settings);
 		g_lastSettings = settings;
 	}
+	if (g_cfg.offMainDetail)
+		OffMainOncePerSecond();
 }
 
 void SampleWorld()

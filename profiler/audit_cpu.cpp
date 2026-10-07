@@ -28,7 +28,6 @@ typedef BOOL (WINAPI *QueryCycles_t)(HANDLE, PULONG64);
 typedef LONG (WINAPI *NtQueryThread_t)(HANDLE, ULONG, PVOID, ULONG, PULONG);
 
 static const int    CPU_MAX_THREADS     = 512;
-static const int    CPU_MAX_OGRE        = 32;
 static const double CPU_NAMES_SEC       = 30.0;
 static const ULONG  CPU_START_ADDRESS   = 9;        // ThreadQuerySetWin32StartAddress
 static const DWORD  CPU_QUERY_LIMITED   = 0x0800;   // THREAD_QUERY_LIMITED_INFORMATION
@@ -38,7 +37,7 @@ static const size_t        OGRE_WORKER_START = 0x2CD1E0;
 static const unsigned char OGRE_WORKER_START_BYTES[16] = { 0x48,0x89,0x4C,0x24,0x08,0x57,0x48,0x83,0xEC,0x30,0x48,0xC7,0x44,0x24,0x20,0xFE };
 
 static volatile LONG s_roleTid[CPU_ROLE_COUNT];
-static volatile LONG s_ogreTid[CPU_MAX_OGRE];      // claimed from 0 by compare-exchange, never cleared
+static volatile LONG s_ogreTid[CPU_OGRE_SLOTS];    // claimed from 0 by compare-exchange, never cleared
 
 // Reporter thread only.
 static CpuThread       s_threads[CPU_MAX_THREADS];
@@ -66,7 +65,7 @@ void CpuNoteRole(int role)
 
 static void ClaimOgreTid(LONG tid)
 {
-	for (int i = 0; i < CPU_MAX_OGRE; ++i)
+	for (int i = 0; i < CPU_OGRE_SLOTS; ++i)
 	{
 		LONG v = s_ogreTid[i];
 		if (v == tid)
@@ -85,9 +84,27 @@ void CpuNoteOgreWorker()
 	ClaimOgreTid((LONG)GetCurrentThreadId());
 }
 
+int CpuOgreSlot()
+{
+	LONG tid = (LONG)GetCurrentThreadId();
+	for (int i = 0; i < CPU_OGRE_SLOTS; ++i)
+	{
+		LONG v = s_ogreTid[i];
+		if (v == tid)
+			return i;
+		if (v == 0)
+		{
+			LONG prev = InterlockedCompareExchange(&s_ogreTid[i], tid, 0);
+			if (prev == 0 || prev == tid)
+				return i;
+		}
+	}
+	return -1;
+}
+
 static bool IsOgreWorker(DWORD tid)
 {
-	for (int i = 0; i < CPU_MAX_OGRE; ++i)
+	for (int i = 0; i < CPU_OGRE_SLOTS; ++i)
 	{
 		if ((DWORD)s_ogreTid[i] == tid)
 			return true;

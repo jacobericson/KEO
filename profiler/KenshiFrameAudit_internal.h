@@ -106,6 +106,16 @@ inline double SinceStart(LONGLONG t)
 	X(PHYS_WAKE, "physWake") X(PHYS_RUN, "physRun") X(PHYS_LOCK, "physLock") X(PHYS_PRE, "physPre") \
 	X(PHYS_SIM, "physSim") X(PHYS_POST, "physPost") \
 	X(FX_UPD, "fxUpd") X(FX_UPDOFF, "fxUpdOff") X(FX_UPDMAIN, "fxUpdMain") X(FX_CENSUS, "fxCensus") \
+	X(OM_OAFIRE, "rOaFire") X(OM_OAWAIT, "rOaWait") X(OM_OABUILD, "rOaBuild") X(OM_OATAIL, "rOaTail") \
+	X(OM_OAWKSUM, "oaWkSum") X(OM_OAWKMAX, "oaWkMax") X(OM_SYNCWAIT, "syncWaitMs") X(OM_WAKEMAX, "ogreWakeMaxUs") \
+	X(OM_WAKEMEAN, "ogreWakeMeanUs") X(OM_WORKMAX, "ogreWorkMaxUs") X(OM_WORKSUM, "ogreWorkSumUs") \
+	X(OM_CRIT, "ogreCritUs") X(OM_MAINWAKE, "ogreMainWakeUs") X(OM_FXFORK, "fxFork") X(OM_FXPRE, "fxPre") \
+	X(OM_FXDRAIN, "fxDrain") X(OM_FXJOBMAX, "fxJobMax") X(OM_FXJOBSUM, "fxJobSum") X(OM_FXWAKE, "fxWake") \
+	X(OM_FXTAIL, "fxTail") X(OM_FPLOAD, "fpLoad") X(OM_FPLOADCACHE, "fpLoadCache") X(OM_FPTREE, "fpTreeLoad") \
+	X(OM_FPGRASS, "fpGrass") X(OM_FPBUILD, "fpBuild") X(OM_FPSUB, "fpSub") X(OM_FPSUBWIND, "fpSubWind") \
+	X(OM_FPPOOLWAIT, "fpPoolWait") X(OM_FPLOCKRO, "fpLockRO") X(OM_FPLOCKDST, "fpLockDst") X(OM_MSTRACE, "msTrace") \
+	X(OM_MSINDOORS, "msIndoors") X(OM_MSNAVVALID, "msNavValid") X(OM_MSINDOORSFAST, "msIndoorsFast") \
+	X(OM_MSTERRAIN, "msTerrain") X(OM_INDOORSOTHER, "indoorsOther") \
 	X(ZONE_SM, "zoneSM") X(UNLOAD_MS, "unloadMs") \
 	X(DT, "dt") X(SPEED, "speed") X(CAM_X, "camX") X(CAM_Y, "camY") X(CAM_Z, "camZ") \
 	X(CAM_ALT, "camAlt") X(SUMERR, "sumErr")
@@ -212,6 +222,7 @@ struct Config
 	bool        hullDiag;           // PhysX hull destroy-queue diagnostic
 	bool        cpuSample;          // per-thread CPU time: _cpu.csv and [AUDIT-THREADS]
 	bool        steadyDetail;       // character, faction and formation cost probes
+	bool        offMainDetail;      // the off-main probes (OffMainDetail)
 };
 
 

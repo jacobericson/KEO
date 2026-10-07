@@ -15,6 +15,10 @@ enum CpuRole { CPU_ROLE_AI, CPU_ROLE_PHYS, CPU_ROLE_BIRDS, CPU_ROLE_COUNT };
 void CpuNoteRole(int role);
 // An Ogre worker records itself when it reaches Barrier::sync. Interlocked only.
 void CpuNoteOgreWorker();
+// The calling Ogre worker's slot (0..31) in the worker table, claiming one if needed; -1 when the
+// table is full. Interlocked only.
+int CpuOgreSlot();
+const int CPU_OGRE_SLOTS = 32;
 // Reporter thread, every pass: one sample a second once the TSC rate is known.
 void CpuSampleTick();
 

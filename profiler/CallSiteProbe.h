@@ -1,9 +1,11 @@
 // CallSiteProbe - time a call at its call site.
 //
 // Direct sites: a probe rewrites the call's rel32 (`E8 rel32`) so it lands on
-// a 16-byte stub in a page allocated within +-2 GB of the module
-// (`FF 25 00000000` + absolute address), which jumps to a per-probe C++
-// wrapper. The wrapper reports entry, calls the original target (the address
+// a 16-byte stub in a page allocated within +-2 GB of the site's module (one
+// page per module, shared by every Install call for it) (`FF 25 00000000` +
+// absolute address), which jumps to a per-probe C++ wrapper. Probe ids are
+// global, so every page has a slot for every id. The wrapper reports entry,
+// calls the original target (the address
 // the call decoded to, usually a `j_` thunk, so any detour behind it stays
 // inside the timing), then reports the two QPC stamps around that call.
 //
@@ -16,6 +18,10 @@
 // through an import slot. The 6-byte call becomes `E8 rel32` + `90`, and the
 // wrapper calls through the same pointer slot, read at call time, so anything
 // that later rewrites the slot stays behind the probe.
+//
+// Qword sites: a 6-byte call another thread may be running while it is rewritten. It must lie
+// inside one aligned 8-byte word, which changes in one interlocked exchange that keeps the bytes
+// around the call, so a thread fetching it sees the old call or the new one, never a mix.
 //
 // No function prologue is touched. Generic: this file knows nothing about the
 // game. The caller passes a table of sites and receives the probe id assigned
@@ -32,7 +38,7 @@ namespace CallSiteProbe
 {
 	typedef unsigned __int64 U64;
 
-	const int MAX_PROBES = 96;
+	const int MAX_PROBES = 128;
 
 	// How the callee takes its arguments and returns. Wrappers forward
 	// rcx/rdx/r8/r9 (SHAPE_INT), rcx/xmm1/r8/r9 (SHAPE_FLOAT: the second
@@ -60,6 +66,7 @@ namespace CallSiteProbe
 		size_t      vslot;      // virtual sites: the call's disp32 (vtable byte offset); 0 = not virtual
 		int         indirect;   // 1 = indirect site (FF 15 disp32); 0 = direct or virtual
 		int         looseVirtual;// virtual: caller verified rcx remains the object across argument setup
+		int         qword;      // virtual or indirect: 1 = rewrite in one aligned 8-byte exchange
 
 		// Filled by Install:
 		int         id;         // probe id given to the callbacks, -1 if not installed
@@ -82,12 +89,17 @@ namespace CallSiteProbe
 	// byte 0 is E8 and the call decodes to targetRva; a virtual site's bytes
 	// are 48 8B 01 FF 90 with disp32 == vslot; an indirect site's bytes are
 	// FF 15 and its disp32 decodes to targetRva. A virtual or indirect site must
-	// be SHAPE_INT. Run it once, while none of the sites can execute. Returns
-	// the number installed; each site's status says why not.
+	// be SHAPE_INT; a qword site must be one of them and lie inside one aligned
+	// 8-byte word. Run it while none of the sites can execute, except a qword
+	// site's own call; the module's stubs from an earlier Install stay executable
+	// throughout. Returns the number installed; each site's status says why not.
 	int Install(HMODULE module, Site* sites, int count);
 
-	// The stub page (NULL until a site was installed).
+	// The first module's stub page (NULL until a site was installed).
 	const void* StubPage();
+
+	// The stub page of `module` (NULL until one of its sites was installed).
+	const void* StubPageFor(HMODULE module);
 
 	// Tag of the site installed under probe id `id`, or -1.
 	int TagOf(int id);

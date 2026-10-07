@@ -1,6 +1,7 @@
 // CallSiteProbe - see CallSiteProbe.h.
 
 #include "CallSiteProbe.h"
+#include "audit_sync_split.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -18,6 +19,7 @@ namespace callsiteprobe_detail
 	const size_t SLOT_SIZE  = 16;
 	// Keep the stub page inside rel32 reach of every byte of the module.
 	const unsigned long long REACH = 0x7FF00000ULL;
+	static_assert(SLOT_SIZE * MAX_PROBES <= PAGE_SIZE, "a stub page holds every probe id");
 
 	void*          g_orig[MAX_PROBES];   // indirect sites: the pointer slot
 	size_t         g_vslot[MAX_PROBES];
@@ -30,7 +32,15 @@ namespace callsiteprobe_detail
 	void*          g_wrapRetFloat[MAX_PROBES];
 	EnterFn        g_onEnter = NULL;
 	ExitFn         g_onExit  = NULL;
-	unsigned char* g_page    = NULL;
+	// One stub page per module; a page holds a slot for every probe id.
+	const int MAX_PAGES = 4;
+	struct ModulePage
+	{
+		uintptr_t      base, end;
+		unsigned char* page;
+	};
+	ModulePage     g_pages[MAX_PAGES];
+	int            g_npages  = 0;
 	int            g_used    = 0;
 
 	// One wrapper per probe id. The body holds no objects, so C++ exceptions
@@ -127,31 +137,37 @@ namespace callsiteprobe_detail
 		return r;
 	}
 
-	// VS2010 has no variadic templates: fill the wrapper tables recursively.
-	template<int N>
+	// VS2010 needs the typed pointer first to pick the instantiation.
+	template<int ID>
+	void FillOne()
+	{
+		FnInt      fi = &ProbeInt<ID>;
+		FnFloat    ff = &ProbeFloat<ID>;
+		FnInt      fv = &ProbeVirt<ID>;
+		FnInt      fd = &ProbeInd<ID>;
+		FnFloat4   f4 = &ProbeFloat4<ID>;
+		FnRetFloat fr = &ProbeRetFloat<ID>;
+		g_wrapInt[ID]      = (void*)fi;
+		g_wrapFloat[ID]    = (void*)ff;
+		g_wrapVirt[ID]     = (void*)fv;
+		g_wrapInd[ID]      = (void*)fd;
+		g_wrapFloat4[ID]   = (void*)f4;
+		g_wrapRetFloat[ID] = (void*)fr;
+	}
+
+	// VS2010 has no variadic templates: fill ids BASE .. BASE+N-1 recursively.
+	template<int BASE, int N>
 	struct FillTables
 	{
 		static void Run()
 		{
-			// VS2010 needs the typed pointer first to pick the instantiation.
-			FnInt   fi = &ProbeInt<N - 1>;
-			FnFloat ff = &ProbeFloat<N - 1>;
-			FnInt   fv = &ProbeVirt<N - 1>;
-			FnInt   fd = &ProbeInd<N - 1>;
-			FnFloat4 f4 = &ProbeFloat4<N - 1>;
-			FnRetFloat fr = &ProbeRetFloat<N - 1>;
-			g_wrapInt[N - 1]   = (void*)fi;
-			g_wrapFloat[N - 1] = (void*)ff;
-			g_wrapVirt[N - 1]  = (void*)fv;
-			g_wrapInd[N - 1]   = (void*)fd;
-			g_wrapFloat4[N - 1] = (void*)f4;
-			g_wrapRetFloat[N - 1] = (void*)fr;
-			FillTables<N - 1>::Run();
+			FillOne<BASE + N - 1>();
+			FillTables<BASE, N - 1>::Run();
 		}
 	};
 
-	template<>
-	struct FillTables<0>
+	template<int BASE>
+	struct FillTables<BASE, 0>
 	{
 		static void Run() {}
 	};
@@ -241,6 +257,59 @@ namespace callsiteprobe_detail
 }
 using namespace callsiteprobe_detail;
 
+// The stub page for the module [base, end), allocated near it on first use.
+static unsigned char* PageFor(uintptr_t base, uintptr_t end)
+{
+	for (int i = 0; i < g_npages; ++i)
+	{
+		if (g_pages[i].base == base)
+			return g_pages[i].page;
+	}
+	if (g_npages >= MAX_PAGES)
+		return NULL;
+	unsigned char* p = AllocNear(base, end);
+	if (!p)
+		return NULL;
+	g_pages[g_npages].base = base;
+	g_pages[g_npages].end  = end;
+	g_pages[g_npages].page = p;
+	++g_npages;
+	return p;
+}
+
+// Points the call at p at its stub: E8 rel32, plus 90 over the sixth byte of a 6-byte call. A qword
+// site changes in one aligned 8-byte exchange that keeps the bytes around the call. NULL when written.
+static const char* WriteCall(unsigned char* p, int newRel, bool sixByte, bool qword)
+{
+	unsigned char* q = qword ? (unsigned char*)((uintptr_t)p & ~(uintptr_t)7) : p;
+	SIZE_T len = qword ? 8 : 6;
+	DWORD prot = 0;
+	if (!VirtualProtect(q, len, PAGE_EXECUTE_READWRITE, &prot))
+		return "SKIP VirtualProtect failed";
+	const char* err = NULL;
+	if (qword)
+	{
+		volatile LONG64* word = (volatile LONG64*)q;
+		LONG64 before = *word;
+		LONG64 after = (LONG64)syncsplit::CallQword((unsigned long long)before, (int)(p - q), newRel);
+		if (InterlockedCompareExchange64(word, after, before) != before)
+			err = "SKIP bytes changed before the exchange";
+	}
+	else
+	{
+		*(int*)(p + 1) = newRel;
+		if (sixByte)
+		{
+			p[0] = 0xE8;   // call rel32 ...
+			p[5] = 0x90;   // ... then a nop over the sixth byte of `FF xx disp32`
+		}
+	}
+	DWORD dummy = 0;
+	VirtualProtect(q, len, prot, &dummy);
+	FlushInstructionCache(GetCurrentProcess(), q, len);
+	return err;
+}
+
 void SetCallbacks(EnterFn onEnter, ExitFn onExit)
 {
 	g_onEnter = onEnter;
@@ -249,7 +318,17 @@ void SetCallbacks(EnterFn onEnter, ExitFn onExit)
 
 const void* StubPage()
 {
-	return g_page;
+	return g_npages > 0 ? g_pages[0].page : NULL;
+}
+
+const void* StubPageFor(HMODULE module)
+{
+	for (int i = 0; i < g_npages; ++i)
+	{
+		if (g_pages[i].base == (uintptr_t)module)
+			return g_pages[i].page;
+	}
+	return NULL;
 }
 
 int TagOf(int id)
@@ -264,7 +343,9 @@ int Install(HMODULE module, Site* sites, int count)
 	static bool tablesFilled = false;
 	if (!tablesFilled)
 	{
-		FillTables<MAX_PROBES>::Run();
+		static_assert(MAX_PROBES == 128, "the fill runs two halves of 64");
+		FillTables<0, 64>::Run();
+		FillTables<64, 64>::Run();
 		tablesFilled = true;
 	}
 
@@ -345,6 +426,11 @@ int Install(HMODULE module, Site* sites, int count)
 				continue;
 			}
 		}
+		if (s.qword && (!(virt || ind) || !syncsplit::InOneQword((unsigned long long)(base + s.siteRva), 6)))
+		{
+			SetStatus(s, (virt || ind) ? "SKIP site straddles an aligned qword" : "SKIP a qword site is a 6-byte call");
+			continue;
+		}
 		if (g_used >= MAX_PROBES)
 		{
 			SetStatus(s, "SKIP no probe id left");
@@ -361,9 +447,8 @@ int Install(HMODULE module, Site* sites, int count)
 		return 0;
 
 	// Phase 2: stub page and stubs.
-	if (!g_page)
-		g_page = AllocNear(base, end);
-	if (!g_page)
+	unsigned char* page = PageFor(base, end);
+	if (!page)
 	{
 		for (int i = 0; i < count; ++i)
 		{
@@ -376,14 +461,15 @@ int Install(HMODULE module, Site* sites, int count)
 		return 0;
 	}
 
+	// Writable and still executable: a later Install for a module leaves its earlier stubs runnable.
 	DWORD oldProt = 0;
-	VirtualProtect(g_page, PAGE_SIZE, PAGE_READWRITE, &oldProt);
+	VirtualProtect(page, PAGE_SIZE, PAGE_EXECUTE_READWRITE, &oldProt);
 	for (int i = 0; i < count; ++i)
 	{
 		Site& s = sites[i];
 		if (s.id < 0)
 			continue;
-		unsigned char* slot = g_page + SLOT_SIZE * (size_t)s.id;
+		unsigned char* slot = page + SLOT_SIZE * (size_t)s.id;
 		U64 wrapper = (U64)(s.vslot != 0 ? g_wrapVirt[s.id]
 		                  : s.indirect != 0 ? g_wrapInd[s.id]
 		                  : s.shape == SHAPE_FLOAT ? g_wrapFloat[s.id]
@@ -397,8 +483,8 @@ int Install(HMODULE module, Site* sites, int count)
 		slot[14] = 0xCC;
 		slot[15] = 0xCC;
 	}
-	VirtualProtect(g_page, PAGE_SIZE, PAGE_EXECUTE_READ, &oldProt);
-	FlushInstructionCache(GetCurrentProcess(), g_page, PAGE_SIZE);
+	VirtualProtect(page, PAGE_SIZE, PAGE_EXECUTE_READ, &oldProt);
+	FlushInstructionCache(GetCurrentProcess(), page, PAGE_SIZE);
 
 	// Phase 3: point each call at its stub, then read it back.
 	int installed = 0;
@@ -408,7 +494,7 @@ int Install(HMODULE module, Site* sites, int count)
 		if (s.id < 0)
 			continue;
 		unsigned char* p = (unsigned char*)(base + s.siteRva);
-		uintptr_t slot = (uintptr_t)(g_page + SLOT_SIZE * (size_t)s.id);
+		uintptr_t slot = (uintptr_t)(page + SLOT_SIZE * (size_t)s.id);
 		long long newRel = (long long)slot - (long long)(uintptr_t)(p + 5);
 		if (newRel < -2147483647LL - 1 || newRel > 2147483647LL)
 		{
@@ -418,22 +504,13 @@ int Install(HMODULE module, Site* sites, int count)
 		}
 		// Virtual and indirect sites are both 6-byte `FF xx disp32` calls.
 		bool virt = s.vslot != 0 || s.indirect != 0;
-		DWORD prot = 0;
-		if (!VirtualProtect(p, 6, PAGE_EXECUTE_READWRITE, &prot))
+		const char* err = WriteCall(p, (int)newRel, virt, s.qword != 0);
+		if (err)
 		{
-			SetStatus(s, "SKIP VirtualProtect failed");
+			SetStatus(s, err);
 			s.id = -1;
 			continue;
 		}
-		*(int*)(p + 1) = (int)newRel;
-		if (virt)
-		{
-			p[0] = 0xE8;   // call rel32 ...
-			p[5] = 0x90;   // ... then a nop over the sixth byte of `FF xx disp32`
-		}
-		DWORD dummy = 0;
-		VirtualProtect(p, 6, prot, &dummy);
-		FlushInstructionCache(GetCurrentProcess(), p, 6);
 
 		int check = *(const int*)(p + 1);
 		if (p[0] != 0xE8 || (virt && p[5] != 0x90) ||

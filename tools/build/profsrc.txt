@@ -30,5 +30,7 @@ profiler\hulls_report.cpp
 profiler\hulls_install.cpp
 profiler\audit_cpu.cpp
 profiler\audit_steady.cpp
+profiler\audit_offmain.cpp
+profiler\audit_ogre.cpp
 src\base\ini_text.cpp
 src\base\legacy_ini_import.cpp

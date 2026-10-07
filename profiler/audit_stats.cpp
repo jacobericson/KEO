@@ -137,6 +137,8 @@ void WriteClassSummary(const char* cls, const std::vector<const FrameRec*>& fr)
 	             FlagShare(fr, F_AIMISS), FlagShare(fr, F_AISYNC)));
 	if (g_cfg.particles)
 		AuditOut(std::string("[AUDIT] ") + cls + " fx p50/p90" + PairList(fr, M_FX_UPD, M_FX_CENSUS, sc));
+	if (g_cfg.offMainDetail)
+		AuditOut(std::string("[AUDIT] ") + cls + " offmain p50/p90" + PairList(fr, M_OM_OAFIRE, M_OM_INDOORSOTHER, sc));
 
 	Stat speed  = ComputeStat(fr, M_SPEED, sc);
 	Stat dt     = ComputeStat(fr, M_DT, sc);

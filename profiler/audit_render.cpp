@@ -4,6 +4,7 @@
 
 #include "audit_detail.h"
 #include "audit_steady.h"
+#include "audit_offmain.h"
 
 namespace kenshiframeaudit_detail {
 
@@ -410,14 +411,22 @@ void hk_BarrierSync(void* barrier)
 	// Ogre's worker threads reach the barrier too: the CPU sampler names them by it.
 	if (g_cfg.cpuSample && !IsMain())
 		CpuNoteOgreWorker();
+	bool om = g_cfg.offMainDetail && IsMain();
+	OgreSyncCall sc = { 0, 0, false, 0 };
+	if (om)
+		OgreSyncEnter(barrier, &sc);   // a fire's stamp is published before the original releases the workers
 	if (!RenderTracking())
 	{
 		oBarrierSync(barrier);
+		if (om)
+			OgreSyncExit(sc);
 		return;
 	}
 	LONGLONG t0 = Now();
 	oBarrierSync(barrier);
 	LONGLONG d = Now() - t0;
+	if (om)
+		OgreSyncExit(sc);
 	g_cur.syncTicks += d;
 	++g_cur.syncs;
 	if (g_depth > 0)
@@ -432,7 +441,11 @@ void hk_OldAnims(void* sm)
 		return;
 	}
 	LONGLONG t0 = Now();
+	if (g_cfg.offMainDetail)
+		OgreOldAnimsEnter();
 	oOldAnims(sm);
+	if (g_cfg.offMainDetail)
+		OgreOldAnimsExit();
 	g_cur.oldAnimTicks += Now() - t0;
 	++g_cur.oldAnims;
 }

@@ -372,7 +372,11 @@ const size_t RVA_PREV_MLEFT   = 0x2132282;  // byte: last frame's mLeft
 	X(FACTIONSN, "factionsN") X(UNLPLATOONS, "unloadedPlatoons") X(PLAYERS, "players") \
 	X(CPONN, "cpOnN") X(CPVISN, "cpVisN") X(CHPERIODICN, "chPeriodicN") X(CHLIGHTN, "chLightN") \
 	X(LZCALLS, "lzCalls") X(LZZONEN, "lzZoneN") X(LZBLDN, "lzBldN") X(LZLIGHTN, "lzLightN") X(LZCHARN, "lzCharN") \
-	X(LZCHARLIGHTN, "lzCharLightN")
+	X(LZCHARLIGHTN, "lzCharLightN") \
+	X(OAOWN, "oaOwn") X(OAFOL, "oaFol") X(OALISTMAX, "oaListMax") X(SYNCFIREBLK, "syncFireBlk") X(OGRELATETOP, "ogreLateTop") \
+	X(OGREWAKEN, "ogreWakeN") X(FXDRAINN, "fxDrainN") X(FPLOADN, "fpLoadN") X(FPLOADCACHEN, "fpLoadCacheN") X(FPSUBN, "fpSubN") \
+	X(FPSUBWINDN, "fpSubWindN") X(FPLOCKN, "fpLockN") X(INDOORSOTHERN, "indoorsOtherN") X(INDOORSOTHERPHYS, "indoorsOtherPhys") \
+	X(OGREWAKEDROP, "ogreWakeDrop")
 
 #define AUDIT_ENUM_C(id, name) C_##id,
 #define AUDIT_NAME(id, name) name,
@@ -565,6 +569,14 @@ enum SiteTag
 	ST_PHYS_DETAIL_FIRST,
 	ST_PHYS_GROUP = ST_PHYS_DETAIL_FIRST, ST_PHYS_ACTOR_DESTROY, ST_PHYS_TERRAIN,
 	ST_PHYS_FLUSH, ST_PHYS_FETCH,
+	// OffMainDetail (audit_offmain.cpp): main-thread rows, then the Ogre worker rows. OnProbeEnter
+	// and OnProbeExit hand this whole range on before any other test.
+	ST_OFF_FIRST,
+	ST_FX_FORK = ST_OFF_FIRST, ST_FX_DRAIN, ST_FP_LOAD, ST_FP_LOADCACHE, ST_FP_SUB, ST_FP_POOLWAIT,
+	ST_FP_LOCK, ST_MS_TRACE, ST_MS_INDOORS, ST_MS_NAVVALID, ST_MS_INDOORSFAST, ST_MS_TERRAIN,
+	ST_OA_FIRE, ST_OA_WAIT,
+	ST_OGRE_WORKER_FIRST,
+	ST_OA_WK5 = ST_OGRE_WORKER_FIRST, ST_OA_WK6, ST_OGRE_WAKE, ST_OGRE_LATETOP, ST_OGRE_ARRIVE, ST_OGRE_LAST,
 	ST_COUNT
 };
 
