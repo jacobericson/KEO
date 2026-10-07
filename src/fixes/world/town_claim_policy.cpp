@@ -14,8 +14,22 @@ bool TownClaimNeedsTown(const TownClaimInputs& in)
 	        || (!in.townIsPlayerTown && in.hasSnapTarget && !in.snapTargetIsPlayerOwned));
 }
 
+bool TownClaimVanillaStands(const TownClaimInputs& in)
+{
+	return TownClaimFlagged(in) && in.spotInNpcTown && !in.hasSnapTarget
+	    && in.haveContainingPlayerTown && !in.createsPlayerTown
+	    && !(in.townIsPlayerTown && in.townHoldsSpot);
+}
+
+bool TownClaimSetsSkipFlag(TownClaimAction action, bool flagged, bool haveTown)
+{
+	return action != TC_VANILLA && flagged && haveTown;
+}
+
 TownClaimAction TownClaimDecide(const TownClaimInputs& in)
 {
+	if (TownClaimVanillaStands(in))
+		return TC_VANILLA;
 	if (!TownClaimNeedsTown(in))
 		return TC_PASS;
 	return in.haveContainingPlayerTown ? TC_USE_CONTAINING : TC_USE_NULL_TOWN;

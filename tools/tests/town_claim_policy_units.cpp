@@ -44,9 +44,27 @@ static TownClaimInputs FromBits(unsigned bits)
 	in.hasSnapTarget            = (bits & (1u << 9)) != 0;
 	in.snapTargetIsPlayerOwned  = (bits & (1u << 10)) != 0;
 	in.haveContainingPlayerTown = (bits & (1u << 11)) != 0;
+	in.spotInNpcTown            = (bits & (1u << 12)) != 0;
+	in.townHoldsSpot            = (bits & (1u << 13)) != 0;
+	in.createsPlayerTown        = (bits & (1u << 14)) != 0;
 	return in;
 }
-static const unsigned kAllBits = 1u << 12;
+static const unsigned kAllBits = 1u << 15;
+
+// The rule before the NPC-town case, written out.
+static TownClaimAction BaseRule(const TownClaimInputs& in)
+{
+	return TownClaimNeedsTown(in) ? (in.haveContainingPlayerTown ? TC_USE_CONTAINING : TC_USE_NULL_TOWN)
+	                              : TC_PASS;
+}
+
+// The case in which the game's choice stands, written out from its inputs.
+static bool IsNpcCase(const TownClaimInputs& in)
+{
+	return TownClaimFlagged(in) && in.spotInNpcTown && !in.hasSnapTarget
+	    && in.haveContainingPlayerTown && !in.createsPlayerTown
+	    && !(in.townIsPlayerTown && in.townHoldsSpot);
+}
 
 static void CheckDecision()
 {
@@ -129,8 +147,10 @@ static void CheckDecision()
 		const TownClaimInputs in = FromBits(bits);
 		if (!TownClaimFlagged(in) || !in.townIsNull)
 			continue;
-		++nullFlagged;
 		const TownClaimAction a = TownClaimDecide(in);
+		if (a == TC_VANILLA)
+			continue;
+		++nullFlagged;
 		if (a == TC_PASS
 		 || (a == TC_USE_CONTAINING && !in.haveContainingPlayerTown)
 		 || (a == TC_USE_NULL_TOWN && in.haveContainingPlayerTown))
@@ -150,8 +170,96 @@ static void CheckDecision()
 		if (!TownClaimFlagged(in))
 			allFlagged = false;
 	}
-	Check(allFlagged && placements == 32,
+	Check(allFlagged && placements == 256,
 	      "flagged: every unparented player placement is flagged, whatever its town");
+}
+
+static void CheckNpcTown()
+{
+	{
+		TownClaimInputs a = NullTown(true);
+		a.spotInNpcTown = true;
+		Check(TownClaimVanillaStands(a) && TownClaimDecide(a) == TC_VANILLA,
+		      "npc town: a null arrival under an owner's town keeps the game's town");
+	}
+	{
+		TownClaimInputs b = Placement();
+		b.spotInNpcTown = true;
+		b.haveContainingPlayerTown = true;
+		b.townHoldsSpot = false;
+		TownClaimInputs held = b;
+		held.townHoldsSpot = true;
+		Check(TownClaimDecide(b) == TC_VANILLA && TownClaimDecide(held) == TC_PASS,
+		      "npc town: a player town whose radius misses the spot keeps the game's town");
+	}
+
+	int cases = 0, vanilla = 0, insideOther = 0, outside = 0;
+	bool caseOk = true, insideOk = true, outsideOk = true, snapOk = true, unflaggedOk = true;
+	bool createsOk = true, holdsOk = true, uncoveredOk = true;
+	for (unsigned bits = 0; bits < kAllBits; ++bits)
+	{
+		const TownClaimInputs in = FromBits(bits);
+		const TownClaimAction a = TownClaimDecide(in);
+		if (a == TC_VANILLA)
+			++vanilla;
+		if (IsNpcCase(in))
+		{
+			++cases;
+			if (a != TC_VANILLA)
+				caseOk = false;
+		}
+		else if (in.spotInNpcTown)
+		{
+			++insideOther;
+			if (a != BaseRule(in))
+				insideOk = false;
+		}
+		if (!in.spotInNpcTown)
+		{
+			++outside;
+			if (a != BaseRule(in))
+				outsideOk = false;
+		}
+		if (in.hasSnapTarget && (a == TC_VANILLA || a != BaseRule(in)))
+			snapOk = false;
+		if (!TownClaimFlagged(in) && a == TC_VANILLA)
+			unflaggedOk = false;
+		if (in.createsPlayerTown && a == TC_VANILLA)
+			createsOk = false;
+		if (in.townIsPlayerTown && in.townHoldsSpot && a == TC_VANILLA)
+			holdsOk = false;
+		if (!in.haveContainingPlayerTown && a == TC_VANILLA)
+			uncoveredOk = false;
+	}
+	Check(caseOk && cases > 0, "npc town: the approved case keeps the game's town");
+	Check(insideOk && insideOther > 0,
+	      "npc town: inside an NPC town, outside the case, the rule is unchanged");
+	Check(snapOk, "npc town: a snap keeps the fix");
+	Check(unflaggedOk, "npc town: an unflagged call is never TC_VANILLA");
+	Check(outsideOk && outside > 0, "npc town: outside every NPC town the rule is unchanged");
+	Check(createsOk, "npc town: a building that creates a player town keeps the fix");
+	Check(holdsOk, "npc town: a player town whose radius holds the spot keeps the fix");
+	Check(uncoveredOk, "npc town: no owner's town over the spot keeps the fix");
+	Check(vanilla > 0 && vanilla == cases, "npc town: the exhaustive walk reaches the rule");
+}
+
+static void CheckSkipFlag()
+{
+	Check(!TownClaimSetsSkipFlag(TC_VANILLA, true, true) && !TownClaimSetsSkipFlag(TC_VANILLA, true, false)
+	   && !TownClaimSetsSkipFlag(TC_VANILLA, false, true) && !TownClaimSetsSkipFlag(TC_VANILLA, false, false),
+	      "flag: the game's choice never sets the skip flag");
+	Check(TownClaimSetsSkipFlag(TC_PASS, true, true) && TownClaimSetsSkipFlag(TC_USE_CONTAINING, true, true)
+	   && TownClaimSetsSkipFlag(TC_USE_NULL_TOWN, true, true),
+	      "flag: a flagged call with a town sets it");
+	const TownClaimAction actions[3] = { TC_PASS, TC_USE_CONTAINING, TC_USE_NULL_TOWN };
+	bool never = true;
+	for (int i = 0; i < 3; ++i)
+	{
+		never = never && !TownClaimSetsSkipFlag(actions[i], true, false)
+		              && !TownClaimSetsSkipFlag(actions[i], false, true)
+		              && !TownClaimSetsSkipFlag(actions[i], false, false);
+	}
+	Check(never, "flag: no town, or an unflagged call, never sets it");
 }
 
 static void CheckPick()
@@ -318,6 +426,8 @@ static void CheckBytes()
 int main()
 {
 	CheckDecision();
+	CheckNpcTown();
+	CheckSkipFlag();
 	CheckPick();
 	CheckEligible();
 	CheckSnapLea();

@@ -8,7 +8,7 @@
 
 // --- The decision -----------------------------------------------------
 
-enum TownClaimAction { TC_PASS = 0, TC_USE_CONTAINING, TC_USE_NULL_TOWN };
+enum TownClaimAction { TC_PASS = 0, TC_USE_CONTAINING, TC_USE_NULL_TOWN, TC_VANILLA };
 
 struct TownClaimInputs
 {
@@ -24,6 +24,9 @@ struct TownClaimInputs
 	bool hasSnapTarget;             // a mounted-building callback with a non-null target
 	bool snapTargetIsPlayerOwned;   // that target's faction is a player faction
 	bool haveContainingPlayerTown;  // one of the owner's towns covers the spot
+	bool spotInNpcTown;             // an NPC town's radius holds the spot (player towns skipped)
+	bool townHoldsSpot;             // t is non-null and its own radius holds the spot
+	bool createsPlayerTown;         // the building's data has "creates player town" set
 };
 
 // A player placement with no parent and no saved state: the call whose town the fix keeps and
@@ -32,9 +35,18 @@ bool TownClaimFlagged(const TownClaimInputs& in);
 // Flagged, and the town vanilla chose cannot stand: none at all, or a non-player town inherited
 // from a snap target the player does not own.
 bool TownClaimNeedsTown(const TownClaimInputs& in);
-// PASS keeps t. Otherwise the containing player town when there is one, else noTown: a flagged
-// call is never handed on with a null town.
+// TC_VANILLA when TownClaimVanillaStands. PASS keeps t. Otherwise the containing player town
+// when there is one, else noTown: a flagged call is never handed on with a null town by the fix.
 TownClaimAction TownClaimDecide(const TownClaimInputs& in);
+// The one case where the game's own choice gives an NPC town and this fix would hand a player
+// town instead: the game's choice stands (its town, its first-time re-check). Open ground inside
+// an NPC town's radius, an owner's town over the spot, and either no town or a player town whose
+// own radius misses the spot; never a building that creates a player town, which the NPC town
+// would make undismantlable.
+bool TownClaimVanillaStands(const TownClaimInputs& in);
+// Whether the call goes on with the skip flag set: a flagged call with a town, unless the game's
+// choice stands.
+bool TownClaimSetsSkipFlag(TownClaimAction action, bool flagged, bool haveTown);
 
 // One of the owner's towns, centre and radius in world units.
 struct TownClaimCandidate { float x, z, radius; };

@@ -429,6 +429,8 @@ const size_t RVA_IS_ZONE_STILL_LOADING  = 0x3AC810; // documented
 const size_t RVA_BUILDER_PLACE              = 0x4D6810;
 const size_t RVA_CREATE_BUILDING            = 0x57C1E0;   // RootObjectFactory::createBuilding
 const size_t RVA_SET_MOUNTED_CALLBACK_VTABLE = 0x16DE9D0; // SetMountedBuildingCallback's vftable
+const size_t RVA_TOWNLIST_NEAREST_WITHIN_RADIUS = 0x9279C0; // TownList::getNearestWithinItsRadius(list, position, skipPlayerTowns)
+const size_t RVA_GAMEDATA_GET_BOOL = 0x6C780; // GameData::getBool(bdata, key): the key's entry, inserted false when missing
 
 // The throw-out fix (src/fixes/world/throwout.cpp, throwout_finder.cpp).
 const size_t RVA_CHAR_GET_DROPPED              = 0x5CC110;  // Character::getDropped
