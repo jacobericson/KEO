@@ -5,19 +5,21 @@
 
 namespace keo_inventory {
 
-std::string SidecarFormat(const SidecarEntry* entries, int n, bool defaultOn)
+std::string SidecarFormat(const SidecarEntry* entries, int n, int* formatFailed)
 {
 	std::string text(SIDECAR_HEADER);
 	text += '\n';
 	for (int i = 0; entries && i < n; ++i)
 	{
 		const bool on = entries[i].on != 0;
-		if (on == defaultOn)
-			continue;
 		char key[64];
 		int len = HandKeyFormat(entries[i].key, key, (int)sizeof key);
 		if (len <= 0)
+		{
+			if (formatFailed)
+				++*formatFailed;
 			continue;
+		}
 		text.append(key, (size_t)len);
 		text += on ? " 1\n" : " 0\n";
 	}
@@ -74,6 +76,11 @@ SidecarParseResult SidecarParse(const char* text, int len, SidecarEntry* out, in
 	memset(&r, 0, sizeof r);
 	if (!text || len <= 0)
 		return r;
+	if (len > SIDECAR_MAX_BYTES)
+	{
+		r.refused = true;
+		return r;
+	}
 
 	const int headerLen = (int)strlen(SIDECAR_HEADER);
 	bool sawHeader = false;

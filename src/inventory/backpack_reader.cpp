@@ -3,13 +3,14 @@
 // BackpackReaderInit checks, so a build whose layouts moved binds nothing and every reader answers
 // as if there were no backpack (or, for the equip test, as if the item would equip). The item's
 // getInventory slot is the one giveItem itself calls; isAnimal's is the KenshiLib vtable's. After
-// init, any thread: plain reads and the two game callees, which neither lock nor allocate.
+// init, any thread: plain reads and the two game callees (getSectionOfType walks a list;
+// isLimitedSlotCompatible reaches RaceLimiter::canEquip, the game's own code).
 #include "inventory/backpack_reader.h"
 #include "game/game.h"
 #include <string.h>
 
 namespace backpack_reader_detail {
-// Bytes this build carries at sites whose instructions encode the offsets above; a mismatch
+// Bytes this build carries at sites whose instructions encode the offsets below; a mismatch
 // means the layouts moved and backpack-first stays off.
 struct ByteCheck { const char* why; size_t rva; unsigned char bytes[16]; int len; };
 
@@ -51,6 +52,14 @@ static const ByteCheck kChecks[] =
 	  { 0x48,0x8B,0x48,0x48,0x48,0x39,0x48,0x40 }, 8 },
 	{ "objectType", RVA_BACKPACK_TYPE_CHECK,
 	  { 0x83,0xBB,0x3C,0x01,0x00,0x00,0x2E }, 7 },
+	// giveItem's `call [rax+18h]` (Inventory::tryAddItem) and `call [rax+160h]` (the item's
+	// getInventory), both past the detour's patched head.
+	{ "tryAddItemSlot", RVA_CHARACTER_GIVE_ITEM + 0x3C,
+	  { 0xFF,0x50,0x18 }, 3 },
+	{ "getInventorySlot", RVA_CHARACTER_GIVE_ITEM + 0x5A,
+	  { 0xFF,0x90,0x60,0x01,0x00,0x00 }, 6 },
+	{ "isAnimalSlot", RVA_CHARACTER_IS_ANIMAL_CHECK,
+	  { 0xFF,0x90,0x48,0x02,0x00,0x00 }, 6 },
 };
 
 // NULL until every check passed; written once on the main thread before the detour goes in.
@@ -109,6 +118,7 @@ bool InventoryIsEmpty(void* inventory)
 	return !inventory || ReadAt<unsigned>(inventory, OFF_INV_ALL_ITEMS_COUNT) == 0;
 }
 
+// Character::isAnimal returns a pointer, non-NULL for an animal.
 bool CharacterIsAnimal(void* character)
 {
 	return character && CallVirtualGetter(character, VT_CHARACTER_IS_ANIMAL) != NULL;

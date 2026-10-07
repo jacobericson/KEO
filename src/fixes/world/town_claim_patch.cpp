@@ -16,7 +16,6 @@
 
 // 0 = not attempted, 1 = armed, -1 = refused.
 static int s_state = 0;
-static const char* s_why = "not installed";
 
 // The data page holds the gate slot; the code page holds the stub at +0 and the vanilla thunk
 // at +0x40. Never freed once the site is patched: the main thread can be inside the stub.
@@ -135,13 +134,16 @@ void InstallTownClaimPatch(bool gateOk)
 	if (!why)
 	{
 		s_state = 1;
-		s_why = "";
 		return;
 	}
 	s_state = -1;
-	s_why = why;
 	LogMsg(std::string("Town claim: patch not armed (") + why
 	       + "); a first-time zone still re-checks a placement's town");
+}
+
+int TownClaimPatchState()
+{
+	return s_state;
 }
 
 void NeutralizeTownClaimPatch()

@@ -22,8 +22,8 @@ bool BackpackFirstSet(const game::HandKey& k, int on);
 // Main thread only. Slot i's key and value while it is in use; false for a free slot or an
 // index out of range.
 bool BackpackFirstEntry(int i, game::HandKey* k, int* on);
-// Main thread only. Moves slot i to key k. When another slot already holds k, that newer entry
-// wins and slot i is erased.
+// Main thread only. Moves slot i to key k. When another slot already holds k, the slot already
+// holding k wins and slot i is erased.
 void BackpackFirstRekey(int i, const game::HandKey& k);
 void BackpackFirstErase(int i);   // main thread only
 void BackpackFirstClear();        // main thread only

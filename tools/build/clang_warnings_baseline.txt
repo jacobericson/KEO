@@ -1,7 +1,7 @@
 DEV	-Wbitwise-instead-of-logical	36
 DEV	-Wdeprecated-builtins	78
 DEV	-Wdynamic-class-memaccess	1
-DEV	-Winvalid-offsetof	517
+DEV	-Winvalid-offsetof	519
 DEV	-Wmicrosoft-cast	3
 DEV	-Wmismatched-tags	16
 DEV	-Wmissing-braces	3
@@ -12,7 +12,7 @@ DEV	-Wunused-const-variable	4
 PROD	-Wbitwise-instead-of-logical	36
 PROD	-Wdeprecated-builtins	78
 PROD	-Wdynamic-class-memaccess	1
-PROD	-Winvalid-offsetof	517
+PROD	-Winvalid-offsetof	519
 PROD	-Wmicrosoft-cast	3
 PROD	-Wmismatched-tags	16
 PROD	-Wmissing-braces	3
@@ -24,7 +24,7 @@ PROD	-Wunused-function	1
 PROD	-Wunused-variable	1
 profiler	-Wbitwise-instead-of-logical	24
 profiler	-Wdeprecated-builtins	30
-profiler	-Winvalid-offsetof	495
+profiler	-Winvalid-offsetof	497
 profiler	-Wmicrosoft-cast	10
 profiler	-Wmismatched-tags	16
 profiler	-Wnonportable-include-path	1

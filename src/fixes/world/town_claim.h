@@ -20,6 +20,11 @@ bool TownClaimRowsInstalled();
 void InstallTownClaimPatch(bool gateOk);
 // DLL_PROCESS_DETACH: points the gate slot at the vanilla thunk. The patched bytes stay.
 void NeutralizeTownClaimPatch();
+// Main thread: the patch's state, 1 armed, -1 refused, 0 not attempted.
+int TownClaimPatchState();
+// Main thread, from the camera tick's list. Returns at once while townClaimFix is off. DEV: once
+// a minute, when a counter moved since the last one, the "TownClaim: heartbeat" line. PROD: nothing.
+void TownClaimTick(double now);
 
 } // namespace fixes
 

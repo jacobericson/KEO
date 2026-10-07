@@ -25,37 +25,50 @@ static giveItem_t orig_giveItem = NULL;
 static volatile LONG s_calls = 0, s_routed = 0, s_placed = 0, s_fellBack = 0;
 static bool s_installed = false;
 
+// AI back thread and main thread. True when the item went into the worn backpack. Each policy
+// input is read in RouteToBackpackFirst's order and the first refusal returns, so a character
+// whose setting is off costs one table read. No lock, no allocation, no logging.
+static bool TryBackpackFirst(void* character, void* item)
+{
+	const int setting = BackpackFirstGet(game::HandKeyOfObject(character));
+	const bool defaultOn = g_inventoryCfg.backpackFirstDefault;
+	if (!(setting < 0 ? defaultOn : setting != 0))
+		return false;
+	if (CharacterIsAnimal(character))
+		return false;
+	void* backpack = WornBackpack(character);
+	void* backpackInv = backpack ? ItemInventory(backpack) : NULL;
+	if (!backpackInv)
+		return false;
+	if (item == backpack)
+		return false;
+	void* itemInv = ItemInventory(item);
+	if (ItemIsNonEmptyContainer(itemInv != NULL, InventoryIsEmpty(itemInv)))
+		return false;
+	if (InventoryWouldAutoEquip(CharacterInventory(character), item))
+		return false;
+	// Every refusal has been passed; the policy still makes the decision.
+	if (!RouteToBackpackFirst(setting, defaultOn, false, true, false, false, false))
+		return false;
+	InterlockedIncrement(&s_routed);
+	tryAddItem_t tryAdd = *(tryAddItem_t*)(*(uintptr_t*)backpackInv + VT_INVENTORY_TRY_ADD_ITEM);
+	if (tryAdd(backpackInv, item, 1))
+	{
+		InterlockedIncrement(&s_placed);
+		return true;
+	}
+	InterlockedIncrement(&s_fellBack);
+	return false;
+}
+
 // AI back thread and main thread. Tries the worn backpack first for a character whose setting is
 // on; on every other path, and when the backpack refuses, the original runs once with its
 // arguments untouched. No lock, no allocation, no logging.
 static bool __fastcall hook_giveItem(void* character, void* item, bool dropOnFail, bool destroyOnFail)
 {
 	InterlockedIncrement(&s_calls);
-	if (character && item)
-	{
-		void* backpack = WornBackpack(character);
-		void* backpackInv = WornBackpackInventory(character);
-		void* itemInv = ItemInventory(item);
-		bool route = RouteToBackpackFirst(
-			BackpackFirstGet(game::HandKeyOfObject(character)),
-			g_inventoryCfg.backpackFirstDefault,
-			CharacterIsAnimal(character),
-			backpackInv != NULL,
-			item == backpack,
-			itemInv != NULL && !InventoryIsEmpty(itemInv),
-			backpackInv != NULL && InventoryWouldAutoEquip(CharacterInventory(character), item));
-		if (route)
-		{
-			InterlockedIncrement(&s_routed);
-			tryAddItem_t tryAdd = *(tryAddItem_t*)(*(uintptr_t*)backpackInv + VT_INVENTORY_TRY_ADD_ITEM);
-			if (tryAdd(backpackInv, item, 1))
-			{
-				InterlockedIncrement(&s_placed);
-				return true;
-			}
-			InterlockedIncrement(&s_fellBack);
-		}
-	}
+	if (character && item && TryBackpackFirst(character, item))
+		return true;
 	return orig_giveItem(character, item, dropOnFail, destroyOnFail);
 }
 

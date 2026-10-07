@@ -42,6 +42,20 @@ const int kTownClaimMaxCandidates = 64;
 // The candidate whose radius covers (px, pz) by horizontal distance, inclusive, nearest centre
 // first; -1 when none does. A radius of 0 or less covers nothing.
 int TownClaimPickContaining(const TownClaimCandidate* c, int n, float px, float pz);
+// A town the containing-town walk may pick: the owner's faction, not a nest marker and not a
+// nest, the same exclusions as the game's own TownList::getNearestWithinItsRadius.
+bool TownClaimTownEligible(bool factionMatches, bool nestMarker, bool isNest);
+
+// --- The snap callback's vftable --------------------------------------
+//
+// The builder (0x4D6810) stores SetMountedBuildingCallback's vftable with
+//   4D6D33  48 8D 15 96 7C 20 01    lea  rdx, [rip+1207C96h]     ; 0x16DE9D0
+// so a binary whose lea no longer reaches the vftable the snap test compares is refused.
+const size_t kTownClaimSnapLeaOffset = 0x523;   // from the builder's entry
+const int    kTownClaimSnapLeaLen    = 7;
+extern const unsigned char kTownClaimSnapLeaBytes[7];
+// True when `bytes` (at address `at`) is `lea rdx, [rip+disp32]` and its target is `expect`.
+bool TownClaimLeaReaches(const unsigned char* bytes, unsigned __int64 at, unsigned __int64 expect);
 
 // --- The site ---------------------------------------------------------
 //
@@ -83,6 +97,9 @@ const size_t kTownClaimStubLen = 0x3E;
 //   pop  r11, r10, r9, r8, rdx, rcx, rax  ; pops leave the flags alone
 //   jnz  keepAddr                         ; a flagged placement keeps its town
 //   jmp  resumeAddr                       ; the first-time path, as vanilla
+//
+// No XMM register is saved: every path out of the site (resume, keep) reaches a call before it
+// reads one, so none is live across the gate.
 bool BuildTownClaimStub(unsigned char* out, size_t cap,
                         unsigned __int64 stubAddr, unsigned __int64 gateSlotAddr,
                         unsigned __int64 keepAddr, unsigned __int64 resumeAddr, size_t* outLen);

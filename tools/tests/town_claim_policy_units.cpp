@@ -174,7 +174,7 @@ static void CheckPick()
 		Check(TownClaimPickContaining(c, 1, 100.0f, 200.0f) == 0
 		   && TownClaimPickContaining(c, 1, 100.0f, 1200.0f) == -1
 		   && TownClaimPickContaining(c, 1, 1100.0f, 200.0f) == -1,
-		      "pick: distance is horizontal");
+		      "pick: the x and z offsets count alike");
 	}
 	{
 		const TownClaimCandidate c[1] = { { 0.0f, 0.0f, 5.0f } };
@@ -194,6 +194,33 @@ static void CheckPick()
 		   && TownClaimPickContaining(NULL, 2, 0.0f, 0.0f) == -1,
 		      "pick: none covers");
 	}
+}
+
+static void CheckEligible()
+{
+	Check(TownClaimTownEligible(true, false, false), "eligible: the owner's town is eligible");
+	Check(!TownClaimTownEligible(false, false, false), "eligible: another faction's town is refused");
+	Check(!TownClaimTownEligible(true, true, false), "eligible: a nest marker is refused");
+	Check(!TownClaimTownEligible(true, false, true), "eligible: a nest is refused");
+}
+
+static void CheckSnapLea()
+{
+	// The builder (0x4D6810) loads SetMountedBuildingCallback's vftable (0x16DE9D0) at +0x523.
+	const unsigned __int64 base = 0x140000000ULL;
+	const unsigned __int64 at = base + 0x4D6810 + kTownClaimSnapLeaOffset;
+	const unsigned __int64 vft = base + 0x16DE9D0;
+	Check(kTownClaimSnapLeaOffset == 0x523 && kTownClaimSnapLeaLen == 7
+	   && TownClaimLeaReaches(kTownClaimSnapLeaBytes, at, vft),
+	      "snap lea: the shipped bytes reach the vftable");
+	unsigned char b[7];
+	memcpy(b, kTownClaimSnapLeaBytes, sizeof(b));
+	b[4] ^= 0x01;
+	Check(!TownClaimLeaReaches(b, at, vft), "snap lea: a changed disp byte does not reach it");
+	memcpy(b, kTownClaimSnapLeaBytes, sizeof(b));
+	b[2] = 0x0D;   // lea rcx
+	Check(!TownClaimLeaReaches(b, at, vft) && !TownClaimLeaReaches(NULL, at, vft),
+	      "snap lea: another instruction is refused");
 }
 
 static void CheckBytes()
@@ -292,6 +319,8 @@ int main()
 {
 	CheckDecision();
 	CheckPick();
+	CheckEligible();
+	CheckSnapLea();
 	CheckBytes();
 	return CheckExit("town_claim_policy_units");
 }

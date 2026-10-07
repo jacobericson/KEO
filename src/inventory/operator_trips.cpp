@@ -9,6 +9,7 @@
 #include "inventory/backpack_reader.h"
 #include "plugin/hook_manifest.h"
 #include "game/game.h"
+#include "game/klib_member_contract.h"
 #include "base/core.h"
 #include <string.h>
 #include <string>
@@ -29,7 +30,7 @@ namespace keo_inventory {
 // Faction::isPlayer +0x250; Building vtable +0x2F8 getFunctionStuff; StorageBuilding +0x440 output
 // kind and vtable +0x550 getProductionItemData; Character vtable +0x160 getInventory; Inventory
 // vtable +0x20 hasRoomForItem.
-static const size_t kAiMe = 0x2F8, kFactionIsPlayer = 0x250, kStorageOutputKind = 0x440;
+static const size_t kAiMe = KLIB_OFF_AI_me, kFactionIsPlayer = KLIB_OFF_Faction_isPlayer, kStorageOutputKind = 0x440;
 static const size_t kVtGetFaction = 0x58, kVtFunctionStuff = 0x2F8, kVtProductItem = 0x550;
 static const size_t kVtGetInventory = 0x160, kVtHasRoom = 0x20;
 

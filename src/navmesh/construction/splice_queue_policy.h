@@ -13,7 +13,8 @@ const int   SPLICE_WAIT_CAP_TICKS = 600;    // ticks before a waiting box is re-
 // Vanilla's own test: progress below totalMats * pathThreshold, in single precision.
 bool SpliceBelow(float progress, float totalMats, float pathThreshold);
 // The crossing block vanilla runs (and so the record): the wall owns its build state, was below
-// before the call, is not below after it, the amount is not FLT_MAX, and it has a physical.
+// before the call, is at or over the threshold after it (an ordered compare: a NaN progress never
+// records), the amount is not FLT_MAX, and it has a physical.
 bool SpliceRecordDue(int shareType, bool belowBefore, float progressAfter, float totalMats,
                      float pathThreshold, float amount, bool hasPhysical);
 

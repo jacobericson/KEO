@@ -72,7 +72,7 @@ bool ThrowoutHoldAdd(const game::HandKey& key, const ThrowoutHand& hand, double 
 	return true;
 }
 
-bool ThrowoutHoldIsHeld(const game::HandKey& key, double nowHours)
+bool ThrowoutHoldIsHeld(const game::HandKey& key, double nowHours, double capHours)
 {
 	for (int i = 0; i < THROWOUT_HOLD_SLOTS; ++i)
 	{
@@ -81,7 +81,7 @@ bool ThrowoutHoldIsHeld(const game::HandKey& key, double nowHours)
 		double e;
 		if (!ReadEntry(s_slots[i], &live, &k, &e, NULL) || !live)
 			continue;
-		if (game::HandKeyEqual(k, key) && ThrowoutHoldDecide(nowHours, e, true) == TH_HELD)
+		if (game::HandKeyEqual(k, key) && ThrowoutHoldDecide(nowHours, e, true, capHours) == TH_HELD)
 			return true;
 	}
 	return false;

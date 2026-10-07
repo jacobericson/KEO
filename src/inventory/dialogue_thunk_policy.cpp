@@ -50,4 +50,26 @@ bool DialogCallRel32(unsigned __int64 callAddr, unsigned __int64 thunkAddr, int*
 	return true;
 }
 
+// Sign-extends the little-endian rel32 at p.
+static __int64 ReadRel32(const unsigned char* p)
+{
+	const unsigned int u = (unsigned int)p[0] | ((unsigned int)p[1] << 8)
+	                     | ((unsigned int)p[2] << 16) | ((unsigned int)p[3] << 24);
+	return (__int64)(int)u;
+}
+
+unsigned __int64 DialogueOriginalCallTarget(unsigned __int64 callAddr, const unsigned char lead[23])
+{
+	return callAddr + 5 + (unsigned __int64)ReadRel32(lead + kDialogLeadLen - 4);
+}
+
+bool DialogJumpTarget(unsigned __int64 thunkAddr, const unsigned char bytes[5], unsigned __int64* targetOut)
+{
+	if (!bytes || bytes[0] != 0xE9)
+		return false;
+	if (targetOut)
+		*targetOut = thunkAddr + 5 + (unsigned __int64)ReadRel32(bytes + 1);
+	return true;
+}
+
 } // namespace keo_inventory

@@ -1,9 +1,10 @@
 // The backpack-first sidecar's text: the parser's refusals, skips and counts line by line, the
-// format's version line and default filter, and a format-then-parse round trip, whole and cut.
+// format's version line and every entry written, and a format-then-parse round trip, whole and cut.
 #include <cstdio>
 #include <cstring>
 #include <string>
 #include "inventory/backpack_sidecar_policy.h"
+#include "inventory/backpack_table.h"
 
 #include "check.h"
 
@@ -52,6 +53,12 @@ static void CheckParseRefusals()
 	      && Counts(Parse("KEO_backpacks 1 1\n2 7 31 405 1 0\n", out, 8), true, 0, 0, 0, 0)
 	      && Counts(Parse("KEO_backpacks 10\n", out, 8), true, 0, 0, 0, 0),
 	      "parse: another version refuses the file");
+
+	std::string big("KEO_backpacks 1\n2 7 31 405 1 0\n");
+	big.resize((size_t)SIDECAR_MAX_BYTES, '\n');
+	std::string over = big + "\n";
+	CHECK(Counts(Parse(big, out, 8), false, 1, 0, 0, 0) && Counts(Parse(over, out, 8), true, 0, 0, 0, 0),
+	      "parse: a file over the size cap is refused");
 }
 
 static void CheckParseLines()
@@ -106,27 +113,38 @@ static void CheckParseLines()
 
 static void CheckFormat()
 {
-	CHECK(SidecarFormat(NULL, 0, true) == "KEO_backpacks 1\n" && SidecarFormat(NULL, 0, false) == "KEO_backpacks 1\n",
+	CHECK(SidecarFormat(NULL, 0, NULL) == "KEO_backpacks 1\n",
 	      "format: an empty table writes the version line alone");
 
 	SidecarEntry e[3] = { Entry(Key(2, 7, 31, 405, 1), 1), Entry(Key(2, 7, 31, 406, 2), 0),
 	                      Entry(Key(2, 8, 31, 405, 3), 1) };
-	CHECK(SidecarFormat(e, 3, true) == "KEO_backpacks 1\n2 7 31 406 2 0\n"
-	      && SidecarFormat(e, 3, false) == "KEO_backpacks 1\n2 7 31 405 1 1\n2 8 31 405 3 1\n"
-	      && SidecarFormat(e, 1, true) == "KEO_backpacks 1\n",
-	      "format: an entry equal to the default is not written");
+	CHECK(SidecarFormat(e, 3, NULL) == "KEO_backpacks 1\n2 7 31 405 1 1\n2 7 31 406 2 0\n2 8 31 405 3 1\n"
+	      && SidecarFormat(e, 1, NULL) == "KEO_backpacks 1\n2 7 31 405 1 1\n",
+	      "format: every entry is written, whatever the default");
 
 	SidecarEntry order[3] = { Entry(Key(2, 9, 1, 900, 9), 0), Entry(Key(2, 1, 1, 100, 1), 0),
 	                          Entry(Key(2, 5, 1, 500, 5), 0) };
-	CHECK(SidecarFormat(order, 3, true) == "KEO_backpacks 1\n2 9 1 900 9 0\n2 1 1 100 1 0\n2 5 1 500 5 0\n",
+	CHECK(SidecarFormat(order, 3, NULL) == "KEO_backpacks 1\n2 9 1 900 9 0\n2 1 1 100 1 0\n2 5 1 500 5 0\n",
 	      "format: lines keep the given order");
+
+	// A full table at the widest keys: every line written, the text under the read cap, and it
+	// parses back whole.
+	static SidecarEntry full[BACKPACK_TABLE_CAP];
+	for (int i = 0; i < BACKPACK_TABLE_CAP; ++i)
+		full[i] = Entry(Key(4294967295u, 4294967295u, 4294967295u, 4294967295u - (unsigned)i, 4294967295u), i & 1);
+	int failed = 0;
+	const std::string text = SidecarFormat(full, BACKPACK_TABLE_CAP, &failed);
+	static SidecarEntry back[BACKPACK_TABLE_CAP];
+	SidecarParseResult r = Parse(text, back, BACKPACK_TABLE_CAP);
+	CHECK(failed == 0 && (int)text.size() < SIDECAR_MAX_BYTES && Counts(r, false, BACKPACK_TABLE_CAP, 0, 0, 0),
+	      "format: a full table stays under the size cap");
 }
 
 static void CheckRoundTrip()
 {
 	SidecarEntry in[4] = { Entry(Key(2, 7, 31, 405, 1), 0), Entry(Key(2, 7, 31, 406, 4294967295u), 0),
 	                       Entry(Key(4294967295u, 0, 0, 0, 0), 0), Entry(Key(2, 3, 4, 5, 6), 0) };
-	std::string text = SidecarFormat(in, 4, true);
+	std::string text = SidecarFormat(in, 4, NULL);
 	SidecarEntry out[8];
 	SidecarParseResult r = Parse(text, out, 8);
 	bool same = Counts(r, false, 4, 0, 0, 0);

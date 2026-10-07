@@ -27,15 +27,39 @@ enum ThrowoutDrop { TD_NONE = 0, TD_REACHED_OUTSIDE, TD_REACHED_INSIDE, TD_TIMEO
 ThrowoutDrop ThrowoutClassifyDrop(int reason, bool timedOut, ThrowoutFlag flag, int gateCode);
 
 // The hold. HELD while unconscious and before the expiry; CAP once the expiry is reached, whatever
-// the body's state; WOKE when conscious before it; NONE for an empty entry (expiry <= 0).
-enum ThrowoutHold { TH_NONE = 0, TH_HELD, TH_WOKE, TH_CAP };
-ThrowoutHold ThrowoutHoldDecide(double nowHours, double expiryHours, bool unconscious);
+// the body's state; WOKE when conscious before it; NONE for an empty entry (expiry <= 0); STALE
+// when the expiry lies further ahead than the cap (capHours, plus a minute) allows, as after a
+// load into an earlier game time.
+enum ThrowoutHold { TH_NONE = 0, TH_HELD, TH_WOKE, TH_CAP, TH_STALE };
+ThrowoutHold ThrowoutHoldDecide(double nowHours, double expiryHours, bool unconscious, double capHours);
 double ThrowoutHoldExpiry(double nowHours, int holdMinutes);   // now + minutes / 60
 
 // The finder's mode, decided once per process: with another plugin's finder detour possibly in
 // the chain, call the original and filter a held result; otherwise replace the loop.
 enum ThrowoutFinderMode { TFM_REPLACE = 0, TFM_CHAIN };
 ThrowoutFinderMode ThrowoutFinderModeFor(bool otherFinderLoaded);
+// The mode from the install until the tick's first call decides it: the original chained.
+ThrowoutFinderMode ThrowoutFinderModeBeforeTick();
+
+// In chain mode, a held result is replaced by the replacement loop's answer only while no live
+// foreign detour sits in the finder's chain; otherwise it is answered as no candidate.
+bool ThrowoutChainFallback(bool heldResult, bool foreignHopLive);
+
+// One hop of the walk down the finder's entry chain. OURS: our own detour, the walk continues
+// from our trampoline. FOLLOW: a jump, followed. END: vanilla code (the exe, or memory no module
+// owns, which holds a trampoline's copy of vanilla's prologue). LIVE: another module's code, or
+// bytes that cannot be read.
+enum ThrowoutHopKind { THK_FOLLOW = 0, THK_OURS, THK_END, THK_LIVE };
+ThrowoutHopKind ThrowoutClassifyHop(bool readable, bool isJump, bool inExe, bool inOurs, bool inOtherModule);
+const int kThrowoutMaxHops = 12;  // a longer walk counts as live
+// The target of the jump at `at` (E9 rel32, or FF 25 disp32 through the pointer `slot` read
+// there), or 0 when `bytes` is not one. `slot` is the pointer an FF 25 reads, ignored for E9.
+unsigned __int64 ThrowoutJumpTarget(const unsigned char* bytes, unsigned __int64 at, unsigned __int64 slot);
+// The address an FF 25 at `at` reads its pointer from, or 0 when `bytes` is not FF 25.
+unsigned __int64 ThrowoutJumpSlot(const unsigned char* bytes, unsigned __int64 at);
+
+// A task vftable entry reaches `expect`: it is `expect`, or an E9 rel32 thunk to it.
+bool ThrowoutSlotResolves(const unsigned char* entryBytes, unsigned __int64 entry, unsigned __int64 expect);
 
 const int kThrowoutInPrison = 2;   // UseStuffState IN_PRISON
 // Vanilla's five conditions in its order, then the hold: a seen, uncarried, unconscious,

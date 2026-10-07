@@ -87,6 +87,18 @@ static const char* TryArm(unsigned __int64* thunkOut)
 	 || memcmp(head, kHasItemFunctionHead, sizeof(head)) != 0)
 		return "hasItemFunction head differs";
 
+	// The wrapper calls what the original call reached: the j_ thunk, itself a jump to
+	// hasItemFunction, so a thunk retargeted after arming is still honoured; at arming it must
+	// reach hasItemFunction.
+	const unsigned __int64 target = DialogueOriginalCallTarget(callAddr, lead);
+	unsigned char thunkBytes[5];
+	unsigned __int64 thunkTarget = 0;
+	if (target != (unsigned __int64)(uintptr_t)GameAddr(RVA_J_INVENTORY_HAS_ITEM_FUNCTION)
+	 || !SafeReadBytes((const void*)(uintptr_t)target, thunkBytes, sizeof(thunkBytes))
+	 || !DialogJumpTarget(target, thunkBytes, &thunkTarget)
+	 || thunkTarget != (unsigned __int64)(uintptr_t)GameAddr(RVA_INVENTORY_HAS_ITEM_FUNCTION))
+		return "thunk";
+
 	unsigned char* page = AllocateNearPages((unsigned __int64)gameBase, kThunkPageSize);
 	if (!page)
 		return "no free page within rel32 reach of the exe";
@@ -112,7 +124,7 @@ static const char* TryArm(unsigned __int64* thunkOut)
 	}
 
 	// Before the write: the thunk reaches the wrapper as soon as the call does.
-	fn_hasItemFunction = (hasItemFunction_t)GameAddr(RVA_INVENTORY_HAS_ITEM_FUNCTION);
+	fn_hasItemFunction = (hasItemFunction_t)(uintptr_t)target;
 
 	void* relAddr = (void*)(uintptr_t)(callAddr + 1);
 	DWORD oldSite = 0;

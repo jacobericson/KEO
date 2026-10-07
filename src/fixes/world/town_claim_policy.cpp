@@ -46,6 +46,23 @@ int TownClaimPickContaining(const TownClaimCandidate* c, int n, float px, float 
 	return best;
 }
 
+bool TownClaimTownEligible(bool factionMatches, bool nestMarker, bool isNest)
+{
+	return factionMatches && !nestMarker && !isNest;
+}
+
+// Read from the IDB: the builder (0x4D6810) at +0x523.
+const unsigned char kTownClaimSnapLeaBytes[7] =
+	{ 0x48, 0x8D, 0x15, 0x96, 0x7C, 0x20, 0x01 };
+
+bool TownClaimLeaReaches(const unsigned char* bytes, unsigned __int64 at, unsigned __int64 expect)
+{
+	if (!bytes || bytes[0] != 0x48 || bytes[1] != 0x8D || bytes[2] != 0x15)
+		return false;
+	int disp = 0;
+	memcpy(&disp, bytes + 3, 4);
+	return (unsigned __int64)((__int64)(at + (unsigned __int64)kTownClaimSnapLeaLen) + disp) == expect;
+}
 
 // Read from the IDB (kenshi_x64.exe, Steam 1.0.65), RootObjectFactory::createBuilding
 // (0x57C1E0).

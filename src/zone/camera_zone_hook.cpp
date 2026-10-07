@@ -37,6 +37,7 @@
 #include "diag/physx_pool_probe.h"
 #include "fixes/world/corpse_pin.h"
 #include "fixes/world/throwout.h"
+#include "fixes/world/town_claim.h"
 #include "zone/handoff/zone_handoff.h"
 #include "zone/geometry/zone_geometry_epoch.h"
 #include "zone/retention/zone_retention.h"
@@ -285,6 +286,7 @@ static bool CameraZoneTicks(void* zoneMgr, bool saveLoading)
 	ZoneGeometryCertTick(tickNow);
 	navmesh::WallSpliceTick(tickNow, saveLoading);
 	fixes::ThrowoutTick(tickNow, saveLoading);
+	fixes::TownClaimTick(tickNow);
 	keo_inventory::BackpackRekeyTick(tickNow, saveLoading);
 	keo_inventory::OperatorTripsTick(tickNow, saveLoading);
 	// Same placement, same reason: the coverage counters describe preload

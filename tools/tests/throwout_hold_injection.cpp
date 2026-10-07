@@ -1,7 +1,8 @@
 // Races the throw-out hold table's lock-free read against its writers: two writer threads add
 // 200,000 entries each, every entry's key serial, hand bytes and expiry stamped from one value,
 // while a reader thread reads every entry in a loop. Every entry the read accepts must carry one
-// stamp in all three; a mixed entry is a torn read the sequence word failed to refuse.
+// stamp in all three, and a key whose index and container are the ones its writer derived from
+// that stamp; a mixed entry is a torn read the sequence word failed to refuse.
 // The threads start together on a flag and wait with bounded compare-exchange spins only.
 //
 // Links src/fixes/world/throwout_hold.cpp and throwout_policy.cpp unmodified.
@@ -75,7 +76,8 @@ namespace throwout_hold_injection_detail
 			g_reads++;
 			unsigned __int64 stamp;
 			std::memcpy(&stamp, h.bytes, sizeof stamp);
-			if (e != (double)k.serial + 0.25 || stamp != (unsigned __int64)k.serial)
+			if (e != (double)k.serial + 0.25 || stamp != (unsigned __int64)k.serial
+			 || k.index != (k.serial ^ 0x5A5A) || (k.container != 1 && k.container != 2))
 			{
 				if (g_torn == 0)
 				{

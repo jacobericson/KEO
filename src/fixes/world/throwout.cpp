@@ -86,6 +86,7 @@ static volatile LONG s_clearMissed    = 0;
 static volatile LONG s_woke           = 0;
 static volatile LONG s_cap            = 0;
 static volatile LONG s_gone           = 0;
+static volatile LONG s_stale          = 0;  // an expiry further ahead than the cap: released
 static volatile LONG s_installed      = 0;  // rows in
 
 static const GuardCounter kThrowoutRows[] =
@@ -107,6 +108,7 @@ static const GuardCounter kThrowoutRows[] =
 	{ "woke",           GF_COUNT, &s_woke,           0 },
 	{ "cap",            GF_COUNT, &s_cap,            0 },
 	{ "gone",           GF_COUNT, &s_gone,           0 },
+	{ "stale",          GF_COUNT, &s_stale,          0 },
 };
 
 // Main-thread tick state.
@@ -277,8 +279,18 @@ void ThrowoutTick(double now, bool saveLoading)
 		s_modeDecided = true;
 		const bool other = GetModuleHandleA("KenshiQOL.dll") != NULL;
 		s_chain = ThrowoutFinderModeFor(other) == TFM_CHAIN;
-		ThrowoutFinderChainOriginal(s_chain);
-		LogMsg(other ? "Throwout: finder mode=chain (another plugin hooks the finder)" : "Throwout: finder mode=replace");
+		if (s_chain)
+		{
+			const bool live = ThrowoutFinderDecideFallback();
+			ThrowoutFinderChainOriginal(true);
+			LogMsg(live ? "Throwout: finder mode=chain (another plugin hooks the finder; a foreign detour below is live)"
+			            : "Throwout: finder mode=chain (another plugin hooks the finder; a foreign detour below is not live)");
+		}
+		else
+		{
+			ThrowoutFinderChainOriginal(false);
+			LogMsg("Throwout: finder mode=replace");
+		}
 	}
 	if (saveLoading && !s_wasLoading)
 		InterlockedExchangeAdd(&s_clearMissed, ThrowoutHoldClear());
@@ -294,6 +306,7 @@ void ThrowoutTick(double now, bool saveLoading)
 		ThrowoutHand h;
 		game::HandKey k;
 		double e;
+		const double cap = g_fixesCfg.throwOutHoldMinutes / 60.0;
 		for (int i = 0; i < THROWOUT_HOLD_SLOTS; ++i)
 		{
 			if (!ThrowoutHoldRead(i, &k, &h, &e))
@@ -305,11 +318,13 @@ void ThrowoutTick(double now, bool saveLoading)
 					InterlockedIncrement(&s_gone);
 				continue;
 			}
-			const ThrowoutHold d = ThrowoutHoldDecide(ThrowoutNowHours(), e, IsUnconcious(c));
+			const ThrowoutHold d = ThrowoutHoldDecide(ThrowoutNowHours(), e, IsUnconcious(c), cap);
 			if (d == TH_WOKE && ThrowoutHoldRelease(i, k, e))
 				InterlockedIncrement(&s_woke);
 			else if (d == TH_CAP && ThrowoutHoldRelease(i, k, e))
 				InterlockedIncrement(&s_cap);
+			else if (d == TH_STALE && ThrowoutHoldRelease(i, k, e))
+				InterlockedIncrement(&s_stale);
 		}
 	}
 
@@ -318,6 +333,22 @@ void ThrowoutTick(double now, bool saveLoading)
 		s_nextBeat = now + kBeatSeconds;
 		EmitHeartbeat();
 	}
+}
+
+// Main thread, at install. IsTownTask compares a task's vftable with the town task's; that
+// vftable's path-impossible (+0x28) and tick (+0x38) entries must reach the two slot rows'
+// functions, directly or through one E9 thunk, or the slot detours would mark the wrong task.
+static bool TownTaskSlotsResolve()
+{
+	const unsigned char* vft = (const unsigned char*)GameAddr(RVA_TAKE_OUTSIDE_TOWN_VFTABLE);
+	unsigned __int64 e5 = 0, e7 = 0;
+	unsigned char b5[5], b7[5];
+	if (!ThrowoutSafeRead(vft + 0x28, &e5, sizeof(e5)) || !ThrowoutSafeRead(vft + 0x38, &e7, sizeof(e7))
+	 || !ThrowoutSafeRead((const void*)(uintptr_t)e5, b5, sizeof(b5))
+	 || !ThrowoutSafeRead((const void*)(uintptr_t)e7, b7, sizeof(b7)))
+		return false;
+	return ThrowoutSlotResolves(b5, e5, (unsigned __int64)(uintptr_t)GameAddr(RVA_TAKE_OUTSIDE_PATH_IMPOSSIBLE))
+	    && ThrowoutSlotResolves(b7, e7, (unsigned __int64)(uintptr_t)GameAddr(RVA_TAKE_OUTSIDE_TICK));
 }
 
 void InstallThrowout(int* installed, int*)
@@ -338,11 +369,17 @@ void InstallThrowout(int* installed, int*)
 		else
 			fn_handGetCharacter = (handGetCharacter_t)GameAddr(RVA_HAND_GET_CHARACTER);
 	}
-	// The finder first: its row reads the clock resolved above.
+	// The finder first: its row reads the clock resolved above. Its mode is set before the row
+	// goes in, so no call reaches it undecided; the tick's first call settles it.
 	if (!why)
+	{
+		ThrowoutFinderChainOriginal(ThrowoutFinderModeBeforeTick() == TFM_CHAIN);
 		why = ThrowoutFinderInstall(installed);
+	}
 	if (!why)
 		why = HookInstall(HOOK_CHAR_GET_DROPPED, hook_getDropped, &orig_getDropped, installed, true);
+	if (!why && !TownTaskSlotsResolve())
+		why = "bytes: town task vftable";
 	if (!why)
 		why = HookInstall(HOOK_TAKE_OUTSIDE_TICK, hook_takeOutsideTick, &orig_takeOutsideTick, installed, true);
 	if (!why)
@@ -363,7 +400,10 @@ void InstallThrowout(int* installed, int*)
 		LogMsg(ss.str());
 		return;
 	}
-	ErrorLog(std::string("Throwout: not installed (") + why + "); the throw-out task and its finder run as vanilla");
+	std::ostringstream ss;
+	ss << "Throwout: not installed (" << why << "; " << rows
+	   << "/4 rows in); the rows already in stay in and the rest run as vanilla";
+	ErrorLog(ss.str());
 }
 
 } // namespace fixes

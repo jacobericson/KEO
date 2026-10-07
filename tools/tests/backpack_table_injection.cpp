@@ -3,7 +3,9 @@
 // each take the lowest free slot, while two reader threads look both keys up in a loop. A read of
 // A as off, or of B as on, pairs one write's key with another write's value: a torn read the slot
 // sequence failed to refuse. A read that raced twice answers -1 and is counted, never torn.
-// The writer starts only after both readers report ready; a handshake that runs out fails.
+// The writer starts only after both readers report ready; a handshake that runs out fails. Reads
+// that saw A on and B off are counted too, and each must be above 0: a lookup that never found
+// either key proves nothing.
 //
 // Links src/inventory/backpack_table.cpp, backpack_policy.cpp and src/game/hand_key.cpp unmodified.
 
@@ -25,8 +27,11 @@ namespace backpack_table_injection_detail
 	volatile LONG g_done = 0;
 	volatile LONG g_handshakeFailed = 0;
 	volatile LONG g_writes = 0;
-	volatile LONG g_reads = 0;
-	volatile LONG g_torn = 0;
+	// 64-bit, so a reader that spins while the writer is starved cannot wrap a sum.
+	volatile LONGLONG g_reads = 0;
+	volatile LONGLONG g_torn = 0;
+	volatile LONGLONG g_hitsA = 0;
+	volatile LONGLONG g_hitsB = 0;
 
 	DWORD WINAPI Writer(void*)
 	{
@@ -53,18 +58,26 @@ namespace backpack_table_injection_detail
 	DWORD WINAPI Reader(void* arg)
 	{
 		const int id = (int)(INT_PTR)arg;
-		LONG reads = 0, torn = 0;
+		LONGLONG reads = 0, torn = 0, hitsA = 0, hitsB = 0;
 		SetEvent(g_ready[id]);
 		while (!g_done)
 		{
-			if (BackpackFirstGet(kKeyA) == 0)
+			const int a = BackpackFirstGet(kKeyA);
+			const int b = BackpackFirstGet(kKeyB);
+			if (a == 0)
 				++torn;
-			if (BackpackFirstGet(kKeyB) == 1)
+			else if (a == 1)
+				++hitsA;
+			if (b == 1)
 				++torn;
+			else if (b == 0)
+				++hitsB;
 			reads += 2;
 		}
-		InterlockedExchangeAdd(&g_reads, reads);
-		InterlockedExchangeAdd(&g_torn, torn);
+		InterlockedExchangeAdd64(&g_reads, reads);
+		InterlockedExchangeAdd64(&g_torn, torn);
+		InterlockedExchangeAdd64(&g_hitsA, hitsA);
+		InterlockedExchangeAdd64(&g_hitsB, hitsB);
 		return 0;
 	}
 }
@@ -104,13 +117,19 @@ int main()
 		std::printf("FAIL backpack table: handshake (readers not ready within %lu ms)\n", HANDSHAKE_MS);
 		return 1;
 	}
-	const LONG t = g_torn, n = g_reads;
+	const LONGLONG t = g_torn, n = g_reads, ha = g_hitsA, hb = g_hitsB;
 	if (t != 0 || n <= 0 || g_writes != WRITES)
 	{
-		std::printf("FAIL backpack table: torn reads (torn %ld, reads %ld, writes %ld of %ld, raced %ld)\n",
+		std::printf("FAIL backpack table: torn reads (torn %lld, reads %lld, writes %ld of %ld, raced %ld)\n",
 		            t, n, g_writes, WRITES, BackpackFirstRaceCount());
 		return 1;
 	}
-	std::printf("backpack table: torn=%ld reads=%ld raced=%ld\n", t, n, BackpackFirstRaceCount());
+	if (ha <= 0 || hb <= 0)
+	{
+		std::printf("FAIL backpack table: hits (hitsA %lld, hitsB %lld, reads %lld)\n", ha, hb, n);
+		return 1;
+	}
+	std::printf("backpack table: torn=%lld reads=%lld raced=%ld hitsA=%lld hitsB=%lld\n",
+	            t, n, BackpackFirstRaceCount(), ha, hb);
 	return 0;
 }

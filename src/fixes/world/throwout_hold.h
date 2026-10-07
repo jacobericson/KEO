@@ -20,9 +20,10 @@ struct __declspec(align(8)) ThrowoutHand { unsigned char bytes[32]; };
 
 // Any thread. False when the drawn entry was being written (counted by the caller as lost).
 bool ThrowoutHoldAdd(const game::HandKey& key, const ThrowoutHand& hand, double expiryHours);
-// Any thread. True while a live entry with this key is HELD at nowHours (ThrowoutHoldDecide with
+// Any thread. True while a live entry with this key is HELD at nowHours under capHours (a stale
+// entry is not held and is left for the main thread to release; ThrowoutHoldDecide with
 // unconscious = true: the finder asks only about unconscious candidates).
-bool ThrowoutHoldIsHeld(const game::HandKey& key, double nowHours);
+bool ThrowoutHoldIsHeld(const game::HandKey& key, double nowHours, double capHours);
 // Main thread. Entry i's contents, when it is live and was read whole.
 bool ThrowoutHoldRead(int i, game::HandKey* key, ThrowoutHand* hand, double* expiryHours);
 // Main thread. Ends entry i only if it still holds this key with this expiry (the values a

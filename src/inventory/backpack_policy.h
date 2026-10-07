@@ -14,14 +14,16 @@ namespace keo_inventory {
 // would not go into one of the main inventory's empty equipment slots (vanilla equips it there).
 bool RouteToBackpackFirst(int setting, bool defaultOn, bool isAnimal, bool wearsBackpack,
                           bool itemIsTheBackpack, bool itemIsNonEmptyContainer, bool wouldAutoEquip);
+// The item is a container holding anything: it has an inventory and that inventory is not empty.
+bool ItemIsNonEmptyContainer(bool hasInventory, bool inventoryEmpty);
 
 // A table slot copied between two reads of its sequence is consistent when the sequence was
 // even (no write in progress) and did not move.
 bool BackpackSlotReadable(long seqBefore, long seqAfter);
 
-// Up to max unsigned decimal fields separated by spaces or tabs, each at most 0xFFFFFFFF.
-// Returns the field count, or -1 for any other character, an overlong field, or more than max
-// fields.
+// Up to max unsigned decimal fields separated by spaces or tabs, each at most ten digits (leading
+// zeros counted) and at most 0xFFFFFFFF. Returns the field count, or -1 for any other character,
+// an overlong field, or more than max fields.
 int  ParseUnsignedFields(const char* text, int len, unsigned* out, int max);
 
 // "type container containerSerial index serial". Returns the characters written (no
@@ -30,9 +32,9 @@ int  HandKeyFormat(const game::HandKey& k, char* out, int n);
 // Exactly five fields and not the null handle.
 bool HandKeyParse(const char* text, int len, game::HandKey* out);
 
-// The food-score post-hook's decision: zero vanilla's score when it wants ground food (above 0)
-// and the worn backpack holds food the character can eat.
-bool FoodScoreZero(bool vanillaWants, bool backpackHasFood);
+// The food-score post-hook's decision: zero vanilla's score when it is at least 1 (a walk to
+// ground food; a lower score is kept) and the worn backpack holds food the character can eat.
+bool FoodScoreZero(float vanillaScore, bool backpackHasFood);
 // The dialogue item-function wrapper's second look: only when the main inventory said no and a
 // backpack is worn.
 bool DialogUseBackpack(bool mainHas, bool wearsBackpack);

@@ -90,6 +90,8 @@
 	// turns backpack-first off, and pickups fill the main inventory first as vanilla does.
 	HOOK_ROW(HOOK_CHARACTER_GIVE_ITEM, "Character::giveItem", RVA_CHARACTER_GIVE_ITEM, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
 	         0x48,0x89,0x5C,0x24,0x08,0x48,0x89,0x6C,0x24,0x10,0x48,0x89,0x74,0x24,0x18,0x57)
+
+	// --- src/fixes/world/, town claim and throw-out ---
 	// src/fixes/world/town_claim.cpp. The builder: `mov rax,rsp; push rbp; push r12`, six whole
 	// position-independent bytes. createBuilding: `mov rax,rsp; push rbp/rsi/rdi`. Wanted while
 	// townClaimFix is on. diagnostic = true: a mismatch leaves placement as vanilla does it.

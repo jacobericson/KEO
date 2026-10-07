@@ -31,6 +31,14 @@ bool DialogThunkBuild(unsigned char* out, size_t cap, unsigned __int64 wrapperAd
 // instruction.
 bool DialogCallRel32(unsigned __int64 callAddr, unsigned __int64 thunkAddr, int* rel32Out);
 
+// Where the lead's own E8 rel32 (its last five bytes) sends the call at callAddr: callAddr + 5 +
+// rel32. The caller has checked the lead first.
+unsigned __int64 DialogueOriginalCallTarget(unsigned __int64 callAddr, const unsigned char lead[23]);
+
+// A jump thunk's target: E9 rel32 at thunkAddr reaches thunkAddr + 5 + rel32. False when the
+// bytes are not an E9.
+bool DialogJumpTarget(unsigned __int64 thunkAddr, const unsigned char bytes[5], unsigned __int64* targetOut);
+
 } // namespace keo_inventory
 
 #endif

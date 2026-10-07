@@ -10,6 +10,7 @@
 #include "inventory/backpack_table.h"
 #include "inventory/backpack_first.h"
 #include "inventory/backpack_window.h"
+#include "inventory/backpack_food.h"
 #include "inventory/inventory_config.h"
 #include "game/hand_key.h"
 #include "game/game.h"
@@ -37,8 +38,6 @@ static_assert(sizeof(HandBlock) == 0x20, "HandBlock is the game's 0x20-byte hand
 
 namespace keo_inventory {
 
-static const int SIDECAR_MAX_BYTES = 262144;   // 512 entries need about 30 KB
-
 // The callees' first 16 bytes, checked at install before any of them is called.
 static const unsigned char kWriteFileHead[16] =
 	{ 0x40,0x55,0x56,0x57,0x48,0x83,0xEC,0x30,0x48,0xC7,0x44,0x24,0x20,0xFE,0xFF,0xFF };
@@ -61,19 +60,20 @@ static volatile LONG    s_armed           = 0;
 // Main thread only.
 static long s_rekeyed = 0, s_dropped = 0;
 static long s_read = 0, s_missing = 0, s_refused = 0, s_badLines = 0, s_duplicates = 0, s_overflow = 0;
-static long s_written = 0, s_writeFail = 0;
+static long s_written = 0, s_unqueued = 0, s_writeFail = 0, s_formatFailed = 0;
 static double s_nextRekey = 0.0;
 static double s_nextBeat  = 0.0;
 static const double kRekeySeconds = 1.0;
 static const double kBeatSeconds  = 60.0;
 
 // Main thread, from the saveGame hook. The game returns each path by constructing it into an
-// empty std::string of ours (no heap block to leak), which this frame then destroys.
-static void SidecarWrite(void* sfs)
+// empty std::string of ours (no heap block to leak), which this frame then destroys. True when
+// the file was written whole; the caller counts it once saveGame has answered.
+static bool SidecarWrite(void* sfs)
 {
 	try
 	{
-		s_rekeyed += BackpackRekeyNow(true);
+		BackpackRekeyNow(true);
 		SidecarEntry entries[BACKPACK_TABLE_CAP];
 		int n = 0;
 		const int slots = BackpackFirstSlotCount();
@@ -88,29 +88,32 @@ static void SidecarWrite(void* sfs)
 				++n;
 			}
 		}
-		std::string text = SidecarFormat(entries, n, g_inventoryCfg.backpackFirstDefault);
+		int formatFailed = 0;
+		std::string text = SidecarFormat(entries, n, &formatFailed);
+		s_formatFailed += formatFailed;
 		std::string name(SIDECAR_FILE_NAME); std::string path; fn_sfsWriteFile(sfs, &path, &name);
 		if (path.empty())
 		{
 			++s_writeFail;
-			return;
+			return false;
 		}
 		FILE* f = NULL;
 		if (fopen_s(&f, path.c_str(), "wb") != 0 || !f)
 		{
 			++s_writeFail;
-			return;
+			return false;
 		}
 		const size_t wrote = fwrite(text.data(), 1, text.size(), f);
 		const int closed = fclose(f);
 		if (wrote == text.size() && closed == 0)
-			++s_written;
-		else
-			++s_writeFail;
+			return true;
+		++s_writeFail;
+		return false;
 	}
 	catch (...)
 	{
 		++s_writeFail;
+		return false;
 	}
 }
 
@@ -134,7 +137,8 @@ static void SidecarRead(void* sfs)
 			++s_missing;
 			return;
 		}
-		std::vector<char> buf((size_t)SIDECAR_MAX_BYTES);
+		// One byte past the cap, so an oversize file reaches the parser over the cap and is refused.
+		std::vector<char> buf((size_t)SIDECAR_MAX_BYTES + 1);
 		const size_t got = fread(&buf[0], 1, buf.size(), f);
 		fclose(f);
 
@@ -160,12 +164,20 @@ static void SidecarRead(void* sfs)
 }
 
 // Main thread, before the save's copy: the table re-keyed, unresolved entries dropped, the
-// sidecar written into the temp folder. Never throws into the game.
+// sidecar written into the temp folder. A written file counts as written only when saveGame
+// queued the copy, else as unqueued. Never throws into the game.
 static char __fastcall hook_sfsSaveGame(void* sfs, const std::string* savePath)
 {
-	if (InterlockedCompareExchange(&s_armed, 0, 0))
-		SidecarWrite(sfs);
-	return orig_sfsSaveGame(sfs, savePath);
+	const bool wrote = InterlockedCompareExchange(&s_armed, 0, 0) && SidecarWrite(sfs);
+	const char r = orig_sfsSaveGame(sfs, savePath);
+	if (wrote)
+	{
+		if (r)
+			++s_written;
+		else
+			++s_unqueued;
+	}
+	return r;
 }
 
 // Main thread: the save is indexed and no character exists yet; the table is filled from the
@@ -219,6 +231,21 @@ void InstallBackpackSidecar(int* installed, int*)
 	}
 }
 
+bool BackpackResolveKey(const game::HandKey& k, game::HandKey* live)
+{
+	if (live)
+		*live = k;
+	if (!fn_hmGetCharacter || !s_handleManager || !s_handVftable)
+		return false;
+	HandBlock h = { s_handVftable, k.type, k.container, k.containerSerial, k.index, k.serial, 0 };
+	void* c = fn_hmGetCharacter(s_handleManager, &h, false, true);
+	if (!c)
+		return false;
+	if (live)
+		*live = game::HandKeyOfObject(c);
+	return true;
+}
+
 int BackpackRekeyNow(bool dropUnresolved)
 {
 	if (!fn_hmGetCharacter || !s_handleManager || !s_handVftable)
@@ -249,6 +276,7 @@ int BackpackRekeyNow(bool dropUnresolved)
 			++moved;
 		}
 	}
+	s_rekeyed += moved;
 	return moved;
 }
 
@@ -257,7 +285,7 @@ void BackpackRekeyTick(double now, bool saveLoading)
 	if (InterlockedCompareExchange(&s_armed, 0, 0) && !saveLoading && now >= s_nextRekey)
 	{
 		s_nextRekey = now + kRekeySeconds;
-		s_rekeyed += BackpackRekeyNow(false);
+		BackpackRekeyNow(false);
 	}
 
 	// Unconditional, on a timer: a sidecar that never armed and one that never had work must
@@ -282,7 +310,9 @@ void BackpackRekeyTick(double now, bool saveLoading)
 	   << " refused=" << s_refused
 	   << " badLines=" << s_badLines
 	   << " written=" << s_written
+	   << " unqueued=" << s_unqueued
 	   << " writeFail=" << s_writeFail
+	   << " formatFailed=" << s_formatFailed
 	   << " tableFull=" << BackpackFirstFullCount()
 	   << " raced=" << BackpackFirstRaceCount()
 	   << " duplicates=" << s_duplicates
@@ -291,7 +321,8 @@ void BackpackRekeyTick(double now, bool saveLoading)
 	   << " boxSkipped=" << box[1]
 	   << " noArrange=" << box[2]
 	   << " clicks=" << box[3]
-	   << " clickFailed=" << box[4];
+	   << " clickFailed=" << box[4]
+	   << " foodCalls=" << BackpackFoodCalls();
 	LogMsg(ss.str());
 }
 

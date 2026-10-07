@@ -9,12 +9,14 @@
 #define NOMINMAX
 #endif
 #include "inventory/backpack_window.h"
+#include "inventory/backpack_first.h"
 #include "inventory/backpack_policy.h"
 #include "inventory/backpack_table.h"
 #include "inventory/backpack_reader.h"
 #include "inventory/backpack_sidecar.h"
 #include "inventory/inventory_config.h"
 #include "game/game.h"
+#include "game/klib_member_contract.h"
 #include "game/hand_key.h"
 #include "plugin/hook_manifest.h"
 #include "base/core.h"
@@ -41,7 +43,7 @@ namespace keo_inventory {
 static const size_t OFF_LAYOUT_MAIN_WIDGET     = 0x8;
 static const size_t OFF_GUI_CALLBACK_OBJECT    = 0x50;
 static const size_t OFF_CONTAINER_OWNER        = 0x230;
-static const size_t OFF_FACTION_IS_PLAYER      = 0x250;
+static const size_t OFF_FACTION_IS_PLAYER      = KLIB_OFF_Faction_isPlayer;
 static const size_t VT_ROOT_GET_DATA_TYPE      = 0x20;
 static const size_t VT_ROOT_GET_FACTION        = 0x58;
 static const int    DATA_TYPE_CHARACTER        = 1;
@@ -99,7 +101,8 @@ static MyGUI::Widget* FindBySuffix(MyGUI::Widget* parent, const char* suffix, in
 }
 
 // Main thread, from MyGUI's click dispatch. Flips the owner's choice and the box; nothing is
-// thrown back into the game.
+// thrown back into the game. The box's key is followed to its character's live hand first, and
+// the table re-keyed, so the write updates the entry the character's pickups read.
 static void OnBackpackFirstClick(MyGUI::Widget* sender)
 {
 	try
@@ -112,6 +115,15 @@ static void OnBackpackFirstClick(MyGUI::Widget* sender)
 			InterlockedIncrement(&s_clickFailed);
 			return;
 		}
+		game::HandKey live;
+		if (BackpackResolveKey(key, &live) && !game::HandKeyEqual(live, key))
+		{
+			char buf[64] = { 0 };
+			HandKeyFormat(live, buf, (int)sizeof(buf));
+			sender->setUserString(BOX_KEY, buf);
+			key = live;
+		}
+		BackpackRekeyNow(false);
 		int cur = BackpackFirstGet(key);
 		bool on = cur < 0 ? g_inventoryCfg.backpackFirstDefault : cur != 0;
 		if (!BackpackFirstSet(key, on ? 0 : 1))
@@ -199,6 +211,8 @@ static void __fastcall hook_setupSections(void* layout, void* gui, void* section
 void InstallBackpackWindow(int* installed, int*)
 {
 	if (!HookRowWanted(HOOK_BACKPACK_LAYOUT_SETUP_SECTIONS)) return;
+	// A box would write a table no pickup reads.
+	if (!BackpackFirstInstalled()) { ErrorLog("BackpackWindow: not installed (backpackFirst)"); return; }
 	const char* why = NULL;
 	if (memcmp((const void*)GameAddr(RVA_LAYOUT_MAIN_WIDGET_CHECK), kMainWidgetCheck, sizeof(kMainWidgetCheck)) != 0)
 		why = "mainWidget";

@@ -16,7 +16,7 @@ bool SpliceRecordDue(int shareType, bool belowBefore, float progressAfter, float
 {
 	return shareType == SPLICE_HAND_NULL_ITEM
 	    && belowBefore
-	    && !SpliceBelow(progressAfter, totalMats, pathThreshold)
+	    && progressAfter >= totalMats * pathThreshold
 	    && amount != FLT_MAX
 	    && hasPhysical;
 }

@@ -48,8 +48,7 @@ static const int kBeatSeconds  = 60;
 static PendingSplice     s_pending[kPendingSlots];
 static volatile LONG     s_waiting = 0;
 static bool              s_wasLoading = false;
-static volatile LONGLONG s_nextBeat = 0;
-static LONGLONG          s_qpf = 0;
+static double            s_nextBeatAt = 0.0;
 static LONG              s_lastPrinted = 0;
 #ifdef KEO_DEBUG
 static volatile LONG     s_issueLines = 0;
@@ -180,7 +179,9 @@ static GateSnapshot TakeSnapshot()
 	return s;
 }
 
-// The cells a box touches, from its two corners on x and z.
+// The cells a box touches, from its two corners on x and z. WorldToZoneGrid clamps an off-map
+// corner to cell 0 or 63, so a box past the map edge is judged by the edge cell; generate's
+// multi-cell path skips a missing cell.
 static void TouchedCells(const float box[6], int* x0, int* y0, int* x1, int* y1)
 {
 	int ax = 0, ay = 0, bx = 0, by = 0;
@@ -297,7 +298,7 @@ static void EvaluatePending()
 	}
 }
 
-static void Heartbeat()
+static void Heartbeat(double now)
 {
 	LONG waiting = 0;
 	for (int i = 0; i < kPendingSlots; ++i)
@@ -305,16 +306,16 @@ static void Heartbeat()
 			++waiting;
 	InterlockedExchange(&s_waiting, waiting);
 
-	if (s_qpf == 0)
-	{
-		LARGE_INTEGER f;
-		s_qpf = QueryPerformanceFrequency(&f) ? f.QuadPart : -1;
-	}
-	if (!GuardBeatDue(&s_nextBeat, s_qpf, kBeatSeconds))
+	if (now < s_nextBeatAt)
 		return;
+	s_nextBeatAt = now + kBeatSeconds;
 	LONG print = 0;
 	for (int i = 0; i < (int)ARRAYSIZE(kBeatRows); ++i)
+	{
+		if (kBeatRows[i].value == &s_waiting)
+			continue;
 		print += Read(kBeatRows[i].value);
+	}
 #ifdef KEO_DEBUG
 	for (int i = 0; i < (int)ARRAYSIZE(kBeatRowsDev); ++i)
 		print += Read(kBeatRowsDev[i].value);
@@ -331,7 +332,7 @@ static void Heartbeat()
 	LogMsg(FlbDone(&o));
 }
 
-void WallSpliceTick(double /*now*/, bool saveLoading)
+void WallSpliceTick(double now, bool saveLoading)
 {
 	if (!InterlockedCompareExchange(&g_wallSplice.armed, 0, 0)) return;
 	if (DropWhileLoading(saveLoading))
@@ -343,7 +344,7 @@ void WallSpliceTick(double /*now*/, bool saveLoading)
 		DrainIntoPending();
 		EvaluatePending();
 	}
-	Heartbeat();
+	Heartbeat(now);
 }
 
 // A navmesh thread. Counts and reads only, without a lock: a racy read for a diagnostic, never a
@@ -351,6 +352,8 @@ void WallSpliceTick(double /*now*/, bool saveLoading)
 void WallSpliceNoteType1Start()
 {
 	InterlockedIncrement(&g_wallSplice.t1Start);
+	if (NavMeshStopSeen())
+		return;
 	const uintptr_t physics = *(volatile uintptr_t*)GameAddr(RVA_PAUSESTATE_PHYSICS);
 	if (!physics)
 		return;

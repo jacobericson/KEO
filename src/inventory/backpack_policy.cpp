@@ -28,6 +28,11 @@ bool RouteToBackpackFirst(int setting, bool defaultOn, bool isAnimal, bool wears
 	return true;
 }
 
+bool ItemIsNonEmptyContainer(bool hasInventory, bool inventoryEmpty)
+{
+	return hasInventory && !inventoryEmpty;
+}
+
 bool BackpackSlotReadable(long seqBefore, long seqAfter)
 {
 	return (seqBefore & 1) == 0 && seqBefore == seqAfter;
@@ -51,11 +56,13 @@ int ParseUnsignedFields(const char* text, int len, unsigned* out, int max)
 			return -1;
 		if (count >= max)
 			return -1;
-		// The accumulator is checked after every digit, so a field of any length either fits in
-		// 32 bits or fails here.
+		// Ten digits at most, leading zeros included, and the value checked after every digit.
 		unsigned __int64 v = 0;
+		int digits = 0;
 		while (i < len && text[i] >= '0' && text[i] <= '9')
 		{
+			if (++digits > 10)
+				return -1;
 			v = v * 10 + (unsigned)(text[i] - '0');
 			if (v > 0xFFFFFFFFull)
 				return -1;
@@ -117,9 +124,9 @@ bool HandKeyParse(const char* text, int len, game::HandKey* out)
 	return true;
 }
 
-bool FoodScoreZero(bool vanillaWants, bool backpackHasFood)
+bool FoodScoreZero(float vanillaScore, bool backpackHasFood)
 {
-	return vanillaWants && backpackHasFood;
+	return vanillaScore >= 1.0f && backpackHasFood;
 }
 
 bool DialogUseBackpack(bool mainHas, bool wearsBackpack)

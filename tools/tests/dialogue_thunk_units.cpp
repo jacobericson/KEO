@@ -1,6 +1,7 @@
 // The dialogue item-function patch's pure half: the call site's lead bytes against this suite's own
-// copy of them, the thunk's bytes range by range, the call's rel32 reach, and the hooked-head rule
-// the food-score install applies to getNumFoodItems.
+// copy of them, the thunk's bytes range by range, the call's rel32 reach, the original call's
+// target through the j_ thunk, and the hooked-head rule the food-score install applies to
+// getNumFoodItems.
 #include <cstdio>
 #include <cstring>
 #include "inventory/dialogue_thunk_policy.h"
@@ -87,7 +88,7 @@ static void CheckHead()
 	memcpy(b, kFoodHead, sizeof(b));
 	b[0] = 0xE9; b[1] = 0x10; b[2] = 0x20; b[3] = 0x30; b[4] = 0x40;
 	CHECK(ClassifyPrologue(b, kFoodHead, true) == PROLOGUE_SHARED,
-	      "head: KenshiQOL's E9 over getNumFoodItems with the tail intact is accepted");
+	      "head: another plugin's E9 over getNumFoodItems with the tail intact is accepted");
 
 	memcpy(b, kFoodHead, sizeof(b));
 	b[0] = 0xFF; b[1] = 0x25; b[2] = 0x00; b[3] = 0x10; b[4] = 0x00; b[5] = 0x00;
@@ -106,11 +107,33 @@ static void CheckHead()
 	      "head: a changed first byte without a jump refuses");
 }
 
+// j_Inventory__hasItemFunction at 0x4B812, as read from the binary: jmp 0x7456C0.
+static const unsigned char kJThunk[5] = { 0xE9, 0xA9, 0x9E, 0x6F, 0x00 };
+
+static void CheckTarget()
+{
+	CHECK(DialogueOriginalCallTarget(0x6789AAULL, kLead) == 0x4B812ULL,
+	      "target: the lead's call reaches the j_ thunk");
+	unsigned char moved[23];
+	memcpy(moved, kLead, sizeof(moved));
+	moved[19] ^= 0x10;
+	CHECK(DialogueOriginalCallTarget(0x6789AAULL, moved) == 0x4B812ULL + 0x10,
+	      "target: a changed rel32 byte moves the target");
+	unsigned __int64 to = 0;
+	CHECK(DialogJumpTarget(0x4B812ULL, kJThunk, &to) && to == 0x7456C0ULL,
+	      "target: the j_ thunk jumps to hasItemFunction");
+	unsigned char notJmp[5] = { 0xE8, 0xA9, 0x9E, 0x6F, 0x00 };
+	to = 7;
+	CHECK(!DialogJumpTarget(0x4B812ULL, notJmp, &to) && to == 7 && !DialogJumpTarget(0x4B812ULL, NULL, &to),
+	      "target: a thunk that is not an E9 refuses");
+}
+
 int main()
 {
 	CheckLead();
 	CheckThunk();
 	CheckRel32();
+	CheckTarget();
 	CheckHead();
 	return CheckExit("dialogue_thunk_units");
 }

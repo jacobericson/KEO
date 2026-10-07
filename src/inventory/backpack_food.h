@@ -9,6 +9,8 @@ namespace keo_inventory {
 void InstallBackpackFood(int* installed, int* total);
 // Any thread: the food and dialogue counters, for the jobs heartbeat.
 void BackpackFoodCountersRead(long* foodZeroed, long* dialogCalls, long* dialogBackpackHits);
+// Any thread: post-hook entries, for the backpack heartbeat.
+long BackpackFoodCalls();
 
 } // namespace keo_inventory
 

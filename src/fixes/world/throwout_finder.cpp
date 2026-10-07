@@ -12,6 +12,8 @@
 #include "game/game.h"
 #include "game/hand_key.h"
 #include "plugin/hook_manifest.h"
+#include "base/core.h"
+#include "base/config.h"
 #include <windows.h>
 #include <string.h>
 #include "base/klib_include.h"
@@ -40,6 +42,8 @@ static senseItrIncrement_t    fn_senseItrIncrement    = NULL;
 static getOwnerships_t        fn_getOwnerships        = NULL;
 static isMyTown_t             fn_isMyTown             = NULL;
 static volatile LONG s_chainOriginal = 0;
+// 1 until the tick's first call in chain mode walks the entry chain; written once, main thread.
+static volatile LONG s_foreignHopLive = 1;
 
 // The callees' first bytes, compared at install before the row goes in.
 static const unsigned char kCtorBytes[16] =
@@ -53,13 +57,15 @@ static const unsigned char kGetOwnershipsBytes[16] =
 static const unsigned char kIsMyTownBytes[16] =
 	{ 0x40,0x53,0x48,0x83,0xEC,0x20,0x48,0x8B,0xD9,0x48,0x85,0xD2,0x75,0x08,0x32,0xC0 };
 
-static volatile LONG s_finderCalls, s_finderSkips, s_chainCalls, s_chainFiltered;
+// chainFiltered counts every held chained result; chainFallback the share the loop answered.
+static volatile LONG s_finderCalls, s_finderSkips, s_chainCalls, s_chainFiltered, s_chainFallback;
 static GuardCounter s_finderRows[] =
 {
 	{ "finder",        GF_COUNT, &s_finderCalls,   0 },
 	{ "skips",         GF_COUNT, &s_finderSkips,   0 },
 	{ "chainCalls",    GF_COUNT, &s_chainCalls,    0 },
 	{ "chainFiltered", GF_COUNT, &s_chainFiltered, 0 },
+	{ "chainFallback", GF_COUNT, &s_chainFallback, 0 },
 };
 
 // The virtuals vanilla's loop calls, by vtable offset. The first three only read; amInsideTownWalls
@@ -94,29 +100,15 @@ static void WriteHand(void* out, const game::HandKey& k)
 	*(unsigned*)(o + KLIB_OFF_hand_serial)          = k.serial;
 }
 
-// The AI back thread. The original runs (another plugin's detour of it stays in the chain); a
-// held result is answered as no candidate.
-static float ChainOriginal(void* aiPtr, const void* subject, void* out, bool justAsking)
+static double HoldCapHours()
 {
-	InterlockedIncrement(&s_chainCalls);
-	float r = orig_findKOIntruderTown(aiPtr, subject, out, justAsking);
-	if (r > 0.0f && ThrowoutHoldIsHeld(game::HandKeyFromHand(out), ThrowoutNowHours()))
-	{
-		InterlockedIncrement(&s_chainFiltered);
-		WriteNullHand(out);
-		return 0.0f;
-	}
-	return r;
+	return g_fixesCfg.throwOutHoldMinutes / 60.0;
 }
 
 // The AI back thread. Vanilla's loop (findKOIntruder_town 0x99B380) with one more condition: a
-// held body is skipped, so a later candidate is still found. In chain mode the original runs and
-// a held result is filtered instead. No lock, no allocation, no logging.
-static float __fastcall hook_findKOIntruderTown(void* aiPtr, const void* subject, void* out, bool justAsking)
+// held body is skipped, so a later candidate is still found. No lock, no allocation, no logging.
+static float ReplaceLoop(void* aiPtr, void* out)
 {
-	InterlockedIncrement(&s_finderCalls);
-	if (InterlockedCompareExchange(&s_chainOriginal, 0, 0))
-		return ChainOriginal(aiPtr, subject, out, justAsking);
 	WriteNullHand(out);
 	AI* ai = (AI*)aiPtr;
 	Character* me = ai->me;
@@ -128,6 +120,7 @@ static float __fastcall hook_findKOIntruderTown(void* aiPtr, const void* subject
 	SenseItrPod it;
 	fn_senseItrCtor(&it, 0x400E, 0x201, &ai->sensoryData.seen);
 	const double now = ThrowoutNowHours();
+	const double cap = HoldCapHours();
 	for (; it.node != it.end; fn_senseItrIncrement(&it))
 	{
 		Character* c = (Character*)fn_senseItrGetCharacter(&it);
@@ -140,7 +133,7 @@ static float __fastcall hook_findKOIntruderTown(void* aiPtr, const void* subject
 		const bool vanilla = ThrowoutCandidate(c != NULL, carried, sameTown, ko, inSomething, walls, false);
 		if (!vanilla)
 			continue;
-		if (ThrowoutHoldIsHeld(game::HandKeyOfObject(c), now))
+		if (ThrowoutHoldIsHeld(game::HandKeyOfObject(c), now, cap))
 		{
 			InterlockedIncrement(&s_finderSkips);
 			continue;
@@ -149,6 +142,36 @@ static float __fastcall hook_findKOIntruderTown(void* aiPtr, const void* subject
 		return 1.0f;
 	}
 	return 0.0f;
+}
+
+// The AI back thread. The original runs (another plugin's detour of it stays in the chain). A
+// held result falls back to the replacement loop when no live foreign detour sits in the chain,
+// else it is answered as no candidate.
+static float ChainOriginal(void* aiPtr, const void* subject, void* out, bool justAsking)
+{
+	InterlockedIncrement(&s_chainCalls);
+	float r = orig_findKOIntruderTown(aiPtr, subject, out, justAsking);
+	const bool held = r > 0.0f && ThrowoutHoldIsHeld(game::HandKeyFromHand(out), ThrowoutNowHours(), HoldCapHours());
+	if (!held)
+		return r;
+	InterlockedIncrement(&s_chainFiltered);
+	if (ThrowoutChainFallback(held, InterlockedCompareExchange(&s_foreignHopLive, 0, 0) != 0))
+	{
+		InterlockedIncrement(&s_chainFallback);
+		return ReplaceLoop(aiPtr, out);
+	}
+	WriteNullHand(out);
+	return 0.0f;
+}
+
+// The AI back thread. In chain mode the original runs and a held result is filtered; otherwise
+// the replacement loop. No lock, no allocation, no logging.
+static float __fastcall hook_findKOIntruderTown(void* aiPtr, const void* subject, void* out, bool justAsking)
+{
+	InterlockedIncrement(&s_finderCalls);
+	if (InterlockedCompareExchange(&s_chainOriginal, 0, 0))
+		return ChainOriginal(aiPtr, subject, out, justAsking);
+	return ReplaceLoop(aiPtr, out);
 }
 
 const char* ThrowoutFinderInstall(int* installed)
@@ -183,9 +206,79 @@ void ThrowoutFinderChainOriginal(bool on)
 	InterlockedExchange(&s_chainOriginal, on ? 1 : 0);
 }
 
+// Standalone and POD-only: MSVC 2010 rejects __try in a function that also holds an object
+// needing unwinding.
+bool ThrowoutSafeRead(const void* addr, void* out, size_t n)
+{
+	bool ok = true;
+	GuardEnter();
+	__try
+	{
+		memcpy(out, addr, n);
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		ok = false;
+	}
+	GuardLeave();
+	return ok;
+}
+
+static HMODULE ModuleOf(const void* p)
+{
+	HMODULE m = NULL;
+	if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+	                        (LPCWSTR)p, &m))
+		return NULL;
+	return m;
+}
+
+// From the finder's entry: jumps are followed (E9 rel32, FF 25 through its pointer), our own
+// detour continues from our trampoline, vanilla code ends the walk, and another module's code,
+// unreadable bytes or more than kThrowoutMaxHops hops count as live.
+bool ThrowoutFinderDecideFallback()
+{
+	const HMODULE exe = GetModuleHandleW(NULL);
+	const HMODULE ours = ModuleOf((const void*)&s_foreignHopLive);
+	unsigned __int64 at = (unsigned __int64)(uintptr_t)GameAddr(RVA_FIND_KO_INTRUDER_TOWN);
+	bool live = true;
+	for (int hop = 0; hop < kThrowoutMaxHops; ++hop)
+	{
+		unsigned char b[6];
+		const bool readable = ThrowoutSafeRead((const void*)(uintptr_t)at, b, sizeof(b));
+		const bool isJump = readable && (b[0] == 0xE9 || (b[0] == 0xFF && b[1] == 0x25));
+		const HMODULE m = ModuleOf((const void*)(uintptr_t)at);
+		const ThrowoutHopKind kind = ThrowoutClassifyHop(readable, isJump, m != NULL && m == exe,
+			m != NULL && m == ours, m != NULL && m != exe && m != ours);
+		if (kind == THK_END)
+		{
+			live = false;
+			break;
+		}
+		if (kind == THK_LIVE)
+			break;
+		if (kind == THK_OURS)
+		{
+			at = (unsigned __int64)(uintptr_t)orig_findKOIntruderTown;
+			if (!at)
+				break;
+			continue;
+		}
+		unsigned __int64 target = 0;
+		const unsigned __int64 slot = ThrowoutJumpSlot(b, at);
+		if (slot && !ThrowoutSafeRead((const void*)(uintptr_t)slot, &target, sizeof(target)))
+			break;
+		at = ThrowoutJumpTarget(b, at, target);
+		if (!at)
+			break;
+	}
+	InterlockedExchange(&s_foreignHopLive, live ? 1 : 0);
+	return live;
+}
+
 const GuardCounter* ThrowoutFinderCounterRows(int* count)
 {
-	*count = 4;
+	*count = (int)ARRAYSIZE(s_finderRows);
 	return s_finderRows;
 }
 

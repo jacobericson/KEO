@@ -185,7 +185,7 @@ void InstallWallSpliceNop(bool gateOk)
 		return;
 	}
 	InterlockedExchange(&g_wallSplice.armed, SpliceArmed(true, true) ? 1 : 0);
-	LogMsg("WallSplice: armed (progress detour and call-site NOP; a heartbeat line follows every minute)");
+	LogMsg("WallSplice: armed (progress detour and call-site NOP; a heartbeat line follows in any minute a counter moved)");
 }
 
 } // namespace navmesh

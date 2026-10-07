@@ -42,9 +42,10 @@ static void CheckRoute()
 	      "route: the worn backpack itself is never routed");
 	CHECK(!RouteToBackpackFirst(1, true, false, true, false, true, false),
 	      "route: a container holding items routes to the original");
-	// An empty container is a plain item to this rule (vanilla's own backpack try accepts one).
-	CHECK(RouteToBackpackFirst(1, true, false, true, false, false, false)
-	      && RouteToBackpackFirst(-1, true, false, true, false, false, false),
+	// An empty container is a plain item to this rule (vanilla's own backpack try accepts one):
+	// only an inventory holding something makes the item a non-empty container.
+	CHECK(!ItemIsNonEmptyContainer(true, true) && !ItemIsNonEmptyContainer(false, true)
+	      && ItemIsNonEmptyContainer(true, false),
 	      "route: an empty container routes");
 	CHECK(!RouteToBackpackFirst(-1, true, false, true, false, false, true),
 	      "route: an item an empty equipment slot accepts routes to the original");
@@ -104,6 +105,9 @@ static void CheckFields()
 	      "fields: more than max fails");
 	CHECK(Parse("", f, 5) == 0 && Parse("  \t ", f, 5) == 0 && ParseUnsignedFields("9", 0, f, 5) == 0,
 	      "fields: an empty line is zero fields");
+	memset(f, 0, sizeof f);
+	CHECK(Parse("00000000000001", f, 8) == -1 && Parse("0000000001", f, 8) == 1 && f[0] == 1,
+	      "fields: a field over ten digits fails, leading zeros included");
 }
 
 static void CheckKey()
@@ -192,6 +196,28 @@ static void CheckTable()
 	CHECK(BackpackFirstGet(b) == 0 && BackpackFirstGet(c) == -1 && !BackpackFirstEntry(0, NULL, NULL)
 	      && BackpackFirstEntryCount() == 1, "table: rekey onto a key already present keeps the newer entry");
 
+	// The box's click under the character's live key L, after the re-key moved its entry from the
+	// old key O: the next re-key finds no O entry left, so the click's value stands.
+	BackpackFirstClear();
+	const HandKey o = Key(2, 9, 31, 700, 70);
+	const HandKey l = Key(2, 9, 32, 701, 71);
+	BackpackFirstSet(o, 1);
+	for (int i = 0; i < BackpackFirstSlotCount(); ++i)
+	{
+		HandKey ki = Key(11, 0, 0, 0, 0);
+		if (BackpackFirstEntry(i, &ki, NULL) && game::HandKeyEqual(ki, o))
+			BackpackFirstRekey(i, l);
+	}
+	BackpackFirstSet(l, 0);
+	for (int i = 0; i < BackpackFirstSlotCount(); ++i)
+	{
+		HandKey ki = Key(11, 0, 0, 0, 0);
+		if (BackpackFirstEntry(i, &ki, NULL) && game::HandKeyEqual(ki, o))
+			BackpackFirstRekey(i, l);
+	}
+	CHECK(BackpackFirstGet(l) == 0 && BackpackFirstEntryCount() == 1,
+	      "table: a click under the live key survives the next re-key");
+
 	BackpackFirstClear();
 	bool filled = true;
 	for (int i = 0; i < BACKPACK_TABLE_CAP; ++i)
@@ -209,10 +235,13 @@ static void CheckTable()
 
 static void CheckFood()
 {
-	// Arguments: vanillaWants (the original's score above 0), backpackHasFood.
-	CHECK(FoodScoreZero(true, true), "food: wants ground food and the backpack has food zeroes");
-	CHECK(!FoodScoreZero(true, false), "food: no food in the backpack keeps vanilla");
-	CHECK(!FoodScoreZero(false, true) && !FoodScoreZero(false, false),
+	// Arguments: vanillaScore (the original's score), backpackHasFood.
+	CHECK(FoodScoreZero(1.0f, true), "food: a score of 1 with backpack food is zeroed");
+	CHECK(FoodScoreZero(5.0f, true), "food: wants ground food and the backpack has food zeroes");
+	CHECK(!FoodScoreZero(1.0f, false) && !FoodScoreZero(5.0f, false),
+	      "food: no food in the backpack keeps vanilla");
+	CHECK(!FoodScoreZero(0.1f, true), "food: the 0.1 ally-threat score is kept");
+	CHECK(!FoodScoreZero(0.0f, true) && !FoodScoreZero(0.0f, false) && !FoodScoreZero(-1.0f, true),
 	      "food: vanilla not wanting is never changed");
 }
 

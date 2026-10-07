@@ -14,6 +14,7 @@
 #include "fixes/guard_report.h"
 #include "base/fixed_log_buf.h"
 #include "game/game.h"
+#include "game/klib_member_contract.h"
 #include "base/core.h"
 #include <string>
 
@@ -26,7 +27,7 @@ using namespace job_counters_detail;
 namespace keo_inventory {
 
 // RootObjectBase vtable +0x58 getFaction; Faction::isPlayer +0x250 (read from the IDB 2026-09-30).
-static const size_t kVtGetFaction = 0x58, kFactionIsPlayer = 0x250;
+static const size_t kVtGetFaction = 0x58, kFactionIsPlayer = KLIB_OFF_Faction_isPlayer;
 static const int kBeatSeconds = 60;
 
 static haulAmount_t      orig_haulAmount = NULL;

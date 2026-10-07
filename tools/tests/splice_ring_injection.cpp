@@ -2,8 +2,9 @@
 // consumer drains at most 8 records per call and yields between calls, so the producers lap it and
 // each other. Every drained record must be whole (its six values derived from its first two), and
 // once every producer has returned and the drain has reached the cursor, drained + lost must equal
-// written, with at least one record overwritten by a later lap. The threads yield with
-// SwitchToThread only.
+// written, with at least one record overwritten by a later lap. A second phase runs the same
+// producers against a consumer with no cap and no yield and holds it to the same whole
+// record and accounting checks. The threads yield with SwitchToThread only.
 //
 // Links src/navmesh/construction/splice_ring.cpp unmodified.
 
@@ -18,6 +19,9 @@ namespace splice_ring_injection_detail
 	const int  PRODUCERS = 3;
 	const LONG PUSHES    = 200000;
 	const int  BATCH     = 8;
+	const int  WIDE      = 64;
+
+	bool g_keepPace = false;
 
 	SpliceRing    g_ring;
 	volatile LONG g_producersDone = 0;
@@ -51,8 +55,8 @@ namespace splice_ring_injection_detail
 
 	void DrainOnce()
 	{
-		float out[BATCH][6];
-		const int got = SpliceRingDrain(&g_ring, out, BATCH);
+		float out[WIDE][6];
+		const int got = SpliceRingDrain(&g_ring, out, g_keepPace ? WIDE : BATCH);
 		for (int k = 0; k < got; ++k)
 			Check(out[k]);
 		g_drained += got;
@@ -80,15 +84,23 @@ namespace splice_ring_injection_detail
 		while (InterlockedCompareExchange(&g_producersDone, 0, 0) < PRODUCERS)
 		{
 			DrainOnce();
-			SwitchToThread();
+			if (!g_keepPace)
+				SwitchToThread();
 		}
 		return 0;
 	}
 }
 using namespace splice_ring_injection_detail;
 
-int main()
+// One phase: fresh ring and counters, the producers against the consumer, then the final drain and
+// the checks. Returns 0 when the phase held.
+static int RunPhase(const char* name, bool keepPace, bool requireLap)
 {
+	g_keepPace = keepPace;
+	g_producersDone = 0;
+	g_drained = 0;
+	g_torn = 0;
+	g_tornThread = g_tornN = -1;
 	SpliceRingInit(&g_ring);
 
 	HANDLE threads[PRODUCERS + 1];
@@ -99,7 +111,7 @@ int main()
 	{
 		if (!threads[t])
 		{
-			printf("splice ring: thread creation failed\n");
+			printf("splice ring %s: thread creation failed\n", name);
 			return 1;
 		}
 	}
@@ -116,20 +128,30 @@ int main()
 	const LONG overwritten = g_ring.overwritten;
 	if (g_torn != 0)
 	{
-		printf("splice ring: torn record thread=%d n=%d\n", g_tornThread, g_tornN);
+		printf("splice ring %s: torn record thread=%d n=%d\n", name, g_tornThread, g_tornN);
 		return 1;
 	}
 	if (g_ring.read != written || g_drained + lost != written)
 	{
-		printf("splice ring: accounting drained=%ld lost=%ld written=%ld\n", g_drained, lost, written);
+		printf("splice ring %s: accounting drained=%ld lost=%ld written=%ld\n", name, g_drained, lost, written);
 		return 1;
 	}
-	if (overwritten == 0)
+	if (requireLap && overwritten == 0)
 	{
-		printf("splice ring: no lap (overwritten=0); the harness did not exercise lapping\n");
+		printf("splice ring %s: no lap (overwritten=0); the harness did not exercise lapping\n", name);
 		return 1;
 	}
-	printf("splice ring: pushed=%ld drained=%ld lost=%ld overwritten=%ld claimFailed=%ld torn=0 lapped=yes\n",
-	       written, g_drained, lost, overwritten, g_ring.claimFailed);
+	printf("splice ring %s: pushed=%ld drained=%ld lost=%ld overwritten=%ld claimFailed=%ld\n",
+	       name, written, g_drained, lost, overwritten, g_ring.claimFailed);
+	return 0;
+}
+
+int main()
+{
+	if (RunPhase("starved", false, true) != 0)
+		return 1;
+	if (RunPhase("keepPace", true, false) != 0)
+		return 1;
+	printf("splice ring: torn=0 lapped=yes keepPace=torn0\n");
 	return 0;
 }

@@ -14,8 +14,10 @@ namespace fixes {
 void InstallThrowout(int* installed, int* total);
 // Main thread, from the camera tick's list. Returns at once while throwOutFix is off. Its first
 // call decides the finder's mode once per process (whether a plugin known to hook the finder is
-// loaded) and logs it. Then: a save load's rising edge clears the table; once a second, it ends
-// a hold whose body woke, is gone or passed the cap; once a minute, the "Throwout:" heartbeat.
+// loaded, and in chain mode whether a foreign detour in its chain is live) and logs it. Then: a
+// save load's rising edge clears the table; once a second, it ends a hold whose body woke, is
+// gone, passed the cap or lies further ahead than the cap allows; once a minute, the "Throwout:"
+// heartbeat.
 void ThrowoutTick(double now, bool saveLoading);
 
 } // namespace fixes

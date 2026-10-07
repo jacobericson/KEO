@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <cfloat>
 #include <cstring>
+#include <limits>
 #include "navmesh/construction/splice_queue_policy.h"
 #include "navmesh/construction/splice_ring.h"
 
@@ -40,6 +41,8 @@ static void CheckRecord()
 	Check(!SpliceRecordDue(owner, true, 10.0f, 10.0f, 0.8f, FLT_MAX, true), "record: FLT_MAX never records");
 	Check(SpliceRecordDue(owner, true, 10.0f, 10.0f, 0.8f, 9999.0f, true), "record: 9999 records");
 	Check(!SpliceRecordDue(owner, true, 8.0f, 10.0f, 0.8f, 2.0f, false), "record: no physical does not record");
+	Check(!SpliceRecordDue(owner, true, std::numeric_limits<float>::quiet_NaN(), 10.0f, 0.8f, 2.0f, true),
+	      "record: NaN progress after the call records nothing");
 }
 
 static void CheckBoxes()
