@@ -16,12 +16,16 @@
 	  NULL, minI, posOnly, doc, false, NULL, NULL, fn, ch, chN, dbg }
 #define CFG_OROW(n, kind, T, field, lo, hi, minI, posOnly, doc, fn, label, tip, diag, sLo, sExp, ch, chN, dbg) \
 	CFG_OROW_L(n, kind, T, field, lo, hi, minI, posOnly, doc, fn, label, tip, diag, sLo, sExp, ch, chN, dbg, false)
-// A live row: the settings tab's close writes it into the running config on
-// the main thread, so every reader of its field must run on the main thread.
+// A live row: the settings tab's close stores its field once on the main thread, one aligned
+// store of the field's width (LiveFieldStore); a reader on any thread loads the field once per
+// use and sees the old value or the new one. A field a startup path writes on a refusal is never
+// a live row, or the tab would undo the refusal.
 #define CFG_OINT_LIVE(n, T, field, lo, hi, minI, doc, diag, label, tip) \
 	CFG_OROW_L(n, CK_INT, T, field, lo, hi, minI, false, doc, NULL, label, tip, diag, lo, 0, NULL, 0, false, true)
 #define CFG_OBOOL(n, T, field, doc, diag, label, tip) \
 	CFG_OROW(n, CK_BOOL, T, field, 1.0f, 0.0f, INT_MIN, false, doc, NULL, label, tip, diag, 0.0f, 0, NULL, 0, false)
+#define CFG_OBOOL_LIVE(n, T, field, doc, diag, label, tip) \
+	CFG_OROW_L(n, CK_BOOL, T, field, 1.0f, 0.0f, INT_MIN, false, doc, NULL, label, tip, diag, 0.0f, 0, NULL, 0, false, true)
 #define CFG_OBOOL_DBG(n, T, field, doc, diag, label, tip) \
 	CFG_OROW(n, CK_BOOL, T, field, 1.0f, 0.0f, INT_MIN, false, doc, NULL, label, tip, diag, 0.0f, 0, NULL, 0, true)
 #define CFG_OINT(n, T, field, lo, hi, minI, doc, diag, label, tip) \
@@ -37,3 +41,5 @@
 	CFG_OROW(n, CK_CUSTOM, T, field, 1.0f, 0.0f, INT_MIN, false, doc, fn, NULL, NULL, false, 0.0f, 0, NULL, 0, false)
 #define CFG_OCUSTOM_CHOICES(n, T, field, fn, doc, diag, label, tip, ch) \
 	CFG_OROW(n, CK_CUSTOM, T, field, 1.0f, 0.0f, INT_MIN, false, doc, fn, label, tip, diag, 0.0f, 0, ch, CFG_COUNT(ch), false)
+#define CFG_OCUSTOM_CHOICES_LIVE(n, T, field, fn, doc, diag, label, tip, ch) \
+	CFG_OROW_L(n, CK_CUSTOM, T, field, 1.0f, 0.0f, INT_MIN, false, doc, fn, label, tip, diag, 0.0f, 0, ch, CFG_COUNT(ch), false, true)

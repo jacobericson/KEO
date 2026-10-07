@@ -7,6 +7,7 @@
 #include "render/render_config.h"
 #include "render/render_keys.h"
 #include "base/config_table.h"
+#include "base/config_rows.h"
 #include "base/config_values.h"
 #include "bench/bench_slots.h"
 #include <cmath>
@@ -1073,6 +1074,150 @@ static void CheckLiveModuleRows()
 	zone::g_zoneCfg = held;
 }
 
+// A live field is stored whole at a width of 1, 4 or 8 bytes and an address
+// aligned to it; any other store is refused and leaves the field as it was.
+static void CheckLiveFieldStore()
+{
+	unsigned char b = 0, bSrc = 0xA5;
+	int i = 0, iSrc = 0x12345678;
+	double d = 0.0, dSrc = 2.5;
+	bool whole = LiveFieldStore(&b, &bSrc, 1) && LiveFieldStore(&i, &iSrc, 4) && LiveFieldStore(&d, &dSrc, 8);
+	Check(whole && b == bSrc && i == iSrc && d == dSrc,
+	      "live store: a byte, an aligned int and an aligned double store whole");
+
+	double dst = 1.25;
+	const double src[2] = { 9.5, 9.5 };
+	const size_t widths[] = { 0, 2, 3, 16 };
+	bool refused = true;
+	for (size_t w = 0; w < sizeof(widths) / sizeof(widths[0]); ++w)
+		refused = refused && !LiveFieldStore(&dst, src, widths[w]) && dst == 1.25;
+	Check(refused, "live store: widths 0, 2, 3 and 16 refuse and leave dst");
+
+	double buf[3] = { 0.0, 0.0, 0.0 };
+	char* odd = (char*)buf + 1;
+	unsigned char before[sizeof(buf)];
+	memcpy(before, buf, sizeof(buf));
+	bool misaligned = !LiveFieldStore(odd, &iSrc, 4) && !LiveFieldStore(odd, &dSrc, 8)
+	    && memcmp(before, buf, sizeof(buf)) == 0;
+	Check(misaligned, "live store: a misaligned int or double refuses and leaves dst");
+}
+
+namespace settings_factory_units_detail {
+struct LiveProbe { bool b; int i; int choice; double d; };
+}
+using namespace settings_factory_units_detail;
+
+static bool ParseProbeChoice(const std::string&, ConfigLogFn) { return true; }
+
+static const ConfigChoice kProbeChoices[] =
+{
+	{ "low", 0, "Low", false },
+	{ "high", 1, "High", false },
+};
+
+// Each _LIVE macro builds a live row, and the close stores each width of
+// field into the running state.
+static void CheckLiveMacros()
+{
+	LiveProbe state = { false, 0, 0, 1.0 };
+	const LiveProbe defaults = state;
+	const ConfigKey keys[] =
+	{
+		CFG_OBOOL_LIVE("probeBool", LiveProbe, b, NDOC, SHOW, "Probe bool", NULL),
+		CFG_OINT_LIVE("probeInt", LiveProbe, i, 0.0f, 100.0f, INT_MIN, NDOC, SHOW, "Probe int", NULL),
+		CFG_OCUSTOM_CHOICES_LIVE("probeChoice", LiveProbe, choice, ParseProbeChoice, NDOC, SHOW, "Probe choice", NULL,
+		                         kProbeChoices),
+		CFG_OROW_L("probeDouble", CK_DOUBLE, LiveProbe, d, 0.0f, 10.0f, INT_MIN, false, NDOC, NULL, "Probe double", NULL,
+		           SHOW, 0.0f, 0, NULL, 0, false, true),
+		{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0,
+		  NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0, false }
+	};
+	const ConfigKey startup[] =
+	{
+		CFG_OBOOL("probeBool", LiveProbe, b, NDOC, SHOW, NULL, NULL),
+		CFG_OCUSTOM_CHOICES("probeChoice", LiveProbe, choice, ParseProbeChoice, NDOC, SHOW, NULL, NULL, kProbeChoices)
+	};
+	Check(keys[0].live && keys[1].live && keys[2].live && keys[3].live && !startup[0].live && !startup[1].live,
+	      "live macros: the bool, int, custom and double rows are live");
+
+	ConfigModule module = { "liveProbe", "Live probe", keys, &state, &defaults, sizeof(state) };
+	ConfigModuleStage staged;
+	memset(&staged, 0, sizeof(staged));
+	StageModule(module, &staged);
+	Check(ApplyLiveModuleRows(module, staged, NULL) == 0, "live rows: an unchanged probe applies nothing");
+
+	LiveProbe* s = (LiveProbe*)staged.state;
+	s->b = true;
+	s->i = 42;
+	s->choice = 1;
+	s->d = 2.5;
+	std::vector<std::string> applied;
+	int n = ApplyLiveModuleRows(module, staged, &applied);
+	Check(n == 4 && applied.size() == 4 && applied[0] == "probeBool=true" && applied[1] == "probeInt=42"
+	      && applied[2] == "probeChoice=high" && applied[3] == "probeDouble=2.5"
+	      && state.b && state.i == 42 && state.choice == 1 && state.d == 2.5,
+	      "live rows: every width reaches the running state");
+
+	// Through the tab's rows: the checkbox binds its staged field, the drop
+	// box its staged slot, and the clamp copies the slot into the field.
+	state = defaults;
+	ConfigModuleStage saved;
+	memset(&saved, 0, sizeof(saved));
+	StageModule(module, &saved);
+	ConfigModuleStage st = saved;
+	std::vector<SettingsRow> rows;
+	AddModuleRows(module, &st, false, &rows);
+	const SettingsRow* box = FindLabel(rows, RowLabel(keys[0]));
+	const SettingsRow* drop = FindLabel(rows, RowLabel(keys[2]));
+	bool bound = box && box->kind == SR_CHECKBOX && box->boolPtr == &((LiveProbe*)st.state)->b
+	          && drop && drop->kind == SR_DROPBOX && drop->intPtr == &st.slots[2].i;
+	Check(bound, "live rows: the probe checkbox binds its field and the drop box its slot");
+	if (!bound)
+		return;
+	*box->boolPtr = true;
+	*drop->intPtr = 1;
+	ClampModuleStage(module, &st, saved, &DiscardLog);
+	applied.clear();
+	n = ApplyLiveModuleRows(module, st, &applied);
+	Check(n == 2 && applied.size() == 2 && applied[0] == "probeBool=true" && applied[1] == "probeChoice=high"
+	      && state.b && state.choice == 1 && state.i == 0 && state.d == 1.0,
+	      "live rows: a live checkbox and a live drop box reach the running state");
+}
+
+namespace settings_factory_units_detail {
+struct LiveNarrow { short s; int i; };
+}
+
+// A live field LiveFieldStore cannot store is refused: the close logs it,
+// counts it not and leaves it, and the preview counts it not either.
+static void CheckLiveRefusedWidth()
+{
+	LiveNarrow state = { 0, 0 };
+	const LiveNarrow defaults = state;
+	const ConfigKey keys[] =
+	{
+		CFG_OROW_L("probeShort", CK_CUSTOM, LiveNarrow, s, 1.0f, 0.0f, INT_MIN, false, NDOC, ParseProbeChoice, NULL, NULL,
+		           SHOW, 0.0f, 0, NULL, 0, false, true),
+		CFG_OINT_LIVE("probeInt", LiveNarrow, i, 0.0f, 100.0f, INT_MIN, NDOC, SHOW, NULL, NULL),
+		{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0,
+		  NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0, false }
+	};
+	ConfigModule module = { "liveNarrow", "Live narrow", keys, &state, &defaults, sizeof(state) };
+	ConfigModuleStage staged;
+	memset(&staged, 0, sizeof(staged));
+	StageModule(module, &staged);
+	LiveNarrow* s = (LiveNarrow*)staged.state;
+	s->s = 7;
+	s->i = 5;
+	Check(LiveModuleRowsDiffering(module, staged) == 1, "live rows: the preview leaves out a row the close refuses");
+	std::vector<std::string> applied;
+	int n = ApplyLiveModuleRows(module, staged, &applied);
+	Check(n == 1 && applied.size() == 2 && applied[0] == "probeShort refused (width)" && applied[1] == "probeInt=5"
+	      && state.s == 0 && state.i == 5,
+	      "live rows: a two-byte field is refused, logged, not counted and not stored");
+	Check(LiveModuleRowsDiffering(module, staged) == 0, "live rows: a refused row still counts nothing after the close");
+}
+
 int main()
 {
 	CheckSections();
@@ -1098,5 +1243,8 @@ int main()
 	CheckIniOnlyOffsetText();
 	CheckUnlabelledOffsetDouble();
 	CheckLiveModuleRows();
+	CheckLiveFieldStore();
+	CheckLiveMacros();
+	CheckLiveRefusedWidth();
 	return CheckExit(SUITE_NAME);
 }

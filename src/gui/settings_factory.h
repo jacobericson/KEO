@@ -74,12 +74,19 @@ int ModuleStageEntries(const ConfigModule& m, const ConfigModuleStage& staged, c
                        std::vector<IniEntry>* out);
 
 // The live offset rows of m (not retired, no target) whose field in the
-// clamped staged state differs from the running config, m.state. The first
-// only counts them; the second also copies each one into m.state, adding
-// "key=value" to applied when it is not NULL, and must run on the main
-// thread, which is where every live row's readers run.
+// clamped staged state differs from the running config, m.state, and that
+// LiveFieldStore can store. The first only counts them; the second also stores
+// each one into m.state through LiveFieldStore, adding "key=value" to applied
+// when it is not NULL, and "key refused (width)" for a differing field
+// LiveFieldStore cannot store, which neither counts. The second
+// runs on the main thread; a reader elsewhere loads each field once per use.
 int LiveModuleRowsDiffering(const ConfigModule& m, const ConfigModuleStage& staged);
 int ApplyLiveModuleRows(const ConfigModule& m, const ConfigModuleStage& staged, std::vector<std::string>* applied);
+
+// One store of width bytes from src into dst: a byte, or an aligned 4- or 8-byte store, each a
+// single write on x64. False, with dst untouched, for any other width or a dst not aligned to its
+// width. Main thread.
+bool LiveFieldStore(void* dst, const void* src, size_t width);
 
 // Stages m's live offset rows from the running config rather than the saved
 // copy, slots included, so the tab shows what runs: after a close whose INI

@@ -333,8 +333,8 @@ static void CommitStaging()
 			next.renderLevers = g_renderCfg.renderLevers;
 		ApplyRenderConfig(next);
 	}
-	// The other modules' live rows go straight into the running config; this
-	// runs on the main thread, as their readers do.
+	// The other modules' live rows go straight into the running config, one aligned store each;
+	// this runs on the main thread, and a reader elsewhere loads each field once per use.
 	std::vector<std::string> live;
 	for (int m = 0; m < kConfigModuleCount && m < CONFIG_MODULE_MAX; ++m)
 	{

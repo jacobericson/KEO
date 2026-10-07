@@ -8,6 +8,7 @@
 #include <climits>
 #include <cstring>
 #include <float.h>
+#include <stdint.h>
 
 namespace settings_factory_detail {
 enum StageWidget { SW_NONE, SW_CHECKBOX, SW_SLIDER, SW_INT_SLIDER, SW_DROPBOX };
@@ -431,6 +432,36 @@ int ModuleStageEntries(const ConfigModule& m, const ConfigModuleStage& staged, c
 	return n;
 }
 
+// Whether LiveFieldStore stores width bytes at dst: a byte, or 4 or 8 bytes at
+// an address aligned to their width.
+static bool LiveFieldStorable(const void* dst, size_t width)
+{
+	if (!dst)
+		return false;
+	const uintptr_t at = (uintptr_t)dst;
+	return width == 1 || ((width == 4 || width == 8) && (at & (width - 1)) == 0);
+}
+
+bool LiveFieldStore(void* dst, const void* src, size_t width)
+{
+	if (!src || !LiveFieldStorable(dst, width))
+		return false;
+	switch (width)
+	{
+	case 1:
+		*(volatile unsigned char*)dst = *(const unsigned char*)src;
+		return true;
+	case 4:
+		*(volatile unsigned int*)dst = *(const unsigned int*)src;
+		return true;
+	case 8:
+		*(volatile unsigned __int64*)dst = *(const unsigned __int64*)src;
+		return true;
+	default:
+		return false;
+	}
+}
+
 static int LiveRows(const ConfigModule& m, const ConfigModuleStage& staged, bool apply,
                     std::vector<std::string>* applied)
 {
@@ -442,12 +473,20 @@ static int LiveRows(const ConfigModule& m, const ConfigModuleStage& staged, bool
 		const ConfigKey& k = m.keys[i];
 		if (!k.live || k.retired || k.target || ConfigOffsetValueEqual(k, staged.state, m.state))
 			continue;
-		if (apply)
+		// The count and the close refuse the same rows, so a preview never
+		// counts a row the close leaves as it was.
+		char* dst = (char*)m.state + k.offset;
+		bool stored = LiveFieldStorable(dst, k.size);
+		if (apply && stored)
+			stored = LiveFieldStore(dst, (const char*)staged.state + k.offset, k.size);
+		if (!stored)
 		{
-			memcpy((char*)m.state + k.offset, (const char*)staged.state + k.offset, k.size);
-			if (applied)
-				applied->push_back(std::string(k.name) + "=" + ConfigFormatValue(m, k, m.state));
+			if (apply && applied)
+				applied->push_back(std::string(k.name) + " refused (width)");
+			continue;
 		}
+		if (apply && applied)
+			applied->push_back(std::string(k.name) + "=" + ConfigFormatValue(m, k, m.state));
 		++n;
 	}
 	return n;

@@ -299,14 +299,41 @@ static void CheckZoneSquadRadiusAndCap()
 	zone::g_zoneCfg = held;
 }
 
-// The live offset rows outside the render module: each one's readers all run
-// on the main thread, where the settings tab writes it.
+// The live offset rows outside the render module, by name: each one's field is stored once by the
+// tab's close and loaded once per use by its readers, and no startup path writes it on a refusal.
 static bool LiveOffsetRowAllowed(const char* module, const char* key)
 {
 	if (strcmp(module, "zone"))
 		return false;
 	return !strcmp(key, "zoneLifeRetainRadius") || !strcmp(key, "zoneLifeSquadRadius")
 	    || !strcmp(key, "zoneRetentionMaxHeld");
+}
+
+// A live field LiveFieldStore can store: 1, 4 or 8 bytes at an offset aligned to its width.
+static bool LiveRowStorable(const ConfigKey& k)
+{
+	return (k.size == 1 || k.size == 4 || k.size == 8) && k.offset % k.size == 0;
+}
+
+static ConfigKey StorableProbe(size_t offset, size_t size)
+{
+	ConfigKey k;
+	memset(&k, 0, sizeof(k));
+	k.name = "storableProbe";
+	k.kind = CK_INT;
+	k.offset = offset;
+	k.size = size;
+	k.live = true;
+	return k;
+}
+
+static void CheckLiveRowStorable()
+{
+	Check(LiveRowStorable(StorableProbe(3, 1)) && LiveRowStorable(StorableProbe(4, 4)) && LiveRowStorable(StorableProbe(8, 8)),
+	      "live rows: 1-, 4- and 8-byte aligned fields are storable");
+	Check(!LiveRowStorable(StorableProbe(0, 2)), "live rows: a two-byte field is not storable");
+	Check(!LiveRowStorable(StorableProbe(2, 4)) && !LiveRowStorable(StorableProbe(4, 8)),
+	      "live rows: a misaligned field is not storable");
 }
 
 int main()
@@ -352,7 +379,8 @@ int main()
 				if (k.size != width && (strcmp(mod.name, "render") || k.size != 0)) Fail(k.name, "kind width");
 				if (k.offset + width > mod.stateSize) Fail(k.name, "kind width outside state");
 			}
-			if (k.live && strcmp(mod.name, "render") && !LiveOffsetRowAllowed(mod.name, k.name)) Fail(k.name, "live row outside the render module and the allowed zone rows");
+			if (k.live && strcmp(mod.name, "render") && !LiveOffsetRowAllowed(mod.name, k.name)) Fail(k.name, "live row outside the render module and the allowed rows");
+			if (k.live && strcmp(mod.name, "render") && !LiveRowStorable(k)) Fail(k.name, "live row width or alignment");
 			if (!mod.state || !strcmp(mod.name, "render") || k.retired || k.lo > k.hi
 			    || (k.kind != CK_INT && k.kind != CK_FLOAT && k.kind != CK_DOUBLE)) continue;
 			std::vector<unsigned char> saved((unsigned char*)mod.state, (unsigned char*)mod.state + mod.stateSize);
@@ -377,5 +405,6 @@ int main()
 	CheckPlannerKeys();
 	CheckZoneRetainRadius();
 	CheckZoneSquadRadiusAndCap();
+	CheckLiveRowStorable();
 	return CheckExit("config_modules_units");
 }
