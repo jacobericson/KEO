@@ -124,6 +124,7 @@ extern const ConfigModule kConfigModules[] =
 	{ "pathfind", "Pathfinding", pathfind::g_pathfindConfigKeys, &pathfind::g_pathfindCfg, &pathfind::kPathfindDefaults, sizeof(pathfind::PathfindConfig) },
 	{ "movement", "Movement and orders", movement::g_movementConfigKeys, &movement::g_movementCfg, &movement::kMovementDefaults, sizeof(movement::MovementConfig) },
 	{ "fixes", "Crash guards and probes", fixes::g_fixesConfigKeys, &fixes::g_fixesCfg, &fixes::kFixesDefaults, sizeof(fixes::FixesConfig) },
+	{ "inventory", "Inventory and jobs", keo_inventory::g_inventoryConfigKeys, &keo_inventory::g_inventoryCfg, &keo_inventory::kInventoryDefaults, sizeof(keo_inventory::InventoryConfig) },
 	{ "planner", "Route planner", planner::g_plannerConfigKeys, &planner::g_plannerCfg, &planner::kPlannerDefaults, sizeof(planner::PlannerConfig) },
 	{ "gui", "Settings panel", keo_gui::g_guiConfigKeys, &keo_gui::g_guiCfg, &keo_gui::kGuiDefaults, sizeof(keo_gui::GuiConfig) },
 	{ "core", "Benchmark and retired keys", kCoreKeys, NULL, NULL, 0 },

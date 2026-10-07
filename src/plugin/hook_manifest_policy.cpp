@@ -32,6 +32,11 @@ bool HookWantEval(HookWant want, const HookWantInputs& in)
 	case HOOK_WANT_PLANNER:            return in.planner;
 	case HOOK_WANT_GATHER_PACE:       return in.gatherPace;
 	case HOOK_WANT_PLANNER_PRE_ARRIVAL: return in.preArrival;
+	case HOOK_WANT_TOWN_CLAIM:        return in.townClaim;
+	case HOOK_WANT_THROWOUT:          return in.throwOut;
+	case HOOK_WANT_BACKPACK_FOOD:     return in.backpackFood;
+	case HOOK_WANT_OPERATOR_TRIPS:    return in.operatorTrips;
+	case HOOK_WANT_WALL_SPLICE:       return in.wallSplice;
 	case HOOK_WANT_UNCOUNTED:         return false;
 	}
 	return false;
@@ -69,6 +74,11 @@ HookWantInputs HookWantInputsFromConfig()
 	in.planner = planner::g_plannerCfg.mode != planner::PLANNER_OFF;
 	in.gatherPace = movement::g_movementCfg.formationGatherPaceEnabled;
 	in.preArrival = planner::g_plannerCfg.mode == planner::PLANNER_ON && planner::g_plannerCfg.preArrivalMs > 0;
+	in.townClaim           = fixes::g_fixesCfg.townClaimFixEnabled;
+	in.throwOut            = fixes::g_fixesCfg.throwOutFixEnabled;
+	in.backpackFood        = keo_inventory::g_inventoryCfg.backpackFoodScoreEnabled;
+	in.operatorTrips       = keo_inventory::g_inventoryCfg.operatorFillBeforeDeliverEnabled;
+	in.wallSplice          = navmesh::g_navmeshCfg.wallSpliceFixEnabled;
 	return in;
 }
 

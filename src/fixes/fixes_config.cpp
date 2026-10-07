@@ -58,6 +58,9 @@ const FixesConfig kFixesDefaults =
 	true, // nestValidationGuardEnabled
 	0, // graphHeuristicGuardOn
 	0, // clusterCrossCostOn
+	true, // townClaimFixEnabled
+	true, // throwOutFixEnabled
+	60, // throwOutHoldMinutes
 };
 
 FixesConfig g_fixesCfg = kFixesDefaults;
@@ -153,6 +156,15 @@ const ConfigKey g_fixesConfigKeys[] =
 	  "Nest validation guard",
 	  "Skips the game's nest validation for a cell whose navmesh is not in yet, so no nest is destroyed"
 	  " against a missing mesh; the cell is checked again next loading cycle."),
+	CFG_OBOOL("townClaimFix", FixesConfig, townClaimFixEnabled,           DOC, SHOW,
+	  "Placed buildings stay the player's",
+	  "A building placed near an NPC town joins the player's own town or none, never the NPC town."),
+	CFG_OBOOL("throwOutFix", FixesConfig, throwOutFixEnabled,             DOC, SHOW,
+	  "No endless throw-out loop",
+	  "A knocked-out intruder a town throws out is not carried back and forth until it wakes."),
+	CFG_OINT("throwOutHoldMinutes", FixesConfig, throwOutHoldMinutes, 1.0f, 1440.0f, INT_MIN, DOC, SHOW,
+	  "Thrown-out hold in game minutes",
+	  "How long a thrown-out body stays off the town's throw-out search if it does not wake first."),
 	CFG_OCUSTOM("graphHeuristicGuard", FixesConfig, graphHeuristicGuardOn, ParseGraphHeuristicGuard, NDOC),
 	CFG_OCUSTOM("clusterCrossCost", FixesConfig, clusterCrossCostOn, ParseClusterCrossCost, NDOC),
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }

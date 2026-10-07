@@ -40,6 +40,7 @@ const NavMeshConfig kNavMeshDefaults =
 	0, // cfg_navmeshGenConcurrency
 	512, // cfg_navmeshDiskCacheMaxMB
 	1.0, // cfg_reprioritizeInterval
+	true, // wallSpliceFixEnabled
 	0, // g_navMeshWorkerCount
 	0, // g_modSetHash
 };
@@ -118,6 +119,9 @@ const ConfigKey g_navmeshConfigKeys[] =
 	CFG_ODOUBLE("reprioritizeInterval", NavMeshConfig, cfg_reprioritizeInterval, 1.0f, 30.0f, DOC, DEVROW,
 	  "Navmesh queue reorder interval seconds",
 	  "Seconds between navmesh queue reorders while fast reordering is on.", 1.0f, 1),
+	CFG_OBOOL("wallSpliceFix", NavMeshConfig, wallSpliceFixEnabled,         DOC, SHOW,
+	  "Finished walls reach the navmesh",
+	  "A wall that is finished or repaired is added to the navmesh once its collision is in place."),
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }
 };
 

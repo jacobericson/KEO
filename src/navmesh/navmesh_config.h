@@ -105,6 +105,11 @@ struct NavMeshConfig
 
 	double cfg_reprioritizeInterval;  // seconds between navmesh queue reprioritization
 
+	// wallSpliceFix: a finished or repaired wall's local navmesh patch is issued from the main thread
+	// once the wall's collision has moved into the navmesh's group, instead of before it. On by
+	// default; false leaves the game's own patch. Read at startup only.
+	bool wallSpliceFixEnabled;
+
 	// Derived by LoadConfig and FinalizeConfig; no key.
 
 	// The clamped worker count, i.e. how many threads CreateNavMeshWorkers starts

@@ -19,7 +19,7 @@ struct ConfigStageValue
 	float f;
 };
 
-const int CONFIG_MODULE_MAX = 9;
+const int CONFIG_MODULE_MAX = 10;
 const int CONFIG_STAGE_MAX  = 128;    // rows per module table, retired rows included
 const int CONFIG_STATE_MAX  = 1024;   // bytes of one module's state struct
 

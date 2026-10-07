@@ -122,7 +122,7 @@ static void CheckFallback()
 	std::vector<SettingsRow> rows;
 	keo_gui::AddPlayerSections(kSettingsPlaces, &st, &rows);
 	std::vector<std::string> full = Headers(rows);
-	Check(full.size() == 3 && full[2] == PROD_SECTIONS[2], "fallback: the full table leaves no other section");
+	Check(full.size() == 5 && full[4] == PROD_SECTIONS[4], "fallback: the full table leaves no other section");
 
 	// The table without one Zone loading key, its module's title being a
 	// player section's.
@@ -143,7 +143,7 @@ static void CheckFallback()
 	for (size_t i = 0; i < headers.size(); ++i)
 		for (size_t j = i + 1; j < headers.size(); ++j)
 			unique = unique && headers[i] != headers[j];
-	Check(unique && headers.size() == 4 && headers[3] == keo_gui::OTHER_SETTINGS_TITLE,
+	Check(unique && headers.size() == 6 && headers[5] == keo_gui::OTHER_SETTINGS_TITLE,
 	      "fallback: one Other settings section after the player ones");
 	const ConfigModule* mod = NULL;
 	const ConfigKey* k = FindConfigKey(dropped, &mod);

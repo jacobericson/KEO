@@ -265,7 +265,7 @@ void CheckTemplateAndDefaults(const ConfigModule& core, const ConfigModule& rend
 	std::string text = ReadFile("KEO.ini", &ok);
 	Check(ok, "KEO.ini found at the repository root");
 	std::vector<KeyValue> tmpl = TemplateKeys(text);
-	Check(tmpl.size() == 77, "template has 77 documented key lines");
+	Check(tmpl.size() == 85, "template has 85 documented key lines");
 
 	// 1. Every template line names a documented, active row...
 	std::vector<std::string> missing;
@@ -489,6 +489,7 @@ void CheckClamps(const ConfigModule& core)
 	zone::g_zoneCfg.cfg_zoneRetentionMaxHeld = 3;
 	movement::g_movementCfg.cfg_islandFarSpan = 9;
 	zone::g_zoneCfg.cfg_zoneLifeIdleSeconds = 4.0;
+	fixes::g_fixesCfg.throwOutHoldMinutes = 0;
 	Captured().clear();
 	ConfigClampLoaded(&CaptureLog);
 	want.clear();
@@ -505,6 +506,7 @@ void CheckClamps(const ConfigModule& core)
 	want.push_back("Config: zoneRetentionMaxHeld=3 clamped to min 12");
 	want.push_back("Config: islandFarSpan=9 clamped to max 8");
 	want.push_back("Config: zoneLifeIdleSeconds=4 clamped to min 5");
+	want.push_back("Config: throwOutHoldMinutes=0 clamped to min 1");
 	Check(Captured() == want, "every other clamp bound, in order");
 	for (size_t j = 0; j < Captured().size(); ++j)
 		std::printf("  clamp log: %s\n", Captured()[j].c_str());
@@ -554,7 +556,7 @@ void CheckCoreWriter(const ConfigModule& core)
 	for (int m = 0; m < kConfigModuleCount; ++m)
 		if (kConfigModules[m].state && strcmp(kConfigModules[m].name, "render"))
 			ConfigIniEntries(kConfigModules[m], kConfigModules[m].state, kConfigModules[m].defaults, &e);
-	Check(e.size() == 88u,
+	Check(e.size() == 96u,
 	      "writer: core entries, every active row but the custom rows without choices");
 	bool appends = false;
 	for (size_t i = 0; i < e.size(); ++i)
@@ -629,7 +631,7 @@ void CheckGoldenRecord(const ConfigModule& core)
 		if (!fl[i].empty() && eq != std::string::npos)
 			want.push_back(KeyValue(fl[i].substr(0, eq), fl[i].substr(eq + 1)));
 	}
-	Check(want.size() == 117u, "golden record key count");
+	Check(want.size() == 125u, "golden record key count");
 	CheckNamed(got.size() == want.size(), "golden count");
 	for (size_t i = 0; i < got.size(); ++i)
 	{
@@ -675,8 +677,8 @@ void CheckTables()
 		}
 		Check(mod.keys[i].name == NULL, "tables end");
 	}
-	Check(kConfigModuleCount == 9, "tables end: nine modules");
-	Check(active == 119 && retired == 23, "tables end: active and retired rows");
+	Check(kConfigModuleCount == 10, "tables end: ten modules");
+	Check(active == 127 && retired == 23, "tables end: active and retired rows");
 	Check(coreActive == 2 && renderActive == 22, "tables end: rows per module");
 	std::printf("  tables: %d module(s), %d active row(s) (core %d, render %d), %d retired\n",
 	            kConfigModuleCount, active, coreActive, renderActive, retired);

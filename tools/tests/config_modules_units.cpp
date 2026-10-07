@@ -117,6 +117,14 @@ static const Owner kOwners[] =
 	{ "plannerLegAim", "planner" },
 	{ "plannerMergeBias", "planner" },
 	{ "plannerMergeDetour", "planner" },
+	{ "townClaimFix", "fixes" },
+	{ "throwOutFix", "fixes" },
+	{ "throwOutHoldMinutes", "fixes" },
+	{ "wallSpliceFix", "navmesh" },
+	{ "backpackFirstDefault", "inventory" },
+	{ "backpackFoodScore", "inventory" },
+	{ "backpackDialogueFunction", "inventory" },
+	{ "operatorFillBeforeDeliver", "inventory" },
 };
 static const Expected kExpected[] =
 {
@@ -126,6 +134,7 @@ static const Expected kExpected[] =
 	{ "pathfind", "Pathfinding", sizeof(pathfind::PathfindConfig), &pathfind::kPathfindDefaults },
 	{ "movement", "Movement and orders", sizeof(movement::MovementConfig), &movement::kMovementDefaults },
 	{ "fixes", "Crash guards and probes", sizeof(fixes::FixesConfig), &fixes::kFixesDefaults },
+	{ "inventory", "Inventory and jobs", sizeof(keo_inventory::InventoryConfig), &keo_inventory::kInventoryDefaults },
 	{ "planner", "Route planner", sizeof(planner::PlannerConfig), &planner::kPlannerDefaults },
 	{ "gui", "Settings panel", sizeof(keo_gui::GuiConfig), &keo_gui::kGuiDefaults },
 	{ "core", "Benchmark and retired keys", 0, NULL }
@@ -302,13 +311,13 @@ static bool LiveOffsetRowAllowed(const char* module, const char* key)
 
 int main()
 {
-	Check(kConfigModuleCount == 9 && kConfigModuleCount <= CONFIG_MODULE_MAX, "nine modules within stage capacity");
+	Check(kConfigModuleCount == 10 && kConfigModuleCount <= CONFIG_MODULE_MAX, "ten modules within stage capacity");
 	std::set<std::string> names;
 	int moduleKeys = 0, activeCore = 0, retiredCore = 0, debug = 0;
 	for (int m = 0; m < kConfigModuleCount; ++m)
 	{
 		const ConfigModule& mod = kConfigModules[m];
-		if (m >= 9) { Fail(mod.name, "unexpected module"); continue; }
+		if (m >= 10) { Fail(mod.name, "unexpected module"); continue; }
 		const Expected& e = kExpected[m];
 		if (strcmp(mod.name, e.name) || strcmp(mod.title, e.title)) Fail(mod.name, "module order or title");
 		if (mod.state)
@@ -357,7 +366,7 @@ int main()
 		}
 		if (i == CONFIG_STAGE_MAX) Fail(mod.name, "no table end within stage capacity");
 	}
-	Check(moduleKeys == 95 && activeCore == 2 && retiredCore == 23 && debug == 4, "module and core row counts");
+	Check(moduleKeys == 103 && activeCore == 2 && retiredCore == 23 && debug == 4, "module and core row counts");
 	for (size_t i = 0; i < sizeof(kOwners) / sizeof(kOwners[0]); ++i)
 	{
 		const ConfigModule* mod = NULL;

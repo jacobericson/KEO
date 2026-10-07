@@ -19,6 +19,14 @@ const SettingsPlace kSettingsPlaces[] =
 	{ "Squad movement", "movement", "formationGatherPace" },
 	{ "Squad movement", "movement", "k7PostDeathHold" },
 	{ "Squad movement", "planner", "plannerMode" },
+	{ "Gameplay fixes",     "fixes",     "townClaimFix" },
+	{ "Gameplay fixes",     "fixes",     "throwOutFix" },
+	{ "Gameplay fixes",     "fixes",     "throwOutHoldMinutes" },
+	{ "Gameplay fixes",     "navmesh",   "wallSpliceFix" },
+	{ "Backpacks and jobs", "inventory", "backpackFirstDefault" },
+	{ "Backpacks and jobs", "inventory", "backpackFoodScore" },
+	{ "Backpacks and jobs", "inventory", "backpackDialogueFunction" },
+	{ "Backpacks and jobs", "inventory", "operatorFillBeforeDeliver" },
 	{ NULL, NULL, NULL }
 };
 

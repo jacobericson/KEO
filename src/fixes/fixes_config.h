@@ -189,6 +189,20 @@ struct FixesConfig
 	// distance as an instance registers (cluster_cross_cost.cpp); 0 by default. Changes NPC
 	// routing as well as the hierarchical player search. Read at startup only.
 	int clusterCrossCostOn;
+
+	// townClaimFix: a building the player places keeps the town its placement chose, or the player
+	// town whose radius holds it, or none, instead of the NPC town the game's re-check in an unsaved
+	// zone picks. On by default; false skips both hooks and the patch. Read at startup only.
+	bool townClaimFixEnabled;
+
+	// throwOutFix: a body a town throws out is marked outside where it lands and kept off the town's
+	// throw-out search until it wakes or the hold below runs out. On by default; false skips every
+	// hook. Read at startup only.
+	bool throwOutFixEnabled;
+
+	// throwOutHoldMinutes: the longest that hold lasts, in game minutes (1 to 1440). Read at
+	// startup only.
+	int throwOutHoldMinutes;
 };
 
 extern FixesConfig g_fixesCfg;

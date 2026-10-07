@@ -240,6 +240,7 @@ static const char* const kClampOrder[] =
 	"plannerPreArrivalMs",
 	"plannerMergeBias",
 	"plannerMergeDetour",
+	"throwOutHoldMinutes",
 	NULL
 };
 

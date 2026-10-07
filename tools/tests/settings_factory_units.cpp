@@ -32,7 +32,7 @@ static const char* const SUITE_NAME = "settings_factory_units";
 #else
 static const char* const SUITE_NAME = "settings_factory_prod_units";
 #endif
-static const size_t CORE_ROWS_DEV = 87;
+static const size_t CORE_ROWS_DEV = 95;
 static const int DEV_ONLY_ROWS = 94;
 
 // ---- Sections --------------------------------------------------------------
@@ -47,15 +47,15 @@ static void CheckSections()
 
 	// DEV: every module section, then the Benchmark section.
 	std::vector<std::string> dev = Headers(Rows(&st, true, &bench));
-	bool sections = dev.size() == 9 && dev[0] == RENDER_TITLE && dev[8] == "Benchmark";
-	for (int i = 0; sections && i < 7; ++i) sections = dev[i + 1] == MODULE_TITLES[i];
+	bool sections = dev.size() == 10 && dev[0] == RENDER_TITLE && dev[9] == "Benchmark";
+	for (int i = 0; sections && i < 8; ++i) sections = dev[i + 1] == MODULE_TITLES[i];
 	Check(sections, "Sections: DEV");
 
 	// PROD: only the sections that keep a row, and no Benchmark.
 	std::vector<SettingsRow> rows = Rows(&st, false, &bench);
 	std::vector<std::string> prod = Headers(rows);
-	sections = prod.size() == 3;
-	for (int i = 0; sections && i < 3; ++i) sections = prod[i] == PROD_SECTIONS[i];
+	sections = prod.size() == 5;
+	for (int i = 0; sections && i < 5; ++i) sections = prod[i] == PROD_SECTIONS[i];
 	Check(sections, "Sections: PROD");
 	Check(!rows.empty() && rows[0].kind == SR_HEADER && rows[0].label == PROD_SECTIONS[0],
 	      "the page opens with its first section's heading");
@@ -159,7 +159,8 @@ static void CheckRowCounts()
 	Check(ModuleSections(dev).size() == CORE_ROWS_DEV, "core rows dev");
 	Check(Section(dev, RENDER_TITLE).size() == 21, "render rows dev");
 	Check(Section(prod, "Zone loading").size() == 7 && Section(prod, "Performance").size() == 3
-	      && Section(prod, "Squad movement").size() == 4, "player section rows prod");
+	      && Section(prod, "Squad movement").size() == 4 && Section(prod, "Gameplay fixes").size() == 4
+	      && Section(prod, "Backpacks and jobs").size() == 4, "player section rows prod");
 }
 
 // ---- Restart and devOnly ---------------------------------------------------
@@ -297,7 +298,7 @@ static void CheckNumericRows()
 	Check(none, "stitchSourceLines has no row in either build");
 
 	// Every slider's default and maximum lie on its grid, from sliderLo.
-	for (int mm = 1; mm < 7; ++mm)
+	for (int mm = 1; mm < 8; ++mm)
 	for (int i = 0; kConfigModules[mm].keys[i].name; ++i)
 	{
 		const ConfigModule& mod = kConfigModules[mm];

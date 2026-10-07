@@ -41,6 +41,11 @@ enum HookWant
 	HOOK_WANT_PLANNER,            // plannerMode != off
 	HOOK_WANT_GATHER_PACE,        // formationGatherPace
 	HOOK_WANT_PLANNER_PRE_ARRIVAL, // plannerMode == on and plannerPreArrivalMs > 0
+	HOOK_WANT_TOWN_CLAIM,         // townClaimFix
+	HOOK_WANT_THROWOUT,           // throwOutFix
+	HOOK_WANT_BACKPACK_FOOD,      // backpackFoodScore
+	HOOK_WANT_OPERATOR_TRIPS,     // operatorFillBeforeDeliver
+	HOOK_WANT_WALL_SPLICE,        // wallSpliceFix
 	HOOK_WANT_UNCOUNTED
 };
 
@@ -74,6 +79,11 @@ struct HookWantInputs
 	bool planner;  // plannerMode != off
 	bool gatherPace;          // formationGatherPace
 	bool preArrival;          // plannerMode == on and plannerPreArrivalMs > 0
+	bool townClaim;           // townClaimFix
+	bool throwOut;            // throwOutFix
+	bool backpackFood;        // backpackFoodScore
+	bool operatorTrips;       // operatorFillBeforeDeliver
+	bool wallSplice;          // wallSpliceFix
 };
 
 bool HookWantEval(HookWant want, const HookWantInputs& in);

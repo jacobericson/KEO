@@ -18,8 +18,8 @@
 static const char* const RENDER_TITLE = "Render and particles";
 static const char* const MODULE_TITLES[] =
 {
-	"Zone loading", "Navmesh", "Pathfinding", "Movement and orders", "Crash guards and probes", "Route planner",
-	"Settings panel"
+	"Zone loading", "Navmesh", "Pathfinding", "Movement and orders", "Crash guards and probes",
+	"Inventory and jobs", "Route planner", "Settings panel"
 };
 
 // The PROD page's rows in display order, by key and section: the settings an
@@ -39,10 +39,15 @@ static const ProdRow kProdPage[] =
 	{ "particleStepCap", "Performance" }, { "renderLevers", "Performance" }, { "foliagePageBudgetMs", "Performance" },
 	{ "groupCohesion", "Squad movement" }, { "formationGatherPace", "Squad movement" },
 	{ "k7PostDeathHold", "Squad movement" }, { "plannerMode", "Squad movement" },
+	{ "townClaimFix", "Gameplay fixes" }, { "throwOutFix", "Gameplay fixes" },
+	{ "wallSpliceFix", "Gameplay fixes" }, { "throwOutHoldMinutes", "Gameplay fixes" },
+	{ "backpackFirstDefault", "Backpacks and jobs" }, { "backpackFoodScore", "Backpacks and jobs" },
+	{ "backpackDialogueFunction", "Backpacks and jobs" }, { "operatorFillBeforeDeliver", "Backpacks and jobs" },
 	{ NULL, NULL }
 };
-static const int PROD_PAGE_ROWS = 14;
-static const char* const PROD_SECTIONS[] = { "Zone loading", "Performance", "Squad movement" };
+static const int PROD_PAGE_ROWS = 22;
+static const char* const PROD_SECTIONS[] = { "Zone loading", "Performance", "Squad movement", "Gameplay fixes",
+	"Backpacks and jobs" };
 
 static void CheckNamed(bool ok, const std::string& what)
 {
@@ -154,7 +159,7 @@ static const char* SectionOf(const ConfigModule& mod, const ConfigKey& k, bool d
 static std::vector<const SettingsRow*> ModuleSections(const std::vector<SettingsRow>& rows)
 {
 	std::vector<const SettingsRow*> out;
-	for (int m = 0; m < 7; ++m)
+	for (int m = 0; m < 8; ++m)
 	{
 		std::vector<const SettingsRow*> sec = Section(rows, MODULE_TITLES[m]);
 		out.insert(out.end(), sec.begin(), sec.end());
