@@ -16,7 +16,6 @@
 #include <string>
 #include "base/klib_include.h"
 #include <core/Functions.h>
-#include <Debug.h>                  // ErrorLog
 #include "base/klib_include_end.h"
 
 // The cluster-graph search (checkFaceConnectivity's own graph, reached only
@@ -263,7 +262,7 @@ void InstallGraphPositionGuard(int* installed, int*)
 	else
 	{
 		orig_graphPositionLookup = NULL;
-		ErrorLog(std::string("Graph position guard: not installed (") + why
+		LogError(std::string("Graph position guard: not installed (") + why
 		         + "); a cluster-graph search that meets a section with no graph instance still faults");
 	}
 }

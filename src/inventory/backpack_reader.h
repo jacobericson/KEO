@@ -6,10 +6,18 @@
 
 namespace keo_inventory {
 
-// Main thread, at install: binds getSectionOfType and isLimitedSlotCompatible and checks each
-// callee's head and the four layout tripwires against the bytes this build carries. False, with
-// *why naming the first mismatch, when any differs.
+// Main thread, at install: binds getSectionOfType and isLimitedSlotCompatible after checking every
+// row of its byte table against the bytes this build carries. A callee head passes as its original
+// prologue or behind another plugin's E9 or FF 25 detour over a matching tail, and so checks only
+// that the call still reaches the function; each offset the reader reads itself, and each call
+// slot, has an exact row that must match byte for byte. False, with *why naming the first refusing row and the
+// bytes read there ("<row> read=XX XX ..."), when any refuses; the text stays valid until the next
+// call.
 bool  BackpackReaderInit(const char** why);
+// The callee heads the last init found behind another plugin's detour, comma-separated
+// ("getSectionOfType,isLimitedSlotCompatible"), or "none" when none or when that init refused.
+// Main thread.
+const char* BackpackReaderSharedCallees();
 
 void* CharacterInventory(void* character);         // Character's main Inventory*, or NULL
 void* ItemInventory(void* item);                   // the item's own Inventory* (a container), or NULL

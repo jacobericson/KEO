@@ -150,19 +150,19 @@ static void InstallLoadingHooks(int* installed, int*)
 	// Loading-message and readiness-bypass hooks
 	if (HookInstall(HOOK_SHOW_LOADING_MESSAGE, hook_showLoadingMessage,
 			&game::g_hookOrig.orig_showLoadingMessage, installed, false) != NULL)
-		ErrorLog("FAILED to hook showLoadingMessage");
+		LogError("FAILED to hook showLoadingMessage");
 
 	if (HookInstall(HOOK_IS_CONTENT_PENDING, hook_isContentPending,
 			&game::g_hookOrig.orig_isContentPending, installed, false) != NULL)
 	{
-		ErrorLog("FAILED to hook isContentPending");
+		LogError("FAILED to hook isContentPending");
 		zone::g_zoneCfg.preloadEnabled = false;  // registration readiness requires isContentPending
 	}
 
 	// Camera-zone orchestrator hook
 	if (HookInstall(HOOK_UPDATE_CAMERA_ZONE, hook_updateCameraZone,
 			&game::g_hookOrig.orig_updateCameraZone, installed, false) != NULL)
-		ErrorLog("FAILED to hook updateCameraZone");
+		LogError("FAILED to hook updateCameraZone");
 }
 
 // GameWorld::destroyListOE inserter. Two jobs on one hook: the race
@@ -188,7 +188,7 @@ static void InstallDestroyListHook(int* installed, int*)
 		{
 			orig_destroyListInsert = NULL;
 			SetDestroyListDefer(false);
-			ErrorLog("FAILED to hook destroyListOE inserter (sub_140799BE0)");
+			LogError("FAILED to hook destroyListOE inserter (sub_140799BE0)");
 		}
 	}
 }
@@ -211,7 +211,7 @@ static void InstallResetUnloadHook(int* installed, int*)
 	else
 	{
 		orig_resetUnloadZones = NULL;
-		ErrorLog("FAILED to hook the save-load reset unload (sub_14036C1E0); "
+		LogError("FAILED to hook the save-load reset unload (sub_14036C1E0); "
 		         "the ZM+8 edge still clears the mod's state, and the registry guard "
 		         "refuses surviving zones");
 	}
@@ -224,7 +224,7 @@ static void InstallOrderHook(int* installed, int*)
 	{
 		if (HookInstall(HOOK_ADD_ORDER_SELECTED, hook_addOrderSelected,
 				&game::g_hookOrig.orig_addOrderSelected, installed, false) != NULL)
-			ErrorLog("FAILED to hook addOrderSelectedCharacters");
+			LogError("FAILED to hook addOrderSelectedCharacters");
 	}
 }
 
@@ -249,13 +249,13 @@ static void InstallIslandHooks(int* installed, int*)
 			&game::g_hookOrig.orig_isInIsland, installed, false) == NULL)
 		islandInstalled++;
 	else
-		ErrorLog("FAILED to hook ZoneMap::isInIsland");
+		LogError("FAILED to hook ZoneMap::isInIsland");
 
 	if (HookInstall(HOOK_GETISLAND_IMPL, hook_getIsland,
 			&game::g_hookOrig.orig_getIsland, installed, false) == NULL)
 		islandInstalled++;
 	else
-		ErrorLog("FAILED to hook ZoneManager::getIsland");
+		LogError("FAILED to hook ZoneManager::getIsland");
 
 	IslandSetHooksInstalled(islandInstalled == 2);
 
@@ -285,7 +285,7 @@ static void InstallCancelHooks(int* installed, int*)
 	else
 	{
 		game::g_hookOrig.orig_stopCharactersMovement = NULL;
-		ErrorLog("FAILED to hook PlayerInterface::stopCharactersMovement (island cancel)");
+		LogError("FAILED to hook PlayerInterface::stopCharactersMovement (island cancel)");
 	}
 
 	if (HookInstall(HOOK_ADD_JOB_SELECTED, hook_addJobSelected,
@@ -294,7 +294,7 @@ static void InstallCancelHooks(int* installed, int*)
 	else
 	{
 		game::g_hookOrig.orig_addJobSelected = NULL;
-		ErrorLog("FAILED to hook PlayerInterface::addJobSelectedCharacters (island cancel)");
+		LogError("FAILED to hook PlayerInterface::addJobSelectedCharacters (island cancel)");
 	}
 
 	if (HookInstall(HOOK_ADD_TASK_NEAREST, hook_addTaskNearest,
@@ -303,7 +303,7 @@ static void InstallCancelHooks(int* installed, int*)
 	else
 	{
 		game::g_hookOrig.orig_addTaskNearest = NULL;
-		ErrorLog("FAILED to hook PlayerInterface::addTaskNearestSelectedCharacter (island cancel)");
+		LogError("FAILED to hook PlayerInterface::addTaskNearestSelectedCharacter (island cancel)");
 	}
 
 	IslandSetCancelHooksInstalled(stopOk, jobOk, taskOk);
@@ -330,7 +330,7 @@ static void InstallCacheHook(int* installed, int*)
 		}
 		else
 		{
-			ErrorLog("FAILED to hook dispatchJob");
+			LogError("FAILED to hook dispatchJob");
 			navmesh::g_navmeshCfg.cachingEnabled = false;
 		}
 
@@ -379,13 +379,13 @@ static void InstallPathfindHooks(int* installed, int*)
 				&game::g_hookOrig.orig_csFindPath, installed, false) == NULL)
 			diagInstalled++;
 		else
-			ErrorLog("FAILED to hook ContentStream::findPath");
+			LogError("FAILED to hook ContentStream::findPath");
 
 		if (HookInstall(HOOK_CS_CHECK_FACE_CONN, hook_csCheckFaceConn,
 				&game::g_hookOrig.orig_csCheckFaceConn, installed, false) == NULL)
 			diagInstalled++;
 		else
-			ErrorLog("FAILED to hook checkFaceConnectivity");
+			LogError("FAILED to hook checkFaceConnectivity");
 	}
 
 	if (full)
@@ -395,13 +395,13 @@ static void InstallPathfindHooks(int* installed, int*)
 			{ if (diag) diagInstalled++; }
 		else
 		{
-			ErrorLog("FAILED to hook findPathFull");
+			LogError("FAILED to hook findPathFull");
 			// The heuristic guards, installed by an earlier step, stay in: each calls its site
 			// unchanged while the instances are in place, and NPC searches reach the same sites.
 			if (pathfind::g_pathfindCfg.playerHierarchicalMode != AHIER_OFF)
 			{
 				pathfind::g_pathfindCfg.playerHierarchicalMode = AHIER_OFF;
-				ErrorLog("FAILED to hook findPathFull; playerHierarchical is off for this session");
+				LogError("FAILED to hook findPathFull; playerHierarchical is off for this session");
 			}
 		}
 	}
@@ -412,7 +412,7 @@ static void InstallPathfindHooks(int* installed, int*)
 				&game::g_hookOrig.orig_requestPath, installed, false) == NULL)
 			diagInstalled++;
 		else
-			ErrorLog("FAILED to hook requestPath");
+			LogError("FAILED to hook requestPath");
 
 		if (diagInstalled < 4)
 			pathfind::g_pathfindCfg.pathfindDiagEnabled = false;
@@ -435,7 +435,7 @@ static void HierarchicalGuardStep(int*, int*)
 	if (pathfind::g_pathfindCfg.playerHierarchicalMode == AHIER_OFF || GraphHeuristicGuardComplete())
 		return;
 	pathfind::g_pathfindCfg.playerHierarchicalMode = AHIER_OFF;
-	ErrorLog(std::string("Graph heuristic guard ") + GraphHeuristicGuardToken()
+	LogError(std::string("Graph heuristic guard ") + GraphHeuristicGuardToken()
 	         + "; playerHierarchical is off for this session");
 }
 
@@ -450,7 +450,7 @@ static void InstallSubmitHook(int* installed, int*)
 			LogMsg("Pathfinding step 2: submit hook installed");
 		}
 		else
-			ErrorLog("FAILED to hook PathRequestQueue::submit");
+			LogError("FAILED to hook PathRequestQueue::submit");
 	}
 }
 
@@ -467,7 +467,7 @@ static void InstallFallbackHook(int* installed, int*)
 			LogMsg("Pathfinding step 4: fallback hook installed");
 		}
 		else
-			ErrorLog("FAILED to hook findPathFallback");
+			LogError("FAILED to hook findPathFallback");
 	}
 }
 
@@ -488,7 +488,7 @@ static void InstallPathExtractHooks(int* installed, int*)
 			LogMsg("pathExtractGuard: extraction hook installed");
 		}
 		else
-			ErrorLog("FAILED to hook contentStreamCallee_0x8869");
+			LogError("FAILED to hook contentStreamCallee_0x8869");
 	}
 
 	if (HookRowWanted(HOOK_ADD_INSTANCE))
@@ -500,7 +500,7 @@ static void InstallPathExtractHooks(int* installed, int*)
 			LogMsg("sectionStamp: addInstance count hook installed");
 		}
 		else
-			ErrorLog("FAILED to hook hkaiStreamingCollection::addInstance");
+			LogError("FAILED to hook hkaiStreamingCollection::addInstance");
 	}
 	else
 		LogMsg("addInstance not hooked: sectionStamp and navMeshLife are both off, "
@@ -524,19 +524,19 @@ static void InstallPathPoolHooks(int* installed, int*)
 			&orig_contentStream, installed, true) == NULL)
 		poolInstalled++;
 	else
-		ErrorLog("FAILED to hook SectionManager::contentStream (PathPool)");
+		LogError("FAILED to hook SectionManager::contentStream (PathPool)");
 
 	if (HookInstall(HOOK_DEQUEUE_WORK, hook_dequeueWork,
 			&orig_dequeueWork, installed, true) == NULL)
 		poolInstalled++;
 	else
-		ErrorLog("FAILED to hook SectionManager::dequeueWork_threadSafe (PathPool)");
+		LogError("FAILED to hook SectionManager::dequeueWork_threadSafe (PathPool)");
 
 	if (HookInstall(HOOK_ENQUEUE_THREAD_SAFE, hook_enqueueThreadSafe,
 			&orig_enqueueThreadSafe, installed, true) == NULL)
 		poolInstalled++;
 	else
-		ErrorLog("FAILED to hook PathRequestQueue::enqueue_threadSafe (PathPool)");
+		LogError("FAILED to hook PathRequestQueue::enqueue_threadSafe (PathPool)");
 
 	if (gateHookWanted)
 	{
@@ -545,7 +545,7 @@ static void InstallPathPoolHooks(int* installed, int*)
 			poolInstalled++;
 		else
 		{
-			ErrorLog("FAILED to hook Gates__updateCodes (PathPool)");
+			LogError("FAILED to hook Gates__updateCodes (PathPool)");
 			pathfind::g_pathfindCfg.gatePassDiagEnabled = false;
 		}
 		if (orig_gatesUpdateCodes
@@ -553,7 +553,7 @@ static void InstallPathPoolHooks(int* installed, int*)
 				&orig_gatesFindPath, installed, true) == NULL)
 			poolInstalled++;
 		else
-			ErrorLog("FAILED to hook Gates__findPath (GatePass)");
+			LogError("FAILED to hook Gates__findPath (GatePass)");
 	}
 
 	std::ostringstream ps;

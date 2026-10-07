@@ -22,7 +22,6 @@
 #include <string>
 #include <sstream>
 #include "base/klib_include.h"
-#include <Debug.h>
 #include <kenshi/RootObject.h>
 #include "base/klib_include_end.h"
 
@@ -403,7 +402,7 @@ void InstallThrowout(int* installed, int*)
 	std::ostringstream ss;
 	ss << "Throwout: not installed (" << why << "; " << rows
 	   << "/4 rows in); the rows already in stay in and the rest run as vanilla";
-	ErrorLog(ss.str());
+	LogError(ss.str());
 }
 
 } // namespace fixes

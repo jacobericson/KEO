@@ -250,7 +250,7 @@ void InstallPlannerPreArrival(int* installed)
 	{
 		s_armState = 3;
 		s_bannerToken = "refused";
-		ErrorLog(std::string("Planner: charMovementUpdate not installed (") + why
+		LogError(std::string("Planner: charMovementUpdate not installed (") + why
 		         + "); pre-arrival is off for this session");
 		return;
 	}

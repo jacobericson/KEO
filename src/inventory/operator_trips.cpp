@@ -7,6 +7,7 @@
 #include "inventory/operator_trips.h"
 #include "inventory/operator_policy.h"
 #include "inventory/backpack_reader.h"
+#include "inventory/byte_check_policy.h"
 #include "plugin/hook_manifest.h"
 #include "game/game.h"
 #include "game/klib_member_contract.h"
@@ -42,7 +43,8 @@ static wantsToEatNow_t   fn_wantsToEatNow       = NULL;
 static void*             s_handleManager        = NULL;
 static volatile LONG     s_reason[OR_COUNT];
 
-// Each callee's first bytes in this build: the row installs only when all four match.
+// Each callee's first bytes in this build: the row installs only when all four pass as callee
+// heads (their own prologue, or another plugin's detour over a matching tail).
 static const unsigned char kAnythingButBaseHead[16] =
 	{ 0x48,0x89,0x74,0x24,0x18,0x57,0x48,0x83,0xEC,0x20,0x48,0x8B,0xF1,0x48,0x63,0x4A };
 static const unsigned char kBuildingHasPowerHead[16] =
@@ -118,16 +120,19 @@ void InstallOperatorTrips(int* installed, int*)
 	// callee's head is checked before its binding is set, and every binding before the install.
 	const char* reader = NULL;   // set only when the reader refuses
 	const char* why = NULL;
+	ByteRowLog rows;
+	ByteRowLogReset(&rows);
 	if (!BackpackReaderInit(&reader))
 		why = "reader refused: ";
-	else if (memcmp((const void*)GameAddr(RVA_HANDLES_ANYTHING_BUT_BASE), kAnythingButBaseHead, 16) != 0)
-		why = "getAnythingButBase";
-	else if (memcmp((const void*)GameAddr(RVA_AI_BUILDING_HAS_POWER), kBuildingHasPowerHead, 16) != 0)
-		why = "buildingHasPower";
-	else if (memcmp((const void*)GameAddr(RVA_AI_MACHINE_INPUT_INVALID), kMachineInputInvalidHead, 16) != 0)
-		why = "isMachineInputInvalid";
-	else if (memcmp((const void*)GameAddr(RVA_CHARACTER_WANTS_TO_EAT_NOW), kWantsToEatNowHead, 16) != 0)
-		why = "wantsToEatNow";
+	else if (!ByteRowCheck(&rows, "getAnythingButBase", BYTE_CHECK_CALLEE_HEAD,
+	                       (const unsigned char*)GameAddr(RVA_HANDLES_ANYTHING_BUT_BASE), kAnythingButBaseHead, 16)
+	      || !ByteRowCheck(&rows, "buildingHasPower", BYTE_CHECK_CALLEE_HEAD,
+	                       (const unsigned char*)GameAddr(RVA_AI_BUILDING_HAS_POWER), kBuildingHasPowerHead, 16)
+	      || !ByteRowCheck(&rows, "isMachineInputInvalid", BYTE_CHECK_CALLEE_HEAD,
+	                       (const unsigned char*)GameAddr(RVA_AI_MACHINE_INPUT_INVALID), kMachineInputInvalidHead, 16)
+	      || !ByteRowCheck(&rows, "wantsToEatNow", BYTE_CHECK_CALLEE_HEAD,
+	                       (const unsigned char*)GameAddr(RVA_CHARACTER_WANTS_TO_EAT_NOW), kWantsToEatNowHead, 16))
+		why = rows.why;
 	else
 	{
 		// Before the install: the detour calls them as soon as it is in.
@@ -140,12 +145,12 @@ void InstallOperatorTrips(int* installed, int*)
 	}
 	if (!why)
 	{
-		LogMsg("OperatorTrips: installed");
+		LogMsg(std::string("OperatorTrips: installed shared=") + ByteRowShared(&rows));
 	}
 	else
 	{
 		orig_operatorWantGone = NULL;
-		ErrorLog(std::string("OperatorTrips: not installed (") + why + (reader ? reader : "")
+		LogError(std::string("OperatorTrips: not installed (") + why + (reader ? reader : "")
 		         + "); operators deliver as vanilla");
 	}
 }

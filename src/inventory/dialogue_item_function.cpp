@@ -9,6 +9,7 @@
 #include "inventory/dialogue_thunk_policy.h"
 #include "inventory/backpack_policy.h"
 #include "inventory/backpack_reader.h"
+#include "inventory/byte_check_policy.h"
 #include "inventory/inventory_config.h"
 #include "fixes/near_page.h"
 #include "base/fixed_log_buf.h"
@@ -26,7 +27,9 @@ namespace keo_inventory {
 
 static hasItemFunction_t fn_hasItemFunction = NULL;
 static volatile LONG s_dialogCalls = 0, s_dialogBackpackHits = 0;
-// Inventory::hasItemFunction's first bytes in this build: the patch is written only when they match.
+// Inventory::hasItemFunction's first bytes in this build: the patch is written only when they pass
+// as a callee head (the wrapper only calls the function; another plugin's detour over a matching
+// tail passes).
 static const unsigned char kHasItemFunctionHead[16] =
 	{ 0x44,0x8B,0x49,0x18,0x45,0x33,0xC0,0x45,0x85,0xC9,0x74,0x1B,0x48,0x8B,0x49,0x20 };
 static const size_t kThunkPageSize = 4096;
@@ -66,7 +69,8 @@ static bool SafeReadBytes(const void* addr, void* out, size_t n)
 
 // Main thread, startPlugin. Verifies the site and the callee, builds the thunk and rewrites the
 // call's rel32. NULL on success with *thunkOut set; otherwise the reason, with the site untouched.
-static const char* TryArm(unsigned __int64* thunkOut)
+// rows records the callee head's judgement; a refusal's reason is its text.
+static const char* TryArm(unsigned __int64* thunkOut, ByteRowLog* rows)
 {
 	unsigned __int64 navmesh = 0;
 	if (!SafeReadBytes(GameAddr(RVA_GLOBAL_SECTION_MGR), &navmesh, sizeof(navmesh)))
@@ -83,9 +87,10 @@ static const char* TryArm(unsigned __int64* thunkOut)
 		return "call site bytes differ";
 
 	unsigned char head[16];
-	if (!SafeReadBytes(GameAddr(RVA_INVENTORY_HAS_ITEM_FUNCTION), head, sizeof(head))
-	 || memcmp(head, kHasItemFunctionHead, sizeof(head)) != 0)
-		return "hasItemFunction head differs";
+	if (!SafeReadBytes(GameAddr(RVA_INVENTORY_HAS_ITEM_FUNCTION), head, sizeof(head)))
+		return "hasItemFunction head unreadable";
+	if (!ByteRowCheck(rows, "hasItemFunction", BYTE_CHECK_CALLEE_HEAD, head, kHasItemFunctionHead, 16))
+		return rows->why;
 
 	// The wrapper calls what the original call reached: the j_ thunk, itself a jump to
 	// hasItemFunction, so a thunk retargeted after arming is still honoured; at arming it must
@@ -142,24 +147,28 @@ static const char* TryArm(unsigned __int64* thunkOut)
 void InstallDialogueItemFunctionPatch(bool gateOk)
 {
 	if (!g_inventoryCfg.backpackDialogueFunctionEnabled) return;
-	if (!gateOk) { LogMsg("DialogueItemFunction: not armed (the build gate refused); the condition stays vanilla"); return; }
+	if (!gateOk) { LogError("DialogueItemFunction: not armed (the build gate refused); the condition stays vanilla"); return; }
 
 	// The reader binds idempotently; unbound, the wrapper could never see a backpack.
 	const char* reader = NULL;   // set only when the reader refuses
 	unsigned __int64 thunk = 0;
-	const char* why = BackpackReaderInit(&reader) ? TryArm(&thunk) : "reader refused: ";
+	ByteRowLog rows;
+	ByteRowLogReset(&rows);
+	const char* why = BackpackReaderInit(&reader) ? TryArm(&thunk, &rows) : "reader refused: ";
 	FixedLogBuf o; FlbInit(&o);
 	if (!why)
 	{
 		FlbStr(&o, "DialogueItemFunction: armed at exe+"); FlbHex(&o, kDialogCallRva);
 		FlbStr(&o, " thunk="); FlbHex(&o, thunk);
+		FlbStr(&o, " shared="); FlbStr(&o, ByteRowShared(&rows));
+		LogMsg(FlbDone(&o));
 	}
 	else
 	{
 		FlbStr(&o, "DialogueItemFunction: not armed ("); FlbStr(&o, why); FlbStr(&o, reader);
 		FlbStr(&o, "); the condition stays vanilla");
+		LogError(FlbDone(&o));
 	}
-	LogMsg(FlbDone(&o));
 }
 
 void DialogueItemFunctionCounters(long* calls, long* backpackHits)

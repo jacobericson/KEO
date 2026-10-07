@@ -15,7 +15,6 @@
 #include <string>
 #include "base/klib_include.h"
 #include <core/Functions.h>
-#include <Debug.h>                  // ErrorLog
 #include "base/klib_include_end.h"
 #include "base/config_values.h"
 #include "planner/coarse_graph_live.h"
@@ -134,7 +133,7 @@ void InstallClusterCrossCost(int* installed, int*)
 	else
 	{
 		orig_graphInstanceConnect = NULL;
-		ErrorLog(std::string("Cluster cross cost: not installed (") + why
+		LogError(std::string("Cluster cross cost: not installed (") + why
 		         + "); cross-tile links keep their tile-local cost and the planner's live overlay is off");
 	}
 }

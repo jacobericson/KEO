@@ -2,7 +2,8 @@
 // Any thread; initialization and deferred flush run on the main thread.
 // LogMsgBounded holds logCS while FlushDeferredLogLines takes pendingLogCS
 // for a bounded copy: logCS -> pendingLogCS. LogMsg then re-enters logCS
-// on the same thread after pendingLogCS is released.
+// on the same thread after pendingLogCS is released. LogError takes logCS as
+// LogMsg does and calls KenshiLib's ErrorLog after releasing it.
 
 #include "base/core.h"
 #include "base/core_internal.h"
@@ -98,10 +99,10 @@ static void OpenLogFile()
 #endif
 }
 
-static void LogLine(std::ofstream& file, const std::string& line)
+static void LogLine(std::ofstream& file, const std::string& line, bool toDebugLog)
 {
 	// Only call DebugLog on main thread (RE_Kenshi thread safety unknown)
-	if (GetCurrentThreadId() == mainThreadId)
+	if (toDebugLog && GetCurrentThreadId() == mainThreadId)
 		DebugLog(line);
 
 	std::ostringstream ts;
@@ -109,7 +110,7 @@ static void LogLine(std::ofstream& file, const std::string& line)
 	file << ts.str() << "\n";
 }
 
-void LogMsg(const std::string& line)
+static void WriteLogLine(const std::string& line, bool toDebugLog)
 {
 	if (!logCSInitialized)
 		return;
@@ -117,10 +118,31 @@ void LogMsg(const std::string& line)
 	OpenLogFile();
 	if (logFile.is_open())
 	{
-		LogLine(logFile, line);
+		LogLine(logFile, line, toDebugLog);
 		logFile.flush();
 	}
 	LeaveCriticalSection(&logCS);
+}
+
+void LogMsg(const std::string& line)
+{
+	WriteLogLine(line, true);
+}
+
+// The ERROR: line goes to KEO's log only (not through DebugLog), so RE_Kenshi's log holds the
+// refusal once, as ErrorLog writes it. ErrorLog shares DebugLog's main-thread rule; off the main
+// thread the line takes the deferred queue and the main thread's flush writes it. Before
+// InitLogFile only ErrorLog has somewhere to write.
+void LogError(const std::string& line)
+{
+	const std::string lead = std::string("ERROR: ") + line;
+	if (logCSInitialized && !IsMainThread())
+	{
+		LogMsgDeferrable(lead.c_str());
+		return;
+	}
+	WriteLogLine(lead, false);
+	ErrorLog(line);
 }
 
 #ifdef KEO_DEBUG

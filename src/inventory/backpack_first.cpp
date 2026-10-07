@@ -82,12 +82,12 @@ void InstallBackpackFirst(int* installed, int*)
 	if (!why)
 	{
 		s_installed = true;
-		LogMsg("BackpackFirst: installed");
+		LogMsg(std::string("BackpackFirst: installed shared=") + BackpackReaderSharedCallees());
 	}
 	else
 	{
 		orig_giveItem = NULL;
-		ErrorLog(std::string("BackpackFirst: not installed (") + why + ")");
+		LogError(std::string("BackpackFirst: not installed (") + why + ")");
 	}
 }
 

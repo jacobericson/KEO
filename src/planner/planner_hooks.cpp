@@ -22,7 +22,6 @@
 #include <sstream>
 #include "base/klib_include.h"
 #include <core/Functions.h>
-#include <Debug.h>
 #include "base/klib_include_end.h"
 
 #pragma intrinsic(_ReturnAddress)
@@ -182,7 +181,7 @@ void InstallPlannerHooks(int* installed, int*)
 	{
 		g_plannerCfg.mode = PLANNER_OFF;
 		s_refusedWhy = "playerHierarchical";
-		ErrorLog("Planner: refused to arm (plannerMode=on needs playerHierarchical=on); the planner is off for this session");
+		LogError("Planner: refused to arm (plannerMode=on needs playerHierarchical=on); the planner is off for this session");
 		return;
 	}
 	if (arm != PLAN_ARM_GO) return;
@@ -209,7 +208,7 @@ void InstallPlannerHooks(int* installed, int*)
 	{
 		g_plannerCfg.mode = PLANNER_OFF;
 		s_refusedWhy = g_hookPrologues[failed].name;
-		ErrorLog(std::string("Planner: ") + s_refusedWhy + " not installed (" + why
+		LogError(std::string("Planner: ") + s_refusedWhy + " not installed (" + why
 		         + "); the planner is off for this session");
 		return;
 	}

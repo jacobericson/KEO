@@ -1,18 +1,28 @@
 // backpack_reader.cpp - The worn backpack and the inventory facts backpack-first needs, read at
-// the game's own offsets. Each field offset below is encoded in an instruction whose bytes
-// BackpackReaderInit checks, so a build whose layouts moved binds nothing and every reader answers
-// as if there were no backpack (or, for the equip test, as if the item would equip). The item's
+// the game's own offsets. Each field offset the reader reads itself is encoded in an instruction
+// that an exact row of BackpackReaderInit's table checks (sectionsInSearchOrder's +0x78 in the
+// getSectionOfType head's byte 15, which every accepted detour shape still compares), so a build
+// whose layouts moved binds nothing and every reader answers as if there were no backpack (or, for
+// the equip test, as if the item would equip). The item's
 // getInventory slot is the one giveItem itself calls; isAnimal's is the KenshiLib vtable's. After
 // init, any thread: plain reads and the two game callees (getSectionOfType walks a list;
 // isLimitedSlotCompatible reaches RaceLimiter::canEquip, the game's own code).
 #include "inventory/backpack_reader.h"
+#include "inventory/byte_check_policy.h"
 #include "game/game.h"
 #include <string.h>
 
 namespace backpack_reader_detail {
-// Bytes this build carries at sites whose instructions encode the offsets below; a mismatch
-// means the layouts moved and backpack-first stays off.
-struct ByteCheck { const char* why; size_t rva; unsigned char bytes[16]; int len; };
+using keo_inventory::ByteCheckKind;
+using keo_inventory::BYTE_CHECK_EXACT;
+using keo_inventory::BYTE_CHECK_CALLEE_HEAD;
+
+// Bytes this build carries at sites whose instructions encode the offsets below, and at the heads
+// of the two callees; a refused row means the code moved and backpack-first stays off. A callee
+// head (16 bytes) is judged under the build gate's shared-site rule: it checks only that the call
+// still reaches the function, so another plugin's detour of a function the reader only calls still
+// binds. Every offset the reader reads itself has its own exact row past any head patch.
+struct ByteCheck { const char* why; size_t rva; unsigned char bytes[16]; int len; ByteCheckKind kind; };
 
 typedef void* (__fastcall *getSectionOfType_t)(void* inventory, int slot);
 typedef bool  (__fastcall *isLimitedSlotCompatible_t)(void* section, void* item);
@@ -39,28 +49,36 @@ static const int MAX_SEARCH_SECTIONS  = 64;
 static const ByteCheck kChecks[] =
 {
 	{ "getSectionOfType", RVA_INVENTORY_GET_SECTION_OF_TYPE,
-	  { 0x44,0x8B,0x49,0x70,0x45,0x33,0xC0,0x45,0x85,0xC9,0x74,0x1E,0x4C,0x8B,0x51,0x78 }, 16 },
+	  { 0x44,0x8B,0x49,0x70,0x45,0x33,0xC0,0x45,0x85,0xC9,0x74,0x1E,0x4C,0x8B,0x51,0x78 }, 16,
+	  BYTE_CHECK_CALLEE_HEAD },
+	{ "searchCount", RVA_INVENTORY_SEARCH_COUNT_CHECK,
+	  { 0x39,0x59,0x70 }, 3, BYTE_CHECK_EXACT },
 	{ "limitedSlot", RVA_INVENTORY_GET_SECTION_OF_TYPE + 0x16,
-	  { 0x39,0x90,0xB8,0x00,0x00,0x00 }, 6 },
+	  { 0x39,0x90,0xB8,0x00,0x00,0x00 }, 6, BYTE_CHECK_EXACT },
 	{ "isLimitedSlotCompatible", RVA_INVSECTION_LIMITED_COMPATIBLE,
-	  { 0x48,0x89,0x5C,0x24,0x08,0x48,0x89,0x74,0x24,0x10,0x57,0x48,0x83,0xEC,0x20,0x48 }, 16 },
+	  { 0x48,0x89,0x5C,0x24,0x08,0x48,0x89,0x74,0x24,0x10,0x57,0x48,0x83,0xEC,0x20,0x48 }, 16,
+	  BYTE_CHECK_CALLEE_HEAD },
 	{ "isEmpty", RVA_INVENTORY_IS_EMPTY,
-	  { 0x33,0xC0,0x39,0x41,0x18,0x0F,0x94,0xC0,0xC3 }, 9 },
+	  { 0x33,0xC0,0x39,0x41,0x18,0x0F,0x94,0xC0,0xC3 }, 9, BYTE_CHECK_EXACT },
 	{ "inventory", RVA_GIVE_ITEM_INVENTORY_CHECK,
-	  { 0x48,0x83,0xEC,0x30,0x48,0x83,0xB9,0xE8,0x02,0x00,0x00,0x00 }, 12 },
+	  { 0x48,0x83,0xEC,0x30,0x48,0x83,0xB9,0xE8,0x02,0x00,0x00,0x00 }, 12, BYTE_CHECK_EXACT },
 	{ "sectionItems", RVA_GET_BACKPACK_ITEMS_CHECK,
-	  { 0x48,0x8B,0x48,0x48,0x48,0x39,0x48,0x40 }, 8 },
+	  { 0x48,0x8B,0x48,0x48,0x48,0x39,0x48,0x40 }, 8, BYTE_CHECK_EXACT },
 	{ "objectType", RVA_BACKPACK_TYPE_CHECK,
-	  { 0x83,0xBB,0x3C,0x01,0x00,0x00,0x2E }, 7 },
+	  { 0x83,0xBB,0x3C,0x01,0x00,0x00,0x2E }, 7, BYTE_CHECK_EXACT },
 	// giveItem's `call [rax+18h]` (Inventory::tryAddItem) and `call [rax+160h]` (the item's
 	// getInventory), both past the detour's patched head.
 	{ "tryAddItemSlot", RVA_CHARACTER_GIVE_ITEM + 0x3C,
-	  { 0xFF,0x50,0x18 }, 3 },
+	  { 0xFF,0x50,0x18 }, 3, BYTE_CHECK_EXACT },
 	{ "getInventorySlot", RVA_CHARACTER_GIVE_ITEM + 0x5A,
-	  { 0xFF,0x90,0x60,0x01,0x00,0x00 }, 6 },
+	  { 0xFF,0x90,0x60,0x01,0x00,0x00 }, 6, BYTE_CHECK_EXACT },
 	{ "isAnimalSlot", RVA_CHARACTER_IS_ANIMAL_CHECK,
-	  { 0xFF,0x90,0x48,0x02,0x00,0x00 }, 6 },
+	  { 0xFF,0x90,0x48,0x02,0x00,0x00 }, 6, BYTE_CHECK_EXACT },
 };
+
+// Main thread only (BackpackReaderInit and its readers): the last init's refusing row and the
+// callee heads it found behind another plugin's detour.
+static keo_inventory::ByteRowLog s_rows;
 
 // NULL until every check passed; written once on the main thread before the detour goes in.
 static getSectionOfType_t        fn_getSectionOfType        = NULL;
@@ -88,19 +106,25 @@ namespace keo_inventory {
 
 bool BackpackReaderInit(const char** why)
 {
+	ByteRowLogReset(&s_rows);
 	for (int i = 0; i < (int)(sizeof(kChecks) / sizeof(kChecks[0])); ++i)
 	{
 		const ByteCheck& c = kChecks[i];
-		if (memcmp((const void*)GameAddr(c.rva), c.bytes, (size_t)c.len) != 0)
+		if (!ByteRowCheck(&s_rows, c.why, c.kind, (const unsigned char*)GameAddr(c.rva), c.bytes, c.len))
 		{
 			if (why)
-				*why = c.why;
+				*why = s_rows.why;
 			return false;
 		}
 	}
 	fn_getSectionOfType        = (getSectionOfType_t)GameAddr(RVA_INVENTORY_GET_SECTION_OF_TYPE);
 	fn_isLimitedSlotCompatible = (isLimitedSlotCompatible_t)GameAddr(RVA_INVSECTION_LIMITED_COMPATIBLE);
 	return true;
+}
+
+const char* BackpackReaderSharedCallees()
+{
+	return ByteRowShared(&s_rows);
 }
 
 void* CharacterInventory(void* character)

@@ -17,7 +17,6 @@
 #include <string>
 #include "base/klib_include.h"
 #include <core/Functions.h>
-#include <Debug.h>                  // ErrorLog
 #include "base/klib_include_end.h"
 
 // One A* iteration: pop the cheapest node from the open set, work out where it
@@ -282,7 +281,7 @@ void InstallGraphExpandGuard(int* installed, int*)
 	{
 		orig_graphExpandNode = NULL;
 		fn_openSetPopNext = NULL;
-		ErrorLog(std::string("Graph expand guard: not installed (") + why
+		LogError(std::string("Graph expand guard: not installed (") + why
 		         + "); expanding a node whose section has no graph instance still faults");
 	}
 }

@@ -72,7 +72,7 @@ void InstallJobCounters(int* installed, int*)
 	else
 	{
 		orig_haulAmount = NULL;
-		ErrorLog(std::string("JobCounters: not installed (") + why + "); haul sizes are not counted");
+		LogError(std::string("JobCounters: not installed (") + why + "); haul sizes are not counted");
 	}
 }
 

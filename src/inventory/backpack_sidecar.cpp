@@ -11,6 +11,7 @@
 #include "inventory/backpack_first.h"
 #include "inventory/backpack_window.h"
 #include "inventory/backpack_food.h"
+#include "inventory/byte_check_policy.h"
 #include "inventory/inventory_config.h"
 #include "game/hand_key.h"
 #include "game/game.h"
@@ -38,7 +39,7 @@ static_assert(sizeof(HandBlock) == 0x20, "HandBlock is the game's 0x20-byte hand
 
 namespace keo_inventory {
 
-// The callees' first 16 bytes, checked at install before any of them is called.
+// The callees' first 16 bytes, checked at install as callee heads before any of them is called.
 static const unsigned char kWriteFileHead[16] =
 	{ 0x40,0x55,0x56,0x57,0x48,0x83,0xEC,0x30,0x48,0xC7,0x44,0x24,0x20,0xFE,0xFF,0xFF };
 static const unsigned char kReadFileHead[16] =
@@ -201,12 +202,15 @@ void InstallBackpackSidecar(int* installed, int*)
 {
 	if (!HookRowWanted(HOOK_SFS_SAVE_GAME)) return;
 	const char* why = NULL;
-	if (memcmp((const void*)GameAddr(RVA_SFS_WRITE_FILE), kWriteFileHead, 16) != 0)
-		why = "writeFile";
-	else if (memcmp((const void*)GameAddr(RVA_SFS_READ_FILE), kReadFileHead, 16) != 0)
-		why = "readFile";
-	else if (memcmp((const void*)GameAddr(RVA_HANDLE_MANAGER_GET_CHARACTER), kGetCharacterHead, 16) != 0)
-		why = "getCharacter";
+	ByteRowLog rows;
+	ByteRowLogReset(&rows);
+	if (!ByteRowCheck(&rows, "writeFile", BYTE_CHECK_CALLEE_HEAD,
+	                  (const unsigned char*)GameAddr(RVA_SFS_WRITE_FILE), kWriteFileHead, 16)
+	 || !ByteRowCheck(&rows, "readFile", BYTE_CHECK_CALLEE_HEAD,
+	                  (const unsigned char*)GameAddr(RVA_SFS_READ_FILE), kReadFileHead, 16)
+	 || !ByteRowCheck(&rows, "getCharacter", BYTE_CHECK_CALLEE_HEAD,
+	                  (const unsigned char*)GameAddr(RVA_HANDLE_MANAGER_GET_CHARACTER), kGetCharacterHead, 16))
+		why = rows.why;
 	if (!why)
 	{
 		fn_sfsWriteFile   = (sfsPathOf_t)GameAddr(RVA_SFS_WRITE_FILE);
@@ -223,11 +227,11 @@ void InstallBackpackSidecar(int* installed, int*)
 	if (!why)
 	{
 		InterlockedExchange(&s_armed, 1);
-		LogMsg("BackpackSidecar: installed");
+		LogMsg(std::string("BackpackSidecar: installed shared=") + ByteRowShared(&rows));
 	}
 	else
 	{
-		ErrorLog(std::string("BackpackSidecar: not installed (") + why + ")");
+		LogError(std::string("BackpackSidecar: not installed (") + why + ")");
 	}
 }
 

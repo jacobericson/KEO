@@ -284,7 +284,7 @@ void InstallTownClaim(int* installed, int*)
 		LogMsg("Town claim: hooks installed");
 		return;
 	}
-	ErrorLog(std::string("Town claim: not installed (") + row + ": " + why
+	LogError(std::string("Town claim: not installed (") + row + ": " + why
 	         + "); a placement near an NPC town keeps vanilla's town");
 }
 

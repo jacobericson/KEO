@@ -17,7 +17,6 @@
 #include <string>
 #include "base/klib_include.h"
 #include <core/Functions.h>
-#include <Debug.h>                  // ErrorLog
 #include "base/klib_include_end.h"
 
 #pragma intrinsic(_ReturnAddress)
@@ -368,7 +367,7 @@ void InstallCreateInstanceGuard(int* installed, int*)
 		orig_createInstance = NULL;
 		s_state = -1;
 		s_why = why;
-		ErrorLog(std::string("Create-instance guard: not installed (") + why
+		LogError(std::string("Create-instance guard: not installed (") + why
 		         + "); a NavInstance handed to createInstance while already queued is still freed and re-queued");
 	}
 	// The baseline line at zero calls; the tick carries on from here.

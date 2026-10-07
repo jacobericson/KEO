@@ -68,7 +68,7 @@ void InstallFormationPace(int* installed, int*)
 	const char* why = HookInstall(HOOK_SPEED_GROUP_GET_SPEED, hook_getSpeed, &orig_getSpeed, installed, true);
 	if (why)
 	{
-		ErrorLog(std::string("Formation pace: pace=refused(") + why + ")");
+		LogError(std::string("Formation pace: pace=refused(") + why + ")");
 		return;
 	}
 	InterlockedExchange(&s_armed, 1);

@@ -16,7 +16,6 @@
 #include <string>
 #include "base/klib_include.h"
 #include <core/Functions.h>
-#include <Debug.h>                  // ErrorLog
 #include "base/klib_include_end.h"
 
 // capZero + capEq + capGt + noMesh + unread + vtblBad + addOther == adds: every
@@ -277,7 +276,7 @@ void InstallNavMeshLife(int* installed, int*)
 	else
 	{
 		orig_removeInstance = NULL;
-		ErrorLog(std::string("NavMesh lifecycle: retire half not installed (") + why
+		LogError(std::string("NavMesh lifecycle: retire half not installed (") + why
 		         + "); ADD rows still appear, RET rows do not");
 	}
 }

@@ -16,7 +16,6 @@
 #include <string>
 #include "base/klib_include.h"
 #include <core/Functions.h>
-#include <Debug.h>                  // ErrorLog
 #include "base/klib_include_end.h"
 
 // The site records a search node's cost and, for a node it has not estimated
@@ -190,7 +189,7 @@ void InstallGraphVisitorGuard(int* installed, int*)
 	else
 	{
 		orig_searchSetNodeCost = NULL;
-		ErrorLog(std::string("Graph visitor guard: not installed (") + why
+		LogError(std::string("Graph visitor guard: not installed (") + why
 		         + "); a search that meets a section with no graph instance still faults");
 	}
 }

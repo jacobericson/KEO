@@ -14,7 +14,6 @@
 #include <sstream>
 #include "base/klib_include.h"
 #include <core/Functions.h>
-#include <Debug.h>                  // ErrorLog
 #include <kenshi/Globals.h>
 #include <kenshi/GameWorld.h>
 #include <kenshi/gui/ForgottenGUI.h>
@@ -120,7 +119,7 @@ void InstallZonePauseGuard(int* installed, int*)
 		return;
 	}
 	orig_processLoading = NULL;
-	ErrorLog(std::string("Escape menu pause guard: not installed (") + (why ? why : "prologue/hook") + ")");
+	LogError(std::string("Escape menu pause guard: not installed (") + (why ? why : "prologue/hook") + ")");
 }
 
 bool ZonePauseIsPaused()

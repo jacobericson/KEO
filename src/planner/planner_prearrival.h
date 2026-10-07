@@ -9,7 +9,7 @@ namespace planner {
 // Main thread, from InstallPlannerHooks once the planner's two rows armed: captures the key and the leg
 // settings, installs the charMovementUpdate row while it is wanted (plannerMode=on and
 // plannerPreArrivalMs > 0) and arms the detour last. A failed install leaves pre-arrival off for the
-// session with one ErrorLog line; it never refuses the planner.
+// session with one LogError line; it never refuses the planner.
 void InstallPlannerPreArrival(int* installed);
 // Main thread, every frame from the planner's tick: publishes the game speed the detour reads. Returns
 // at once unless armed.

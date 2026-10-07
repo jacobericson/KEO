@@ -16,9 +16,6 @@
 #include "zone/preload/preload_internal.h"
 #include <sstream>
 #include <iomanip>
-#include "base/klib_include.h"
-#include <Debug.h>                  // ErrorLog
-#include "base/klib_include_end.h"
 
 // When each cell's current hold began and when it was last renewed, negative
 // for none.
@@ -93,8 +90,7 @@ static void Hold(void* zoneEntry)
 	ss << std::fixed << std::setprecision(1)
 	   << "Zone expiry guard: cell (" << gx << "," << gy << ") held " << held
 	   << " s for a navmesh job still working on it; it stays held until the job ends (said once per session)";
-	LogMsg(ss.str());
-	ErrorLog(ss.str());
+	LogError(ss.str());
 }
 
 static void EndEpisode(void* zoneEntry)

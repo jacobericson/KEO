@@ -71,6 +71,10 @@ const char* NavMeshWorkerPhaseName(LONG phase);
 std::string GetDLLDirectory();
 void InitLogFile();
 void LogMsg(const std::string& line);
+// A refusal or failure: written to KEO's log as "ERROR: <line>" and handed to KenshiLib's ErrorLog
+// unchanged (RE_Kenshi's log). Any thread: off the main thread it takes LogMsgDeferrable's queue
+// and reaches the logs a frame later through the main thread's flush (DebugLog, not ErrorLog).
+void LogError(const std::string& line);
 
 // True on the thread that called InitLogFile (startPlugin -> game main thread).
 bool IsMainThread();

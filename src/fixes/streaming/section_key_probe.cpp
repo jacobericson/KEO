@@ -19,7 +19,6 @@
 #include <sstream>
 #include "base/klib_include.h"
 #include <core/Functions.h>
-#include <Debug.h>                  // ErrorLog
 #include "base/klib_include_end.h"
 
 // Two detours that read, and change nothing. Both run on the navmesh thread
@@ -93,7 +92,7 @@ void InstallSectionKeyProbe(int* installed, int*)
 	else
 	{
 		orig_clearanceResetKeys = NULL;
-		ErrorLog(std::string("Section key probe: the clearance-reset site is not hooked (")
+		LogError(std::string("Section key probe: the clearance-reset site is not hooked (")
 		         + why + "); its key set is not recorded");
 	}
 
@@ -106,7 +105,7 @@ void InstallSectionKeyProbe(int* installed, int*)
 	else
 	{
 		orig_sectionCutLookup = NULL;
-		ErrorLog(std::string("Section key probe: the cut-lookup site is not hooked (")
+		LogError(std::string("Section key probe: the cut-lookup site is not hooked (")
 		         + why + "); its key is not recorded");
 	}
 

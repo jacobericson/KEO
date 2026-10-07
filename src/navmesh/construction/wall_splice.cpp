@@ -16,9 +16,6 @@
 #include <windows.h>
 #include <string.h>
 #include <string>
-#include "base/klib_include.h"
-#include <Debug.h>
-#include "base/klib_include_end.h"
 
 namespace navmesh {
 
@@ -124,7 +121,7 @@ void InstallWallSplice(int* installed, int*)
 	}
 	// A head mismatch installs nothing, so the NOP is never written either.
 	orig_wallAddProgress = NULL;
-	ErrorLog(std::string("WallSplice: not installed (") + why + "); walls splice as vanilla");
+	LogError(std::string("WallSplice: not installed (") + why + "); walls splice as vanilla");
 }
 
 // POD-only, for the __try: MSVC 2010 rejects one in a function holding an object to unwind.

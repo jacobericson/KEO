@@ -17,7 +17,6 @@
 #include <string>
 #include "base/klib_include.h"
 #include <core/Functions.h>
-#include <Debug.h>                  // ErrorLog
 #include "base/klib_include_end.h"
 
 #pragma intrinsic(_ReturnAddress)
@@ -449,7 +448,7 @@ void InstallHullQueueGuard(int* installed, int*)
 		       + (s_actMode ? "guard" : "observe")
 		       + " (a heartbeat line follows every minute)");
 		if (s_pushersInstalled != kPushers)
-			ErrorLog("Hull queue guard: not every pusher detour installed; drops still work, "
+			LogError("Hull queue guard: not every pusher detour installed; drops still work, "
 			         "but some fire lines will name the caller as inline");
 	}
 	else
@@ -457,7 +456,7 @@ void InstallHullQueueGuard(int* installed, int*)
 		orig_updateUT = NULL;
 		s_state = -1;
 		s_why = why;
-		ErrorLog(std::string("Hull queue guard: not installed (") + why
+		LogError(std::string("Hull queue guard: not installed (") + why
 		         + "); a hull queued twice for destruction is still deleted twice");
 	}
 	// The baseline line at zero calls; the tick carries on from here.

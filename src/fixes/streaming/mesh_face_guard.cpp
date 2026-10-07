@@ -16,7 +16,6 @@
 #include <string>
 #include "base/klib_include.h"
 #include <core/Functions.h>
-#include <Debug.h>                  // ErrorLog
 #include "base/klib_include_end.h"
 
 // judged + unjudged + fired == calls: every entry takes exactly one arm.
@@ -286,7 +285,7 @@ void InstallMeshFaceGuard(int* installed, int*)
 	else
 	{
 		orig_faceAabb = NULL;
-		ErrorLog(std::string("Mesh face guard: not installed (") + why
+		LogError(std::string("Mesh face guard: not installed (") + why
 		         + "); a face whose edge run leaves the instance still faults");
 	}
 }

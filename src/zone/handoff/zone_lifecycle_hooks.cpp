@@ -19,7 +19,6 @@
 #include "base/config.h"
 #include "base/klib_include.h"
 #include <core/Functions.h>
-#include <Debug.h>                  // ErrorLog
 #include "base/klib_include_end.h"
 
 // ZoneManager::activateZoneMap(this, map, centre, range, type, timer). The
@@ -144,7 +143,7 @@ static void InstallZoneMapUpdateHook(int* installed)
 		return;
 	}
 	orig_zoneMapUpdate = NULL;
-	ErrorLog("Zone lifecycle: ZoneMap::update detour NOT installed — nothing holds a cell the game has "
+	LogError("Zone lifecycle: ZoneMap::update detour NOT installed — nothing holds a cell the game has "
 	         "taken over from the mod, so every one of them expires on the first pass that reaches it, "
 	         "and no expiry waits for a navmesh job still working on its cell (the expiry guard is lost); "
 	         "this build prepares cells that are then thrown away");
@@ -165,7 +164,7 @@ void InstallZoneLifecycleHooks(int* installed, int*)
 	else
 	{
 		orig_activateZoneMap = NULL;
-		ErrorLog("Zone lifecycle: activateZoneMap detour NOT installed — this build publishes no zone itself, "
+		LogError("Zone lifecycle: activateZoneMap detour NOT installed — this build publishes no zone itself, "
 		         "so every cell the mod prepares would stay out of the game's reach");
 	}
 

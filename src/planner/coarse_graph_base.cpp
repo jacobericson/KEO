@@ -33,7 +33,6 @@
 #include <vector>
 #include "base/klib_include.h"
 #include <kenshi/SaveFileSystem.h>
-#include <Debug.h>                  // ErrorLog
 #include "base/klib_include_end.h"
 
 namespace planner {
@@ -527,14 +526,14 @@ void PlannerBaseStartStep(int* installed, int* total)
 	(void)total;
 	if (!CgStoreCreate())
 	{
-		ErrorLog("Planner: store allocation failed; the planner is off for this session");
+		LogError("Planner: store allocation failed; the planner is off for this session");
 		g_plannerCfg.mode = PLANNER_OFF;
 		return;
 	}
 	PlanStoreArm(g_plannerCfg.mode);
 	if (!PlannerTickArm())
 	{
-		ErrorLog("Planner: search scratch allocation failed; the planner is off for this session");
+		LogError("Planner: search scratch allocation failed; the planner is off for this session");
 		g_plannerCfg.mode = PLANNER_OFF;
 		PlanStoreArm(PLANNER_OFF);
 	}
@@ -556,7 +555,7 @@ void PlannerBaseStartStep(int* installed, int* total)
 	HANDLE thread = s_requestEvent ? CreateThread(NULL, 0, BuilderMain, NULL, CREATE_SUSPENDED, NULL) : NULL;
 	if (!thread)
 	{
-		ErrorLog("Planner: the base builder thread did not start; the base stays empty");
+		LogError("Planner: the base builder thread did not start; the base stays empty");
 		return;
 	}
 	SetThreadPriority(thread, THREAD_PRIORITY_BELOW_NORMAL);

@@ -21,7 +21,6 @@
 #include <string>
 #include "base/klib_include.h"
 #include <core/Functions.h>
-#include <Debug.h>                  // ErrorLog
 #include "base/klib_include_end.h"
 
 // ---------------------------------------------------------------------------
@@ -520,7 +519,7 @@ void InstallUnstitchProbe(int* installed, int*)
 	else
 	{
 		orig_deleteInstance_probe = NULL;
-		ErrorLog(std::string("Unstitch probe: not installed (") + why + ")");
+		LogError(std::string("Unstitch probe: not installed (") + why + ")");
 	}
 }
 

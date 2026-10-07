@@ -20,7 +20,6 @@
 #include <string>
 #include "base/klib_include.h"
 #include <core/Functions.h>
-#include <Debug.h>                  // ErrorLog
 #include "base/klib_include_end.h"
 
 #pragma intrinsic(_ReturnAddress)
@@ -724,7 +723,7 @@ void InstallStitchSource(int* installed, int*)
 	{
 		orig_nmgStitch = NULL;
 		s_notInstalledWhy = why;
-		ErrorLog(std::string("Stitch source: not installed (") + why
+		LogError(std::string("Stitch source: not installed (") + why
 		         + "); un-stitch drops go unclassified");
 	}
 }

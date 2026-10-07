@@ -18,7 +18,6 @@
 #include <string>
 #include "base/klib_include.h"
 #include <core/Functions.h>
-#include <Debug.h>                  // ErrorLog
 #include "base/klib_include_end.h"
 
 // ---------------------------------------------------------------------------
@@ -571,7 +570,7 @@ void InstallUnstitchGuard(int* installed, int*)
 	else
 	{
 		orig_unstitchCrossSection = NULL;
-		ErrorLog(std::string("Un-stitch bounds guard: not installed (") + why
+		LogError(std::string("Un-stitch bounds guard: not installed (") + why
 		         + "); a teardown that meets a stale connection record still faults");
 	}
 }

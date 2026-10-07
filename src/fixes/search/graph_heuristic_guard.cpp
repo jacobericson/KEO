@@ -16,7 +16,6 @@
 #include <string>
 #include "base/klib_include.h"
 #include <core/Functions.h>
-#include <Debug.h>                  // ErrorLog
 #include "base/klib_include_end.h"
 
 #pragma intrinsic(_ReturnAddress)
@@ -289,7 +288,7 @@ static void NoteRow(const char* why, const char* row, int* n)
 		++*n;
 		return;
 	}
-	ErrorLog(std::string("Graph heuristic guard: ") + row + " not installed (" + why
+	LogError(std::string("Graph heuristic guard: ") + row + " not installed (" + why
 	         + "); that site still faults on an absent graph instance");
 }
 

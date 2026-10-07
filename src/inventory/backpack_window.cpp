@@ -28,7 +28,6 @@
 #include <mygui/MyGUI_Widget.h>
 #include <mygui/MyGUI_Button.h>
 #include <mygui/MyGUI_Delegate.h>
-#include <Debug.h>
 #include "base/klib_include_end.h"
 
 namespace backpack_window_detail {
@@ -212,7 +211,7 @@ void InstallBackpackWindow(int* installed, int*)
 {
 	if (!HookRowWanted(HOOK_BACKPACK_LAYOUT_SETUP_SECTIONS)) return;
 	// A box would write a table no pickup reads.
-	if (!BackpackFirstInstalled()) { ErrorLog("BackpackWindow: not installed (backpackFirst)"); return; }
+	if (!BackpackFirstInstalled()) { LogError("BackpackWindow: not installed (backpackFirst)"); return; }
 	const char* why = NULL;
 	if (memcmp((const void*)GameAddr(RVA_LAYOUT_MAIN_WIDGET_CHECK), kMainWidgetCheck, sizeof(kMainWidgetCheck)) != 0)
 		why = "mainWidget";
@@ -225,7 +224,7 @@ void InstallBackpackWindow(int* installed, int*)
 	if (!why)
 		LogMsg("BackpackWindow: installed");
 	else
-		ErrorLog(std::string("BackpackWindow: not installed (") + why + ")");
+		LogError(std::string("BackpackWindow: not installed (") + why + ")");
 }
 
 void BackpackWindowCounters(long out[5])

@@ -15,7 +15,6 @@
 #include <sstream>
 #include "base/klib_include.h"
 #include <core/Functions.h>
-#include <Debug.h>                  // ErrorLog
 #include <kenshi/Platoon.h>         // ActivePlatoon, its `things` list
 #include <kenshi/Character.h>       // Character, carryingObject, _isBeingCarried
 #include "base/klib_include_end.h"
@@ -113,7 +112,7 @@ void InstallCorpsePin(int* installed, int*)
 		return;
 	}
 	orig_calculateCurrentPos = NULL;
-	ErrorLog(std::string("Corpse pin: not installed (") + why + ")");
+	LogError(std::string("Corpse pin: not installed (") + why + ")");
 }
 
 long CorpsePinOverrideCount()  { return InterlockedCompareExchange(&s_overrideCount, 0, 0); }

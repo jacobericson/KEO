@@ -5,11 +5,11 @@
 #include "inventory/backpack_food.h"
 #include "inventory/backpack_policy.h"
 #include "inventory/backpack_reader.h"
+#include "inventory/byte_check_policy.h"
 #include "inventory/dialogue_item_function.h"
 #include "plugin/hook_manifest.h"
 #include "game/game.h"
 #include "game/klib_member_contract.h"
-#include "game/prologue_policy.h"
 #include "base/core.h"
 #include <string>
 
@@ -57,12 +57,13 @@ void InstallBackpackFood(int* installed, int*)
 	// shared-site rule: an E9 or FF 25 jump over a matching tail is another plugin's detour, and
 	// calling the exe address still reaches the count.
 	const char* why = NULL;
-	const PrologueClass head = ClassifyPrologue(
-		(const unsigned char*)GameAddr(RVA_INVENTORY_GET_NUM_FOOD_ITEMS), kGetNumFoodItemsHead, true);
+	ByteRowLog rows;
+	ByteRowLogReset(&rows);
 	if (!readerBound)
 		why = "reader refused: ";
-	else if (head != PROLOGUE_ORIGINAL && head != PROLOGUE_SHARED)
-		why = "getNumFoodItems";
+	else if (!ByteRowCheck(&rows, "getNumFoodItems", BYTE_CHECK_CALLEE_HEAD,
+	                       (const unsigned char*)GameAddr(RVA_INVENTORY_GET_NUM_FOOD_ITEMS), kGetNumFoodItemsHead, 16))
+		why = rows.why;
 	else
 	{
 		// Before the install: the post-hook calls it as soon as it is in.
@@ -71,15 +72,13 @@ void InstallBackpackFood(int* installed, int*)
 	}
 	if (!why)
 	{
-		LogMsg(head == PROLOGUE_SHARED
-		       ? "BackpackFood: installed (getNumFoodItems is hooked by another plugin)"
-		       : "BackpackFood: installed");
+		LogMsg(std::string("BackpackFood: installed shared=") + ByteRowShared(&rows));
 	}
 	else
 	{
 		orig_scoreFindFoodOnGround = NULL;
 		fn_getNumFoodItems = NULL;
-		ErrorLog(std::string("BackpackFood: not installed (") + why + (reader ? reader : "") + "); food scoring stays vanilla");
+		LogError(std::string("BackpackFood: not installed (") + why + (reader ? reader : "") + "); food scoring stays vanilla");
 	}
 }
 

@@ -288,6 +288,7 @@ src\game\hand_key.cpp
 src\inventory\inventory_config.cpp
 src\navmesh\cache\nm_cache_type_policy.cpp
 src\inventory\backpack_policy.cpp
+src\inventory\byte_check_policy.cpp
 src\inventory\backpack_table.cpp
 src\inventory\backpack_reader.cpp
 src\inventory\backpack_first.cpp

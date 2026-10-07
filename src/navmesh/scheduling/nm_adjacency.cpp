@@ -15,7 +15,6 @@
 #include <string>
 #include "base/klib_include.h"
 #include <core/Functions.h>
-#include <Debug.h>                  // ErrorLog
 #include "base/klib_include_end.h"
 
 #include "navmesh/scheduling/nm_adjacency_internal.h"
@@ -195,7 +194,7 @@ void InstallNavMeshAdjacency(int* installed, int*)
 	if (!ReadCellSize(RVA_SUBMAP_CELL_X, &s_cellX) || !ReadCellSize(RVA_SUBMAP_CELL_Z, &s_cellZ))
 	{
 		s_cellX = s_cellZ = 0.0f;   // interiors keep the 8-neighbourhood
-		ErrorLog("NavMesh adjacency: the sub-map cell size is unreadable; a type-4 interior's box is not widened");
+		LogError("NavMesh adjacency: the sub-map cell size is unreadable; a type-4 interior's box is not widened");
 	}
 
 	s_observerWhy = HookInstall(HOOK_NMG_UPDATE, hook_nmgUpdate, &orig_nmgUpdate,
@@ -234,7 +233,7 @@ void InstallNavMeshAdjacency(int* installed, int*)
 		       + (s_modeWhy[0] ? std::string(" (") + s_modeWhy + ")" : std::string())
 		       + " (a heartbeat line follows every minute)");
 	else
-		ErrorLog(std::string("NavMesh adjacency: drain observer not installed (") + s_observerWhy
+		LogError(std::string("NavMesh adjacency: drain observer not installed (") + s_observerWhy
 		         + "); adjacent navmesh jobs are counted, not deferred");
 	s_nextBeat = 0.0;
 	NavMeshAdjTick(ElapsedSec());

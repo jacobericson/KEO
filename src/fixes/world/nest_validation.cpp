@@ -15,7 +15,6 @@
 #include <cstring>
 #include "base/klib_include.h"
 #include <core/Functions.h>
-#include <Debug.h>                  // ErrorLog
 #include "base/klib_include_end.h"
 
 static finalizeZoneResources_t orig_finalizeZoneResources_guard = NULL;
@@ -130,7 +129,7 @@ void InstallNestValidationGuard(int* installed, int*)
 	else
 	{
 		orig_finalizeZoneResources_guard = NULL;
-		ErrorLog(std::string("Nest validation guard: not installed (") + why + ")");
+		LogError(std::string("Nest validation guard: not installed (") + why + ")");
 	}
 
 	// The destroyed counter is independent of the guard above: it installs
@@ -146,14 +145,14 @@ void InstallNestValidationGuard(int* installed, int*)
 	else
 	{
 		orig_townListDestroy = NULL;
-		ErrorLog(std::string("Nest validation guard: destroyed counter not installed (") + destroyWhy + ")");
+		LogError(std::string("Nest validation guard: destroyed counter not installed (") + destroyWhy + ")");
 	}
 #else
 	// The two rows exist from step 2; below it the guard has nothing to install.
 	(void)installed;
 	orig_finalizeZoneResources_guard = NULL;
 	orig_townListDestroy = NULL;
-	ErrorLog("Nest validation guard: not installed (no manifest row below ZONEHAND_STEP 2)");
+	LogError("Nest validation guard: not installed (no manifest row below ZONEHAND_STEP 2)");
 #endif
 }
 

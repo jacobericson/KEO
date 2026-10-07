@@ -18,7 +18,6 @@
 #include <string>
 #include "base/klib_include.h"
 #include <core/Functions.h>
-#include <Debug.h>                  // ErrorLog
 #include "base/klib_include_end.h"
 
 #pragma intrinsic(_ReturnAddress)
@@ -266,7 +265,7 @@ void InstallPhysXPoolProbe(int* installed, int*)
 	else
 	{
 		orig_loadPhysXResource = NULL;
-		ErrorLog(std::string("PhysXPool probe: not installed (") + why + ")");
+		LogError(std::string("PhysXPool probe: not installed (") + why + ")");
 	}
 }
 
