@@ -488,6 +488,10 @@ struct NavMeshCacheState
 	// computed from (ZoneContentUnchanged, below). One job can count twice (the
 	// worker's claim-time lookup and ProcessNavMeshJob hash independently).
 	volatile long nmHashRaceCount;
+
+	// Jobs the cache never keys because of their type (a local patch): each is counted once, in
+	// the pipeline's lookup, and generated. t1Bypass= on the NM cache stats line.
+	volatile long nmT1Bypass;
 };
 
 // The L1 entries and write index are guarded by nmCacheCS. The main-thread

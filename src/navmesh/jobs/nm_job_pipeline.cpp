@@ -14,6 +14,8 @@
 #include "navmesh/nm_workers_internal.h"
 #include "navmesh/cache/nm_force_rebuild.h"
 #include "navmesh/cache/nm_force_rebuild_policy.h"
+#include "navmesh/cache/nm_cache_type_policy.h"
+#include "navmesh/construction/wall_splice.h"
 using namespace nm_workers_detail;
 // Undoes the bg thread's swap-path install (a fresh work buffer written over
 // realNMG+256 for the duration of processJobAlt) if something unwinds out of
@@ -362,6 +364,10 @@ bool PjCtx::Begin()
 	InterlockedExchange(&navmesh::g_nmCache.nmDiagLastGridX, gridX);
 	InterlockedExchange(&navmesh::g_nmCache.nmDiagLastGridY, gridY);
 	InterlockedExchange(&navmesh::g_nmCache.nmDiagLastType, jobType);
+#ifdef KEO_DEBUG
+	if (jobType == 1)
+		navmesh::WallSpliceNoteType1Start();
+#endif
 
 	key.gridX = gridX;
 	key.gridY = gridY;
@@ -393,10 +399,14 @@ void PjCtx::Lookup()
 	// thread respects, so the game can unload the content under this read.
 	// keyOk false: no L1/L2 lookup, no late-HIT lookup and no L1 store (hence
 	// no L2 write) for this job; it is generated, or dropped by the re-check
-	// after missLock. hashContent is re-compared at the
+	// after missLock. A job type the cache never keys is counted once here and
+	// takes the same path. hashContent is re-compared at the
 	// store (ZoneContentUnchanged) to catch an unload that began after the walk.
 	hashContent = 0;
-	keyOk = ComputeBuildingHashChecked(jobZone, &key.buildingHash, &hashContent);
+	const bool cacheable = navmesh::NmJobCacheable(jobType);
+	if (!cacheable)
+		InterlockedIncrement(&navmesh::g_nmCache.nmT1Bypass);
+	keyOk = cacheable && ComputeBuildingHashChecked(jobZone, &key.buildingHash, &hashContent);
 	// A forced job leaves no entry of its key in L1 and no file on disk, and
 	// reads neither (nm_force_rebuild.cpp's NmForceRebuildClearKey).
 	if (forced)
@@ -858,7 +868,7 @@ void PjCtx::StoreGenerated(WbSwapRestore& swapRestore, ProcessJobLock& missLock,
 			// hash was computed from. An unload (or unload and reload)
 			// that began after the walk shows up here as a different
 			// or NULL zone+0, and the mesh is then used for this job
-			// only, never cached. keyOk false was counted at the hash.
+			// only, never cached. keyOk false was counted at the hash, or as a type the cache never keys.
 			// The certificate's other end. It is checked on every
 			// store, and its verdict counted, whatever the mode: the
 			// rate and the reason split are the measurement that has

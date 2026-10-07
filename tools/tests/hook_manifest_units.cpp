@@ -82,7 +82,7 @@ static bool HasName(const TestRow* rows, int n, const char* name)
 	return false;
 }
 
-// The 24 inputs, each with its field and the config global it is read from; a
+// The 29 inputs, each with its field and the config global it is read from; a
 // NULL global is a key a PROD build does not carry, or an int key
 // CheckInputMapping flips on its own.
 struct InputField
@@ -123,6 +123,11 @@ static const InputField kFields[] =
 	{ "planner", &HookWantInputs::planner, NULL },
 	{ "gatherPace",          &HookWantInputs::gatherPace,          &movement::g_movementCfg.formationGatherPaceEnabled },
 	{ "preArrival",          &HookWantInputs::preArrival,          NULL },
+	{ "townClaim",           &HookWantInputs::townClaim,           &fixes::g_fixesCfg.townClaimFixEnabled },
+	{ "throwOut",            &HookWantInputs::throwOut,            &fixes::g_fixesCfg.throwOutFixEnabled },
+	{ "backpackFood",        &HookWantInputs::backpackFood,        &keo_inventory::g_inventoryCfg.backpackFoodScoreEnabled },
+	{ "operatorTrips",       &HookWantInputs::operatorTrips,       &keo_inventory::g_inventoryCfg.operatorFillBeforeDeliverEnabled },
+	{ "wallSplice",          &HookWantInputs::wallSplice,          &navmesh::g_navmeshCfg.wallSpliceFixEnabled },
 };
 static const int kFieldCount = (int)(sizeof(kFields) / sizeof(kFields[0]));
 
@@ -230,20 +235,20 @@ static void CheckVariant(const TestRow* rows, int n, const char* variant, int ex
 	Check(n > 0 && strcmp(rows[n - 1].name, "OptionsWindow::saveOptions") == 0, what);
 }
 
-// Exactly the four DEV-only rows separate the variants: a define that leaked
+// Exactly the DEV-only rows listed separate the variants: a define that leaked
 // from the first expansion into the second would make the counts agree.
 static void CheckDevMinusProd()
 {
 	static const char* const kDevOnly[] =
-		{ "deleteInstance", "clearanceResetKeys", "sectionCutLookup", "loadPhysXResource" };
+		{ "deleteInstance", "clearanceResetKeys", "sectionCutLookup", "loadPhysXResource", "haulAmount" };
 
-	bool ok = kDevCount - kProdCount == 4;
+	bool ok = kDevCount - kProdCount == 5;
 	int extra = 0;
 	for (int i = 0; i < kDevCount; ++i)
 		if (!HasName(kProdRows, kProdCount, kDevRows[i].name))
 			++extra;
-	ok = ok && extra == 4;
-	for (int k = 0; k < 4; ++k)
+	ok = ok && extra == 5;
+	for (int k = 0; k < (int)(sizeof(kDevOnly) / sizeof(kDevOnly[0])); ++k)
 		ok = ok && HasName(kDevRows, kDevCount, kDevOnly[k])
 		        && !HasName(kProdRows, kProdCount, kDevOnly[k]);
 	for (int i = 0; i < kProdCount; ++i)
@@ -301,6 +306,11 @@ static const Flip kFlips[] =
 	{ "plannerMode", { "planner" }, { "graphInstanceConnect", "getZoneEdge", "setDestinationVec3" } },
 	{ "gatherPace", { "gatherPace" }, { "getSpeed" } },
 	{ "preArrival", { "preArrival" }, { "charMovementUpdate" } },
+	{ "townClaim", { "townClaim" }, { "builderPlace", "createBuilding" } },
+	{ "throwOut", { "throwOut" }, { "getDropped", "takeOutsideTick", "takeOutsidePathImpossible", "findKOIntruderTown" } },
+	{ "backpackFood", { "backpackFood" }, { "scoreFindFoodOnGround" } },
+	{ "operatorTrips", { "operatorTrips" }, { "operatorWantGone" } },
+	{ "wallSplice", { "wallSplice" }, { "wallAddProgress" } },
 };
 
 static void CheckWantTruthTable()
@@ -449,14 +459,14 @@ int main()
 {
 	CheckInstallAdmit();
 #if ZONEHAND_STEP >= 3
-	CheckVariant(kDevRows, kDevCount, "dev", 74, 59, 58, 25, 34, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 70, 55, 53, 25, 30, ProdDefaults());
+	CheckVariant(kDevRows, kDevCount, "dev", 89, 74, 73, 25, 49, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 84, 69, 67, 25, 44, ProdDefaults());
 #elif ZONEHAND_STEP == 2
-	CheckVariant(kDevRows, kDevCount, "dev", 73, 58, 57, 25, 33, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 69, 54, 52, 25, 29, ProdDefaults());
+	CheckVariant(kDevRows, kDevCount, "dev", 88, 73, 72, 25, 48, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 83, 68, 66, 25, 43, ProdDefaults());
 #else
-	CheckVariant(kDevRows, kDevCount, "dev", 70, 55, 54, 25, 30, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 66, 51, 49, 25, 26, ProdDefaults());
+	CheckVariant(kDevRows, kDevCount, "dev", 85, 70, 69, 25, 45, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 80, 65, 63, 25, 40, ProdDefaults());
 #endif
 	CheckDevMinusProd();
 	CheckWantTruthTable();

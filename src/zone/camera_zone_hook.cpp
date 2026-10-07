@@ -7,6 +7,9 @@
 #include "zone/preload/preload.h"
 #include "zone/transition.h"
 #include "navmesh/nm_workers.h"
+#include "navmesh/construction/wall_splice.h"
+#include "inventory/backpack_sidecar.h"
+#include "inventory/job_counters.h"
 #include "zone/camera_zone_hook.h"
 #include "zone/transition_hook.h"
 #include "navmesh/cache/nm_force_rebuild.h"
@@ -33,6 +36,7 @@
 #include "fixes/stitch/stitch_byte_guard.h"
 #include "diag/physx_pool_probe.h"
 #include "fixes/world/corpse_pin.h"
+#include "fixes/world/throwout.h"
 #include "zone/handoff/zone_handoff.h"
 #include "zone/geometry/zone_geometry_epoch.h"
 #include "zone/retention/zone_retention.h"
@@ -279,6 +283,10 @@ static bool CameraZoneTicks(void* zoneMgr, bool saveLoading)
 	// not preloading is on. A report placed below the returns would be
 	// silent about exactly the sessions worth reading.
 	ZoneGeometryCertTick(tickNow);
+	navmesh::WallSpliceTick(tickNow, saveLoading);
+	fixes::ThrowoutTick(tickNow, saveLoading);
+	keo_inventory::BackpackRekeyTick(tickNow, saveLoading);
+	keo_inventory::OperatorTripsTick(tickNow, saveLoading);
 	// Same placement, same reason: the coverage counters describe preload
 	// paths that run through transitions and save loads, and the transition
 	// line only prints at a bracket close. A session with no transition at

@@ -83,6 +83,50 @@
 	// gather walks at the group's own pace as it did before.
 	HOOK_ROW(HOOK_SPEED_GROUP_GET_SPEED, "getSpeed", RVA_SPEED_GROUP_GET_SPEED, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_GATHER_PACE, HOOK_CAP_NONE,
 	         0x48,0x89,0x54,0x24,0x10,0x53,0x55,0x41,0x55,0x48,0x83,0xEC,0x60,0x48,0x8B,0x05)
+
+	// --- src/inventory/, backpacks ---
+	// Character::giveItem (src/inventory/backpack_first.cpp): `mov [rsp+8],rbx; mov [rsp+10h],rbp;
+	// mov [rsp+18h],rsi; push rdi`, whole and position-independent. diagnostic = true: a mismatch
+	// turns backpack-first off, and pickups fill the main inventory first as vanilla does.
+	HOOK_ROW(HOOK_CHARACTER_GIVE_ITEM, "Character::giveItem", RVA_CHARACTER_GIVE_ITEM, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
+	         0x48,0x89,0x5C,0x24,0x08,0x48,0x89,0x6C,0x24,0x10,0x48,0x89,0x74,0x24,0x18,0x57)
+	// src/fixes/world/town_claim.cpp. The builder: `mov rax,rsp; push rbp; push r12`, six whole
+	// position-independent bytes. createBuilding: `mov rax,rsp; push rbp/rsi/rdi`. Wanted while
+	// townClaimFix is on. diagnostic = true: a mismatch leaves placement as vanilla does it.
+	HOOK_ROW(HOOK_BUILDER_PLACE, "builderPlace", RVA_BUILDER_PLACE, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_TOWN_CLAIM, HOOK_CAP_NONE,
+	         0x48,0x8B,0xC4,0x55,0x41,0x54,0x41,0x55,0x41,0x56,0x41,0x57,0x48,0x8D,0xA8,0x58)
+	HOOK_ROW(HOOK_CREATE_BUILDING, "createBuilding", RVA_CREATE_BUILDING, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_TOWN_CLAIM, HOOK_CAP_NONE,
+	         0x48,0x8B,0xC4,0x55,0x56,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x41,0x57,0x48,0x8D)
+	// src/fixes/world/throwout.cpp. getDropped: `push rdi; sub rsp,60h`. The tick slot: `push rbx;
+	// sub rsp,20h`. The path-impossible slot and the finder: `mov [rsp+x],rbx`, five whole bytes.
+	// All position-independent. Wanted while throwOutFix is on. diagnostic = true: a mismatch leaves
+	// the throw-out task and the finder as vanilla has them. Another plugin may hook getDropped and
+	// the finder too; the gate accepts a site another plugin detoured first.
+	HOOK_ROW(HOOK_CHAR_GET_DROPPED, "getDropped", RVA_CHAR_GET_DROPPED, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_THROWOUT, HOOK_CAP_NONE,
+	         0x40,0x57,0x48,0x83,0xEC,0x60,0x48,0xC7,0x44,0x24,0x20,0xFE,0xFF,0xFF,0xFF,0x48)
+	HOOK_ROW(HOOK_TAKE_OUTSIDE_TICK, "takeOutsideTick", RVA_TAKE_OUTSIDE_TICK, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_THROWOUT, HOOK_CAP_NONE,
+	         0x40,0x53,0x48,0x83,0xEC,0x20,0x48,0x8B,0x82,0x40,0x06,0x00,0x00,0x48,0x8B,0xDA)
+	HOOK_ROW(HOOK_TAKE_OUTSIDE_PATH_IMPOSSIBLE, "takeOutsidePathImpossible", RVA_TAKE_OUTSIDE_PATH_IMPOSSIBLE, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_THROWOUT, HOOK_CAP_NONE,
+	         0x48,0x89,0x5C,0x24,0x10,0x56,0x48,0x83,0xEC,0x30,0x48,0x8B,0xD9,0x48,0x8B,0x4A)
+	HOOK_ROW(HOOK_FIND_KO_INTRUDER_TOWN, "findKOIntruderTown", RVA_FIND_KO_INTRUDER_TOWN, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_THROWOUT, HOOK_CAP_NONE,
+	         0x48,0x89,0x5C,0x24,0x08,0x48,0x89,0x74,0x24,0x10,0x57,0x48,0x83,0xEC,0x40,0x33)
+
+	// SaveFileSystem::saveGame, ::loadGame, ::newGame (src/inventory/backpack_sidecar.cpp): the
+	// sidecar's write before the save's copy, its read once the save is indexed, the table's clear.
+	// saveGame: push rbp/rsi/rdi/r12, whole; loadGame and newGame: `mov [rsp+8],rbx`, whole.
+	// diagnostic = true: a mismatch turns the sidecar off; choices then last until the game exits.
+	HOOK_ROW(HOOK_SFS_SAVE_GAME, "SaveFileSystem::saveGame", RVA_SFS_SAVE_GAME, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
+	         0x40,0x55,0x56,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x41,0x57,0x48,0x8D,0xAC,0x24)
+	HOOK_ROW(HOOK_SFS_LOAD_GAME, "SaveFileSystem::loadGame", RVA_SFS_LOAD_GAME, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
+	         0x48,0x89,0x5C,0x24,0x08,0x57,0x48,0x83,0xEC,0x50,0x48,0x8B,0xDA,0x48,0x8B,0xF9)
+	HOOK_ROW(HOOK_SFS_NEW_GAME, "SaveFileSystem::newGame", RVA_SFS_NEW_GAME, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
+	         0x48,0x89,0x5C,0x24,0x08,0x48,0x89,0x74,0x24,0x10,0x57,0x48,0x83,0xEC,0x50,0x33)
+	// BackpackInventoryLayout::setupSections (src/inventory/backpack_window.cpp): push rbp/rbx/rsi/
+	// rdi/r12, whole. Once per backpack window, on the main thread; the box is added after it.
+	// diagnostic = true: a mismatch drops the box; the choice still follows the INI default and
+	// the saved sidecar.
+	HOOK_ROW(HOOK_BACKPACK_LAYOUT_SETUP_SECTIONS, "BackpackInventoryLayout::setupSections", RVA_BACKPACK_LAYOUT_SETUP_SECTIONS, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
+	         0x40,0x55,0x53,0x56,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x48,0x8D,0x6C,0x24,0xD9)
 #if ZONEHAND_STEP >= 2
 	// ZoneManager::activateZoneMap (src/zone/handoff/zone_lifecycle_hooks.cpp): seven
 	// register pushes then `sub rsp,0A0h`, so the five bytes a detour takes
@@ -246,6 +290,24 @@
 	HOOK_ROW(HOOK_NMG_UPDATE, "nmgUpdate", RVA_NMG_UPDATE, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
 	         0x48,0x8B,0xC4,0x55,0x41,0x54,0x41,0x55,0x41,0x56,0x41,0x57,0x48,0x8D,0xA8,0xD8)
 
+	// --- src/navmesh/construction/wall_splice.cpp, the deferred wall splice ---
+	// WallBuilding::addConstructionProgress: push rsi; sub rsp,80h, whole and position-independent.
+	// Wanted while wallSpliceFix is on; the call-site NOP is written only after this row installs.
+	// diagnostic = true: a mismatch leaves the vanilla splice in place.
+	HOOK_ROW(HOOK_WALL_ADD_PROGRESS, "wallAddProgress", RVA_WALL_ADD_PROGRESS, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_WALL_SPLICE, HOOK_CAP_NONE,
+	         0x40,0x56,0x48,0x81,0xEC,0x80,0x00,0x00,0x00,0x83,0xB9,0x70,0x03,0x00,0x00,0x0B)
+	// --- src/inventory/backpack_food.cpp, ground-food scoring sees the backpack ---
+	// AI::scoreFindFoodOnGround: push rbx; sub rsp,30h, whole and position-independent. Wanted while
+	// backpackFoodScore is on. diagnostic = true: a mismatch leaves food scoring vanilla.
+	HOOK_ROW(HOOK_SCORE_FIND_FOOD_ON_GROUND, "scoreFindFoodOnGround", RVA_SCORE_FIND_FOOD_ON_GROUND, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_BACKPACK_FOOD, HOOK_CAP_NONE,
+	         0x40,0x53,0x48,0x83,0xEC,0x30,0x48,0x8B,0xD9,0x48,0x8B,0x89,0xF8,0x02,0x00,0x00)
+	// --- src/inventory/operator_trips.cpp, operators fill up before delivering ---
+	// The state-89 evaluator: mov rax,rsp; push rsi; push rdi, whole and position-independent.
+	// Wanted while operatorFillBeforeDeliver is on. diagnostic = true: a mismatch leaves
+	// operators delivering as vanilla.
+	HOOK_ROW(HOOK_OPERATOR_WANT_GONE, "operatorWantGone", RVA_OPERATOR_WANT_GONE, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_OPERATOR_TRIPS, HOOK_CAP_NONE,
+	         0x48,0x8B,0xC4,0x56,0x57,0x41,0x54,0x48,0x83,0xEC,0x70,0x48,0xC7,0x44,0x24,0x20)
+
 #ifdef KEO_DEBUG
 	// NavMesh::deleteInstance (src/fixes/stitch/unstitch_probe.cpp): five register
 	// pushes then a lea, so the bytes a detour takes are whole instructions and
@@ -272,6 +334,12 @@
 	// the counter alone, and the counter only counts.
 	HOOK_ROW(HOOK_LOAD_PHYSX_RESOURCE, "loadPhysXResource", RVA_LOAD_PHYSX_RESOURCE, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
 	         0x4C,0x8B,0xDC,0x56,0x57,0x41,0x54,0x48,0x81,0xEC,0x80,0x00,0x00,0x00,0x48,0xC7)
+
+	// Task_EmptyMachine's haul amount (src/inventory/job_counters.cpp): mov r11,rsp; push rdi;
+	// push r12, whole. DEV builds only. diagnostic = true: a mismatch loses the counter alone,
+	// and the counter only reads the answer.
+	HOOK_ROW(HOOK_HAUL_AMOUNT, "haulAmount", RVA_HAUL_AMOUNT, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
+	         0x4C,0x8B,0xDC,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x41,0x57,0x48,0x83,0xEC,0x40)
 #endif
 
 	// --- hook_manifest.cpp, island overlay ---

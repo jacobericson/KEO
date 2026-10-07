@@ -28,6 +28,7 @@
 #include "navmesh/nm_workers.h"
 #include "navmesh/cache/nm_force_rebuild.h"
 #include "navmesh/scheduling/nm_adjacency.h"
+#include "navmesh/construction/wall_splice.h"
 #include "movement/formation.h"
 #include "movement/islands.h"
 #include "pathfind/pathfinding.h"
@@ -37,6 +38,14 @@
 #include "pathfind/gate_pass.h"
 #include "bench/bench_runner.h"
 #include "fixes/world/corpse_pin.h"
+#include "inventory/backpack_first.h"
+#include "fixes/world/town_claim.h"
+#include "fixes/world/throwout.h"
+#include "inventory/backpack_sidecar.h"
+#include "inventory/backpack_food.h"
+#include "inventory/operator_trips.h"
+#include "inventory/job_counters.h"
+#include "inventory/backpack_window.h"
 #include "movement/formation_pace.h"
 #include "planner/coarse_graph_base.h"
 #if ZONEHAND_STEP >= 2
@@ -628,16 +637,29 @@ static void (*const kInstallSteps[])(int*, int*) =
 	// anything if it was running for the whole session, and the one control
 	// that matters (preload on versus off) is another key entirely.
 	InstallPhysXPoolProbe,
+	// Pass-through counter of player haul sizes; DEV only, no INI key.
+	keo_inventory::InstallJobCounters,
 #endif
 
 	InstallZonePauseGuard,
 	InstallZoneLifecycleHooks,
 	InstallCorpsePin,
+	keo_inventory::InstallBackpackFirst,
+	fixes::InstallTownClaim,
+	keo_inventory::InstallBackpackSidecar,
+	keo_inventory::InstallBackpackWindow,
 	InstallFormationPace,
+	fixes::InstallThrowout,
 #if ZONEHAND_STEP >= 2
 	InstallNestValidationGuard,
 #endif
+	// The ground-food score sees the worn backpack, while backpackFoodScore is on.
+	keo_inventory::InstallBackpackFood,
 
+	// A finished or repaired wall's navmesh splice, deferred until physics has moved its hulls; only while wanted.
+	navmesh::InstallWallSplice,
+	// Machine operators fill main inventory and backpack before delivering; only while wanted.
+	keo_inventory::InstallOperatorTrips,
 	InstallOrderHook,
 	OrderAbortStep,
 	InstallIslandHooks,

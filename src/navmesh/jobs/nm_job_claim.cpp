@@ -14,6 +14,7 @@
 #include "navmesh/nm_workers_internal.h"
 #include "navmesh/jobs/nm_queue_lock.h"
 #include "navmesh/cache/nm_force_rebuild_policy.h"
+#include "navmesh/cache/nm_cache_type_policy.h"
 using namespace nm_workers_detail;
 namespace nm_workers_detail {
 // --------------------------------------------------------------------
@@ -369,12 +370,13 @@ uintptr_t WorkerTryDequeueAny(int claimSlot, int* hitIdxOut, bool* isMissOut,
 	key.jobType = jobType;
 	key.aabbHash = HashAABB((float*)(KLIB_MEMBER(4, job, NavMeshGenerator__Task_bounds, 48)));
 	// Claim time, outside every lock the main thread respects: the content can
-	// be unloaded under this read. An untrusted hash skips
-	// the L1 and L2 lookups, so the job takes the MISS path, where the early
-	// and post-missLock zone re-checks decide whether it is generated or
-	// dropped, and ProcessNavMeshJob computes (and checks) its own key.
+	// be unloaded under this read. An untrusted hash, or a job type the cache
+	// never keys, skips the L1 and L2 lookups, so the job takes the MISS path,
+	// where the early and post-missLock zone re-checks decide whether it is
+	// generated or dropped, and ProcessNavMeshJob computes (and checks) its own key.
 	uintptr_t hashContent = 0;
-	bool keyOk = ComputeBuildingHashChecked(zone, &key.buildingHash, &hashContent);
+	bool keyOk = navmesh::NmJobCacheable(jobType)
+	          && ComputeBuildingHashChecked(zone, &key.buildingHash, &hashContent);
 	// A forced job reads neither L1 nor L2: it regenerates its tile.
 	const bool mayRead = NmJobMayReadCache(keyOk, claimedOut->forceCell >= 0);
 

@@ -20,6 +20,7 @@ static double lastNMLogTime = 0.0;
 struct CacheStatsWindowCtx
 {
     long jobs, hits, misses, skips, totalMs, savedMs;
+    long t1Bypass;
     long gx, gy, jt, step, hitGr;
     long diskHits, diskMiss, diskWrites, diskReadUs, diskWriteUs;
 };
@@ -38,6 +39,7 @@ static void AppendCacheSummary(std::ostringstream& ss, const CacheStatsWindowCtx
 	   << " L2hit=" << diskHits
 	   << " miss=" << misses
 	   << " skips=" << skips
+	   << " t1Bypass=" << ctx.t1Bypass
 	   << " fill=" << navmesh::g_nmL1.nmCacheFill << "/" << NM_CACHE_SIZE;
 
 	if (misses > 0)
@@ -740,6 +742,7 @@ void LogNavMeshCacheStats(double now)
 	ctx.hits = InterlockedCompareExchange(&navmesh::g_nmCache.nmCacheHitCount, 0, 0);
 	ctx.misses = InterlockedCompareExchange(&navmesh::g_nmCache.nmCacheMissCount, 0, 0);
 	ctx.skips = InterlockedCompareExchange(&navmesh::g_nmCache.nmCacheSkipCount, 0, 0);
+	ctx.t1Bypass = InterlockedCompareExchange(&navmesh::g_nmCache.nmT1Bypass, 0, 0);
 	ctx.totalMs = InterlockedCompareExchange(&navmesh::g_nmCache.nmTotalMsTimes10, 0, 0);
 	ctx.savedMs = InterlockedCompareExchange(&navmesh::g_nmCache.nmSavedMsTimes10, 0, 0);
 	ctx.gx = InterlockedCompareExchange(&navmesh::g_nmCache.nmDiagLastGridX, 0, 0);
