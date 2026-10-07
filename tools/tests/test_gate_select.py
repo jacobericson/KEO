@@ -106,16 +106,18 @@ def only_names(raw, all_flag, since_arg):
 
 
 def resolve_only(names, suites, modules):
-    """(suite lines, Python lines) for the names: each first a suite row of suites [(name,
-    line)], else the stem of exactly one row of modules [(stem, line)]. An unknown name or a
-    stem that two rows share is refused."""
+    """(suite lines, Python lines) for the names: each a suite row of suites [(name, line)] or
+    the stem of exactly one row of modules [(stem, line)]. An unknown name, a stem that two rows
+    share, or a name that is both a suite and a module stem is refused."""
     suite_by = dict(suites)
     by_stem = {}
     for stem, line in modules:
         by_stem.setdefault(stem, []).append(line)
-    s_lines, p_lines, unknown, twice = [], [], [], []
+    s_lines, p_lines, unknown, twice, both = [], [], [], [], []
     for name in names:
-        if name in suite_by:
+        if name in suite_by and name in by_stem:
+            both.append(name)
+        elif name in suite_by:
             s_lines.append(suite_by[name])
         elif len(by_stem.get(name, [])) == 1:
             p_lines.append(by_stem[name][0])
@@ -127,6 +129,8 @@ def resolve_only(names, suites, modules):
         raise Refusal('--only: %s is neither a suite nor a Python test module' % ', '.join(unknown))
     if twice:
         raise Refusal('--only: %s names more than one Python test module' % ', '.join(twice))
+    if both:
+        raise Refusal('--only: %s is both a suite and a Python test module' % ', '.join(both))
     return s_lines, p_lines
 
 

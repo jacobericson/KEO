@@ -1,7 +1,11 @@
-"""Tests of test_gate_select.py: the Python test selection's source and its printed line."""
+"""Tests of test_gate_select.py (the Python test selection's source and its printed line, the
+runner-control skip, --only's names) and of test_gate.main's wiring of them."""
+import contextlib
+import io
 import os
 import sys
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import test_gate_select as s  # noqa: E402
@@ -126,14 +130,15 @@ class TestOnly(unittest.TestCase):
                          ['test_slots', 'test_test_gate_select', 'test_keo_replay', 'test_slots'])
         self.assertEqual(self.modules[2][1], '130 tools\\release\\test_keo_replay.py shards=5 when=tools/release/**')
 
-    def test_suites_first_then_unique_module_stems(self):
+    def test_suites_and_unique_module_stems_and_no_name_in_both(self):
         s_lines, p_lines = s.resolve_only(['beta_units', 'test_keo_replay', 'test_test_gate_select'],
                                           self.suites, self.modules)
         self.assertEqual(s_lines, ['beta_units | tools\\tests\\beta_units.cpp |  | /DX'])
         self.assertEqual(p_lines, ['130 tools\\release\\test_keo_replay.py shards=5 when=tools/release/**',
                                    '98 tools\\tests\\test_test_gate_select.py when=tools/tests/test_gate*.py'])
-        suite_named = s.resolve_only(['alpha_units'], self.suites, [('alpha_units', '1 x\\alpha_units.py')])
-        self.assertEqual(suite_named, (['alpha_units | tools\\tests\\alpha_units.cpp | src\\a.cpp |'], []))
+        with self.assertRaises(s.Refusal) as cm:
+            s.resolve_only(['alpha_units'], self.suites, [('alpha_units', '1 x\\alpha_units.py')])
+        self.assertIn('alpha_units is both a suite and a Python test module', str(cm.exception))
 
     def test_unknown_and_shared_names_are_refused(self):
         with self.assertRaises(s.Refusal) as cm:
@@ -165,6 +170,52 @@ class TestOnly(unittest.TestCase):
                          'build_tests: only a, test_b: suites 1.2 s, python 3.0 s')
         self.assertEqual(s.only_line(['test_b'], [('python', 0.5)]), 'build_tests: only test_b: python 0.5 s')
         self.assertFalse(s.only_line(['a'], [('suites', 1.0)]).startswith('build_tests: guards'))
+
+
+class TestGateWiring(unittest.TestCase):
+    """test_gate.main's use of these choices, every process and file write mocked out."""
+
+    def run_main(self, argv, heavy):
+        import test_gate
+        seen = {}
+
+        def run_phases(wanted, cmds):
+            seen['wanted'], seen['cmds'] = list(wanted), cmds
+            return []
+        out = io.TextIOWrapper(io.BytesIO(), encoding='utf-8')
+        env = dict((k, v) for k, v in os.environ.items() if k != 'PY_TESTS_SINCE')
+        with mock.patch.dict(os.environ, env, clear=True), \
+                mock.patch.object(test_gate.slots, 'heavy', heavy), \
+                mock.patch.object(test_gate, 'setup', return_value=(test_gate.SUITES, False)), \
+                mock.patch.object(test_gate, 'write_repo_lines'), \
+                mock.patch.object(test_gate, 'git_resolve', return_value=(BASE, HEAD)), \
+                mock.patch.object(test_gate, 'run_phases', side_effect=run_phases), \
+                mock.patch.object(test_gate, 'report', return_value=0), \
+                contextlib.redirect_stdout(out):
+            rc = test_gate.main(argv)
+        out.flush()
+        return rc, seen, out.buffer.getvalue().decode('utf-8')
+
+    def test_only_takes_no_heavy_slot_and_runs_no_guards(self):
+        import test_gate
+        with open(os.path.join(test_gate.REPO, test_gate.SUITES), 'rb') as f:
+            name = s.suite_rows(f.read().decode('utf-8'))[0][0]
+
+        def heavy(label=None):
+            raise AssertionError('--only took the heavy slot')
+        rc, seen, _ = self.run_main(['--only', name], heavy)
+        self.assertEqual(rc, 0)
+        self.assertEqual(seen['wanted'], ['suites'])
+
+    def test_the_default_selection_reaches_the_python_runner_and_the_guards(self):
+        rc, seen, text = self.run_main([], lambda label=None: contextlib.nullcontext())
+        self.assertEqual(rc, 0)
+        self.assertEqual(list(seen['wanted']), ['guards', 'suites', 'python'])
+        self.assertEqual(seen['cmds']['python'][-2:], ['--since', BASE])
+        self.assertEqual(seen['cmds']['guards'][-2:], ['--since', BASE])
+        self.assertIn('build_tests: python selection since %s (merge-base with main' % BASE, text)
+        rc, seen, _ = self.run_main(['--all'], lambda label=None: contextlib.nullcontext())
+        self.assertNotIn('--since', seen['cmds']['python'] + seen['cmds']['guards'])
 
 
 if __name__ == '__main__':
