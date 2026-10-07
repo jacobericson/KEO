@@ -142,7 +142,7 @@ const ConfigKey g_pathfindConfigKeys[] =
 	CFG_OCUSTOM("playerHierarchical", PathfindConfig, playerHierarchicalMode, ParsePlayerHierarchical, NDOC),
 	CFG_OCUSTOM("playerHierOnCap", PathfindConfig, playerHierOnCapMode, ParsePlayerHierOnCap, NDOC),
 	CFG_OROW_L("npcFailMemo", CK_CUSTOM, PathfindConfig, npcFailMemoMode, 1.0f, 0.0f, INT_MIN, false, NDOC,
-	           ParseNpcFailMemo, "NPC failed-search memo",
+	           ParseNpcFailMemo, "NPC failed-search memo (DEV)",
 	           "Answers an NPC's path search as failed, without searching, when a search from the same"
 	           " start area to the same goal already failed under the same navmesh and door states in the"
 	           " last 15 seconds. Observe searches anyway and counts what it would have answered.",

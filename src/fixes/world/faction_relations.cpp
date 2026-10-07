@@ -207,8 +207,16 @@ static void RelHeartbeat(double now)
 	const LONG absent = RelRead(&s_absent);
 	const LONG forwarded = RelRead(&s_forwarded);
 	std::ostringstream ss;
-	ss << "Relations: mode=" << RelModeName(s_seenMode)
-	   << " calls=" << (long long)found + (long long)absent + (long long)forwarded
+	ss << "Relations: mode=" << RelModeName(s_seenMode);
+	if (s_updateWhy)
+		ss << " install=refused(update:" << s_updateWhy << ")";
+	else if (s_eventWhy)
+		ss << " install=refused(event:" << s_eventWhy << ")";
+	else if (s_amountWhy)
+		ss << " install=refused(amount:" << s_amountWhy << ")";
+	else
+		ss << " install=ok";
+	ss << " calls=" << (long long)found + (long long)absent + (long long)forwarded
 	   << " found=" << found << " absent=" << absent
 	   << " verifyBad=" << RelRead(&s_verifyBad) << " hashBad=" << RelRead(&s_hashBad)
 	   << " fallback=" << (RelRead(&s_fallback) ? 1 : 0)

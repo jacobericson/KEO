@@ -595,6 +595,8 @@ void hook_findPathFull(void* streamingCollection, void* searchState, void* findP
 #ifdef KEO_DEBUG
 	// The NPC failed-search memo, once the request's labels are taken: a search it answers never
 	// reaches the A*, and is counted on the memo's own line rather than in the A* records.
+	// CountFindPathWave above has already counted a waved-through search as started; the memo never
+	// covers one (NfmCovers), which keeps every started wave paired with an outcome.
 	NpcFailMemoCall memo;
 	if (NpcFailMemoBefore(streamingCollection, searchState, findPathOutput, c.astarCallerClass,
 	                      currentRequestIsPlayer, c.wavedThrough, &memo))

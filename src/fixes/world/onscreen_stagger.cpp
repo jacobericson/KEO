@@ -49,6 +49,7 @@ static volatile LONG s_jumps = 0;
 
 // Main thread only.
 static int         s_seenMode = 0;
+static const char* s_installWhy = "not run";
 static OnScreenCam s_last = { false, 0.0f, 0.0f, -1, -1 };
 static double      s_lastBeat = 0;
 
@@ -123,6 +124,7 @@ void InstallOnScreenStagger(int* installed, int*)
 		why = HookInstall(HOOK_CHARACTER_UPDATE_ONSCREEN_CHECK, hook_updateOnScreenCheck, &orig_check,
 		                  installed, true);
 	}
+	s_installWhy = why;
 	if (why)
 		ErrorLog(std::string("OnScreenStagger: install=refused(") + why + ")");
 	else
@@ -173,8 +175,12 @@ static void OnsHeartbeat(double now)
 	const LONG full = OnsRead(&s_full);
 	const LONG skipped = OnsRead(&s_skipped);
 	std::ostringstream ss;
-	ss << "OnScreenStagger: mode=" << (s_seenMode ? "on" : "off")
-	   << " calls=" << (long long)full + (long long)skipped
+	ss << "OnScreenStagger: mode=" << (s_seenMode ? "on" : "off");
+	if (s_installWhy)
+		ss << " install=refused(" << s_installWhy << ")";
+	else
+		ss << " install=ok";
+	ss << " calls=" << (long long)full + (long long)skipped
 	   << " full=" << full << " skipped=" << skipped << " jumps=" << OnsRead(&s_jumps);
 	LogMsg(ss.str());
 	s_lastBeat = now;

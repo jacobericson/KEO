@@ -39,6 +39,7 @@ static volatile LONG s_resets = 0;
 
 // Main thread only.
 static int s_seenMode = 0;
+static const char* s_installWhy = "not run";
 static bool s_wasLoading = false;
 static double s_lastBeat = 0.0;
 
@@ -98,10 +99,15 @@ static void EmitHeartbeat()
 	const LONG creates = ReadCounter(&s_creates);
 	const LONG moves = ReadCounter(&s_moves);
 	const LONG resets = ReadCounter(&s_resets);
+	char install[48];
+	if (s_installWhy)
+		_snprintf_s(install, sizeof(install), _TRUNCATE, "refused(%s)", s_installWhy);
+	else
+		_snprintf_s(install, sizeof(install), _TRUNCATE, "ok");
 	char line[256];
 	_snprintf_s(line, sizeof(line), _TRUNCATE,
-		"HullSame: mode=%s applies=%ld skipped=%ld teleports=%ld creates=%ld resets=%ld",
-		s_seenMode ? "on" : "off", (long)(skipped + teleports + creates + moves),
+		"HullSame: mode=%s install=%s applies=%ld skipped=%ld teleports=%ld creates=%ld resets=%ld",
+		s_seenMode ? "on" : "off", install, (long)(skipped + teleports + creates + moves),
 		(long)skipped, (long)teleports, (long)creates, (long)resets);
 	LogMsg(line);
 }
@@ -123,6 +129,7 @@ void InstallHullSameSkip(int* installed, int*)
 	else if (!VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old))
 		why = "protect";
 
+	s_installWhy = why;
 	if (why)
 	{
 		LogMsg(std::string("HullSame: install=refused(") + why + ")");

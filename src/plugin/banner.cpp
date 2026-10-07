@@ -89,6 +89,8 @@ void LogInitBanner(int installed, int totalHooks, const std::string& gateTok,
 	    << ", klibMembers=" << 5
 	;
 	msg << ", gate=" << gateTok;
+	// A QueryPerformanceCounter reading, which places this line on another log's clock.
+	msg << ", qpc=" << QpcNow();
 	// The only knob a folded build still varies, then the profiler lookup's state; both
 	// appended last so grepping for an earlier token's fixed prefix is unaffected.
 	msg << ", zonehand=" << ZONEHAND_STEP;
