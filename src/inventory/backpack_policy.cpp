@@ -4,6 +4,10 @@
 
 namespace keo_inventory {
 
+// RootObjectBase::getDataType values.
+static const int DATA_TYPE_CHARACTER = 1;
+static const int DATA_TYPE_CONTAINER = 46;
+
 bool RouteToBackpackFirst(int setting, bool defaultOn, bool isAnimal, bool wearsBackpack,
                           bool itemIsTheBackpack, bool itemIsNonEmptyContainer, bool wouldAutoEquip)
 {
@@ -121,6 +125,26 @@ bool FoodScoreZero(bool vanillaWants, bool backpackHasFood)
 bool DialogUseBackpack(bool mainHas, bool wearsBackpack)
 {
 	return !mainHas && wearsBackpack;
+}
+
+bool BackpackBoxWanted(int callbackDataType, int ownerDataType, bool ownerIsAnimal,
+                       bool ownerIsPlayer, bool ownerWearsThis)
+{
+	// A character's own window, or any other window, is not a backpack's.
+	if (callbackDataType != DATA_TYPE_CONTAINER)
+		return false;
+	// A backpack on the ground, in a box or in a shop has no character owner.
+	if (ownerDataType != DATA_TYPE_CHARACTER)
+		return false;
+	if (ownerIsAnimal)
+		return false;
+	// A looted NPC's backpack opens beside the loot window.
+	if (!ownerIsPlayer)
+		return false;
+	// A backpack carried in the inventory, not on the back, takes no pickups.
+	if (!ownerWearsThis)
+		return false;
+	return true;
 }
 
 } // namespace keo_inventory

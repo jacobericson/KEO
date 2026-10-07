@@ -9,6 +9,7 @@
 #include "inventory/backpack_sidecar_policy.h"
 #include "inventory/backpack_table.h"
 #include "inventory/backpack_first.h"
+#include "inventory/backpack_window.h"
 #include "inventory/inventory_config.h"
 #include "game/hand_key.h"
 #include "game/game.h"
@@ -264,6 +265,8 @@ void BackpackRekeyTick(double now, bool saveLoading)
 	if (now < s_nextBeat)
 		return;
 	s_nextBeat = now + kBeatSeconds;
+	long box[5];
+	BackpackWindowCounters(box);
 	std::ostringstream ss;
 	ss << "Backpack: first=" << (BackpackFirstInstalled() ? 1 : 0)
 	   << " sidecar=" << (InterlockedCompareExchange(&s_armed, 0, 0) ? 1 : 0)
@@ -283,7 +286,12 @@ void BackpackRekeyTick(double now, bool saveLoading)
 	   << " tableFull=" << BackpackFirstFullCount()
 	   << " raced=" << BackpackFirstRaceCount()
 	   << " duplicates=" << s_duplicates
-	   << " overflow=" << s_overflow;
+	   << " overflow=" << s_overflow
+	   << " boxes=" << box[0]
+	   << " boxSkipped=" << box[1]
+	   << " noArrange=" << box[2]
+	   << " clicks=" << box[3]
+	   << " clickFailed=" << box[4];
 	LogMsg(ss.str());
 }
 

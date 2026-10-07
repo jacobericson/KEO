@@ -55,6 +55,24 @@ static void CheckRoute()
 	      "route: any doubt about an equip keeps the original");
 }
 
+static void CheckBox()
+{
+	// Arguments: callbackDataType, ownerDataType, ownerIsAnimal, ownerIsPlayer, ownerWearsThis.
+	// 46 is CONTAINER and 1 CHARACTER; each refusing row varies one input from the wanted set.
+	CHECK(BackpackBoxWanted(46, 1, false, true, true),
+	      "box: a worn backpack of a player character gets the box");
+	CHECK(!BackpackBoxWanted(46, -1, false, false, false) && !BackpackBoxWanted(46, 46, false, true, true),
+	      "box: a ground backpack (no owner) gets none");
+	CHECK(!BackpackBoxWanted(46, 1, false, false, true),
+	      "box: an NPC's backpack gets none");
+	CHECK(!BackpackBoxWanted(46, 1, true, true, true),
+	      "box: an animal's pack gets none");
+	CHECK(!BackpackBoxWanted(46, 1, false, true, false),
+	      "box: a carried, not worn, backpack gets none");
+	CHECK(!BackpackBoxWanted(1, 1, false, true, true) && !BackpackBoxWanted(-1, -1, false, false, false),
+	      "box: a character's own window (owner type not a container) gets none");
+}
+
 static void CheckSlot()
 {
 	CHECK(BackpackSlotReadable(0, 0) && BackpackSlotReadable(4, 4), "slot: an even unchanged sequence is readable");
@@ -210,6 +228,7 @@ static void CheckDialog()
 int main()
 {
 	CheckRoute();
+	CheckBox();
 	CheckSlot();
 	CheckFields();
 	CheckKey();

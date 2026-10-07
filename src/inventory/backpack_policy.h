@@ -37,6 +37,11 @@ bool FoodScoreZero(bool vanillaWants, bool backpackHasFood);
 // backpack is worn.
 bool DialogUseBackpack(bool mainHas, bool wearsBackpack);
 
+// Whether a backpack window gets the backpack-first box: its owner object is a container whose
+// owner is a player-faction character, not an animal, wearing that very container.
+bool BackpackBoxWanted(int callbackDataType, int ownerDataType, bool ownerIsAnimal,
+                       bool ownerIsPlayer, bool ownerWearsThis);
+
 } // namespace keo_inventory
 
 #endif
