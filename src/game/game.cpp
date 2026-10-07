@@ -236,6 +236,44 @@ bool ZoneInSetB(void* zoneMgr, void* zone)
 	                       (uintptr_t)zone);
 }
 
+int ZoneSetBVisit(void* zoneMgr, void (*visit)(void* ctx, void* zone), void* ctx)
+{
+	if (!zoneMgr || !visit)
+		return -1;
+	uintptr_t set = KLIB_MEMBER(2, zoneMgr, ZoneManager_activeZones, OFF_ZM_SET_B);
+	int visited = -1;
+	GuardEnter();
+	__try
+	{
+		unsigned long long size = *(unsigned long long*)(KLIB_MEMBER(2, set, ZoneSetTable_size_, OFF_SET_SIZE));
+		unsigned long long bucketCount = *(unsigned long long*)(KLIB_MEMBER(2, set, ZoneSetTable_bucket_count_, OFF_SET_BUCKET_COUNT));
+		uintptr_t buckets = *(uintptr_t*)(KLIB_MEMBER(2, set, ZoneSetTable_buckets_, OFF_SET_BUCKETS));
+		if (size == 0)
+		{
+			visited = 0;
+		}
+		else if (size <= (unsigned long long)ZONE_GRID_COUNT * 4 && buckets && bucketCount > 0
+		         && bucketCount < (1ull << 24))
+		{
+			uintptr_t node = *(uintptr_t*)(buckets + 8 * bucketCount);
+			int maxIter = (int)size + 16;
+			int n = 0;
+			while (node && n < maxIter)
+			{
+				visit(ctx, *(void**)KLIB_MEMBER(2, node, ZoneSetNode_value_base_, OFF_SET_NODE_VALUE));
+				++n;
+				node = *(uintptr_t*)KLIB_MEMBER(2, node, ZoneSetNode_next_, 0);
+			}
+			visited = n;
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		visited = -1;
+	}
+	GuardLeave();
+	return visited;
+}
 
 // =========================================================================
 // Build gate: hook and patch-site prologues
