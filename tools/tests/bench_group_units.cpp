@@ -224,7 +224,7 @@ static void ResolveTests()
 	      "resolve: a retired row is dropped as retired");
 
 #ifdef KEO_DEBUG
-	const char* refusedKey = "lightCache";
+	const char* refusedKey = "npcFailMemo";
 #else
 	const char* refusedKey = "reflectionHalfRate";
 #endif
@@ -253,16 +253,16 @@ static void OffTests()
 #ifdef KEO_DEBUG
 	ResetRunning();
 	SetRunning("ogreJoinSpinUs", "50");
-	SetRunning("lightCache", "on");
-	Groups("o1", "each/1/3+25:ogreJoinSpinUs=20;lightCache=shadow");
+	SetRunning("npcFailMemo", "on");
+	Groups("o1", "each/1/3+25:ogreJoinSpinUs=20;npcFailMemo=observe");
 	BenchScenario sc;
 	Check(Build("o1", &sc), "off: a choice row's off is its first choice");
 	sc.applySet(0, sc.ctx);
-	Check(Running("ogreJoinSpinUs") == "0" && Running("lightCache") == "off", "off: a choice row's off is its first choice");
+	Check(Running("ogreJoinSpinUs") == "0" && Running("npcFailMemo") == "off", "off: a choice row's off is its first choice");
 	sc.restoreSettings(sc.ctx);
-	Check(Running("ogreJoinSpinUs") == "50" && Running("lightCache") == "on", "off: a choice row's off is its first choice");
+	Check(Running("ogreJoinSpinUs") == "50" && Running("npcFailMemo") == "on", "off: a choice row's off is its first choice");
 	SetRunning("ogreJoinSpinUs", "0");
-	SetRunning("lightCache", "off");
+	SetRunning("npcFailMemo", "off");
 #endif
 
 	ResetRunning();

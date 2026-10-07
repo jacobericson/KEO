@@ -153,13 +153,6 @@ inline bool IsCameraDetached(uintptr_t playerIntf)
 bool ZoneInSetA(void* zoneMgr, void* zone);
 bool ZoneInSetB(void* zoneMgr, void* zone);
 
-// Calls visit(ctx, zone) for every element of the ZoneManager's Set B, in its
-// list order, with ZoneInSetB's walk and bounds. Returns the number visited,
-// 0 for an empty set, or -1 when the set is unreadable (a NULL manager or
-// callback, a size or bucket count out of bounds, a fault, in which case
-// visit may already have run for some elements). Main thread.
-int ZoneSetBVisit(void* zoneMgr, void (*visit)(void* ctx, void* zone), void* ctx);
-
 
 
 #endif // KEO_ZONE_HELPERS_H
