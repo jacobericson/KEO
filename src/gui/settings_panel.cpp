@@ -12,6 +12,7 @@
 #include "base/config.h"
 #include "game/game.h"
 #include "base/core.h"
+#include "zone/zone_config.h"
 #include <stddef.h>
 #include "base/klib_include.h"
 #include <kenshi/Globals.h>
@@ -205,6 +206,21 @@ static void AddRows(DatapanelGUI* panel, const std::vector<SettingsRow>& rows, i
 	}
 }
 
+// The squad radius row's floor from the game's Fast zone hopping option as
+// it reads now. Its checkbox writes the option when clicked, so the close
+// sees a change made during the same visit to the Options window.
+static ConfigFloor SquadRadiusFloor()
+{
+	return zone::ZoneSquadRadiusFloor(GameFastZoneHopping());
+}
+
+static void LogFloorRaised(const ConfigFloor& f, const char* when)
+{
+	std::ostringstream ss;
+	ss << "Settings panel: " << f.key << " below its floor, raised to " << f.floor << " " << when;
+	LogMsg(ss.str());
+}
+
 // Inserts the tab before the last one (Mods, where RE_Kenshi puts its
 // button). hide() casts every tab's item data to DatapanelGUI* and throws on
 // anything else, then destroys the panel and removes the tab itself, so the
@@ -253,6 +269,9 @@ static void BuildTab(OptionsWindow* win)
 	{
 		std::vector<SettingsRow> rows;
 		BuildSettingsRows(&s_staging, DEV_BUILD, &bench, &rows);
+		ConfigFloor floor = SquadRadiusFloor();
+		if (ApplySettingsFloor(&s_staging, floor, &rows))
+			LogFloorRaised(floor, "on the tab");
 		int cat = PickCategory(tabs, count);
 		tab = tabs->insertItemAt(count - 1, "KEO");
 		DatapanelGUI* panel = gui->createDatapanel("keo_options", tab, true);
@@ -291,6 +310,9 @@ static void CommitStaging()
 {
 	s_staged = false;
 	SettingsStaging staged = s_staging;
+	ConfigFloor floor = SquadRadiusFloor();
+	if (ApplySettingsFloor(&staged, floor, NULL))
+		LogFloorRaised(floor, "at close");
 	int renderModule = RenderModuleIndex();
 	RenderConfig& render = StagedRender(&staged);
 	std::vector<std::string> notes;

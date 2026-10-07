@@ -54,6 +54,9 @@ const size_t RVA_ZONEMAP_UPDATE      = 0xA0A960;
 // time, not the game-speed-scaled value beside it, so the countdowns run down
 // at the same rate whatever the simulation speed.
 const size_t RVA_GLOBAL_FRAME_TIME   = 0x2132730;
+// The game's OptionsHolder, a static object (not a pointer); its Options
+// window's checkboxes write its fields the moment they are clicked.
+const size_t RVA_GLOBAL_OPTIONS      = 0x2132440;
 // The insert helper both tracking sets use: (set, outPair, &value, &pValue).
 // Not a KenshiLib-named member; it is the out-of-line body behind
 // ogre_unordered_set<ZoneMap*>::insert.

@@ -132,4 +132,10 @@ extern ZoneConfig g_zoneCfg;
 extern const ZoneConfig kZoneDefaults;
 extern const ConfigKey g_zoneConfigKeys[];
 
+// The squad radius row's floor. With the game's Fast zone hopping option on,
+// the game itself keeps a 3x3 around each player character, so the row's 0
+// would keep nothing less than 1: the floor is 1 then, and 0, the row's own
+// lo, with the option off.
+ConfigFloor ZoneSquadRadiusFloor(bool fastZoneHopping);
+
 } // namespace zone

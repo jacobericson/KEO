@@ -73,6 +73,17 @@ struct ConfigModule
 	size_t           stateSize;   // sizeof(*state), 0 for a module of target rows
 };
 
+// A lower bound a module puts on one of its whole-number slider rows while a
+// game setting makes the row's smaller values meaningless, and the sentence
+// the row's tooltip gains while it holds. A floor at or below the row's own
+// lo, or a key that names no such row, changes nothing.
+struct ConfigFloor
+{
+	const char* key;
+	int         floor;
+	const char* note;
+};
+
 // Every module, in the settings page's order (config_keys.cpp).
 extern const ConfigModule kConfigModules[];
 extern const int kConfigModuleCount;

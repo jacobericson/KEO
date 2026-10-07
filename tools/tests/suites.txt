@@ -53,6 +53,7 @@ astar_cost_policy_units | tools\tests\astar_cost_policy_units.cpp | src\pathfind
 klib_dethunk_units | tools\tests\klib_dethunk_units.cpp |  |
 nm_busy_bridge_units | tools\tests\nm_busy_bridge_units.cpp | src\navmesh\jobs\nm_busy_bridge_policy.cpp |
 nm_cache_slot_units | tools\tests\nm_cache_slot_units.cpp | src\navmesh\cache\nm_cache_slot_policy.cpp |
+settings_floor_units | tools\tests\settings_floor_units.cpp | src\gui\settings_factory.cpp src\gui\settings_rows.cpp src\gui\settings_layout.cpp src\base\config_table.cpp src\base\config_keys.cpp src\zone\zone_config.cpp src\navmesh\navmesh_config.cpp src\pathfind\pathfind_config.cpp src\movement\movement_config.cpp src\fixes\fixes_config.cpp src\planner\planner_config.cpp src\gui\gui_config.cpp src\base\ini_text.cpp src\render\render_keys.cpp src\render\render_defaults.cpp src\zone\geometry\zone_geometry_cert.cpp src\bench\bench_lever_ab.cpp src\bench\bench_sweep.cpp src\bench\bench_slots.cpp src\bench\bench_scenario.cpp src\bench\bench_recorders.cpp src\bench\bench_stats.cpp | /DKEO_DEBUG /DZONEHAND_STEP=3
 nm_worker_gate_units | tools\tests\nm_worker_gate_units.cpp | src\navmesh\workers\nm_worker_gate_policy.cpp |
 zone_reset_sequence_units | tools\tests\zone_reset_sequence_units.cpp | src\zone\reset\zone_reset_sequence.cpp src\zone\reset\zone_reset_fence.cpp |
 zone_reset_gate_units | tools\tests\zone_reset_gate_units.cpp | src\zone\reset\zone_reset_gate.cpp src\zone\reset\zone_reset_fence.cpp |

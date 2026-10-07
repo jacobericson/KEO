@@ -104,3 +104,13 @@ SettingsDiff DiffSettings(const SettingsStaging& staged, const RenderConfig& liv
 // ClampRenderValues against fallback (lines to renderNotes).
 void ClampSettings(SettingsStaging* staged, const SettingsStaging& saved, const RenderConfig& fallback,
                    ConfigLogFn log, std::vector<std::string>* renderNotes);
+
+// Holds the row f names to its floor for one showing of the tab. Only a shown
+// whole-number slider of an offset module (CK_INT, no choices, no target),
+// with lo < f.floor <= hi, is touched: a staged value below the floor, or not
+// a number, is raised to it in its slot and its state field; with rows, the
+// slider row bound to that slot starts at the floor and its tooltip gains
+// f.note. True when the staged value was raised. The tab runs it after its
+// rows are built and again on the close's copy, before ClampSettings, which
+// returns an unchanged slot to its saved value.
+bool ApplySettingsFloor(SettingsStaging* staging, const ConfigFloor& f, std::vector<SettingsRow>* rows);

@@ -103,6 +103,16 @@ inline bool GetCameraFocusXZ(uintptr_t playerIntf, float* outX, float* outZ)
 	return true;
 }
 
+// The game's Fast zone hopping option (OptionsHolder::manyActiveZones): with
+// it on, the game keeps a 3x3 around each player character instead of the
+// cell it stands in. False before the bindings are ready. Main thread, where
+// the Options window writes it.
+inline bool GameFastZoneHopping()
+{
+	uintptr_t o = (uintptr_t)GameAddr(RVA_GLOBAL_OPTIONS);
+	return o && *(const unsigned char*)(KLIB_MEMBER(5, o, OptionsHolder_manyActiveZones, 0x88)) != 0;
+}
+
 // ForgottenGUI::isLoading / ::isPaused, called directly (not hooked):
 // RCX=the ForgottenGUI object (a fixed global, not a pointer to dereference).
 // This is exactly the pair CameraClass::update (0x6B1540) gates its whole

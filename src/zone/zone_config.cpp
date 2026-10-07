@@ -152,4 +152,14 @@ const ConfigKey g_zoneConfigKeys[] =
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }
 };
 
+ConfigFloor ZoneSquadRadiusFloor(bool fastZoneHopping)
+{
+	ConfigFloor f;
+	f.key = "zoneLifeSquadRadius";
+	f.floor = fastZoneHopping ? 1 : 0;
+	f.note = "Fast zone hopping is on (Options, General): the game itself keeps a 3x3 around each of your"
+	         " characters, so this can't go below 1. Turn Fast zone hopping off to set 0.";
+	return f;
+}
+
 } // namespace zone

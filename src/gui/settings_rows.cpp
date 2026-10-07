@@ -199,3 +199,58 @@ void ClampSettings(SettingsStaging* staged, const SettingsStaging& saved, const 
 	if (r >= 0)
 		ClampRenderValues(&StagedRender(staged), fallback, renderNotes);
 }
+
+// The module and key index of the row f names, when it is a slot-bound
+// whole-number slider the floor lies inside; false otherwise.
+static bool FloorTarget(const ConfigFloor& f, int* module, int* key)
+{
+	if (!f.key)
+		return false;
+	for (int m = 0; m < kConfigModuleCount && m < CONFIG_MODULE_MAX; ++m)
+	{
+		const ConfigModule& mod = kConfigModules[m];
+		for (int i = 0; i < CONFIG_STAGE_MAX && mod.keys[i].name; ++i)
+		{
+			const ConfigKey& k = mod.keys[i];
+			if (k.retired || strcmp(k.name, f.key) != 0)
+				continue;
+			if (!mod.state || k.target || k.kind != CK_INT || k.choices || !k.label || k.lo > k.hi
+			    || f.floor <= (int)k.lo || f.floor > (int)k.hi)
+				return false;
+			*module = m;
+			*key = i;
+			return true;
+		}
+	}
+	return false;
+}
+
+bool ApplySettingsFloor(SettingsStaging* staging, const ConfigFloor& f, std::vector<SettingsRow>* rows)
+{
+	int m = -1;
+	int i = -1;
+	if (!FloorTarget(f, &m, &i))
+		return false;
+	const ConfigKey& k = kConfigModules[m].keys[i];
+	ConfigModuleStage& s = staging->module[m];
+	float lo = (float)f.floor;
+	bool raised = !(s.slots[i].f >= lo);
+	if (raised)
+	{
+		s.slots[i].f = lo;
+		*(int*)((char*)s.state + k.offset) = f.floor;
+	}
+	if (rows)
+	{
+		for (size_t r = 0; r < rows->size(); ++r)
+		{
+			SettingsRow& row = (*rows)[r];
+			if (row.kind != SR_SLIDER || row.floatPtr != &s.slots[i].f)
+				continue;
+			row.lo = lo;
+			if (f.note && *f.note)
+				row.tooltip += row.tooltip.empty() ? std::string(f.note) : std::string(" ") + f.note;
+		}
+	}
+	return raised;
+}
