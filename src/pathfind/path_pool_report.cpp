@@ -25,6 +25,19 @@ GateWindowStats SnapshotAndResetGateStats()
 	return g;
 }
 
+#ifdef KEO_DEBUG
+// One side of the window's wait split, read and cleared here: p50, p99 and max in ms, then the count.
+static void AppendWaitSplit(std::ostringstream& ss, const char* name, PPHist* h)
+{
+	double p50 = PPHistPercentileUs(h, 0.50) / 1000.0;
+	double p99 = PPHistPercentileUs(h, 0.99) / 1000.0;
+	double mx = InterlockedExchange(&h->maxUs, 0) / 1000.0;
+	LONG n = InterlockedCompareExchange(&h->count, 0, 0);
+	PPHistReset(h);
+	ss << " " << name << "=" << p50 << "/" << p99 << "/" << mx << "/" << n;
+}
+#endif
+
 void PrintPathQueueLine(double windowSec, const GateWindowStats& gws, LONG* servedOut)
 {
 	LONG arrived = InterlockedExchange(&g_ppWindow.g_arrivedCount, 0);
@@ -118,6 +131,11 @@ void PrintPathQueueLine(double windowSec, const GateWindowStats& gws, LONG* serv
 	// stopped, the game is still running, and no order can be issued anywhere.
 	if (NavMeshUpdateGuardLatched())
 		ss << " nmGuard=latched";
+#ifdef KEO_DEBUG
+	AppendWaitSplit(ss, "waitPlayer", &g_ppWindow.g_waitHistPlayer);
+	AppendWaitSplit(ss, "waitNpc", &g_ppWindow.g_waitHistNpc);
+	ss << " (p50/p99/max ms/count)";
+#endif
 	LogMsg(ss.str());
 }
 

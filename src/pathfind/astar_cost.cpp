@@ -154,6 +154,8 @@ struct AstarSlowEntry
 	unsigned startFaceKey;
 	unsigned goalFaceKey;
 	float    goalDist3D;
+	int      goalData;
+	int      startCluster;
 };
 } // namespace astar_cost_detail
 using namespace astar_cost_detail;
@@ -208,6 +210,8 @@ static void AstarSlowConsider(const AstarCostSample* s, AstarCallerClass cls)
 		g_slowEntries[insertAt].startFaceKey = s->startFaceKey;
 		g_slowEntries[insertAt].goalFaceKey  = s->goalFaceKey;
 		g_slowEntries[insertAt].goalDist3D   = s->goalDist3D;
+		g_slowEntries[insertAt].goalData     = s->goalData;
+		g_slowEntries[insertAt].startCluster = s->startCluster;
 	}
 
 	InterlockedExchange(&g_slowLock, 0);
@@ -366,6 +370,24 @@ static void PrintAstarCapLine()
 	LogMsg(ss.str());
 }
 
+#ifdef KEO_DEBUG
+// A capped search's goal face data word (4 an open door face, 5 a closed one) and its start's
+// cluster key.
+static void AppendSlowFaces(std::ostringstream& ss, const AstarSlowEntry& e)
+{
+	ss << " goalData=";
+	if (e.goalData < 0)
+		ss << "-";
+	else
+		ss << e.goalData;
+	ss << " startCluster=";
+	if (e.startCluster == -1)
+		ss << "-";
+	else
+		ss << "0x" << std::hex << (unsigned)e.startCluster << std::dec;
+}
+#endif
+
 // Prints the slowest capped searches seen since the previous call, then
 // clears the ring, so the next window starts empty rather than accreting
 // the whole session's worth of entries under the lock above.
@@ -399,8 +421,11 @@ static void PrintAstarSlowLine()
 		   << " boosted=" << e.boosted
 		   << " startFace=0x" << std::hex << e.startFaceKey << std::dec
 		   << " goalFace=0x" << std::hex << e.goalFaceKey << std::dec
-		   << " dist=" << e.goalDist3D
-		   << " svc=" << QpcToMs(e.ticks) << "ms]";
+		   << " dist=" << e.goalDist3D;
+#ifdef KEO_DEBUG
+		AppendSlowFaces(ss, e);
+#endif
+		ss << " svc=" << QpcToMs(e.ticks) << "ms]";
 	}
 	LogMsg(ss.str());
 }

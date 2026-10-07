@@ -52,10 +52,32 @@ static bool ParsePlayerHierOnCap(const std::string& val, ConfigLogFn log)
 	return true;
 }
 
+// npcFailMemo: off, observe or on; anything else is refused.
+static bool ParseNpcFailMemo(const std::string& val, ConfigLogFn log)
+{
+	(void)log;
+	int mode;
+	if (_stricmp(val.c_str(), "off") == 0)
+		mode = NFM_OFF;
+	else if (_stricmp(val.c_str(), "observe") == 0)
+		mode = NFM_OBSERVE;
+	else if (_stricmp(val.c_str(), "on") == 0)
+		mode = NFM_ON;
+	else
+		return false;
+	pathfind::g_pathfindCfg.npcFailMemoMode = mode;
+	return true;
+}
+
 static const ConfigChoice kClusterGraphChoices[] =
 {
 	{ "false", CGB_ORIGINAL, "false" }, { "true", CGB_BYPASS, "true" }, { "player", CGB_PLAYER, "player" },
 	{ "measure", CGB_MEASURE, "measure" }
+};
+
+static const ConfigChoice kNpcFailMemoChoices[] =
+{
+	{ "off", NFM_OFF, "Off" }, { "observe", NFM_OBSERVE, "Observe" }, { "on", NFM_ON, "On" }
 };
 
 namespace pathfind {
@@ -78,6 +100,7 @@ const PathfindConfig kPathfindDefaults =
 	true, // playerRepathTierEnabled
 	AHIER_ON, // playerHierarchicalMode
 	AHIER_CAP_RERUN, // playerHierOnCapMode
+	NFM_OFF, // npcFailMemoMode
 };
 
 PathfindConfig g_pathfindCfg = kPathfindDefaults;
@@ -118,6 +141,12 @@ const ConfigKey g_pathfindConfigKeys[] =
 	  " queueing behind every NPC. Off only counts."),
 	CFG_OCUSTOM("playerHierarchical", PathfindConfig, playerHierarchicalMode, ParsePlayerHierarchical, NDOC),
 	CFG_OCUSTOM("playerHierOnCap", PathfindConfig, playerHierOnCapMode, ParsePlayerHierOnCap, NDOC),
+	CFG_OROW_L("npcFailMemo", CK_CUSTOM, PathfindConfig, npcFailMemoMode, 1.0f, 0.0f, INT_MIN, false, NDOC,
+	           ParseNpcFailMemo, "NPC failed-search memo",
+	           "Answers an NPC's path search as failed, without searching, when a search from the same"
+	           " start area to the same goal already failed under the same navmesh and door states in the"
+	           " last 15 seconds. Observe searches anyway and counts what it would have answered.",
+	           DEVROW, 0.0f, 0, kNpcFailMemoChoices, CFG_COUNT(kNpcFailMemoChoices), true, true),
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }
 };
 

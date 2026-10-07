@@ -17,6 +17,7 @@
 #include "pathfind/player_repath_tier_policy.h"
 #include "planner/planner_water_table.h"
 #include "pathfind/path_result_trace.h"
+#include "pathfind/npc_fail_memo.h"
 #include <intrin.h>
 #pragma intrinsic(_ReturnAddress)
 
@@ -252,6 +253,9 @@ struct FindPathFullCtx
 	unsigned char status, cause;
 	int iterCount;
 	LARGE_INTEGER pathPoolQpcAfter;
+	void* request;          // the request being served, NULL when none was tagged on this thread
+	int slowGoalData;       // a capped character search's goal face data word, -1 unread
+	int slowStartCluster;   // its start face's cluster key, -1 unread
 };
 
 static void TakeFindPathWave(FindPathFullCtx& c)
@@ -281,6 +285,7 @@ static void ResolveFindPathRequest(FindPathFullCtx& c)
 	// The sample's playerByTag and the failure-ring predicate still read
 	// currentRequestIsPlayer after the original; no allocation or logging.
 	c.pathPoolPlayerByReq = -1;
+	c.request = g_pathPoolLastCsFindPathReq;
 	if (g_pathPoolLastCsFindPathReq) {
 		c.pathPoolPlayerByReq = (*(int*)((uintptr_t)g_pathPoolLastCsFindPathReq + 0x2C) >= 20) ? 1 : 0;
 		g_pathPoolLastCsFindPathReq = NULL;
@@ -466,6 +471,8 @@ static void RecordFindPathSamples(const FindPathFullCtx& c)
 	astarSample.startFaceKey = c.astarStartFaceKey;
 	astarSample.goalFaceKey  = c.astarGoalFaceKey;
 	astarSample.goalDist3D   = c.astarGoalDist3D;
+	astarSample.goalData     = c.slowGoalData;
+	astarSample.startCluster = c.slowStartCluster;
 	AstarCostNote(&astarSample, c.astarCallerClass);
 }
 
@@ -572,8 +579,6 @@ using namespace pathfind_hooks_detail;
 
 void hook_findPathFull(void* streamingCollection, void* searchState, void* findPathOutput)
 {
-	InterlockedIncrement(&pathfind::g_pathDiag.diagAstarAttempts);
-
 	// This function's own return address is one of six known call sites
 	// (astar_cost_policy.h) -- captured once, up front, since it never
 	// changes across the rest of this call.
@@ -585,6 +590,18 @@ void hook_findPathFull(void* streamingCollection, void* searchState, void* findP
 	ResolveFindPathRequest(c);
 	ReadFindPathInput(searchState, c);
 	CountFindPathWave(c);
+	c.slowGoalData = -1;
+	c.slowStartCluster = -1;
+#ifdef KEO_DEBUG
+	// The NPC failed-search memo, once the request's labels are taken: a search it answers never
+	// reaches the A*, and is counted on the memo's own line rather than in the A* records.
+	NpcFailMemoCall memo;
+	if (NpcFailMemoBefore(streamingCollection, searchState, findPathOutput, c.astarCallerClass,
+	                      currentRequestIsPlayer, c.wavedThrough, &memo))
+		return;
+#endif
+	// Counted only for a search that reaches the A*, so every attempt lands in one outcome bucket.
+	InterlockedIncrement(&pathfind::g_pathDiag.diagAstarAttempts);
 	c.pathPoolBoosted = 0;
 	c.pathPoolQpcBefore.QuadPart = 0;
 
@@ -604,6 +621,11 @@ void hook_findPathFull(void* streamingCollection, void* searchState, void* findP
 	// Take the "after" QPC and hand the sample to the pool on every
 	// thread, every call.
 	QueryPerformanceCounter(&c.pathPoolQpcAfter);
+#ifdef KEO_DEBUG
+	NpcFailMemoAfter(&memo, streamingCollection, searchState, c.astarCallerClass, c.status, c.cause,
+	                 c.iterCount, c.pathPoolQpcAfter.QuadPart - c.pathPoolQpcBefore.QuadPart, c.request,
+	                 &c.slowGoalData, &c.slowStartCluster);
+#endif
 	RecordFindPathSamples(c);
 	RecordFindPathOutcome(searchState, c);
 }

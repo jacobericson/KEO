@@ -112,6 +112,11 @@ struct PathPassWindow
 	PPHist g_waitHist;
 	// Service starts after the latest pass-start, gate-end or dequeue latch.
 	PPHist g_svcHist;
+#ifdef KEO_DEBUG
+	// The wait split by the request's queue priority: player (20 and up) and NPC.
+	PPHist g_waitHistPlayer;
+	PPHist g_waitHistNpc;
+#endif
 	volatile LONGLONG g_svcTotalUs;
 	volatile LONG g_priNpcCount;
 	volatile LONG g_priPlayerCount;

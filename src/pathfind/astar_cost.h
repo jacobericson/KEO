@@ -30,6 +30,8 @@ struct AstarCostSample
 	unsigned startFaceKey;  // FindPathInput +0x30
 	unsigned goalFaceKey;   // FindPathInput's first goal face key (+0x38 array), 0xFFFFFFFF if none
 	float    goalDist3D;    // |goal - start|, -1.0f if either point was unavailable
+	int      goalData;      // a capped search's goal face data word (DEV builds read it), -1 unread
+	int      startCluster;  // its start face's cluster key (DEV builds read it), -1 unread
 };
 
 // Resolves returnAddr against the game module's own image (gameBase, its

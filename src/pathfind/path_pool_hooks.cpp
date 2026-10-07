@@ -221,6 +221,9 @@ void hook_enqueueThreadSafe(void* queueBase, void** itemPtr)
 			if (pri >= 45)      InterlockedIncrement(&g_ppWindow.g_priTierCount);
 			else if (pri == 20) InterlockedIncrement(&g_ppWindow.g_priPlayerCount);
 			else if (pri <= 10) InterlockedIncrement(&g_ppWindow.g_priNpcCount);
+#ifdef KEO_DEBUG
+			PPHistAdd(pri >= 20 ? &g_ppWindow.g_waitHistPlayer : &g_ppWindow.g_waitHistNpc, waitUs);
+#endif
 
 			// req+0x90, one counter per raw status.
 			if (status >= 0 && status <= 4)
