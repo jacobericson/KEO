@@ -109,6 +109,10 @@ struct NavMeshConfig
 	// once the wall's collision has moved into the navmesh's group, instead of before it. On by
 	// default; false leaves the game's own patch. Read at startup only.
 	bool wallSpliceFixEnabled;
+	// spliceSeamFull: a navmesh patch box across a cell border regenerates every cell it crosses in
+	// full instead of the game's per-cell patches, whose border edges never join. On by default;
+	// false, wallSpliceFix off or caching off leaves the game's patches. Read at startup only.
+	bool spliceSeamFullEnabled;
 
 	// Derived by LoadConfig and FinalizeConfig; no key.
 

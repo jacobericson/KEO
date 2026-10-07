@@ -17,7 +17,12 @@ NmMarkClaim NmMarkClaimDecide(long word, double ageSec, int jobType)
 
 NmMarkPress NmMarkPressDecide(long word, double ageSec)
 {
-	return (NmMarkStateOf(word) == NM_MARK_CLAIMED && ageSec <= NM_REBUILD_MARK_TTL_SEC) ? NM_PRESS_KEEP : NM_PRESS_MARK;
+	return NmMarkCellDecide(word, ageSec, true);
+}
+
+NmMarkPress NmMarkCellDecide(long word, double ageSec, bool keepClaimed)
+{
+	return (keepClaimed && NmMarkStateOf(word) == NM_MARK_CLAIMED && ageSec <= NM_REBUILD_MARK_TTL_SEC) ? NM_PRESS_KEEP : NM_PRESS_MARK;
 }
 
 bool NmMarkPressFinished(long pressWord, long nowWord)

@@ -31,6 +31,10 @@ NmMarkClaim NmMarkClaimDecide(long word, double ageSec, int jobType);
 // so a second press waits for that job; MARK anything else afresh.
 enum NmMarkPress { NM_PRESS_MARK = 0, NM_PRESS_KEEP };
 NmMarkPress NmMarkPressDecide(long word, double ageSec);
+// A mark for a cell: KEEP a mark a job is working on (CLAIMED within the TTL) when keepClaimed,
+// MARK it afresh otherwise; MARK anything else. The key keeps it, so a second press waits for that
+// job; a cell-border rebuild does not, since its box changed the cell after that job began.
+NmMarkPress NmMarkCellDecide(long word, double ageSec, bool keepClaimed);
 
 // A press's cell has ended: its mark is DONE or NONE, or names another press.
 bool NmMarkPressFinished(long pressWord, long nowWord);

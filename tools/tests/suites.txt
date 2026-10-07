@@ -101,6 +101,7 @@ nm_cache_type_policy_units | tools\tests\nm_cache_type_policy_units.cpp | src\na
 backpack_policy_units | tools\tests\backpack_policy_units.cpp | src\inventory\backpack_policy.cpp src\inventory\backpack_table.cpp src\game\hand_key.cpp |
 byte_check_units | tools\tests\byte_check_units.cpp | src\inventory\byte_check_policy.cpp |
 splice_queue_policy_units | tools\tests\splice_queue_policy_units.cpp | src\navmesh\construction\splice_queue_policy.cpp src\navmesh\construction\splice_ring.cpp |
+splice_seam_policy_units | tools\tests\splice_seam_policy_units.cpp | src\navmesh\construction\splice_seam_policy.cpp src\navmesh\construction\splice_queue_policy.cpp |
 town_claim_policy_units | tools\tests\town_claim_policy_units.cpp | src\fixes\world\town_claim_policy.cpp |
 throwout_policy_units | tools\tests\throwout_policy_units.cpp | src\fixes\world\throwout_policy.cpp src\fixes\world\throwout_hold.cpp src\game\hand_key.cpp |
 backpack_sidecar_units | tools\tests\backpack_sidecar_units.cpp | src\inventory\backpack_sidecar_policy.cpp src\inventory\backpack_policy.cpp src\game\hand_key.cpp |

@@ -296,6 +296,8 @@ src\navmesh\construction\splice_queue_policy.cpp
 src\navmesh\construction\splice_ring.cpp
 src\navmesh\construction\wall_splice.cpp
 src\navmesh\construction\wall_splice_drain.cpp
+src\navmesh\construction\splice_seam_policy.cpp
+src\navmesh\construction\splice_seam.cpp
 src\fixes\world\town_claim_policy.cpp
 src\fixes\world\town_claim.cpp
 src\fixes\world\town_claim_patch.cpp

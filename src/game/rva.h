@@ -474,6 +474,7 @@ const size_t RVA_WALL_ADD_PROGRESS = 0x5594A0;   // WallBuilding::addConstructio
 const size_t RVA_QUEUES_ARE_CLEAR_MT = 0x173F70; // PhysicsInterface::queuesAreClearMT (main thread)
 const size_t RVA_NAVMESH_GENERATE_AABB = 0x3A6580; // NavMesh::generate(const Ogre::Aabb&)
 const size_t RVA_ZONEMAP_HANDLE_GET_OBJECT = 0x9F8050; // ZoneMapHandleContainerList::getObject
+const size_t RVA_NMG_ADD_JOB_AABB = 0x3C68E0; // NavMeshGenerator::addJob(ZoneMap*, const Ogre::Aabb&): one type-1 job
 
 
 

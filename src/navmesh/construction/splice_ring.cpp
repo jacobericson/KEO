@@ -7,13 +7,14 @@ void SpliceRingInit(SpliceRing* r)
 {
 	for (int i = 0; i < SPLICE_RING_SLOTS; ++i)
 		r->slot[i].seq = SPLICE_SEQ_EMPTY;
-	r->written = r->claimFailed = r->lost = r->overwritten = 0;
+	r->written = r->claimFailed = r->lost = r->overwritten = r->readPub = 0;
 	r->read = 0;
 	r->stallAt = -1;
 	r->stallPasses = 0;
 }
 
-void SpliceRingPush(SpliceRing* r, const float box[6])
+// SpliceRingPush's claim and publish: false when the claim failed and was counted.
+static bool ClaimAndFill(SpliceRing* r, const float box[6])
 {
 	const LONG idx = InterlockedIncrement(&r->written) - 1;
 	SpliceRingSlot* s = &r->slot[idx & (SPLICE_RING_SLOTS - 1)];
@@ -23,11 +24,25 @@ void SpliceRingPush(SpliceRing* r, const float box[6])
 	 || InterlockedCompareExchange(&s->seq, SPLICE_SEQ_WRITING, cur) != cur)
 	{
 		InterlockedIncrement(&r->claimFailed);
-		return;
+		return false;
 	}
 	for (int i = 0; i < 6; ++i)
 		s->box[i] = box[i];
 	InterlockedExchange(&s->seq, idx);
+	return true;
+}
+
+void SpliceRingPush(SpliceRing* r, const float box[6])
+{
+	ClaimAndFill(r, box);
+}
+
+SplicePush SpliceRingTryPush(SpliceRing* r, const float box[6])
+{
+	const LONG w = InterlockedCompareExchange(&r->written, 0, 0);
+	if (w - InterlockedCompareExchange(&r->readPub, 0, 0) >= SPLICE_RING_SLOTS)
+		return SPLICE_PUSH_FULL;
+	return ClaimAndFill(r, box) ? SPLICE_PUSH_TAKEN : SPLICE_PUSH_CLAIM_FAILED;
 }
 
 int SpliceRingDrain(SpliceRing* r, float (*out)[6], int max)
@@ -87,6 +102,7 @@ int SpliceRingDrain(SpliceRing* r, float (*out)[6], int max)
 		}
 		break;
 	}
+	InterlockedExchange(&r->readPub, r->read);
 	return n;
 }
 

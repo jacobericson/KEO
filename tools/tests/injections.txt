@@ -20,5 +20,5 @@ retire_stall_injection | /EHa | | | tools\tests\retire_stall_injection.cpp src\n
 plan_store_injection | /EHsc | | | tools\tests\plan_store_injection.cpp src\planner\plan_store.cpp src\planner\plan_policy.cpp | plan race:
 coarse_graph_injection | /EHsc | | | tools\tests\coarse_graph_injection.cpp src\planner\coarse_graph.cpp | store race:
 backpack_table_injection | /EHsc | | | tools\tests\backpack_table_injection.cpp src\inventory\backpack_table.cpp src\inventory\backpack_policy.cpp src\game\hand_key.cpp | backpack table: torn=0 reads=
-splice_ring_injection | /EHsc | | | tools\tests\splice_ring_injection.cpp src\navmesh\construction\splice_ring.cpp | torn=0 lapped=yes
+splice_ring_injection | /EHsc | | | tools\tests\splice_ring_injection.cpp src\navmesh\construction\splice_ring.cpp | torn=0 lapped=yes keepPace=torn0 tryPush=refused
 throwout_hold_injection | /EHsc | | | tools\tests\throwout_hold_injection.cpp src\fixes\world\throwout_hold.cpp src\fixes\world\throwout_policy.cpp src\game\hand_key.cpp | hold table: 0 torn

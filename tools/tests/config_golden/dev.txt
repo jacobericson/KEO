@@ -107,6 +107,7 @@ sectionStamp=true
 settingsPanel=true
 shadowReachCull=true
 shadowReachDiag=false
+spliceSeamFull=true
 stitchByteGuard=true
 stitchSourceLines=32
 throwOutFix=true

@@ -4,7 +4,9 @@
 // once every producer has returned and the drain has reached the cursor, drained + lost must equal
 // written, with at least one record overwritten by a later lap. A second phase runs the same
 // producers against a consumer with no cap and no yield and holds it to the same whole
-// record and accounting checks. The threads yield with SwitchToThread only.
+// record and accounting checks. A third phase runs the producers through the refusing push against
+// the starved consumer: every index taken is a record or a failed claim, and at least one push must
+// be refused for a full window. The threads yield with SwitchToThread only.
 //
 // Links src/navmesh/construction/splice_ring.cpp unmodified.
 
@@ -22,6 +24,9 @@ namespace splice_ring_injection_detail
 	const int  WIDE      = 64;
 
 	bool g_keepPace = false;
+	bool g_tryPush = false;
+	volatile LONG g_ok = 0;
+	volatile LONG g_refused = 0;
 
 	SpliceRing    g_ring;
 	volatile LONG g_producersDone = 0;
@@ -72,7 +77,17 @@ namespace splice_ring_injection_detail
 			box[1] = (float)n;
 			for (int i = 2; i < 6; ++i)
 				box[i] = Value((int)n, thread, i);
-			SpliceRingPush(&g_ring, box);
+			if (!g_tryPush)
+				SpliceRingPush(&g_ring, box);
+			else
+			{
+				switch (SpliceRingTryPush(&g_ring, box))
+				{
+				case SPLICE_PUSH_TAKEN: InterlockedIncrement(&g_ok); break;
+				case SPLICE_PUSH_FULL:  InterlockedIncrement(&g_refused); break;
+				default:                break;   // counted in the ring's claimFailed
+				}
+			}
 			if ((n & 1023) == 0) SwitchToThread();
 		}
 		InterlockedIncrement(&g_producersDone);
@@ -94,9 +109,12 @@ using namespace splice_ring_injection_detail;
 
 // One phase: fresh ring and counters, the producers against the consumer, then the final drain and
 // the checks. Returns 0 when the phase held.
-static int RunPhase(const char* name, bool keepPace, bool requireLap)
+static int RunPhase(const char* name, bool keepPace, bool requireLap, bool tryPush)
 {
 	g_keepPace = keepPace;
+	g_tryPush = tryPush;
+	g_ok = 0;
+	g_refused = 0;
 	g_producersDone = 0;
 	g_drained = 0;
 	g_torn = 0;
@@ -136,6 +154,23 @@ static int RunPhase(const char* name, bool keepPace, bool requireLap)
 		printf("splice ring %s: accounting drained=%ld lost=%ld written=%ld\n", name, g_drained, lost, written);
 		return 1;
 	}
+	if (tryPush)
+	{
+		const LONG ok = g_ok, refused = g_refused, claimFailed = g_ring.claimFailed;
+		if (written != ok + claimFailed)
+		{
+			printf("splice ring %s: accounting written=%ld ok=%ld claimFailed=%ld\n", name, written, ok, claimFailed);
+			return 1;
+		}
+		if (refused == 0)
+		{
+			printf("splice ring %s: never refused (refused=0)\n", name);
+			return 1;
+		}
+		printf("splice ring %s: written=%ld ok=%ld refused=%ld claimFailed=%ld drained=%ld lost=%ld\n",
+		       name, written, ok, refused, claimFailed, g_drained, lost);
+		return 0;
+	}
 	if (requireLap && overwritten == 0)
 	{
 		printf("splice ring %s: no lap (overwritten=0); the harness did not exercise lapping\n", name);
@@ -148,10 +183,12 @@ static int RunPhase(const char* name, bool keepPace, bool requireLap)
 
 int main()
 {
-	if (RunPhase("starved", false, true) != 0)
+	if (RunPhase("starved", false, true, false) != 0)
 		return 1;
-	if (RunPhase("keepPace", true, false) != 0)
+	if (RunPhase("keepPace", true, false, false) != 0)
 		return 1;
-	printf("splice ring: torn=0 lapped=yes keepPace=torn0\n");
+	if (RunPhase("tryPush", false, false, true) != 0)
+		return 1;
+	printf("splice ring: torn=0 lapped=yes keepPace=torn0 tryPush=refused\n");
 	return 0;
 }

@@ -265,7 +265,7 @@ void CheckTemplateAndDefaults(const ConfigModule& core, const ConfigModule& rend
 	std::string text = ReadFile("KEO.ini", &ok);
 	Check(ok, "KEO.ini found at the repository root");
 	std::vector<KeyValue> tmpl = TemplateKeys(text);
-	Check(tmpl.size() == 87, "template has 87 documented key lines");
+	Check(tmpl.size() == 88, "template has 88 documented key lines");
 
 	// 1. Every template line names a documented, active row...
 	std::vector<std::string> missing;
@@ -556,7 +556,7 @@ void CheckCoreWriter(const ConfigModule& core)
 	for (int m = 0; m < kConfigModuleCount; ++m)
 		if (kConfigModules[m].state && strcmp(kConfigModules[m].name, "render"))
 			ConfigIniEntries(kConfigModules[m], kConfigModules[m].state, kConfigModules[m].defaults, &e);
-	Check(e.size() == 98u,
+	Check(e.size() == 99u,
 	      "writer: core entries, every active row but the custom rows without choices");
 	bool appends = false;
 	for (size_t i = 0; i < e.size(); ++i)
@@ -631,7 +631,7 @@ void CheckGoldenRecord(const ConfigModule& core)
 		if (!fl[i].empty() && eq != std::string::npos)
 			want.push_back(KeyValue(fl[i].substr(0, eq), fl[i].substr(eq + 1)));
 	}
-	Check(want.size() == 127u, "golden record key count");
+	Check(want.size() == 128u, "golden record key count");
 	CheckNamed(got.size() == want.size(), "golden count");
 	for (size_t i = 0; i < got.size(); ++i)
 	{
@@ -678,7 +678,7 @@ void CheckTables()
 		Check(mod.keys[i].name == NULL, "tables end");
 	}
 	Check(kConfigModuleCount == 10, "tables end: ten modules");
-	Check(active == 129 && retired == 23, "tables end: active and retired rows");
+	Check(active == 130 && retired == 23, "tables end: active and retired rows");
 	Check(coreActive == 2 && renderActive == 22, "tables end: rows per module");
 	std::printf("  tables: %d module(s), %d active row(s) (core %d, render %d), %d retired\n",
 	            kConfigModuleCount, active, coreActive, renderActive, retired);

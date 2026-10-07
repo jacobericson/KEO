@@ -51,6 +51,19 @@ static void TestPress()
 	Check(NmMarkPressFinished(w, NmMarkWord(9, NM_MARK_DONE)) && NmMarkPressFinished(w, NmMarkWord(9, NM_MARK_NONE)) &&
 	      NmMarkPressFinished(w, NmMarkWord(10, NM_MARK_MARKED)) && NmMarkPressFinished(w, 0),
 	      "a press's cell has ended when its mark is done, cleared or another press's");
+	Check(NmMarkCellDecide(NmMarkWord(4, NM_MARK_CLAIMED), 5.0, false) == NM_PRESS_MARK,
+	      "cell mark: the border entry re-marks a mark a job holds");
+	Check(NmMarkCellDecide(NmMarkWord(4, NM_MARK_CLAIMED), 5.0, true) == NM_PRESS_KEEP,
+	      "cell mark: the key's form keeps a mark a job holds");
+	bool fresh = true;
+	const long others[] = { NmMarkWord(4, NM_MARK_MARKED), NmMarkWord(4, NM_MARK_DONE), 0 };
+	for (int keep = 0; keep < 2; ++keep)
+	{
+		for (int i = 0; i < 3; ++i)
+			fresh = fresh && NmMarkCellDecide(others[i], 5.0, keep != 0) == NM_PRESS_MARK;
+		fresh = fresh && NmMarkCellDecide(NmMarkWord(4, NM_MARK_CLAIMED), NM_REBUILD_MARK_TTL_SEC + 1.0, keep != 0) == NM_PRESS_MARK;
+	}
+	Check(fresh, "cell mark: anything else is marked afresh either way");
 }
 
 static void TestFrontAndBypass()

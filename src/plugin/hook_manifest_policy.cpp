@@ -37,6 +37,7 @@ bool HookWantEval(HookWant want, const HookWantInputs& in)
 	case HOOK_WANT_BACKPACK_FOOD:     return in.backpackFood;
 	case HOOK_WANT_OPERATOR_TRIPS:    return in.operatorTrips;
 	case HOOK_WANT_WALL_SPLICE:       return in.wallSplice;
+	case HOOK_WANT_SPLICE_SEAM:       return in.wallSplice && in.spliceSeam && in.caching;
 	case HOOK_WANT_UNCOUNTED:         return false;
 	}
 	return false;
@@ -79,6 +80,7 @@ HookWantInputs HookWantInputsFromConfig()
 	in.backpackFood        = keo_inventory::g_inventoryCfg.backpackFoodScoreEnabled;
 	in.operatorTrips       = keo_inventory::g_inventoryCfg.operatorFillBeforeDeliverEnabled;
 	in.wallSplice          = navmesh::g_navmeshCfg.wallSpliceFixEnabled;
+	in.spliceSeam          = navmesh::g_navmeshCfg.spliceSeamFullEnabled;
 	return in;
 }
 

@@ -227,6 +227,58 @@ static void CheckRing()
 	      "ring: a newer record is never overwritten by an older index");
 }
 
+static SplicePush TryPushOne(float f)
+{
+	const float box[6] = { f, f + 0.5f, f + 1.0f, 1.0f, 2.0f, 3.0f };
+	return SpliceRingTryPush(&s_ring, box);
+}
+
+static void CheckRingTryPush()
+{
+	SpliceRingInit(&s_ring);
+	s_ring.readPub = 9;
+	SpliceRingInit(&s_ring);
+	Check(s_ring.readPub == 0, "ring: init publishes a zero cursor");
+
+	SpliceRingInit(&s_ring);
+	PushN(&s_ring, 3, 0);
+	Check(SpliceRingDrain(&s_ring, s_out, 64) == 3 && s_ring.readPub == 3, "ring: a drain publishes its cursor");
+
+	SpliceRingInit(&s_ring);
+	const SplicePush taken = TryPushOne(5.0f);
+	Check(taken == SPLICE_PUSH_TAKEN && SpliceRingDrain(&s_ring, s_out, 64) == 1 && Near(s_out[0][0], 5.0f),
+	      "ring: try-push takes a record while there is room");
+
+	SpliceRingInit(&s_ring);
+	bool allTaken = true;
+	for (int i = 0; i < SPLICE_RING_SLOTS; ++i)
+		allTaken = allTaken && TryPushOne((float)i) == SPLICE_PUSH_TAKEN;
+	const SplicePush full = TryPushOne(64.0f);
+	Check(allTaken && full == SPLICE_PUSH_FULL && s_ring.written == SPLICE_RING_SLOTS && s_ring.claimFailed == 0,
+	      "ring: try-push refuses a full window and takes nothing");
+
+	SpliceRingInit(&s_ring);
+	for (int i = 0; i < SPLICE_RING_SLOTS; ++i)
+		TryPushOne((float)i);
+	const int drained = SpliceRingDrain(&s_ring, s_out, 64);
+	const SplicePush again = TryPushOne(65.0f);
+	Check(drained == SPLICE_RING_SLOTS && again == SPLICE_PUSH_TAKEN && s_ring.written == SPLICE_RING_SLOTS + 1
+	      && SpliceRingDrain(&s_ring, s_out, 64) == 1 && Near(s_out[0][0], 65.0f) && s_ring.lost == 0,
+	      "ring: try-push after a drain has room again");
+
+	SpliceRingInit(&s_ring);
+	s_ring.slot[0].seq = SPLICE_SEQ_WRITING;
+	s_ring.written = SPLICE_RING_SLOTS;
+	s_ring.read = SPLICE_RING_SLOTS;
+	s_ring.readPub = SPLICE_RING_SLOTS;
+	const SplicePush failed = TryPushOne(7.0f);
+	bool passed = failed == SPLICE_PUSH_CLAIM_FAILED && s_ring.claimFailed == 1 && s_ring.written == SPLICE_RING_SLOTS + 1;
+	for (int pass = 0; pass < SPLICE_RING_STALL_PASSES; ++pass)
+		passed = passed && SpliceRingDrain(&s_ring, s_out, 64) == 0;
+	Check(passed && s_ring.lost == 1 && s_ring.read == SPLICE_RING_SLOTS + 1,
+	      "ring: a failed try-push claim is accounted as lost");
+}
+
 int main()
 {
 	CheckRecord();
@@ -234,5 +286,6 @@ int main()
 	CheckDecide();
 	CheckSite();
 	CheckRing();
+	CheckRingTryPush();
 	return CheckExit("splice_queue_policy_units");
 }

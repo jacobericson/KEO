@@ -301,6 +301,11 @@ static void CheckRuledLabels()
 		        && OnlyRowOf(prod, kLabels[i][0]) >= 0;
 	}
 	Check(exact, "labels: the three Gameplay fixes labels are the user's exact words");
+	const ConfigModule* wallMod = NULL;
+	const ConfigKey* wall = FindConfigKey("wallSpliceFix", &wallMod);
+	Check(wall && wall->tooltip && strcmp(wall->tooltip,
+	      "Walls and buildings you place join the navmesh right away, including ones across a map-cell edge") == 0,
+	      "labels: the wall fix tooltip is the user's exact words");
 }
 
 int main()

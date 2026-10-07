@@ -23,18 +23,6 @@
 
 namespace wall_splice_drain_detail {
 struct PendingSplice { float box[6]; int cellX, cellY; int ticksWaited; int used; };
-
-// What the tick reads once per frame, before it judges any pending box.
-struct GateSnapshot
-{
-	int        mainCount;
-	int        backCount;
-	bool       queuesClear;
-	bool       worldOk;
-	void*      zoneMgr;
-	uintptr_t  sectionMgr;
-	isContentPending_t isReady;
-};
 } // namespace wall_splice_drain_detail
 using namespace wall_splice_drain_detail;
 
@@ -155,9 +143,14 @@ static bool AnyPending()
 	return false;
 }
 
-static GateSnapshot TakeSnapshot()
+bool SpliceWorldOk()
 {
-	GateSnapshot s;
+	return !ZoneResetGateUp(&g_zoneResetGate) && !NavMeshStopSeen() && !isTransitionActive;
+}
+
+SpliceGateSnapshot SpliceGateTake(queuesAreClearMT_t fn)
+{
+	SpliceGateSnapshot s;
 	s.mainCount = 0;
 	s.backCount = 0;
 	s.queuesClear = false;
@@ -172,10 +165,9 @@ static GateSnapshot TakeSnapshot()
 	{
 		s.mainCount = *(int*)(KLIB_MEMBER(2, physics, PhysicsInterface_hullsToChangeGroup_mainThreadData_count, 568));
 		s.backCount = *(int*)(KLIB_MEMBER(2, physics, PhysicsInterface_hullsToChangeGroup_backThreadData_count, 592));
-		s.queuesClear = g_wallSplice.fn_queuesAreClearMT((void*)physics);
+		s.queuesClear = fn((void*)physics);
 	}
-	s.worldOk = !ZoneResetGateUp(&g_zoneResetGate) && !NavMeshStopSeen() && !isTransitionActive
-	         && s.zoneMgr != NULL && s.sectionMgr != 0;
+	s.worldOk = SpliceWorldOk() && s.zoneMgr != NULL && s.sectionMgr != 0;
 	return s;
 }
 
@@ -193,34 +185,40 @@ static void TouchedCells(const float box[6], int* x0, int* y0, int* x1, int* y1)
 	*y1 = ay < by ? by : ay;
 }
 
+bool SpliceCellGone(void* zoneMgr, int x, int y)
+{
+	void* zone = GetZoneEntry(zoneMgr, x, y);
+	return !zone || (!IsZoneLoading(zone) && !IsZoneAccessible(zone));
+}
+
+bool SpliceCellReady(const SpliceGateSnapshot& s, int x, int y)
+{
+	void* zone = GetZoneEntry(s.zoneMgr, x, y);
+	if (!zone || !IsZoneAccessible(zone))
+		return false;
+	int coords[2] = { x, y };
+	return s.isReady((void*)s.sectionMgr, (void*)coords);
+}
+
 // Gone: a touched cell neither loading nor accessible. Two flag reads per cell, no lock.
 static bool AnyCellGone(void* zoneMgr, int x0, int y0, int x1, int y1)
 {
 	for (int x = x0; x <= x1; ++x)
 		for (int y = y0; y <= y1; ++y)
-		{
-			void* zone = GetZoneEntry(zoneMgr, x, y);
-			if (!zone || (!IsZoneLoading(zone) && !IsZoneAccessible(zone)))
+			if (SpliceCellGone(zoneMgr, x, y))
 				return true;
-		}
 	return false;
 }
 
 // Ready: every touched cell accessible (so game-owned, never a private one) and ready by the
 // original isContentPending, which takes the section manager's +0x1E0 lock, as vanilla's own
 // main-thread callers do.
-static bool AllCellsReady(const GateSnapshot& s, int x0, int y0, int x1, int y1)
+static bool AllCellsReady(const SpliceGateSnapshot& s, int x0, int y0, int x1, int y1)
 {
 	for (int x = x0; x <= x1; ++x)
 		for (int y = y0; y <= y1; ++y)
-		{
-			void* zone = GetZoneEntry(s.zoneMgr, x, y);
-			if (!zone || !IsZoneAccessible(zone))
+			if (!SpliceCellReady(s, x, y))
 				return false;
-			int coords[2] = { x, y };
-			if (!s.isReady((void*)s.sectionMgr, (void*)coords))
-				return false;
-		}
 	return true;
 }
 
@@ -252,7 +250,7 @@ static void EvaluatePending()
 {
 	if (!AnyPending())
 		return;
-	const GateSnapshot s = TakeSnapshot();
+	const SpliceGateSnapshot s = SpliceGateTake(g_wallSplice.fn_queuesAreClearMT);
 	int issuedNow = 0;
 	for (int i = 0; i < kPendingSlots && issuedNow < kIssuePerTick; ++i)
 	{

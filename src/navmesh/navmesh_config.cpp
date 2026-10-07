@@ -41,6 +41,7 @@ const NavMeshConfig kNavMeshDefaults =
 	512, // cfg_navmeshDiskCacheMaxMB
 	1.0, // cfg_reprioritizeInterval
 	true, // wallSpliceFixEnabled
+	true, // spliceSeamFullEnabled
 	0, // g_navMeshWorkerCount
 	0, // g_modSetHash
 };
@@ -121,7 +122,11 @@ const ConfigKey g_navmeshConfigKeys[] =
 	  "Seconds between navmesh queue reorders while fast reordering is on.", 1.0f, 1),
 	CFG_OBOOL("wallSpliceFix", NavMeshConfig, wallSpliceFixEnabled,         DOC, SHOW,
 	  "Player buildings properly stitch into navmesh",
-	  "Finished walls join the navmesh at once; player buildings are patched at placement"),
+	  "Walls and buildings you place join the navmesh right away, including ones across a map-cell edge"),
+	CFG_OBOOL("spliceSeamFull", NavMeshConfig, spliceSeamFullEnabled,       DOC, DEVROW,
+	  "Full rebuild for cross-cell navmesh patches",
+	  "A navmesh patch box across a map-cell border regenerates every cell it crosses in full instead of"
+	  " the game's per-cell patches, whose border edges never join. Needs the wall fix and caching."),
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }
 };
 

@@ -121,6 +121,7 @@ static const Owner kOwners[] =
 	{ "throwOutFix", "fixes" },
 	{ "throwOutHoldMinutes", "fixes" },
 	{ "wallSpliceFix", "navmesh" },
+	{ "spliceSeamFull", "navmesh" },
 	{ "backpackFirstDefault", "inventory" },
 	{ "backpackFoodScore", "inventory" },
 	{ "backpackDialogueFunction", "inventory" },
@@ -401,7 +402,7 @@ int main()
 		}
 		if (i == CONFIG_STAGE_MAX) Fail(mod.name, "no table end within stage capacity");
 	}
-	Check(moduleKeys == 105 && activeCore == 2 && retiredCore == 23 && debug == 4, "module and core row counts");
+	Check(moduleKeys == 106 && activeCore == 2 && retiredCore == 23 && debug == 4, "module and core row counts");
 	for (size_t i = 0; i < sizeof(kOwners) / sizeof(kOwners[0]); ++i)
 	{
 		const ConfigModule* mod = NULL;

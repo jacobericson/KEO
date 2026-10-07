@@ -200,14 +200,14 @@ static void AddLive(int cell, long word, void* zone)
 // stamp is written before the word, so a claim that reads the new word reads
 // its stamp. A lost exchange (a claim or a finish moved the word) decides once
 // more on the word it left.
-static long MarkCell(int cell, void* zone, LONGLONG now, bool* kept)
+static long MarkCell(int cell, void* zone, LONGLONG now, bool keepClaimed, bool* kept)
 {
 	*kept = false;
 	for (int attempt = 0; attempt < 2; ++attempt)
 	{
 		const LONG old = InterlockedCompareExchange(&s_markWord[cell], 0, 0);
 		const double age = AgeSec(InterlockedCompareExchange64(&s_markQpc[cell], 0, 0), now);
-		if (NmMarkPressDecide(old, age) == NM_PRESS_KEEP)
+		if (NmMarkCellDecide(old, age, keepClaimed) == NM_PRESS_KEEP)
 		{
 			*kept = true;
 			return old;
@@ -241,6 +241,14 @@ static bool CalledByTheKey(void* immediate)
 	return NmRebuildIsKeyCaller(offs, (int)n, RVA_PROCESS_KEYS_GENERATE_RET);
 }
 
+// A cell's eligibility for an exterior job from the main thread: NmRebuildEligible's answer.
+static int JudgeCell(void* zone, int cell)
+{
+	const bool have = zone != NULL && cell >= 0;
+	return NmRebuildEligible(have, have && IsZoneAccessible(zone), have && IsZoneLoading(zone),
+	                         have && ZoneContent(zone) != 0, have && ZoneTerrain(zone) != 0);
+}
+
 static void AddPressCell(PressWork* p, int gx, int gy, void* zone)
 {
 	PressCell& c = p->c[p->count++];
@@ -248,13 +256,11 @@ static void AddPressCell(PressWork* p, int gx, int gy, void* zone)
 	c.word = 0;
 	c.zone = zone;
 	c.verdict = PV_SKIP;
-	const bool have = zone != NULL && c.cell >= 0;
-	c.skip = NmRebuildEligible(have, have && IsZoneAccessible(zone), have && IsZoneLoading(zone),
-	                           have && ZoneContent(zone) != 0, have && ZoneTerrain(zone) != 0);
+	c.skip = JudgeCell(zone, c.cell);
 	if (c.skip != NM_SKIP_NONE)
 		return;
 	bool kept = false;
-	c.word = MarkCell(c.cell, zone, p->now, &kept);
+	c.word = MarkCell(c.cell, zone, p->now, true, &kept);
 	c.verdict = kept ? PV_KEPT : PV_SKIP;   // settled by QueueMissing
 	p->pending++;
 }
@@ -285,41 +291,49 @@ static void BeginPress(void* navMesh, void* zone, void* immediate, PressWork* p)
 // released before addJob, which takes the same lock itself. A cell whose job a
 // claim already took is in flight; a queued type-0 job is left; anything else
 // gets the game's own exterior job. hasJob is not used: it walks unlocked.
-static void QueueMissing(PressWork* p)
+static void QueueCells(uintptr_t nmg, PressCell* c, int count)
 {
-	if (!p->nmg || !s_addJob || !s_hashZone || p->pending <= 0)
-		return;
 	bool queued[NM_REBUILD_MAX_CELLS] = { false };
-	NmQueueLock q(p->nmg);
-	uintptr_t node = *(uintptr_t*)(KLIB_MEMBER(4, p->nmg, NavMeshGenerator_queue_front, 136));
+	NmQueueLock q(nmg);
+	uintptr_t node = *(uintptr_t*)(KLIB_MEMBER(4, nmg, NavMeshGenerator_queue_front, 136));
 	for (int walked = 0; node && walked < QUEUE_WALK_CAP; ++walked)
 	{
 		const int type = *(int*)(KLIB_MEMBER(4, node, NavMeshGenerator__Task_flags, 88)) & 7;
 		const uintptr_t nodeZone = *(uintptr_t*)(KLIB_MEMBER(4, node, NavMeshGenerator__Task_zone, 0));
 		if (type == 0)
-			for (int i = 0; i < p->count; ++i)
-				if (p->c[i].skip == NM_SKIP_NONE && (uintptr_t)p->c[i].zone == nodeZone)
+			for (int i = 0; i < count; ++i)
+				if (c[i].skip == NM_SKIP_NONE && (uintptr_t)c[i].zone == nodeZone)
 					queued[i] = true;
 		node = *(uintptr_t*)(KLIB_MEMBER(4, node, NavMeshGenerator__Task_next, 96));
 	}
 	q.Release();
 
-	for (int i = 0; i < p->count; ++i)
+	for (int i = 0; i < count; ++i)
 	{
-		PressCell& c = p->c[i];
-		if (c.skip != NM_SKIP_NONE)
+		PressCell& cell = c[i];
+		if (cell.skip != NM_SKIP_NONE)
 			continue;
-		const LONG cur = InterlockedCompareExchange(&s_markWord[c.cell], 0, 0);
-		if (NmMarkStateOf(cur) == NM_MARK_CLAIMED && NmMarkSeqOf(cur) == NmMarkSeqOf(c.word))
-			c.verdict = c.verdict == PV_KEPT ? PV_KEPT : PV_INFLIGHT;
+		const LONG cur = InterlockedCompareExchange(&s_markWord[cell.cell], 0, 0);
+		if (NmMarkStateOf(cur) == NM_MARK_CLAIMED && NmMarkSeqOf(cur) == NmMarkSeqOf(cell.word))
+			cell.verdict = cell.verdict == PV_KEPT ? PV_KEPT : PV_INFLIGHT;
 		else if (queued[i])
-			c.verdict = (i == 0 && s_shown) ? PV_VANILLA : PV_ALREADY;
+			cell.verdict = PV_ALREADY;
 		else
 		{
-			s_addJob((void*)p->nmg, c.zone, s_hashZone(c.zone));
-			c.verdict = PV_QUEUED;
+			s_addJob((void*)nmg, cell.zone, s_hashZone(cell.zone));
+			cell.verdict = PV_QUEUED;
 		}
 	}
+}
+
+// The press's cells; the centre's queued job reads as vanilla's when the game's call showed the panel.
+static void QueueMissing(PressWork* p)
+{
+	if (!p->nmg || !s_addJob || !s_hashZone || p->pending <= 0)
+		return;
+	QueueCells(p->nmg, p->c, p->count);
+	if (p->c[0].verdict == PV_ALREADY && s_shown)
+		p->c[0].verdict = PV_VANILLA;
 }
 
 // Before the game's call: the press's cells, the counters to report against,
@@ -446,6 +460,51 @@ void NmForceRebuildNoteShow()
 void NmForceRebuildNoteDismissed()
 {
 	PressShowApply(NM_PRESS_DISMISSED, false);
+}
+
+int NmForceRebuildCells(void* navMesh, const NmRebuildCell* cells, int n, NmForceCellResult* out)
+{
+	if (!IsMainThread() || !navMesh || !cells || !out || n <= 0 || n > NM_REBUILD_MAX_CELLS)
+		return 0;
+	const uintptr_t nmg = *(uintptr_t*)(KLIB_MEMBER(4, (uintptr_t)navMesh, NavMesh_generator, OFF_MGR_NAVMESH_GEN));
+	const bool mark = navmesh::g_navmeshCfg.cachingEnabled;
+	const LONGLONG now = QpcNow();
+	PressCell c[NM_REBUILD_MAX_CELLS];
+	int pending = 0;
+	for (int i = 0; i < n; ++i)
+	{
+		const bool onGrid = cells[i].gx >= 0 && cells[i].gx < NM_REBUILD_GRID && cells[i].gy >= 0 && cells[i].gy < NM_REBUILD_GRID;
+		void* zone = (onGrid && g_cachedZoneMgr) ? GetZoneEntry(g_cachedZoneMgr, cells[i].gx, cells[i].gy) : NULL;
+		c[i].cell = onGrid ? cells[i].gx * NM_REBUILD_GRID + cells[i].gy : -1;
+		c[i].word = 0;
+		c[i].zone = zone;
+		c[i].verdict = PV_SKIP;
+		c[i].skip = JudgeCell(zone, c[i].cell);
+		out[i].zone = zone;
+		out[i].haveZone = zone != NULL;
+		out[i].terrain = zone != NULL && ZoneTerrain(zone) != 0;
+		out[i].skip = c[i].skip;
+		out[i].verdict = NM_FORCE_CELL_NONE;
+		if (c[i].skip != NM_SKIP_NONE)
+			continue;
+		bool kept = false;
+		if (mark)
+			c[i].word = MarkCell(c[i].cell, zone, now, false, &kept);
+		++pending;
+	}
+	if (pending == 0 || !nmg || !s_addJob || !s_hashZone)
+		return 0;
+	QueueCells(nmg, c, n);
+	CallPrioritizeNavMeshQueue();
+	int forced = 0;
+	for (int i = 0; i < n; ++i)
+	{
+		if (c[i].skip != NM_SKIP_NONE)
+			continue;
+		out[i].verdict = c[i].verdict == PV_QUEUED ? NM_FORCE_CELL_QUEUED : NM_FORCE_CELL_COVERED;
+		++forced;
+	}
+	return forced;
 }
 
 // ---------------------------------------------------------------------
@@ -604,6 +663,25 @@ void NmForceRebuildOnWorldReset()
 static const unsigned char kAddJobPrologue[16]   = { 0x48,0x8B,0xC4,0x55,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x48,0x8D,0x68,0xA1,0x48 };
 static const unsigned char kHashZonePrologue[16] = { 0x40,0x55,0x48,0x83,0xEC,0x20,0x48,0x8B,0x01,0x48,0x89,0x7C,0x24,0x40,0x33,0xFF };
 
+bool NmForceRebuildBindQueue(const char** why)
+{
+	if (s_addJob && s_hashZone)
+		return true;
+	if (!VerifyPrologue(RVA_NMG_ADD_JOB_ZONE, kAddJobPrologue, "addJob(ZoneMap*,uint)"))
+	{
+		*why = "addJob";
+		return false;
+	}
+	if (!VerifyPrologue(RVA_NAVMESH_HASH_ZONE, kHashZonePrologue, "hashZone"))
+	{
+		*why = "hashZone";
+		return false;
+	}
+	s_addJob = (addJobZone_t)GameAddr(RVA_NMG_ADD_JOB_ZONE);
+	s_hashZone = (hashZone_t)GameAddr(RVA_NAVMESH_HASH_ZONE);
+	return true;
+}
+
 void InstallNavMeshRebuildKey(int* installed, int*)
 {
 	if (!HookRowWanted(HOOK_NAVMESH_GENERATE_ZONEMAP))
@@ -612,16 +690,8 @@ void InstallNavMeshRebuildKey(int* installed, int*)
 		return;
 	}
 	const char* why = NULL;
-	if (!VerifyPrologue(RVA_NMG_ADD_JOB_ZONE, kAddJobPrologue, "addJob(ZoneMap*,uint)"))
-		why = "addJob";
-	else if (!VerifyPrologue(RVA_NAVMESH_HASH_ZONE, kHashZonePrologue, "hashZone"))
-		why = "hashZone";
-	else
-	{
-		s_addJob = (addJobZone_t)GameAddr(RVA_NMG_ADD_JOB_ZONE);
-		s_hashZone = (hashZone_t)GameAddr(RVA_NAVMESH_HASH_ZONE);
+	if (NmForceRebuildBindQueue(&why))
 		why = HookInstall(HOOK_NAVMESH_GENERATE_ZONEMAP, hook_navMeshGenerate, &s_origGenerate, installed, true);
-	}
 	if (why)
 		LogMsg(std::string("NavMesh rebuild key: rebuildKey=refused(") + why + "); the key keeps the game's own behaviour");
 	else

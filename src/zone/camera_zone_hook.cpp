@@ -8,6 +8,7 @@
 #include "zone/transition.h"
 #include "navmesh/nm_workers.h"
 #include "navmesh/construction/wall_splice.h"
+#include "navmesh/construction/splice_seam.h"
 #include "inventory/backpack_sidecar.h"
 #include "inventory/job_counters.h"
 #include "zone/camera_zone_hook.h"
@@ -285,6 +286,7 @@ static bool CameraZoneTicks(void* zoneMgr, bool saveLoading)
 	// silent about exactly the sessions worth reading.
 	ZoneGeometryCertTick(tickNow);
 	navmesh::WallSpliceTick(tickNow, saveLoading);
+	navmesh::SpliceSeamTick(tickNow, saveLoading);
 	fixes::ThrowoutTick(tickNow, saveLoading);
 	fixes::TownClaimTick(tickNow);
 	keo_inventory::BackpackRekeyTick(tickNow, saveLoading);

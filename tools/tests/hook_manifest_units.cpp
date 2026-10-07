@@ -82,7 +82,7 @@ static bool HasName(const TestRow* rows, int n, const char* name)
 	return false;
 }
 
-// The 29 inputs, each with its field and the config global it is read from; a
+// The 30 inputs, each with its field and the config global it is read from; a
 // NULL global is a key a PROD build does not carry, or an int key
 // CheckInputMapping flips on its own.
 struct InputField
@@ -128,6 +128,7 @@ static const InputField kFields[] =
 	{ "backpackFood",        &HookWantInputs::backpackFood,        &keo_inventory::g_inventoryCfg.backpackFoodScoreEnabled },
 	{ "operatorTrips",       &HookWantInputs::operatorTrips,       &keo_inventory::g_inventoryCfg.operatorFillBeforeDeliverEnabled },
 	{ "wallSplice",          &HookWantInputs::wallSplice,          &navmesh::g_navmeshCfg.wallSpliceFixEnabled },
+	{ "spliceSeam",          &HookWantInputs::spliceSeam,          &navmesh::g_navmeshCfg.spliceSeamFullEnabled },
 };
 static const int kFieldCount = (int)(sizeof(kFields) / sizeof(kFields[0]));
 
@@ -272,7 +273,7 @@ static const Flip kFlips[] =
 	{ "destroyListDefer", { "destroyListDefer" }, { NULL } },
 	{ "destroyListDiag and destroyListDefer", { "destroyListDiag", "destroyListDefer" },
 	  { "destroyListInsert" } },
-	{ "caching", { "caching" }, { "dispatchJob", "navMeshGenerate" } },
+	{ "caching", { "caching" }, { "dispatchJob", "navMeshGenerate", "navMeshGenerateAabb" } },
 	{ "pathfindDiag", { "pathfindDiag" },
 	  { "csFindPath", "csCheckFaceConn", "requestPath", "pathReqSubmit", "csFindPathFallback",
 	    "contentStreamCallee_0x8869" } },
@@ -310,7 +311,8 @@ static const Flip kFlips[] =
 	{ "throwOut", { "throwOut" }, { "getDropped", "takeOutsideTick", "takeOutsidePathImpossible", "findKOIntruderTown" } },
 	{ "backpackFood", { "backpackFood" }, { "scoreFindFoodOnGround" } },
 	{ "operatorTrips", { "operatorTrips" }, { "operatorWantGone" } },
-	{ "wallSplice", { "wallSplice" }, { "wallAddProgress" } },
+	{ "wallSplice", { "wallSplice" }, { "wallAddProgress", "navMeshGenerateAabb" } },
+	{ "spliceSeam", { "spliceSeam" }, { "navMeshGenerateAabb" } },
 };
 
 static void CheckWantTruthTable()
@@ -459,14 +461,14 @@ int main()
 {
 	CheckInstallAdmit();
 #if ZONEHAND_STEP >= 3
+	CheckVariant(kDevRows, kDevCount, "dev", 90, 75, 74, 25, 50, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 85, 70, 68, 25, 45, ProdDefaults());
+#elif ZONEHAND_STEP == 2
 	CheckVariant(kDevRows, kDevCount, "dev", 89, 74, 73, 25, 49, DevDefaults());
 	CheckVariant(kProdRows, kProdCount, "prod", 84, 69, 67, 25, 44, ProdDefaults());
-#elif ZONEHAND_STEP == 2
-	CheckVariant(kDevRows, kDevCount, "dev", 88, 73, 72, 25, 48, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 83, 68, 66, 25, 43, ProdDefaults());
 #else
-	CheckVariant(kDevRows, kDevCount, "dev", 85, 70, 69, 25, 45, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 80, 65, 63, 25, 40, ProdDefaults());
+	CheckVariant(kDevRows, kDevCount, "dev", 86, 71, 70, 25, 46, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 81, 66, 64, 25, 41, ProdDefaults());
 #endif
 	CheckDevMinusProd();
 	CheckWantTruthTable();

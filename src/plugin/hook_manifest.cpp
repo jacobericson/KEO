@@ -29,6 +29,7 @@
 #include "navmesh/cache/nm_force_rebuild.h"
 #include "navmesh/scheduling/nm_adjacency.h"
 #include "navmesh/construction/wall_splice.h"
+#include "navmesh/construction/splice_seam.h"
 #include "movement/formation.h"
 #include "movement/islands.h"
 #include "pathfind/pathfinding.h"
@@ -658,6 +659,9 @@ static void (*const kInstallSteps[])(int*, int*) =
 
 	// A finished or repaired wall's navmesh splice, deferred until physics has moved its hulls; only while wanted.
 	navmesh::InstallWallSplice,
+	// A box across a cell border regenerates its cells in full; after the wall splice, whose install
+	// compares the same entry's unpatched head. Only while wanted.
+	navmesh::InstallSpliceSeam,
 	// Machine operators fill main inventory and backpack before delivering; only while wanted.
 	keo_inventory::InstallOperatorTrips,
 	InstallOrderHook,

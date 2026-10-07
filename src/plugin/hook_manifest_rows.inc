@@ -298,6 +298,13 @@
 	// diagnostic = true: a mismatch leaves the vanilla splice in place.
 	HOOK_ROW(HOOK_WALL_ADD_PROGRESS, "wallAddProgress", RVA_WALL_ADD_PROGRESS, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_WALL_SPLICE, HOOK_CAP_NONE,
 	         0x40,0x56,0x48,0x81,0xEC,0x80,0x00,0x00,0x00,0x83,0xB9,0x70,0x03,0x00,0x00,0x0B)
+	// --- src/navmesh/construction/splice_seam.cpp, a box across a cell border rebuilds its cells ---
+	// NavMesh::generate(const Ogre::Aabb&): push rbp; push rsi; push rdi; push r12, whole and
+	// position-independent. Wanted while wallSpliceFix, spliceSeamFull and caching are on; installed
+	// after the wall splice's head check of the same entry. diagnostic = true: a mismatch leaves the
+	// per-cell patches.
+	HOOK_ROW(HOOK_NAVMESH_GENERATE_AABB, "navMeshGenerateAabb", RVA_NAVMESH_GENERATE_AABB, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_SPLICE_SEAM, HOOK_CAP_NONE,
+	         0x40,0x55,0x56,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x41,0x57,0x48,0x8D,0x6C,0x24)
 	// --- src/inventory/backpack_food.cpp, ground-food scoring sees the backpack ---
 	// AI::scoreFindFoodOnGround: push rbx; sub rsp,30h, whole and position-independent. Wanted while
 	// backpackFoodScore is on. diagnostic = true: a mismatch leaves food scoring vanilla.

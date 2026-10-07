@@ -34,8 +34,8 @@ static const char* const SUITE_NAME = "settings_factory_units";
 #else
 static const char* const SUITE_NAME = "settings_factory_prod_units";
 #endif
-static const size_t CORE_ROWS_DEV = 97;
-static const int DEV_ONLY_ROWS = 98;
+static const size_t CORE_ROWS_DEV = 98;
+static const int DEV_ONLY_ROWS = 99;
 
 // ---- Sections --------------------------------------------------------------
 

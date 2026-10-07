@@ -1,12 +1,14 @@
 // nm_force_rebuild.h - The game's rebuild-navmesh key (NavMesh::generate(ZoneMap*)): force marks a
 // type-0 claim consumes, the forced job's cache replace, the queue's front, the loading-panel hold
 // and the key's detour. The marks: the main thread writes them, a claim and a job's end
-// compare-exchange them; nothing here takes a lock but nmCacheCS in NmForceRebuildClearKey.
+// compare-exchange them. Locks taken here: the queue lock, in the queue walk the key press and
+// NmForceRebuildCells share (released before addJob), and nmCacheCS in NmForceRebuildClearKey.
 #ifndef KEO_NM_FORCE_REBUILD_H
 #define KEO_NM_FORCE_REBUILD_H
 
 #include <stddef.h>
 #include "navmesh/cache/nm_cache_key.h"
+#include "navmesh/cache/nm_force_rebuild_policy.h"
 
 class NmQueueLock;
 
@@ -49,6 +51,19 @@ void NmForceRebuildNoteDismissed();
 bool NmForceRebuildTick(void* zoneMgr, bool saveLoading);
 // Save-load reset (main thread): every mark, the press and the hold cleared.
 void NmForceRebuildOnWorldReset();
+// One cell's outcome in NmForceRebuildCells. skip is NmRebuildEligible's answer; verdict QUEUED
+// (a type-0 job added), COVERED (a queued or just-claimed type-0 job of the cell carries the
+// mark) or NONE (not eligible).
+enum NmForceCellVerdict { NM_FORCE_CELL_NONE = 0, NM_FORCE_CELL_QUEUED, NM_FORCE_CELL_COVERED };
+struct NmForceCellResult { void* zone; bool haveZone; bool terrain; int skip; int verdict; };
+// Startup, main thread: binds the game's addJob(ZoneMap*, uint) and hashZone after their head
+// checks, once; true when both are bound, else *why names the refusal.
+bool NmForceRebuildBindQueue(const char** why);
+// Main thread, no mod lock held: the cells' full regeneration. Each eligible cell is marked (while
+// caching is on; a mark a job holds is replaced), the queue is walked once under its lock, a
+// type-0 job is added for each cell without one, and the queue is reordered once. Never the
+// Loading panel and never NavMesh::generate(ZoneMap*). Returns the cells forced.
+int  NmForceRebuildCells(void* navMesh, const NmRebuildCell* cells, int n, NmForceCellResult* out);
 // startPlugin's install step for the row HOOK_NAVMESH_GENERATE_ZONEMAP.
 void InstallNavMeshRebuildKey(int* installed, int* total);
 

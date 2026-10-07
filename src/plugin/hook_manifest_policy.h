@@ -46,6 +46,7 @@ enum HookWant
 	HOOK_WANT_BACKPACK_FOOD,      // backpackFoodScore
 	HOOK_WANT_OPERATOR_TRIPS,     // operatorFillBeforeDeliver
 	HOOK_WANT_WALL_SPLICE,        // wallSpliceFix
+	HOOK_WANT_SPLICE_SEAM,        // wallSpliceFix, spliceSeamFull and caching
 	HOOK_WANT_UNCOUNTED
 };
 
@@ -84,6 +85,7 @@ struct HookWantInputs
 	bool backpackFood;        // backpackFoodScore
 	bool operatorTrips;       // operatorFillBeforeDeliver
 	bool wallSplice;          // wallSpliceFix
+	bool spliceSeam;          // spliceSeamFull
 };
 
 bool HookWantEval(HookWant want, const HookWantInputs& in);
