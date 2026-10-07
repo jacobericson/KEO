@@ -136,6 +136,7 @@ static SettingsRow NewRow(SettingsRowKind kind, const std::string& label, const 
 	r.stepExp = 0;
 	r.buttonId = 0;
 	r.restart = false;
+	r.enabledByRow = -1;
 	return r;
 }
 
@@ -195,6 +196,19 @@ static int WidgetGroup(const ConfigKey& k)
 	}
 }
 
+// The first key of group g in keys, when it is a shown checkbox; -1 otherwise.
+static int GroupHead(const std::vector<SettingsKeyRef>& keys, int g, bool devBuild)
+{
+	for (size_t j = 0; j < keys.size(); ++j)
+	{
+		if (keys[j].groupId != g)
+			continue;
+		const ConfigKey& k = keys[j].module->keys[keys[j].key];
+		return SettingsKeyShown(k, devBuild) && WidgetOf(k) == SW_CHECKBOX ? (int)j : -1;
+	}
+	return -1;
+}
+
 void AddSectionRows(const char* title, const std::vector<SettingsKeyRef>& keys, bool devBuild,
                     std::vector<SettingsRow>* out)
 {
@@ -207,12 +221,29 @@ void AddSectionRows(const char* title, const std::vector<SettingsKeyRef>& keys, 
 			const ConfigKey& k = keys[j].module->keys[keys[j].key];
 			if (!SettingsKeyShown(k, devBuild) || WidgetGroup(k) != pass / 2 || k.live != (pass % 2 == 0))
 				continue;
+			const int g = keys[j].groupId;
+			const int head = g ? GroupHead(keys, g, devBuild) : -1;
+			if (head >= 0 && head != (int)j)
+				continue;   // a member lays out after its head
 			if (!headerAdded)
 			{
 				out->push_back(NewRow(SR_HEADER, title, NULL));
 				headerAdded = true;
 			}
 			AddKeyRow(k, keys[j].key, keys[j].stage, devBuild, out);
+			if (head < 0)
+				continue;
+			const int headRow = (int)out->size() - 1;
+			for (size_t m = j + 1; m < keys.size(); ++m)
+			{
+				const ConfigKey& mk = keys[m].module->keys[keys[m].key];
+				if (keys[m].groupId != g || !SettingsKeyShown(mk, devBuild))
+					continue;
+				const size_t before = out->size();
+				AddKeyRow(mk, keys[m].key, keys[m].stage, devBuild, out);
+				if (out->size() > before)
+					out->back().enabledByRow = headRow;
+			}
 		}
 	}
 }

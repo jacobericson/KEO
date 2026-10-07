@@ -224,6 +224,7 @@ const size_t RVA_OPTIONS_CREATE       = 0x3F0120;  // OptionsWindow::create (bui
 const size_t RVA_OPTIONS_SAVE_OPTIONS = 0x3EC950;  // OptionsWindow::saveOptions (only caller hide(), once per close)
 const size_t RVA_DP_SET_LINE_TEXT_BUTTON = 0x6FE390; // DatapanelGUI::setLineTextButton
 const size_t RVA_DP_BUTTON_PRESS      = 0x6F60A0;  // DataPanelLine_Button::pressCallback (invokes the line's callback)
+const size_t RVA_DP_CHECKBOX_TOGGLE_CALLBACK = 0x6F8060; // DataPanelLine_CheckBox::notifyToggleCheck: the line's callback, after the value write
 
 // Benchmark facade (src/bench/), called or read on the main thread only.
 // KenshiLib-covered functions: bench_game.cpp compares each with GetRealAddress.

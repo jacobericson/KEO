@@ -197,6 +197,7 @@ static void AddBackpackFirstBox(void* layout, void* gui)
 static void __fastcall hook_setupSections(void* layout, void* gui, void* sections, void* inventory)
 {
 	orig_setupSections(layout, gui, sections, inventory);
+	if (!g_inventoryCfg.backpackFixesEnabled) return;
 	try
 	{
 		AddBackpackFirstBox(layout, gui);

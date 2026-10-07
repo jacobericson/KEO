@@ -2,6 +2,7 @@ adoptOgrePurgeMaxSkipSeconds=120
 adoptOgrePurgeSkip=true
 backpackDialogueFunction=true
 backpackFirstDefault=true
+backpackFixes=true
 backpackFoodScore=true
 caching=true
 camFocus=true

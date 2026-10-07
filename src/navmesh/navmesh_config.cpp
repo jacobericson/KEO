@@ -120,8 +120,8 @@ const ConfigKey g_navmeshConfigKeys[] =
 	  "Navmesh queue reorder interval seconds",
 	  "Seconds between navmesh queue reorders while fast reordering is on.", 1.0f, 1),
 	CFG_OBOOL("wallSpliceFix", NavMeshConfig, wallSpliceFixEnabled,         DOC, SHOW,
-	  "Finished walls reach the navmesh",
-	  "A wall that is finished or repaired is added to the navmesh once its collision is in place."),
+	  "Player buildings properly stitch into navmesh",
+	  "Finished walls join the navmesh at once; player buildings are patched at placement"),
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }
 };
 

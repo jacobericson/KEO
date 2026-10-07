@@ -14,10 +14,18 @@ struct SettingsPlace
 	const char* section;
 	const char* module;
 	const char* key;
+	// Places of one section that share a group name lay out together, in table order, where the
+	// first one lays out; that first one is a checkbox, and its staged value enables the others.
+	// NULL: no group.
+	const char* group;
 };
 
 // In display order, each section's rows together; a NULL section ends it.
 extern const SettingsPlace kSettingsPlaces[];
+
+// True when every group in places sits in one section, its places adjacent, and its first place
+// names a shown checkbox (a CK_BOOL key with a label).
+bool SettingsGroupsValid(const SettingsPlace* places);
 
 // The heading of the shown keys no place names.
 extern const char* const OTHER_SETTINGS_TITLE;

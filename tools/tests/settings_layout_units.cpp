@@ -31,7 +31,8 @@ static int Group(const SettingsRow& r)
 }
 
 // In every section the checkboxes come first, then the drop boxes, then the
-// sliders, each group's startup-only rows after its live ones; one footnote
+// sliders, each group's startup-only rows after its live ones, a grouped row
+// sitting under its checkbox outside that order; one footnote
 // follows the sections exactly when a startup-only row shows, before the
 // Benchmark section.
 static void CheckSectionOrder()
@@ -69,7 +70,7 @@ static void CheckSectionOrder()
 				anyRestart = true;
 				tooltips = tooltips && EndsWith(r.tooltip, " Takes effect after restarting the game.");
 			}
-			if (i < benchmark)
+			if (i < benchmark && r.enabledByRow < 0)
 			{
 				int place = 2 * Group(r) + (r.restart ? 1 : 0);
 				order = order && place >= last;
@@ -152,10 +153,162 @@ static void CheckFallback()
 	      "fallback: the unplaced key alone under Other settings");
 }
 
+// The row index of the only row labelled with key's label, -1 when none or
+// more than one carries it.
+static int OnlyRowOf(const std::vector<SettingsRow>& rows, const char* key)
+{
+	const ConfigModule* mod = NULL;
+	const ConfigKey* k = FindConfigKey(key, &mod);
+	if (!k)
+		return -1;
+	int at = -1, n = 0;
+	for (size_t i = 0; i < rows.size(); ++i)
+	{
+		if (rows[i].label == RowLabel(*k))
+		{
+			at = (int)i;
+			++n;
+		}
+	}
+	return n == 1 ? at : -1;
+}
+
+// The rows labelled with key's label, every one of them.
+static std::vector<int> RowsOf(const std::vector<SettingsRow>& rows, const char* key)
+{
+	std::vector<int> out;
+	const ConfigModule* mod = NULL;
+	const ConfigKey* k = FindConfigKey(key, &mod);
+	for (size_t i = 0; k && i < rows.size(); ++i)
+	{
+		if (rows[i].label == RowLabel(*k))
+			out.push_back((int)i);
+	}
+	return out;
+}
+
+// The PROD tab's two groups: the throw-out slider under its checkbox and the
+// operator tier under the backpack switch, each greyed by its head's row.
+static void CheckGroups()
+{
+	using keo_gui::kSettingsPlaces;
+	Check(keo_gui::SettingsGroupsValid(kSettingsPlaces), "groups: the table's groups are valid");
+
+	SettingsStaging st;
+	StageAll(&st);
+	std::vector<SettingsRow> prod = Rows(&st, false, NULL);
+	static const char* const kMembers[2][2] =
+	{
+		{ "throwOutFix", "throwOutHoldMinutes" },
+		{ "backpackFixes", "operatorHoldUntil" }
+	};
+	bool follows = true;
+	for (int g = 0; g < 2; ++g)
+	{
+		int head = OnlyRowOf(prod, kMembers[g][0]);
+		int member = OnlyRowOf(prod, kMembers[g][1]);
+		follows = follows && head >= 0 && member == head + 1;
+		std::vector<int> all = RowsOf(prod, kMembers[g][1]);
+		for (size_t i = 0; i < all.size(); ++i)
+			follows = follows && head >= 0 && prod[all[i]].enabledByRow == head;
+	}
+	Check(follows, "groups: each member follows its head");
+
+	// Every greyed row names a checkbox row carrying its own group head's label.
+	bool gated = true;
+	int gatedRows = 0;
+	for (size_t i = 0; i < prod.size(); ++i)
+	{
+		int h = prod[i].enabledByRow;
+		if (h < 0)
+			continue;
+		++gatedRows;
+		bool known = false;
+		for (int g = 0; g < 2; ++g)
+		{
+			std::vector<int> heads = RowsOf(prod, kMembers[g][0]);
+			std::vector<int> members = RowsOf(prod, kMembers[g][1]);
+			for (size_t j = 0; j < members.size(); ++j)
+			{
+				if (members[j] != (int)i)
+					continue;
+				known = true;
+				gated = gated && heads.size() == 1 && heads[0] == h;
+			}
+		}
+		gated = gated && known && (size_t)h < prod.size() && prod[h].kind == SR_CHECKBOX;
+	}
+	Check(gated && gatedRows == 2, "groups: each member's enabledByRow is its head's row, a checkbox");
+
+	// The table with the throw-out slider placed before its checkbox.
+	std::vector<keo_gui::SettingsPlace> places;
+	for (int i = 0; kSettingsPlaces[i].section; ++i)
+		places.push_back(kSettingsPlaces[i]);
+	keo_gui::SettingsPlace end = { NULL, NULL, NULL, NULL };
+	places.push_back(end);
+	for (size_t i = 0; i + 1 < places.size(); ++i)
+	{
+		if (places[i].key && strcmp(places[i].key, "throwOutFix") == 0)
+		{
+			keo_gui::SettingsPlace t = places[i];
+			places[i] = places[i + 1];
+			places[i + 1] = t;
+			break;
+		}
+	}
+	std::vector<SettingsRow> swapped;
+	keo_gui::AddPlayerSections(&places[0], &st, &swapped);
+	int fix = OnlyRowOf(swapped, "throwOutFix");
+	int hold = OnlyRowOf(swapped, "throwOutHoldMinutes");
+	int wall = OnlyRowOf(swapped, "wallSpliceFix");
+	Check(!keo_gui::SettingsGroupsValid(&places[0]) && fix >= 0 && hold >= 0 && wall >= 0
+	      && swapped[fix].enabledByRow == -1 && swapped[hold].enabledByRow == -1 && hold > wall,
+	      "groups: a group whose first place is not a checkbox is refused");
+
+	keo_gui::SettingsPlace split[] =
+	{
+		{ "Gameplay fixes",     "fixes", "throwOutFix",         "throwOut" },
+		{ "Backpacks and jobs", "fixes", "throwOutHoldMinutes", "throwOut" },
+		{ NULL, NULL, NULL, NULL }
+	};
+	Check(!keo_gui::SettingsGroupsValid(split), "groups: a group split across sections is refused");
+
+	std::vector<SettingsRow> dev = Rows(&st, true, NULL);
+	bool none = !dev.empty();
+	for (size_t i = 0; i < dev.size(); ++i)
+		none = none && dev[i].enabledByRow == -1;
+	Check(none, "groups: the DEV page has no group");
+}
+
+// The three Gameplay fixes labels are the user's exact words, each on one PROD row.
+static void CheckRuledLabels()
+{
+	static const char* const kLabels[3][2] =
+	{
+		{ "townClaimFix",  "Prevent NPC from claiming player buildings" },
+		{ "throwOutFix",   "Fix guard throwout loop" },
+		{ "wallSpliceFix", "Player buildings properly stitch into navmesh" }
+	};
+	SettingsStaging st;
+	StageAll(&st);
+	std::vector<SettingsRow> prod = Rows(&st, false, NULL);
+	bool exact = true;
+	for (int i = 0; i < 3; ++i)
+	{
+		const ConfigModule* mod = NULL;
+		const ConfigKey* k = FindConfigKey(kLabels[i][0], &mod);
+		exact = exact && k && k->label && strcmp(k->label, kLabels[i][1]) == 0
+		        && OnlyRowOf(prod, kLabels[i][0]) >= 0;
+	}
+	Check(exact, "labels: the three Gameplay fixes labels are the user's exact words");
+}
+
 int main()
 {
 	CheckSectionOrder();
 	CheckLayoutTable();
 	CheckFallback();
+	CheckGroups();
+	CheckRuledLabels();
 	return CheckExit(SUITE_NAME);
 }

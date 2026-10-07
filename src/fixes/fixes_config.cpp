@@ -157,10 +157,13 @@ const ConfigKey g_fixesConfigKeys[] =
 	  "Skips the game's nest validation for a cell whose navmesh is not in yet, so no nest is destroyed"
 	  " against a missing mesh; the cell is checked again next loading cycle."),
 	CFG_OBOOL("townClaimFix", FixesConfig, townClaimFixEnabled,           DOC, SHOW,
-	  "Placed buildings stay the player's",
-	  "A building placed near an NPC town joins the player's own town or none, never the NPC town."),
+	  "Prevent NPC from claiming player buildings",
+	  "A building placed near an NPC town joins the player's own town or none, never the NPC town."
+	  " Inside an NPC town's radius, where one of your towns also covers the spot, a building that"
+	  " does not found a town and arrives with no town, or with a town too small to hold the spot,"
+	  " keeps the game's choice: in an unsaved zone that NPC town, whose power it then draws."),
 	CFG_OBOOL("throwOutFix", FixesConfig, throwOutFixEnabled,             DOC, SHOW,
-	  "No endless throw-out loop",
+	  "Fix guard throwout loop",
 	  "A knocked-out intruder a town throws out is not carried back and forth until it wakes."),
 	CFG_OINT("throwOutHoldMinutes", FixesConfig, throwOutHoldMinutes, 1.0f, 1440.0f, INT_MIN, DOC, SHOW,
 	  "Thrown-out hold in game minutes",

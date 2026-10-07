@@ -33,6 +33,13 @@ struct InventoryConfig
 	// the KEO tab's close stores it on the main thread; the evaluator reads it once per call on the
 	// AI back thread.
 	int operatorHoldUntil;
+
+	// backpackFixes: the backpack fixes as one switch: pickups into the worn backpack first, the food
+	// and dialogue checks that look in it, operators that fill up before delivering, and the backpack
+	// window's box. On by default. Live: the KEO tab's close stores it on the main thread; each part
+	// loads it once per call (AI back thread and main thread). A part whose own install key was off
+	// at startup is not installed, and this switch does not install it.
+	bool backpackFixesEnabled;
 };
 
 extern InventoryConfig g_inventoryCfg;

@@ -117,7 +117,7 @@ static bool __fastcall hook_operatorWantGone(void* ai, const void* subject, cons
 	const bool vanilla = orig_operatorWantGone(ai, subject, v);
 	if (!vanilla)
 		InterlockedIncrement(&s_reason[OR_VANILLA_FALSE]);
-	if (!vanilla || !ai)
+	if (!vanilla || !ai || !g_inventoryCfg.backpackFixesEnabled)
 		return vanilla;
 	OperatorFacts f;
 	memset(&f, 0, sizeof(f));

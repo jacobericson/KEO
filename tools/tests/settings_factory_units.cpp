@@ -34,8 +34,8 @@ static const char* const SUITE_NAME = "settings_factory_units";
 #else
 static const char* const SUITE_NAME = "settings_factory_prod_units";
 #endif
-static const size_t CORE_ROWS_DEV = 96;
-static const int DEV_ONLY_ROWS = 94;
+static const size_t CORE_ROWS_DEV = 97;
+static const int DEV_ONLY_ROWS = 98;
 
 // ---- Sections --------------------------------------------------------------
 
@@ -162,7 +162,7 @@ static void CheckRowCounts()
 	Check(Section(dev, RENDER_TITLE).size() == 21, "render rows dev");
 	Check(Section(prod, "Zone loading").size() == 7 && Section(prod, "Performance").size() == 3
 	      && Section(prod, "Squad movement").size() == 4 && Section(prod, "Gameplay fixes").size() == 4
-	      && Section(prod, "Backpacks and jobs").size() == 5, "player section rows prod");
+	      && Section(prod, "Backpacks and jobs").size() == 2, "player section rows prod");
 }
 
 // ---- Restart and devOnly ---------------------------------------------------
@@ -175,7 +175,7 @@ static void CheckRestart()
 	std::vector<const SettingsRow*> core = ModuleSections(rows);
 	bool ok = !core.empty();
 	// A module row is startup-only unless its key is live: the three zone
-	// footprint rows and operatorHoldUntil.
+	// footprint rows, operatorHoldUntil and backpackFixes.
 	int liveCore = 0;
 	for (int m = 0; m < kConfigModuleCount; ++m)
 	{
@@ -202,7 +202,7 @@ static void CheckRestart()
 		ok = ok && r && !EndsWith(r->label, " *") && !r->restart;
 		++live;
 	}
-	Check(ok && live > 0 && liveCore == 4, "Restart");
+	Check(ok && live > 0 && liveCore == 5, "Restart");
 }
 
 static bool OnProdPage(const char* name)
@@ -1108,6 +1108,39 @@ static void CheckOperatorHoldLive()
 	Check(ok, "live rows: operatorHoldUntil reaches the running config");
 }
 
+// The backpack switch is a live checkbox on the PROD page: unchecked, it
+// reaches the running config at the close and is written as false.
+static void CheckBackpackFixesLive()
+{
+	int m = ModuleFor("backpackFixes");
+	const keo_inventory::InventoryConfig held = keo_inventory::g_inventoryCfg;
+	bool ok = m >= 0;
+	if (ok)
+	{
+		const ConfigModule& mod = kConfigModules[m];
+		SettingsStaging saved;
+		StageAll(&saved);
+		SettingsStaging st = saved;
+		std::vector<SettingsRow> prod = Rows(&st, false, NULL);
+		const SettingsRow* r = FindLabel(prod, RowLabel(mod.keys[KeyIndex(mod, "backpackFixes")]));
+		ok = r && r->kind == SR_CHECKBOX && r->boolPtr && *r->boolPtr;
+		if (ok)
+		{
+			*r->boolPtr = false;
+			ClampModuleStage(mod, &st.module[m], saved.module[m], &DiscardLog);
+			std::vector<std::string> applied;
+			int n = ApplyLiveModuleRows(mod, st.module[m], &applied);
+			std::vector<IniEntry> e;
+			int entries = ModuleStageEntries(mod, st.module[m], saved.module[m], &e);
+			ok = n == 1 && applied.size() == 1 && applied[0] == "backpackFixes=false"
+			  && keo_inventory::g_inventoryCfg.backpackFixesEnabled == false
+			  && entries == 1 && e.size() == 1 && e[0].key == "backpackFixes" && e[0].value == "false";
+		}
+	}
+	keo_inventory::g_inventoryCfg = held;
+	Check(ok, "live rows: backpackFixes reaches the running config");
+}
+
 // A live field is stored whole at a width of 1, 4 or 8 bytes and an address
 // aligned to it; any other store is refused and leaves the field as it was.
 static void CheckLiveFieldStore()
@@ -1278,6 +1311,7 @@ int main()
 	CheckUnlabelledOffsetDouble();
 	CheckLiveModuleRows();
 	CheckOperatorHoldLive();
+	CheckBackpackFixesLive();
 	CheckLiveFieldStore();
 	CheckLiveMacros();
 	CheckLiveRefusedWidth();

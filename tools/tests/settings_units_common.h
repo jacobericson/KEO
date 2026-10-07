@@ -24,7 +24,8 @@ static const char* const MODULE_TITLES[] =
 
 // The PROD page's rows in display order, by key and section: the settings an
 // end user changes in game; in a section, checkboxes, drop boxes, then
-// sliders, each live before startup-only.
+// sliders, each live before startup-only, but a grouped row right after its
+// group's checkbox.
 struct ProdRow
 {
 	const char* key;
@@ -40,13 +41,11 @@ static const ProdRow kProdPage[] =
 	{ "groupCohesion", "Squad movement" }, { "formationGatherPace", "Squad movement" },
 	{ "k7PostDeathHold", "Squad movement" }, { "plannerMode", "Squad movement" },
 	{ "townClaimFix", "Gameplay fixes" }, { "throwOutFix", "Gameplay fixes" },
-	{ "wallSpliceFix", "Gameplay fixes" }, { "throwOutHoldMinutes", "Gameplay fixes" },
-	{ "backpackFirstDefault", "Backpacks and jobs" }, { "backpackFoodScore", "Backpacks and jobs" },
-	{ "backpackDialogueFunction", "Backpacks and jobs" }, { "operatorFillBeforeDeliver", "Backpacks and jobs" },
-	{ "operatorHoldUntil", "Backpacks and jobs" },
+	{ "throwOutHoldMinutes", "Gameplay fixes" }, { "wallSpliceFix", "Gameplay fixes" },
+	{ "backpackFixes", "Backpacks and jobs" }, { "operatorHoldUntil", "Backpacks and jobs" },
 	{ NULL, NULL }
 };
-static const int PROD_PAGE_ROWS = 23;
+static const int PROD_PAGE_ROWS = 20;
 static const char* const PROD_SECTIONS[] = { "Zone loading", "Performance", "Squad movement", "Gameplay fixes",
 	"Backpacks and jobs" };
 

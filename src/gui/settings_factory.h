@@ -45,12 +45,16 @@ struct SettingsKeyRef
 	const ConfigModule* module;
 	int                 key;
 	ConfigModuleStage*  stage;
+	int                 groupId;   // 0: no group; one group's keys share an id
 };
 
 // A header titled title only when a row shows, then one row per shown key:
 // the checkboxes, then the drop boxes, then the sliders, each group's live
 // keys before its startup-only ones, in keys order. Offset fields that fit
-// bind directly; other rows bind their staged slots.
+// bind directly; other rows bind their staged slots. A grouped key's rows
+// follow its group's first key, a shown checkbox, in keys order, each greyed
+// by that checkbox's row; a group whose first key is not a shown checkbox
+// lays out by kind.
 void AddSectionRows(const char* title, const std::vector<SettingsKeyRef>& keys, bool devBuild,
                     std::vector<SettingsRow>* out);
 

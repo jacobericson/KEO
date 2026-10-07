@@ -14,6 +14,7 @@
 #include "base/core.h"
 #include "zone/zone_config.h"
 #include <stddef.h>
+#include <string.h>
 #include "base/klib_include.h"
 #include <kenshi/Globals.h>
 #include <kenshi/gui/ForgottenGUI.h>
@@ -51,6 +52,25 @@ static SettingsStaging s_staging;              // what the rows write
 static SettingsStaging s_saved;                // what KEO.ini holds
 static const char*     s_token      = "off(gate)";   // until InstallSettingsPanel runs
 static bool            s_buttonsOk  = false;   // the button calls' addresses match KenshiLib's
+static bool            s_groupsOk   = false;   // a checkbox line's toggle invokes its callback (checked at install)
+
+namespace settings_panel_detail {
+// A greyed row's line and the checkbox line whose staged value enables it; rebuilt on every
+// create and dropped at every close, as the Benchmark buttons are.
+struct GatedLine
+{
+	DataPanelLine* member;
+	DataPanelLine* head;
+	const bool*    value;
+};
+} // namespace settings_panel_detail
+using namespace settings_panel_detail;
+
+static const int MAX_GATED = 8;
+static GatedLine s_gated[MAX_GATED];
+static int       s_gatedCount = 0;
+static const unsigned char kCheckboxToggleCallback[18] =
+	{ 0x48,0x8B,0x4B,0x20,0x48,0x85,0xC9,0x74,0x09,0x48,0x8B,0x01,0x48,0x8B,0xD3,0xFF,0x50,0x10 };
 
 // The Benchmark section's button lines of the tab being shown, rebuilt on
 // every create. hide() destroys the lines, so a pointer here is only ever
@@ -127,6 +147,24 @@ static void OnButtonPress(DataPanelLine* line)
 	}
 }
 
+// A grouped checkbox's callback (DataPanelLine_CheckBox::notifyToggleCheck, after it wrote the
+// staged value), from MyGUI's click dispatch on the main thread: its members follow its value.
+static void OnGroupToggle(DataPanelLine* line)
+{
+	try
+	{
+		for (int i = 0; i < s_gatedCount; ++i)
+		{
+			if (s_gated[i].head == line)
+				s_gated[i].member->setEnabled(*s_gated[i].value);
+		}
+	}
+	catch (...)
+	{
+		LogMsg("Settings panel: a grouped row failed to follow its checkbox");
+	}
+}
+
 // The game's own Options tabs draw a heading as "[title]" in this colour,
 // after a full line of space.
 static const char* const HEADING_COLOUR = "#afa68b";
@@ -151,6 +189,7 @@ static void AlignToValueColumn(MyGUI::Widget* box)
 static void AddRows(DatapanelGUI* panel, const std::vector<SettingsRow>& rows, int cat, ToolTip* tooltip)
 {
 	const std::string buttonSkin = "Kenshi_Button2";
+	std::vector<DataPanelLine*> lines(rows.size(), (DataPanelLine*)NULL);
 	for (size_t i = 0; i < rows.size(); ++i)
 	{
 		const SettingsRow& r = rows[i];
@@ -183,13 +222,18 @@ static void AddRows(DatapanelGUI* panel, const std::vector<SettingsRow>& rows, i
 			break;
 		}
 		case SR_CHECKBOX:
-			panel->setLineCheckbox(r.label, r.boolPtr, cat)->setToolTip(r.tooltip, tooltip);
+		{
+			DataPanelLine_CheckBox* c = panel->setLineCheckbox(r.label, r.boolPtr, cat);
+			c->setToolTip(r.tooltip, tooltip);
+			lines[i] = c;
 			break;
+		}
 		case SR_SLIDER:
 		{
 			DataPanelLine_SliderEditable* s = panel->setLineSliderEditable(r.label, cat, true, r.lo, r.hi, r.floatPtr);
 			s->setPrecision(r.stepExp);
 			s->setToolTip(r.tooltip, tooltip);
+			lines[i] = s;
 			break;
 		}
 		case SR_DROPBOX:
@@ -200,9 +244,35 @@ static void AddRows(DatapanelGUI* panel, const std::vector<SettingsRow>& rows, i
 				d->addAValue(r.choices[c].first, r.choices[c].second);
 			d->refresh();
 			d->setToolTip(r.tooltip, tooltip);
+			lines[i] = d;
 			break;
 		}
 		}
+	}
+	if (!s_groupsOk)
+		return;
+	int refused = 0;
+	for (size_t i = 0; i < rows.size(); ++i)
+	{
+		const int head = rows[i].enabledByRow;
+		if (head < 0 || (size_t)head >= rows.size() || !lines[i] || !lines[head] || !rows[head].boolPtr)
+			continue;
+		if (s_gatedCount >= MAX_GATED)
+		{
+			++refused;
+			continue;
+		}
+		lines[i]->setEnabled(*rows[head].boolPtr);
+		GatedLine g = { lines[i], lines[head], rows[head].boolPtr };
+		s_gated[s_gatedCount++] = g;
+		lines[head]->callback = MyGUI::newDelegate(&OnGroupToggle);
+	}
+	if (refused)
+	{
+		std::ostringstream ss;
+		ss << "Settings panel: " << refused << " grouped row(s) past the " << MAX_GATED
+		   << "-row gated list stay enabled";
+		LogMsg(ss.str());
 	}
 }
 
@@ -251,6 +321,7 @@ static void BuildTab(OptionsWindow* win)
 	}
 	StageBenchSpeeds(&s_staging, g_benchSlots);
 	s_buttonCount = 0;
+	s_gatedCount = 0;
 
 	SettingsBench bench;
 	bench.available = s_buttonsOk && BenchAvailable();
@@ -383,6 +454,7 @@ static void hook_OptionsSaveOptions(OptionsWindow* win)
 {
 	s_origSave(win);
 	s_buttonCount = 0;
+	s_gatedCount = 0;
 	if (s_active && s_staged)
 		CommitStaging();
 }
@@ -434,6 +506,12 @@ void InstallSettingsPanel()
 	           && (void*)KlibRealAddress(&DataPanelLine_Button::pressCallback) == GameAddr(RVA_DP_BUTTON_PRESS);
 	if (ok && !s_buttonsOk && DEV_BUILD)
 		LogMsg("Bench: button call addresses differ from KenshiLib's, Benchmark section left out");
+
+	// Grouped rows grey while their checkbox is off; that relies on the checkbox's toggle invoking
+	// the line's callback after it writes the value. A mismatch leaves every row enabled.
+	s_groupsOk = memcmp((const void*)GameAddr(RVA_DP_CHECKBOX_TOGGLE_CALLBACK), kCheckboxToggleCallback, sizeof(kCheckboxToggleCallback)) == 0;
+	if (ok && !s_groupsOk)
+		LogMsg("Settings panel: the checkbox toggle differs; grouped rows stay enabled");
 }
 
 const char* SettingsPanelToken()

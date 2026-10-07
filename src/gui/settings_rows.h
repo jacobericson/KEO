@@ -48,6 +48,7 @@ struct SettingsRow
 	std::string     caption;    // SR_BUTTON: the button's text (label is the line's key, shown beside it)
 	int             buttonId;   // SR_BUTTON
 	bool            restart;    // a startup-only key's row, marked RESTART_MARK
+	int             enabledByRow; // the row index of the checkbox that enables this one; -1 for none
 };
 
 // A startup-only key's label ends with RESTART_MARK and its tooltip with

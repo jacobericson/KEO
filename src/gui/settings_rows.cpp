@@ -23,6 +23,7 @@ static SettingsRow Row(SettingsRowKind kind, const std::string& label, const cha
 	r.stepExp = 0;
 	r.buttonId = 0;
 	r.restart = false;
+	r.enabledByRow = -1;
 	return r;
 }
 

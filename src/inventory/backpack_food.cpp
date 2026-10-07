@@ -7,6 +7,7 @@
 #include "inventory/backpack_reader.h"
 #include "inventory/byte_check_policy.h"
 #include "inventory/dialogue_item_function.h"
+#include "inventory/inventory_config.h"
 #include "plugin/hook_manifest.h"
 #include "game/game.h"
 #include "game/klib_member_contract.h"
@@ -37,7 +38,7 @@ static float __fastcall hook_scoreFindFoodOnGround(void* ai, const void* subject
 {
 	float r = orig_scoreFindFoodOnGround(ai, subject, v);
 	InterlockedIncrement(&s_foodCalls);
-	if (r < 1.0f || !ai)
+	if (r < 1.0f || !ai || !g_inventoryCfg.backpackFixesEnabled)
 		return r;
 	void* me = *(void* const*)((const char*)ai + kAiMe);
 	void* bag = me ? WornBackpackInventory(me) : NULL;

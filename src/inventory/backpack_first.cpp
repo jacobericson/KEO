@@ -25,11 +25,13 @@ static giveItem_t orig_giveItem = NULL;
 static volatile LONG s_calls = 0, s_routed = 0, s_placed = 0, s_fellBack = 0;
 static bool s_installed = false;
 
-// AI back thread and main thread. True when the item went into the worn backpack. Each policy
-// input is read in RouteToBackpackFirst's order and the first refusal returns, so a character
-// whose setting is off costs one table read. No lock, no allocation, no logging.
+// AI back thread and main thread. True when the item went into the worn backpack. The backpack
+// switch is read first, then each policy input in RouteToBackpackFirst's order, and the first
+// refusal returns, so a character whose setting is off costs one table read. No lock, no
+// allocation, no logging.
 static bool TryBackpackFirst(void* character, void* item)
 {
+	if (!g_inventoryCfg.backpackFixesEnabled) return false;
 	const int setting = BackpackFirstGet(game::HandKeyOfObject(character));
 	const bool defaultOn = g_inventoryCfg.backpackFirstDefault;
 	if (!(setting < 0 ? defaultOn : setting != 0))

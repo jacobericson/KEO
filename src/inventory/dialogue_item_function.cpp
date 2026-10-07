@@ -41,7 +41,7 @@ static bool __fastcall KEO_DialogHasItemFunction(const void* inv, int type, void
 {
 	InterlockedIncrement(&s_dialogCalls);
 	const bool mainHas = fn_hasItemFunction(inv, type);
-	void* bag = (!mainHas && who) ? WornBackpackInventory(who) : NULL;
+	void* bag = (!mainHas && who && g_inventoryCfg.backpackFixesEnabled) ? WornBackpackInventory(who) : NULL;
 	if (!DialogUseBackpack(mainHas, bag != NULL))
 		return mainHas;
 	const bool r = fn_hasItemFunction(bag, type);
