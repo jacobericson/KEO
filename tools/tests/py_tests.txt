@@ -6,9 +6,11 @@
 # every module by <order>.
 #
 # excluded: tools/tests/test_gate.py - the test gate build_tests.bat runs, not a unittest module
+# excluded: tools/tests/test_gate_select.py - the test gate's pure choices, tested by test_test_gate_select.py
 40 tools\kenshilib\test_check_headers_pin.py
 50 tools\kenshilib\test_resources_root.py
 90 tools\build\test_hook_sites.py
 95 tools\build\test_slots.py
 96 tools\build\test_objcache.py
 97 tools\build\test_run_variants.py
+98 tools\tests\test_test_gate_select.py when=tools/tests/test_gate*.py

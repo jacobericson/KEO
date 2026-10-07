@@ -1,7 +1,7 @@
 """The host test gate: the guards, the C++ suites and the Python tests as three concurrent
 processes, their output printed afterwards in a fixed order (Python 3, standard library only).
 
-    python tools\\tests\\test_gate.py [--since REV]
+    python tools\\tests\\test_gate.py [--since REV | --all]
 
 Run by build_tests.bat once the VS 2010 x64 environment is set up. Every child runs in the
 repository root, whatever the caller's directory.
@@ -21,8 +21,15 @@ someone else's cpu token (KEO_CPU_HELD=1) passes that on, so each runner runs on
 and runs the three one after another instead, in the printed order. The gate holds one heavy slot
 for the whole run unless it already runs under one. Children write UTF-8 (PYTHONIOENCODING=utf-8;
 PYTHONUTF8 as inherited) and the gate prints their logs as those bytes, its own lines in UTF-8 too.
-PY_TESTS_SINCE and every other setting reach the children through the environment. On an
-interrupt or an error of its own, the gate kills each phase's whole process tree.
+Every other setting reaches the children through the environment. On an interrupt or an error
+of its own, the gate kills each phase's whole process tree.
+
+The Python tests run with selection (run_py_tests.py --since <rev>) from the first of: --since,
+PY_TESTS_SINCE, and the merge-base of HEAD with main. There is no default when that merge-base is
+HEAD itself or git cannot name it (main missing, git failing); then every module runs. --all runs
+every module and is refused together with --since. The choice is printed first, as one
+"build_tests: python selection since <rev> (<source>)" or "build_tests: python selection off
+(<why>), running every module" line, and PY_TESTS_SINCE never reaches a child.
 
 When all three have finished, the guards log is printed, then "build_tests: merging the private
 suite list suites_private.txt" when the lists were merged, then the suites log and the Python log,
@@ -47,6 +54,7 @@ import time
 REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir))
 sys.path.insert(0, os.path.join(REPO, 'tools', 'build'))
 import slots  # noqa: E402
+import test_gate_select  # noqa: E402
 
 SUITES = r'tools\tests\suites.txt'
 PRIVATE_SUITES = r'tools\tests\suites_private.txt'
@@ -95,6 +103,25 @@ def test_phases(variable):
         raise ValueError('%s=%s: %s is not a phase (%s)' % (variable, raw, ', '.join(unknown),
                                                             ', '.join(PHASES)))
     return names
+
+
+def git_resolve():
+    """(merge-base of HEAD with main, HEAD) as full shas; RuntimeError names what failed."""
+    def rev(*args):
+        try:
+            p = subprocess.run(['git', '-C', REPO] + list(args), stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
+        except OSError as exc:
+            raise RuntimeError('git did not start: %s' % exc)
+        out = p.stdout.decode('utf-8', 'replace').strip()
+        if p.returncode != 0 or not out:
+            raise RuntimeError('git %s failed' % ' '.join(args))
+        return out
+    try:
+        rev('rev-parse', '--verify', '--quiet', 'main^{commit}')
+    except RuntimeError:
+        raise RuntimeError('main does not resolve')
+    return rev('merge-base', 'HEAD', 'main'), rev('rev-parse', 'HEAD')
 
 
 def merge_suites():
@@ -215,7 +242,8 @@ def say(line):
     sys.stdout.flush()
 
 
-def run(since, forced, no_close):
+def run(since, selection_line, forced, no_close):
+    say(selection_line)
     try:
         os.makedirs(LOG_DIR, exist_ok=True)
     except OSError as exc:
@@ -238,6 +266,7 @@ def run(since, forced, no_close):
     phases = [by_name[name] for name in PHASES]
     env = slots.child_env(leaf=False)
     env['PYTHONIOENCODING'] = 'utf-8'
+    env.pop('PY_TESTS_SINCE', None)
     try:
         if slots.cpu_held():
             for p in phases:
@@ -274,14 +303,17 @@ def run(since, forced, no_close):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description='Run the host test gate.')
-    ap.add_argument('--since', metavar='REV', help='passed on to run_py_tests.py')
+    ap.add_argument('--since', metavar='REV', help='select the Python tests changed since REV')
+    ap.add_argument('--all', action='store_true', help='run every Python test module')
     args = ap.parse_args(argv)
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     try:
         forced = test_phases('TEST_GATE_FORCE_FAIL')
         no_close = test_phases('TEST_GATE_NO_CLOSE')
+        since, line = test_gate_select.python_selection(args.since, args.all,
+                                                        os.environ.get('PY_TESTS_SINCE'), git_resolve)
         with slots.heavy('build_tests'):
-            return run(args.since, forced, no_close)
+            return run(since, line, forced, no_close)
     except slots.SlotTimeout as exc:
         say('build_tests: FAILED: no heavy slot (%s)' % exc)
         return 1
