@@ -42,6 +42,25 @@ def python_selection(since_arg, all_flag, env_since, resolve):
     return base, '%s since %s (merge-base with main; --all runs every module)' % (PREFIX, base)
 
 
+# ---- the guards' runner controls -----------------------------------------------------------
+
+# A change to any of these since the selection rev runs the guards' runner controls.
+RUNNER_CONTROL_FILES = ('tools/tests/run_suites.py', 'tools/tests/run_py_tests.py', 'tools/tests/py_shard.py',
+                        'tools/tests/check.h', 'tools/tests/check_test_guards.py', 'tools/tests/test_gate.py',
+                        'tools/tests/test_gate_select.py', 'tools/build/slots.py')
+
+
+def runner_controls_skip(since, changed):
+    """The skip line when the runner controls may be skipped, else None (they run). changed is
+    the paths changed since the rev (forward slashes), or None when git could not say."""
+    if not since or changed is None:
+        return None
+    want = set(p.lower() for p in RUNNER_CONTROL_FILES)
+    if any(p.replace('\\', '/').lower() in want for p in changed):
+        return None
+    return 'check_test_guards: runner controls skipped (no runner change since %s)' % since
+
+
 # ---- --only ------------------------------------------------------------------------------
 
 def suite_rows(text):

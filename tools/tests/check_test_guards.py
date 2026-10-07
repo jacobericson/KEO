@@ -42,11 +42,18 @@
    own timings and slots folders, so a busy host cannot delay it; the output
    is shown only when a case is not refused.
 
+Checks 2, 3, 4 and 6 (the runner controls) exercise the runners themselves, so with --since REV
+they run only when one of test_gate_select.RUNNER_CONTROL_FILES changed since REV (committed,
+uncommitted or untracked); otherwise "check_test_guards: runner controls skipped (no runner
+change since REV)" is printed in their place. With no REV, or a diff git cannot give, they run.
+Checks 1 and 5 always run.
+
 Run from the repo root (test_gate.py starts it there whatever the caller's
 directory; a relative invocation from elsewhere is refused rather than
 passing by accident); prints what it found and exits 1 on any problem, or ends with
 "check_test_guards: all checks passed" and exits 0.
 """
+import argparse
 import concurrent.futures
 import fnmatch
 import glob
@@ -59,6 +66,7 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import run_py_tests  # noqa: E402
+import test_gate_select  # noqa: E402
 
 SUITES_TXT = "tools/tests/suites.txt"
 PRIVATE_SUITES_TXT = os.path.join(os.path.dirname(SUITES_TXT), "suites_private.txt")
@@ -525,7 +533,31 @@ def check_py_runner_controls(futures):
     return ok
 
 
-def main():
+def controls_skip_line(since):
+    """The skip line when no runner file changed since the rev, else None (git failing included)."""
+    if not since:
+        return None
+    try:
+        changed = run_py_tests.changed_since(since)
+    except (OSError, RuntimeError):
+        changed = None
+    return test_gate_select.runner_controls_skip(since, changed)
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="Guard the test run's ways of reporting success.")
+    ap.add_argument("--since", metavar="REV",
+                    help="skip the runner controls when no runner file changed since REV")
+    args = ap.parse_args(argv)
+    skip = controls_skip_line(args.since)
+    if skip:
+        coverage_ok = check_coverage()
+        py_coverage_ok = check_python_coverage()
+        print(skip)
+        if coverage_ok and py_coverage_ok:
+            print("check_test_guards: all checks passed")
+            return 0
+        return 1
     py_root = tempfile.mkdtemp(prefix="check_test_guards_py_")
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(PY_REFUSALS) + 2) as pool:

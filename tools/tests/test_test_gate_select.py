@@ -82,6 +82,25 @@ class TestPythonSelection(unittest.TestCase):
             self.assertFalse(line.startswith('python test selection'), line)
 
 
+class TestRunnerControls(unittest.TestCase):
+    def test_skipped_only_with_a_rev_and_no_runner_change(self):
+        self.assertEqual(s.runner_controls_skip('abc', ['src/x.cpp', 'tools/tests/py_tests.txt']),
+                         'check_test_guards: runner controls skipped (no runner change since abc)')
+        self.assertEqual(s.runner_controls_skip('abc', []),
+                         'check_test_guards: runner controls skipped (no runner change since abc)')
+
+    def test_every_runner_file_runs_them(self):
+        for path in s.RUNNER_CONTROL_FILES:
+            self.assertIsNone(s.runner_controls_skip('abc', ['src/x.cpp', path]), path)
+            self.assertIsNone(s.runner_controls_skip('abc', [path.upper().replace('/', '\\')]), path)
+        self.assertEqual(len(s.RUNNER_CONTROL_FILES), 8)
+
+    def test_no_rev_or_an_unknown_diff_runs_them(self):
+        for since in (None, ''):
+            self.assertIsNone(s.runner_controls_skip(since, ['src/x.cpp']))
+        self.assertIsNone(s.runner_controls_skip('abc', None))
+
+
 SUITES = ('# comment\r\n'
           'alpha_units | tools\\tests\\alpha_units.cpp | src\\a.cpp |\r\n'
           '\r\n'

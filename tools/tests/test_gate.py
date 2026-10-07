@@ -12,7 +12,7 @@ list is build\\tests\\suites_merged.txt instead, written as suites.txt's bytes, 
 private list's bytes.
 
     phase   process                                  log (stdout and stderr)
-    guards  check_test_guards.py                     build\\tests\\gate-guards.log
+    guards  check_test_guards.py [--since REV]       build\\tests\\gate-guards.log
     suites  run_suites.py --suites <list>            build\\tests\\gate-suites.log
     python  run_py_tests.py [--since REV]            build\\tests\\gate-python.log
 
@@ -30,7 +30,8 @@ PY_TESTS_SINCE, and the merge-base of HEAD with main. There is no default when t
 HEAD itself or git cannot name it (main missing, git failing); then every module runs. --all runs
 every module and is refused together with --since. The choice is printed first, as one
 "build_tests: python selection since <rev> (<source>)" or "build_tests: python selection off
-(<why>), running every module" line, and PY_TESTS_SINCE never reaches a child.
+(<why>), running every module" line, and PY_TESTS_SINCE never reaches a child. The same rev goes
+to the guards, which then skip their runner controls when no runner file changed since it.
 
 When all three have finished, the guards log is printed, then "build_tests: merging the private
 suite list suites_private.txt" when the lists were merged, then the suites log and the Python log,
@@ -154,7 +155,7 @@ def merge_suites():
 def commands(suite_list, since, forced, no_close, py_list=None):
     py = [sys.executable, '-u']
     cmds = {
-        'guards': py + [r'tools\tests\check_test_guards.py'],
+        'guards': py + [r'tools\tests\check_test_guards.py'] + (['--since', since] if since else []),
         'suites': py + [r'tools\tests\run_suites.py', '--suites', suite_list],
         'python': py + [r'tools\tests\run_py_tests.py'] + (['--list', py_list] if py_list else [])
                   + (['--since', since] if since else []),
