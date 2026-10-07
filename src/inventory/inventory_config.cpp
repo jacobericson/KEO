@@ -2,6 +2,7 @@
 #include "inventory/inventory_config.h"
 #include "base/config_rows.h"
 #include "base/ini_text.h"
+#include "inventory/operator_policy.h"
 #include <cstddef>
 #include <string.h>
 
@@ -13,6 +14,7 @@ const InventoryConfig kInventoryDefaults =
 	true, // backpackFoodScoreEnabled
 	true, // backpackDialogueFunctionEnabled
 	true, // operatorFillBeforeDeliverEnabled
+	OPERATOR_HOLD_HEAVY, // operatorHoldUntil
 };
 
 InventoryConfig g_inventoryCfg = kInventoryDefaults;
@@ -24,6 +26,29 @@ union InventoryConfigPodCheck { keo_inventory::InventoryConfig s; };
 using namespace inventory_config_detail;
 
 namespace keo_inventory {
+
+static const ConfigChoice kOperatorHoldChoices[] =
+{
+	{ "weightless", OPERATOR_HOLD_WEIGHTLESS, "Weightless" }, { "lightweight", OPERATOR_HOLD_LIGHTWEIGHT, "Lightweight" },
+	{ "moderate", OPERATOR_HOLD_MODERATE, "Moderate" }, { "heavy", OPERATOR_HOLD_HEAVY, "Heavy" },
+	{ "overloaded", OPERATOR_HOLD_OVERLOADED, "Overloaded" }
+};
+
+// operatorHoldUntil: one of kOperatorHoldChoices' words, any case; anything else is refused and the
+// key keeps its value. Main thread, at load.
+static bool ParseOperatorHoldUntil(const std::string& val, ConfigLogFn log)
+{
+	(void)log;
+	for (int i = 0; i < CFG_COUNT(kOperatorHoldChoices); ++i)
+	{
+		if (_stricmp(val.c_str(), kOperatorHoldChoices[i].ini) == 0)
+		{
+			g_inventoryCfg.operatorHoldUntil = kOperatorHoldChoices[i].value;
+			return true;
+		}
+	}
+	return false;
+}
 
 const ConfigKey g_inventoryConfigKeys[] =
 {
@@ -38,7 +63,11 @@ const ConfigKey g_inventoryConfigKeys[] =
 	  "A dialogue line that needs an item of a kind also finds it in the worn backpack."),
 	CFG_OBOOL("operatorFillBeforeDeliver", InventoryConfig, operatorFillBeforeDeliverEnabled, DOC, SHOW,
 	  "Operators fill up before delivering",
-	  "A machine operator collects until its inventory and backpack are full, then delivers; not while hungry."),
+	  "A machine operator collects until its inventory and backpack are full or its load passes the weight tier set below, then delivers; not while hungry."),
+	CFG_OCUSTOM_CHOICES_LIVE("operatorHoldUntil", InventoryConfig, operatorHoldUntil, ParseOperatorHoldUntil, DOC, SHOW,
+	  "Operators fill up to",
+	  "A machine operator keeps collecting until its load passes this tier, the word on its character panel, then delivers. Overloaded: weight never sends it.",
+	  kOperatorHoldChoices),
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }
 };
 

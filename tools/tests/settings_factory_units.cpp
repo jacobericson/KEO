@@ -10,6 +10,7 @@
 #include "base/config_rows.h"
 #include "base/config_values.h"
 #include "bench/bench_slots.h"
+#include "inventory/operator_policy.h"
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -33,7 +34,7 @@ static const char* const SUITE_NAME = "settings_factory_units";
 #else
 static const char* const SUITE_NAME = "settings_factory_prod_units";
 #endif
-static const size_t CORE_ROWS_DEV = 95;
+static const size_t CORE_ROWS_DEV = 96;
 static const int DEV_ONLY_ROWS = 94;
 
 // ---- Sections --------------------------------------------------------------
@@ -161,7 +162,7 @@ static void CheckRowCounts()
 	Check(Section(dev, RENDER_TITLE).size() == 21, "render rows dev");
 	Check(Section(prod, "Zone loading").size() == 7 && Section(prod, "Performance").size() == 3
 	      && Section(prod, "Squad movement").size() == 4 && Section(prod, "Gameplay fixes").size() == 4
-	      && Section(prod, "Backpacks and jobs").size() == 4, "player section rows prod");
+	      && Section(prod, "Backpacks and jobs").size() == 5, "player section rows prod");
 }
 
 // ---- Restart and devOnly ---------------------------------------------------
@@ -174,7 +175,7 @@ static void CheckRestart()
 	std::vector<const SettingsRow*> core = ModuleSections(rows);
 	bool ok = !core.empty();
 	// A module row is startup-only unless its key is live: the three zone
-	// footprint rows.
+	// footprint rows and operatorHoldUntil.
 	int liveCore = 0;
 	for (int m = 0; m < kConfigModuleCount; ++m)
 	{
@@ -201,7 +202,7 @@ static void CheckRestart()
 		ok = ok && r && !EndsWith(r->label, " *") && !r->restart;
 		++live;
 	}
-	Check(ok && live > 0 && liveCore == 3, "Restart");
+	Check(ok && live > 0 && liveCore == 4, "Restart");
 }
 
 static bool OnProdPage(const char* name)
@@ -1074,6 +1075,39 @@ static void CheckLiveModuleRows()
 	zone::g_zoneCfg = held;
 }
 
+// The operator hold's tier is a live drop box on the PROD page: a staged
+// word reaches the running config at the close and is written as its word.
+static void CheckOperatorHoldLive()
+{
+	int m = ModuleFor("operatorHoldUntil");
+	const keo_inventory::InventoryConfig held = keo_inventory::g_inventoryCfg;
+	bool ok = m >= 0;
+	if (ok)
+	{
+		const ConfigModule& mod = kConfigModules[m];
+		SettingsStaging saved;
+		StageAll(&saved);
+		SettingsStaging st = saved;
+		std::vector<SettingsRow> prod = Rows(&st, false, NULL);
+		const SettingsRow* r = FindLabel(prod, RowLabel(mod.keys[KeyIndex(mod, "operatorHoldUntil")]));
+		ok = r && r->kind == SR_DROPBOX && r->intPtr;
+		if (ok)
+		{
+			*r->intPtr = keo_inventory::OPERATOR_HOLD_LIGHTWEIGHT;
+			ClampModuleStage(mod, &st.module[m], saved.module[m], &DiscardLog);
+			std::vector<std::string> applied;
+			int n = ApplyLiveModuleRows(mod, st.module[m], &applied);
+			std::vector<IniEntry> e;
+			int entries = ModuleStageEntries(mod, st.module[m], saved.module[m], &e);
+			ok = n == 1 && applied.size() == 1 && applied[0] == "operatorHoldUntil=lightweight"
+			  && keo_inventory::g_inventoryCfg.operatorHoldUntil == keo_inventory::OPERATOR_HOLD_LIGHTWEIGHT
+			  && entries == 1 && e.size() == 1 && e[0].key == "operatorHoldUntil" && e[0].value == "lightweight";
+		}
+	}
+	keo_inventory::g_inventoryCfg = held;
+	Check(ok, "live rows: operatorHoldUntil reaches the running config");
+}
+
 // A live field is stored whole at a width of 1, 4 or 8 bytes and an address
 // aligned to it; any other store is refused and leaves the field as it was.
 static void CheckLiveFieldStore()
@@ -1243,6 +1277,7 @@ int main()
 	CheckIniOnlyOffsetText();
 	CheckUnlabelledOffsetDouble();
 	CheckLiveModuleRows();
+	CheckOperatorHoldLive();
 	CheckLiveFieldStore();
 	CheckLiveMacros();
 	CheckLiveRefusedWidth();

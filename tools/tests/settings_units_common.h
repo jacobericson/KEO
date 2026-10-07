@@ -43,9 +43,10 @@ static const ProdRow kProdPage[] =
 	{ "wallSpliceFix", "Gameplay fixes" }, { "throwOutHoldMinutes", "Gameplay fixes" },
 	{ "backpackFirstDefault", "Backpacks and jobs" }, { "backpackFoodScore", "Backpacks and jobs" },
 	{ "backpackDialogueFunction", "Backpacks and jobs" }, { "operatorFillBeforeDeliver", "Backpacks and jobs" },
+	{ "operatorHoldUntil", "Backpacks and jobs" },
 	{ NULL, NULL }
 };
-static const int PROD_PAGE_ROWS = 22;
+static const int PROD_PAGE_ROWS = 23;
 static const char* const PROD_SECTIONS[] = { "Zone loading", "Performance", "Squad movement", "Gameplay fixes",
 	"Backpacks and jobs" };
 

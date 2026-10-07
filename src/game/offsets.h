@@ -31,6 +31,8 @@ const size_t OFF_CHAR_RACE       = 0x2E0;  // Character::myRace (RaceData*)
 KLIB_ASSERT_OFFSET(Character_myRace, OFF_CHAR_RACE);
 const size_t OFF_STATS_MOVE_SPEED = 0x17C; // CharStats::moveSpeed: the land speed with every body factor
 KLIB_ASSERT_OFFSET(CharStats_moveSpeed, OFF_STATS_MOVE_SPEED);
+const size_t OFF_STATS_ENCUMBRANCE_MULT = 0x190; // CharStats::encumbranceMult: the load multiplier the panel's tier reads
+KLIB_ASSERT_OFFSET(CharStats_encumbranceMult, OFF_STATS_ENCUMBRANCE_MULT);
 
 // RaceData
 const size_t OFF_RACE_WALK_SPEED = 0x64;   // RaceData::walkSpeed (float)

@@ -62,6 +62,7 @@ npcWaitDiag=false
 oldAnimDiag=false
 oldAnimSkip=true
 operatorFillBeforeDeliver=true
+operatorHoldUntil=3
 particleLoopingNames=fire,smoke,torch,rain,weather
 particleOffscreenMinAge=10
 particleOffscreenSeconds=0.5

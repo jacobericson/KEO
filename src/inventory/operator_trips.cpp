@@ -1,13 +1,15 @@
 // operator_trips.cpp - The detour on the operator's GOAP state-89 evaluator
 // (AI::haveSomeResourcesFromThisMachineButWantThemGoneIfPossible): when vanilla says the load
 // should go, a player's operator at its own powered resource machine with valid inputs, not
-// hungry, and with room in its main inventory or worn backpack for the product, is told "not
-// yet", so the planner's collect task keeps it at the machine. The install step runs on the main
-// thread at startup; the detour runs wherever the planner evaluates the requirement.
+// hungry, not past the weight tier operatorHoldUntil names, and with room in its main inventory
+// or worn backpack for the product, is told "not yet", so the planner's collect task keeps it at
+// the machine. The install step runs on the main thread at startup; the detour runs wherever the
+// planner evaluates the requirement.
 #include "inventory/operator_trips.h"
 #include "inventory/operator_policy.h"
 #include "inventory/backpack_reader.h"
 #include "inventory/byte_check_policy.h"
+#include "inventory/inventory_config.h"
 #include "plugin/hook_manifest.h"
 #include "game/game.h"
 #include "game/klib_member_contract.h"
@@ -31,9 +33,11 @@ namespace keo_inventory {
 // Faction::isPlayer +0x250; Building vtable +0x2F8 getFunctionStuff; StorageBuilding +0x440 output
 // kind and vtable +0x550 getProductionItemData; Character vtable +0x160 getInventory; Inventory
 // vtable +0x20 hasRoomForItem.
+// Character +0x450 stats; CharStats +0x190 encumbranceMult, the cached load multiplier.
 static const size_t kAiMe = KLIB_OFF_AI_me, kFactionIsPlayer = KLIB_OFF_Faction_isPlayer, kStorageOutputKind = 0x440;
 static const size_t kVtGetFaction = 0x58, kVtFunctionStuff = 0x2F8, kVtProductItem = 0x550;
 static const size_t kVtGetInventory = 0x160, kVtHasRoom = 0x20;
+static const size_t kCharStats = KLIB_OFF_Character_stats, kStatsEncumbrance = KLIB_OFF_CharStats_encumbranceMult;
 
 static wantGone_t        orig_operatorWantGone  = NULL;
 static anythingButBase_t fn_getAnythingButBase  = NULL;
@@ -59,6 +63,14 @@ static void* VGet(void* self, size_t slot)
 	return ((getter_t)(*(void***)self)[slot / 8])(self);
 }
 
+// The character's cached load multiplier (1.0 below its carry cap), 1.0 without stats. Two plain
+// loads; the AI back thread writes the field, and this runs on that thread.
+static float EncumbranceOf(void* me)
+{
+	const void* stats = *(void* const*)((const char*)me + kCharStats);
+	return stats ? *(const float*)((const char*)stats + kStatsEncumbrance) : 1.0f;
+}
+
 // Fills f in OperatorReasonOf's order and stops at the first fact that fails. Vanilla getters
 // only; every pointer read is NULL-checked.
 static OperatorReason GatherOperatorFacts(void* ai, const void* subject, const void* v, OperatorFacts* f)
@@ -81,6 +93,8 @@ static OperatorReason GatherOperatorFacts(void* ai, const void* subject, const v
 	if (!f->inputsValid) return OperatorReasonOf(*f);
 	f->hungry = fn_wantsToEatNow(me);
 	if (f->hungry) return OperatorReasonOf(*f);
+	f->tooHeavy = OperatorTooHeavy(EncumbranceOf(me), g_inventoryCfg.operatorHoldUntil);
+	if (f->tooHeavy) return OperatorReasonOf(*f);
 	void* item = VGet(fs, kVtProductItem);
 	f->haveProduct = item != NULL;
 	if (!f->haveProduct) return OperatorReasonOf(*f);

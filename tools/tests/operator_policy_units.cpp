@@ -1,6 +1,7 @@
 // The operator hold's pure half: each guard alone sends the operator to deliver, the first failure
 // in the gather order is the one reported, the answer changes only on a hold, the conjunction agrees
-// with the reason, jamming is no input, and the heartbeat's buckets and names.
+// with the reason, jamming is no input, the weight tiers' thresholds, and the heartbeat's buckets
+// and names.
 #include <cstdio>
 #include <cstring>
 #include "inventory/operator_policy.h"
@@ -20,6 +21,7 @@ static OperatorFacts AllHold()
 	f.powered     = true;
 	f.inputsValid = true;
 	f.hungry      = false;
+	f.tooHeavy    = false;
 	f.haveProduct = true;
 	f.hasRoom     = true;
 	return f;
@@ -53,6 +55,8 @@ static void CheckGuards()
 	CHECK(DeliversWith(f, OR_INPUTS_INVALID), "guard: invalid inputs deliver");
 	f = all; f.hungry = true;
 	CHECK(DeliversWith(f, OR_HUNGRY), "guard: hungry delivers");
+	f = all; f.tooHeavy = true;
+	CHECK(DeliversWith(f, OR_TOO_HEAVY), "guard: too heavy delivers");
 	f = all; f.haveProduct = false;
 	CHECK(DeliversWith(f, OR_NO_PRODUCT), "guard: no product delivers");
 	f = all; f.hasRoom = false;
@@ -84,6 +88,16 @@ static void CheckOrder()
 	f.haveProduct = false;
 	ok = ok && OperatorReasonOf(f) == OR_HUNGRY;
 	CHECK(ok, "order: the first failure is reported");
+
+	f = AllHold();
+	f.hungry   = true;
+	f.tooHeavy = true;
+	ok = OperatorReasonOf(f) == OR_HUNGRY;
+	f = AllHold();
+	f.tooHeavy    = true;
+	f.haveProduct = false;
+	ok = ok && OperatorReasonOf(f) == OR_TOO_HEAVY;
+	CHECK(ok, "order: too heavy comes after hunger and before the product");
 }
 
 static void CheckAnswer()
@@ -99,7 +113,7 @@ static void CheckAnswer()
 static void CheckConjunction()
 {
 	bool ok = true;
-	for (int m = 0; m < 256; ++m)
+	for (int m = 0; m < 512; ++m)
 	{
 		OperatorFacts f;
 		f.vanillaTrue = (m & 1) != 0;
@@ -110,10 +124,11 @@ static void CheckConjunction()
 		f.powered     = (m & 32) != 0;
 		f.inputsValid = (m & 64) != 0;
 		f.hungry      = (m & 128) != 0;
+		f.tooHeavy    = (m & 256) != 0;
 		f.haveMachine = true;
 		f.haveProduct = true;
 		const bool hold = HoldDelivery(f.vanillaTrue, f.isPlayer, f.ownsMachine, f.isResource,
-		                               f.hasRoom, f.powered, f.inputsValid, f.hungry);
+		                               f.hasRoom, f.powered, f.inputsValid, f.hungry, f.tooHeavy);
 		ok = ok && hold == (OperatorReasonOf(f) == OR_HOLD);
 	}
 	CHECK(ok, "conjunction: HoldDelivery matches OperatorReasonOf");
@@ -121,8 +136,48 @@ static void CheckConjunction()
 
 static void CheckNoJammed()
 {
-	// Ten bools and nothing else: a jamming fact would be an eleventh member.
-	Check(sizeof(OperatorFacts) == 10, "jammed is not an input");
+	// Eleven bools and nothing else: a jamming fact would be a twelfth member.
+	Check(sizeof(OperatorFacts) == 11, "jammed is not an input");
+}
+
+static void CheckTiers()
+{
+	static const float kBounds[4] = { 0.95f, 0.75f, 0.5f, 0.1f };
+	static const int kTiers[4] =
+		{ OPERATOR_HOLD_WEIGHTLESS, OPERATOR_HOLD_LIGHTWEIGHT, OPERATOR_HOLD_MODERATE, OPERATOR_HOLD_HEAVY };
+	bool ok = OperatorHoldThreshold(OPERATOR_HOLD_OVERLOADED) == 0.0f
+	       && OperatorHoldThreshold(-1) == 0.0f && OperatorHoldThreshold(5) == 0.0f;
+	for (int i = 0; i < 4; ++i)
+		ok = ok && OperatorHoldThreshold(kTiers[i]) == kBounds[i];
+	CHECK(ok, "tier: thresholds are the panel's upper bounds");
+
+	ok = true;
+	for (int i = 0; i < 4; ++i)
+		ok = ok && !OperatorTooHeavy(kBounds[i], kTiers[i]) && OperatorTooHeavy(kBounds[i] - 0.001f, kTiers[i]);
+	CHECK(ok, "tier: each tier holds at its bound and releases below it");
+
+	CHECK(!OperatorTooHeavy(0.3f, OPERATOR_HOLD_HEAVY) && OperatorTooHeavy(0.05f, OPERATOR_HOLD_HEAVY),
+	      "tier: heavy holds a moderate load");
+
+	CHECK(!OperatorTooHeavy(0.0f, OPERATOR_HOLD_OVERLOADED) && !OperatorTooHeavy(0.05f, OPERATOR_HOLD_OVERLOADED)
+	      && !OperatorTooHeavy(-1.0f, OPERATOR_HOLD_OVERLOADED) && !OperatorTooHeavy(1.0f, OPERATOR_HOLD_OVERLOADED),
+	      "tier: overloaded never releases");
+
+	volatile float zero = 0.0f;
+	const float nan = 0.0f / zero;
+	ok = nan != nan;
+	for (int t = OPERATOR_HOLD_WEIGHTLESS; t <= OPERATOR_HOLD_OVERLOADED; ++t)
+		ok = ok && !OperatorTooHeavy(nan, t);
+	CHECK(ok, "tier: a NaN multiplier never releases");
+
+	ok = true;
+	for (int t = OPERATOR_HOLD_WEIGHTLESS; t <= OPERATOR_HOLD_OVERLOADED; ++t)
+		ok = ok && !OperatorTooHeavy(1.0f, t);
+	CHECK(ok, "tier: an unloaded character (1.0) never releases");
+
+	// -1.0f lies below every threshold, the default's 0.0f included, so only the range test holds it.
+	CHECK(!OperatorTooHeavy(-1.0f, -1) && !OperatorTooHeavy(-1.0f, 5) && !OperatorTooHeavy(-1.0f, 99),
+	      "tier: a tier outside the enum never releases");
 }
 
 static void CheckBuckets()
@@ -139,7 +194,7 @@ static void CheckNames()
 	static const char* const kNames[OR_COUNT] =
 	{
 		"hold", "vanilla", "notPlayer", "noMachine", "notOwned", "notResource", "unpowered",
-		"inputs", "hungry", "noProduct", "noRoom"
+		"inputs", "hungry", "heavy", "noProduct", "noRoom"
 	};
 	bool ok = true;
 	for (int r = 0; r < OR_COUNT; ++r)
@@ -159,6 +214,7 @@ int main()
 	CheckAnswer();
 	CheckConjunction();
 	CheckNoJammed();
+	CheckTiers();
 	CheckBuckets();
 	CheckNames();
 	return CheckExit("operator_policy_units");

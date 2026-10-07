@@ -125,6 +125,7 @@ static const Owner kOwners[] =
 	{ "backpackFoodScore", "inventory" },
 	{ "backpackDialogueFunction", "inventory" },
 	{ "operatorFillBeforeDeliver", "inventory" },
+	{ "operatorHoldUntil", "inventory" },
 };
 static const Expected kExpected[] =
 {
@@ -301,8 +302,12 @@ static void CheckZoneSquadRadiusAndCap()
 
 // The live offset rows outside the render module, by name: each one's field is stored once by the
 // tab's close and loaded once per use by its readers, and no startup path writes it on a refusal.
+// The three zone footprint rows, and the operator hold's tier (the evaluator loads the field once
+// per call; the close stores it once).
 static bool LiveOffsetRowAllowed(const char* module, const char* key)
 {
+	if (!strcmp(module, "inventory"))
+		return !strcmp(key, "operatorHoldUntil");
 	if (strcmp(module, "zone"))
 		return false;
 	return !strcmp(key, "zoneLifeRetainRadius") || !strcmp(key, "zoneLifeSquadRadius")
@@ -394,7 +399,7 @@ int main()
 		}
 		if (i == CONFIG_STAGE_MAX) Fail(mod.name, "no table end within stage capacity");
 	}
-	Check(moduleKeys == 103 && activeCore == 2 && retiredCore == 23 && debug == 4, "module and core row counts");
+	Check(moduleKeys == 104 && activeCore == 2 && retiredCore == 23 && debug == 4, "module and core row counts");
 	for (size_t i = 0; i < sizeof(kOwners) / sizeof(kOwners[0]); ++i)
 	{
 		const ConfigModule* mod = NULL;

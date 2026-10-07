@@ -9,6 +9,23 @@ namespace keo_inventory {
 // StorageBuilding's output kind for a resource (ITEM); gear benches have another value.
 const int OPERATOR_RESOURCE_OUTPUT = 4;
 
+// The encumbrance tier a machine operator may fill up to, as the character panel names it.
+enum OperatorHoldTier
+{
+	OPERATOR_HOLD_WEIGHTLESS = 0,
+	OPERATOR_HOLD_LIGHTWEIGHT,
+	OPERATOR_HOLD_MODERATE,
+	OPERATOR_HOLD_HEAVY,
+	OPERATOR_HOLD_OVERLOADED,   // weight never ends the hold
+	OPERATOR_HOLD_TIER_COUNT
+};
+// The multiplier below which the tier is passed: 0.95, 0.75, 0.5 or 0.1; 0 for overloaded and for
+// a value outside the enum.
+float OperatorHoldThreshold(int tier);
+// True when the operator is past its tier: mult < the tier's threshold. Never for overloaded or a
+// value outside the enum; never for a NaN multiplier, so the hold goes on.
+bool OperatorTooHeavy(float encumbranceMult, int tier);
+
 enum OperatorReason
 {
 	OR_HOLD = 0,          // every guard holds: answer "not yet"
@@ -20,6 +37,7 @@ enum OperatorReason
 	OR_UNPOWERED,
 	OR_INPUTS_INVALID,
 	OR_HUNGRY,
+	OR_TOO_HEAVY,         // past the operatorHoldUntil tier
 	OR_NO_PRODUCT,
 	OR_NO_ROOM,
 	OR_COUNT
@@ -28,7 +46,7 @@ enum OperatorReason
 struct OperatorFacts
 {
 	bool vanillaTrue, isPlayer, haveMachine, ownsMachine, isResource, powered, inputsValid, hungry,
-	     haveProduct, hasRoom;
+	     tooHeavy, haveProduct, hasRoom;
 };
 
 // The first failing guard in the enum's order, or OR_HOLD. A fact after the first failure is
@@ -38,7 +56,7 @@ OperatorReason OperatorReasonOf(const OperatorFacts& f);
 bool OperatorAnswer(bool vanilla, OperatorReason r);
 // The design's conjunction (machine and product presence folded into ownsMachine and hasRoom).
 bool HoldDelivery(bool vanillaTrue, bool isPlayer, bool ownsMachine, bool isResource, bool hasRoom,
-                  bool powered, bool inputsValid, bool hungry);
+                  bool powered, bool inputsValid, bool hungry, bool tooHeavy);
 // The jobs heartbeat's field names, one per reason.
 const char* OperatorReasonName(OperatorReason r);
 // The haul histogram's bucket count: HaulBucket answers 0..HAUL_BUCKETS - 1.

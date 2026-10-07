@@ -27,6 +27,7 @@ const SettingsPlace kSettingsPlaces[] =
 	{ "Backpacks and jobs", "inventory", "backpackFoodScore" },
 	{ "Backpacks and jobs", "inventory", "backpackDialogueFunction" },
 	{ "Backpacks and jobs", "inventory", "operatorFillBeforeDeliver" },
+	{ "Backpacks and jobs", "inventory", "operatorHoldUntil" },
 	{ NULL, NULL, NULL }
 };
 
