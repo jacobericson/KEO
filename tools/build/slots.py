@@ -9,6 +9,10 @@ unset):
             capacity KEO_CPU_SLOTS (default os.cpu_count())
     heavy   one slot per build entry point or gate phase; capacity KEO_HEAVY_SLOTS (default 2)
 
+A capacity setting may lower its pool's default but not raise it: a larger value is clamped to the
+default, and the first use in a process writes "slots: KEO_HEAVY_SLOTS=4 clamped to 2
+(KEO_SLOTS_RAISE=1 to raise)" to stderr (the same for KEO_CPU_SLOTS). KEO_SLOTS_RAISE=1 honors it.
+
 Slot k of pool p is the file "<p>-<k>.lock". Holding a slot is holding a lock on its first byte
 (msvcrt.locking, non-blocking); the OS drops the lock when the holder exits or is killed, so no slot
 is ever left stale. A process opens each lock file once and keeps it open until it exits, so the
@@ -63,10 +67,10 @@ says so on stderr. A platform without msvcrt behaves the same way. A malformed s
 ValueError.
 
 Limits: no fairness between processes (a waiter can be overtaken); a capacity is the requester's
-own (a process with a larger KEO_CPU_SLOTS uses more slot files); status() and the wait lines tell
-a free slot from a held one by taking it for an instant; an inherited heavy marker counts as live
-while any slot it names is held, whoever holds it now; the owner files are best effort, so a
-message can read "owner unknown".
+own (a process with a smaller KEO_CPU_SLOTS, or a larger one under KEO_SLOTS_RAISE=1, uses fewer
+or more slot files); status() and the wait lines tell a free slot from a held one by taking it for
+an instant; an inherited heavy marker counts as live while any slot it names is held, whoever
+holds it now; the owner files are best effort, so a message can read "owner unknown".
 
 CLI:
     python tools\\build\\slots.py status
@@ -161,13 +165,31 @@ def slots_dir():
     return d
 
 
+def _raise_allowed():
+    value = os.environ.get('KEO_SLOTS_RAISE', '').strip()
+    if value in ('', '0'):
+        return False
+    if value != '1':
+        raise ValueError('slots: KEO_SLOTS_RAISE=%r (expected 1, 0 or unset)' % value)
+    return True
+
+
 def capacity(pool):
-    """This process's capacity of pool ('cpu' or 'heavy')."""
+    """This process's capacity of pool ('cpu' or 'heavy'). A setting above the default is
+    clamped to it, with one line per pool and process, unless KEO_SLOTS_RAISE=1."""
     if pool == 'cpu':
-        return _env_number('KEO_CPU_SLOTS', os.cpu_count() or 1, int, 1)
-    if pool == 'heavy':
-        return _env_number('KEO_HEAVY_SLOTS', 2, int, 1)
-    raise ValueError('slots: unknown pool %r' % pool)
+        name, default = 'KEO_CPU_SLOTS', os.cpu_count() or 1
+    elif pool == 'heavy':
+        name, default = 'KEO_HEAVY_SLOTS', 2
+    else:
+        raise ValueError('slots: unknown pool %r' % pool)
+    raise_ok = _raise_allowed()
+    value = _env_number(name, default, int, 1)
+    if value <= default or raise_ok:
+        return value
+    _say_once(('clamp', pool), 'slots: %s=%d clamped to %d (KEO_SLOTS_RAISE=1 to raise)'
+                               % (name, value, default))
+    return default
 
 
 def _off_reason():

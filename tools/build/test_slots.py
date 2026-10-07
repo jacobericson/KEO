@@ -548,7 +548,7 @@ class SlotsTest(unittest.TestCase):
         self.assertFalse(os.path.exists(owner))
 
     def test_status_lists_slots_above_this_capacity(self):
-        e = self.env(KEO_HEAVY_SLOTS=3)
+        e = self.env(KEO_HEAVY_SLOTS=3, KEO_SLOTS_RAISE=1)
         held = [self.holder('heavy', e) for _ in range(3)]
         self.assertEqual([got.split()[1] for _, got, _ in held], ['heavy-0', 'heavy-1', 'heavy-2'])
         for child, _, release in held[:2]:
@@ -558,6 +558,53 @@ class SlotsTest(unittest.TestCase):
         [s] = slots.status()
         self.assertEqual((s['id'], s['mine'], s['owner']['pid']),
                          ('heavy-2', False, pid_of(held[2][1])))
+
+    def capacities(self, *pools):
+        """capacity() of each pool, called twice each, and the stderr lines written."""
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            got = [slots.capacity(p) for p in pools for _ in range(2)]
+        return got, err.getvalue().splitlines()
+
+    def test_settings_above_the_default_are_clamped_once_per_pool(self):
+        cores = os.cpu_count() or 1
+        os.environ['KEO_HEAVY_SLOTS'] = '4'
+        os.environ['KEO_CPU_SLOTS'] = str(cores + 1)
+        got, lines = self.capacities('heavy', 'cpu')
+        self.assertEqual(got, [2, 2, cores, cores])
+        self.assertEqual(lines, [
+            'slots: KEO_HEAVY_SLOTS=4 clamped to 2 (KEO_SLOTS_RAISE=1 to raise)',
+            'slots: KEO_CPU_SLOTS=%d clamped to %d (KEO_SLOTS_RAISE=1 to raise)' % (cores + 1, cores)])
+
+    def test_raise_honors_a_larger_setting(self):
+        cores = os.cpu_count() or 1
+        os.environ['KEO_HEAVY_SLOTS'] = '4'
+        os.environ['KEO_CPU_SLOTS'] = str(cores + 1)
+        os.environ['KEO_SLOTS_RAISE'] = '1'
+        self.assertEqual(self.capacities('heavy', 'cpu'), ([4, 4, cores + 1, cores + 1], []))
+        os.environ['KEO_SLOTS_RAISE'] = '0'
+        self.assertEqual(self.capacities('heavy')[0], [2, 2])
+
+    def test_lower_and_default_settings_are_honored_silently(self):
+        os.environ['KEO_HEAVY_SLOTS'] = '1'
+        os.environ['KEO_CPU_SLOTS'] = '1'
+        self.assertEqual(self.capacities('heavy', 'cpu'), ([1, 1, 1, 1], []))
+        os.environ['KEO_HEAVY_SLOTS'] = '2'
+        del os.environ['KEO_CPU_SLOTS']
+        cores = os.cpu_count() or 1
+        self.assertEqual(self.capacities('heavy', 'cpu'), ([2, 2, cores, cores], []))
+
+    def test_a_clamped_process_takes_only_the_default_slots(self):
+        e = self.env(KEO_HEAVY_SLOTS=4)
+        holders = [self.holder('heavy', e) for _ in range(2)]
+        for child, _, _ in holders:
+            self.assertEqual(child.wait_lines('err', 'slots: KEO_HEAVY_SLOTS=4 clamped to 2 '),
+                             'slots: KEO_HEAVY_SLOTS=4 clamped to 2 (KEO_SLOTS_RAISE=1 to raise)')
+        c, rc = self.take('heavy', dict(e, KEO_HEAVY_WAIT='0.3'))
+        self.assertEqual(rc, 3, 'a third heavy slot was taken past the clamp')
+        self.assertEqual(len(c.matching('err', 'slots: KEO_HEAVY_SLOTS=4 clamped')), 1)
+        for _, _, release in holders:
+            touch(release)
 
     def test_a_held_slot_is_never_tried_again_by_its_own_process(self):
         os.environ['KEO_CPU_SLOTS'] = '2'
@@ -652,6 +699,7 @@ class SlotsTest(unittest.TestCase):
                                 ('KEO_HEAVY_WAIT', 'nan'), ('KEO_CPU_WAIT', '-1'),
                                 ('KEO_HEAVY_NOTE', 'x'), ('KEO_SLOTS', 'maybe'),
                                 ('KEO_CPU_HELD', 'yes'), ('KEO_HEAVY_HELD', 'bogus'),
+                                ('KEO_SLOTS_RAISE', 'yes'),
                                 ('KEO_SLOTS_DIR', 'relative\\slots')):
                 saved = os.environ.get(name)
                 os.environ[name] = value
