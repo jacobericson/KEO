@@ -5,6 +5,25 @@
 #include "audit_detail.h"
 
 namespace kenshiframeaudit_detail {
+// PhysicsHullT, as its pose apply (0x4CB0E0) reads it.
+static const size_t HULL_ACTOR    = 0x50;   // NxActor*, NULL until the hull is made
+static const size_t HULL_TELEPORT = 0x34;   // byte: the next pose is a teleport (the apply clears it)
+static const size_t HULL_POSE     = 0x38;   // float x, y, z
+
+// The last pose of each hull. Physics thread only.
+static hullpose::Entry s_poseSlots[hullpose::TABLE_SLOTS];
+static hullpose::Table s_pose;
+
+static void ClassifyHullApply(uintptr_t self)
+{
+	if (!s_pose.slots)
+		s_pose.Init(s_poseSlots, hullpose::TABLE_SLOTS);
+	const float* p = (const float*)(self + HULL_POSE);
+	int cls = s_pose.Classify(self, *(const uintptr_t*)(self + HULL_ACTOR) != 0,
+	                          *(const unsigned char*)(self + HULL_TELEPORT) != 0, p[0], p[1], p[2]);
+	++g_phys.hullClass[cls];
+}
+
 void PhysSwitchAt(int next, LONGLONG at)
 {
 	int current = (int)InterlockedCompareExchange(&g_physPhase, 0, 0);
@@ -19,6 +38,9 @@ void PhysDetailBegin(LONG seq, LONGLONG at)
 	memset(g_phys.physPhaseTicks, 0, sizeof(g_phys.physPhaseTicks));
 	memset(g_phys.physQueued, 0xFF, sizeof(g_phys.physQueued));
 	memset(g_phys.physCalls, 0, sizeof(g_phys.physCalls));
+	memset(g_phys.hullClass, 0, sizeof(g_phys.hullClass));
+	if (s_pose.slots)
+		s_pose.ClearIfHalfFull();
 	g_phys.physHulls = -1;
 	g_physThreadId = GetCurrentThreadId();
 	InterlockedExchange(&g_physActiveSeq, seq);
@@ -156,6 +178,9 @@ __int64 hk_PhysFinishScythe(void* self, unsigned char inserted)
 __int64 hk_PhysApplyHull(void* self)
 {
 	int previous = PhysImplEnter(PP_HULL_APPLY, PO_HULL_APPLY, true);
+	// Before the original: it creates the actor and clears the teleport byte.
+	if (previous >= 0)
+		ClassifyHullApply((uintptr_t)self);
 	__int64 result = oPhysApplyHull(self);
 	PhysImplExit(previous);
 	return result;

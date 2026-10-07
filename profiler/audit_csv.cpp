@@ -53,7 +53,7 @@ void WritePhysCsv(const FrameRec& r)
 				"impulseMs,hullDestroyMs,actorDestroyMs,terrainMs,hullApplyMs,simulateMs,"
 				"flushMs,fetchMs,controllerMs,postMs,hulls,qMake,qGroup,qImpulse,"
 				"qHullDestroy,qActorDestroy,qTerrain,nMake,nGroup,nImpulse,nHullDestroy,"
-				"nActorDestroy,nTerrain,nHullApply");
+				"nActorDestroy,nTerrain,nHullApply,nApCreate,nApTeleport,nApFirst,nApSame,nApTiny,nApMoved");
 			physHeader = true;
 		}
 		const PhysRunSample& p = r.phys;
@@ -72,6 +72,9 @@ void WritePhysCsv(const FrameRec& r)
 			p.queued[PO_TERRAIN], p.calls[PO_MAKE], p.calls[PO_GROUP],
 			p.calls[PO_IMPULSE], p.calls[PO_HULL_DESTROY],
 			p.calls[PO_ACTOR_DESTROY], p.calls[PO_TERRAIN], p.calls[PO_HULL_APPLY]);
+		row += Fmt(",%d,%d,%d,%d,%d,%d", p.apClass[hullpose::PC_CREATE], p.apClass[hullpose::PC_TELEPORT],
+		           p.apClass[hullpose::PC_FIRST], p.apClass[hullpose::PC_SAME], p.apClass[hullpose::PC_TINY],
+		           p.apClass[hullpose::PC_MOVED]);
 		WriteRaw(g_physCsv, row);
 	}
 	if (g_physqCsv && r.nphysq > 0)

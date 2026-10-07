@@ -473,6 +473,8 @@ void CollectPhys()
 		}
 		p.calls[PO_IMPULSE]      = -1; // five-argument virtual call: stack argument must remain untouched
 		p.calls[PO_HULL_DESTROY] = -1; // two-byte virtual call site is intentionally unpatched
+		for (int i = 0; i < hullpose::PC_COUNT; ++i)
+			p.apClass[i] = s.hullClass[i];
 	}
 }
 

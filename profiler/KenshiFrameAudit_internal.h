@@ -234,6 +234,7 @@ struct ThreadSlot
 	int           physHulls;                      // registered hulls at pre-step entry
 	LONGLONG      rel, platU;                     // FactionRelations::update; one platoon's unloaded update (AI)
 	int           relCalls, relNodes;             // relations updates and the map entries they walked
+	int           hullClass[hullpose::PC_COUNT];  // hull pose submissions by class (physics)
 	// CharBody::update time by the task class running it (task vtable).
 	static const int MAX_TASKS = 24;
 	const void*   taskVt[MAX_TASKS];

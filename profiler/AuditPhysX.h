@@ -8,6 +8,7 @@
 #include <Windows.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "audit_pose_table.h"
 
 namespace audit
 {
@@ -78,6 +79,7 @@ struct PhysRunSample
 	int       hulls;
 	int       queued[PO_COUNT];
 	int       calls[PO_COUNT];
+	int       apClass[hullpose::PC_COUNT];   // hull pose submissions by class (doors not classed)
 };
 
 struct PhysQuerySample
