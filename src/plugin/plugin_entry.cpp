@@ -37,6 +37,7 @@
 #include "fixes/physx/physx_query_guard.h"
 #include "fixes/stitch/stitch_byte_guard.h"
 #include "navmesh/construction/wall_splice.h"
+#include "fixes/world/town_claim.h"
 #include "fixes/streaming/section_key_ring.h"
 #include "plugin/crash_record.h"
 
@@ -72,6 +73,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID reserved)
 		// repointed, into the stub's own page. See NeutralizePhysQueryGuard.
 		NeutralizePhysQueryGuard();
 		NeutralizeStitchByteGuard();
+		fixes::NeutralizeTownClaimPatch();
 	}
 	if (reason == DLL_PROCESS_DETACH)
 	{
@@ -449,6 +451,8 @@ void InstallHooksAndGuards(const EntryCtx& ctx)
 	// when the progress detour installed, so the vanilla splice is never removed without its
 	// replacement.
 	navmesh::InstallWallSpliceNop(ctx.gateOk);
+	// A third mid-function patch, off the gate banner like the two above: thirteen bytes in createBuilding, written before a world exists.
+	fixes::InstallTownClaimPatch(ctx.gateOk);
 
 	// Worker threads created lazily on first hook_dispatchJob call
 	// (Havok world not yet initialized at plugin load time)
