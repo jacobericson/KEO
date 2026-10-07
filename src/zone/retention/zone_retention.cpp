@@ -437,6 +437,7 @@ void ZoneRetentionTick(void* zoneMgr, double now)
 		   << " pressure=" << (g_pressure ? 1 : 0)
 		   << " cap=" << zone::g_zoneCfg.cfg_zoneRetentionMaxHeld
 		   << " r=" << zone::g_zoneCfg.cfg_zoneLifeRetainRadius << "/" << zone::g_zoneCfg.cfg_zoneLifeSquadRadius
+		   << " fzh=" << (GameFastZoneHopping() ? "on" : "off")
 		   << " anchors=" << (ZlRetentionReadable() ? 1 : 0);
 		ss << ZoneExpiryGuardStatsFragment();
 		if (g_kept)
