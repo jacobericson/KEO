@@ -1712,9 +1712,10 @@ static void SettingsRowsTests()
 	      "gpuUploadSkip is DEV-only");
 	Check(FindRow(dev, "Render stats") != NULL && FindRow(prod, "Render stats") == NULL, "renderDiag is DEV-only");
 
-	const SettingsRow* levers = FindRow(prod, "Rendering optimizations");
+	const SettingsRow* levers = FindRow(dev, "Rendering optimizations");
+	Check(!FindRow(prod, "Rendering optimizations"), "renderLevers: master control is DEV-page only");
 	Check(levers && levers->label == "Rendering optimizations *" && levers->kind == SR_CHECKBOX
-	      && levers->boolPtr == &StagedRender(&st).renderLevers, "renderLevers: a checkbox bound to staging, marked restart");
+	      && levers->boolPtr == &StagedRender(&st).renderLevers, "renderLevers: a DEV checkbox bound to staging, marked restart");
 	const SettingsRow* cap = FindRow(prod, "Cap particle updates");
 	Check(cap && cap->label.find(" *") == std::string::npos && !cap->restart, "live keys are not marked restart");
 	const SettingsRow* speed = FindRow(dev, "Particle step cap from");

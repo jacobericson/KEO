@@ -273,22 +273,22 @@ const ConfigKey g_fixesConfigKeys[] =
 	CFG_OROW_L("hullSameSkip", CK_CUSTOM, FixesConfig, cfg_hullSameSkip, 1.0f, 0.0f, INT_MIN, false, DOC,
 	           ParseHullSameSkip, "Skip unchanged click hulls",
 	           "The physics thread stops re-sending a character's click hull to PhysX when it has not moved"
-	           " since the last send. Teleports and new hulls always pass.", SHOW, 0.0f, 0,
+	           " since the last send. Teleports and new hulls always pass.", DEVROW, 0.0f, 0,
 	           kHullSameSkipChoices, CFG_COUNT(kHullSameSkipChoices), false, true),
 	CFG_OROW_L("sceneForkSkip", CK_CUSTOM, FixesConfig, cfg_sceneForkSkip, 1.0f, 0.0f, INT_MIN, false, DOC,
 	  ParseSceneForkSkip, "Skip idle scene worker forks",
 	  "Skips the renderer's instance-batch cull, skeleton animation and instance bounds worker forks"
 	  " whenever their lists give the workers nothing to do.",
-	  SHOW, 0.0f, 0, kSceneSwitchChoices, CFG_COUNT(kSceneSwitchChoices), false, true),
+	  DEVROW, 0.0f, 0, kSceneSwitchChoices, CFG_COUNT(kSceneSwitchChoices), false, true),
 	CFG_OROW_L("instEmptySkip", CK_CUSTOM, FixesConfig, cfg_instEmptySkip, 1.0f, 0.0f, INT_MIN, false, DOC,
 	  ParseInstEmptySkip, "Skip empty instance batch uploads",
 	  "An instance batch with nothing visible in a pass skips its vertex buffer lock and upload.",
-	  SHOW, 0.0f, 0, kSceneSwitchChoices, CFG_COUNT(kSceneSwitchChoices), false, true),
+	  DEVROW, 0.0f, 0, kSceneSwitchChoices, CFG_COUNT(kSceneSwitchChoices), false, true),
 	CFG_OROW_L("d3dStateSkip", CK_CUSTOM, FixesConfig, cfg_d3dStateSkip, 1.0f, 0.0f, INT_MIN, false, DOC,
 	  ParseD3dStateSkip, "Keep unchanged D3D11 state objects",
 	  "After a material change, keeps the bound blend, rasterizer and depth-stencil states whose settings"
 	  " did not change, instead of making and binding them again.",
-	  SHOW, 0.0f, 0, kD3dStateChoices, CFG_COUNT(kD3dStateChoices), false, true),
+	  DEVROW, 0.0f, 0, kD3dStateChoices, CFG_COUNT(kD3dStateChoices), false, true),
 	CFG_OBOOL("stitchByteGuard", FixesConfig, stitchByteGuardEnabled,       DOC, DEVROW,
 	  "Interior stitch byte guard",
 	  "Skips the flag byte the game writes past an interior's navmesh when its stitch finishes. Off"
@@ -320,7 +320,7 @@ const ConfigKey g_fixesConfigKeys[] =
 	           ParseRelationsSelfFind, "Faction self-relation lookup",
 	           "Finds each faction's own relation entry with one lookup instead of walking every entry on every"
 	           " AI pass. Verify runs the game's walk too and compares; any difference returns to the walk for"
-	           " the session.", SHOW, 0.0f, 0, kRelationsSelfFindChoices, CFG_COUNT(kRelationsSelfFindChoices),
+	           " the session.", DEVROW, 0.0f, 0, kRelationsSelfFindChoices, CFG_COUNT(kRelationsSelfFindChoices),
 	           false, true),
 	CFG_OBOOL("nestValidationGuard", FixesConfig, nestValidationGuardEnabled,   DOC, DEVROW,
 	  "Nest validation guard",
@@ -330,13 +330,13 @@ const ConfigKey g_fixesConfigKeys[] =
 	           ParseOnScreenStagger, "Stagger far visibility checks",
 	           "A character far beyond the NPC range and off screen gets the game's full visibility check one"
 	           " AI pass in four; the other passes keep it off screen exactly as the check would. A camera"
-	           " jump checks everyone at once.", SHOW, 0.0f, 0, kOnScreenStaggerChoices,
+	           " jump checks everyone at once.", DEVROW, 0.0f, 0, kOnScreenStaggerChoices,
 	           CFG_COUNT(kOnScreenStaggerChoices), false, true),
 	CFG_OROW_L("pausedOffscreenSkip", CK_CUSTOM, FixesConfig, cfg_pausedOffscreenSkip, 1.0f, 0.0f, INT_MIN, false,
 	           DOC, ParsePausedOffscreenSkip, "Skip off-screen paused updates",
 	           "While the game is paused, a character that is off screen, not carried and not in the player's"
 	           " squad runs only its zone check; it gets the full update one paused frame in sixteen and as"
-	           " soon as it is on screen.", SHOW, 0.0f, 0, kPausedOffscreenSkipChoices,
+	           " soon as it is on screen.", DEVROW, 0.0f, 0, kPausedOffscreenSkipChoices,
 	           CFG_COUNT(kPausedOffscreenSkipChoices), false, true),
 	CFG_OBOOL("townClaimFix", FixesConfig, townClaimFixEnabled,           DOC, SHOW,
 	  "Prevent NPC from claiming player buildings",
@@ -355,7 +355,7 @@ const ConfigKey g_fixesConfigKeys[] =
 	CFG_OROW_L("ogreJoinSpinUs", CK_CUSTOM, FixesConfig, cfg_ogreJoinSpinUs, 1.0f, 0.0f, INT_MIN, false, DOC,
 	           ParseOgreJoinSpinUs, "Ogre barrier join spin",
 	           "Before the main thread blocks waiting for Ogre's worker threads, it checks for this long whether"
-	           " they have all arrived, and goes on without a wait when they have.", SHOW, 0.0f, 0,
+	           " they have all arrived, and goes on without a wait when they have.", DEVROW, 0.0f, 0,
 	           kOgreJoinSpinUsChoices, CFG_COUNT(kOgreJoinSpinUsChoices), false, true),
 	{ NULL, CK_BOOL, 0, 0, 0.0f, 0.0f, false, NULL, NULL, false, 0.0f, 0, NULL, INT_MIN, false, false, false, NULL, NULL, NULL, NULL, 0 }
 };

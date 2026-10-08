@@ -35,7 +35,7 @@ static const char* const SUITE_NAME = "settings_factory_units";
 static const char* const SUITE_NAME = "settings_factory_prod_units";
 #endif
 static const size_t CORE_ROWS_DEV = 106;
-static const int DEV_ONLY_ROWS = 99;
+static const int DEV_ONLY_ROWS = 108;
 
 // ---- Sections --------------------------------------------------------------
 
@@ -102,9 +102,8 @@ static void CheckSections()
 	for (size_t i = 0; same && i < renderOnly.size(); ++i)
 		same = renderOnly[i]->label == wantLabel[i] && renderOnly[i]->kind == wantKind[i];
 	Check(same, "Sections");
-	Check(render.size() == 11 && render[0]->label == "Cap particle updates at high game speed"
-	      && render[1]->label == "Rendering optimizations *"
-	      && render[10]->label == "Foliage time limit at high speed (ms)", "Sections");
+	Check(render.size() == 2 && render[0]->label == "Cap particle updates at high game speed"
+	      && render[1]->label == "Foliage time limit at high speed (ms)", "Sections");
 }
 
 // ---- Every shown key once; labels; counts ---------------------------------
@@ -164,7 +163,7 @@ static void CheckRowCounts()
 	std::vector<SettingsRow> dev = Rows(&st, true, NULL), prod = Rows(&st, false, NULL);
 	Check(ModuleSections(dev).size() == CORE_ROWS_DEV, "core rows dev");
 	Check(Section(dev, RENDER_TITLE).size() == 21, "render rows dev");
-	Check(Section(prod, "Zone loading").size() == 7 && Section(prod, "Performance").size() == 11
+	Check(Section(prod, "Zone loading").size() == 7 && Section(prod, "Performance").size() == 2
 	      && Section(prod, "Squad movement").size() == 4 && Section(prod, "Gameplay fixes").size() == 4
 	      && Section(prod, "Backpacks and jobs").size() == 2, "player section rows prod");
 }
@@ -1079,7 +1078,7 @@ static void CheckLiveModuleRows()
 	zone::g_zoneCfg = held;
 }
 
-// Shipping switches are shown and apply live in both builds, with explicit off overrides.
+// Shipping optimizations remain active in both builds; their controls are on the DEV page only.
 static void CheckLiveCustomRows()
 {
 	const char* const keys[] = { "hullSameSkip", "sceneForkSkip", "instEmptySkip", "d3dStateSkip",
@@ -1092,15 +1091,17 @@ static void CheckLiveCustomRows()
 	StageAll(&saved);
 	SettingsStaging st = saved;
 	std::vector<SettingsRow> prod = Rows(&st, false, NULL);
+	std::vector<SettingsRow> dev = Rows(&st, true, NULL);
 	bool ready = true;
 	for (int i = 0; i < 8; ++i)
 	{
 		int k = KeyIndex(fm, keys[i]);
 		const ConfigKey& key = fm.keys[k];
-		const SettingsRow* row = FindLabel(prod, RowLabel(key));
+		const SettingsRow* row = FindLabel(dev, RowLabel(key));
 		bool shown = row && row->kind == SR_DROPBOX && row->intPtr && row->choices.size() >= 2;
-		Check(shown && key.live && !key.devOnly && !key.debugOnlyReader && key.documented,
-		      "shipping switches: each row is documented, shared and live on the PROD page");
+		Check(shown && !FindLabel(prod, RowLabel(key)) && key.live && key.devOnly
+	      && !key.debugOnlyReader && key.documented,
+		      "shipping switches: DEV controls stay hidden in PROD without becoming DEV-only readers");
 		Check(ConfigFormatValue(fm, key, fm.defaults) == (i == 7 ? "20" : "on"),
 		      "shipping switches: both builds default on, with a 20 us join spin");
 		ready = ready && shown;

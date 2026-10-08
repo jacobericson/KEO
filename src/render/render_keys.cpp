@@ -19,7 +19,7 @@ const RenderKey g_renderKeys[] =
 {
 	RK_ROW("renderLevers",             RK_BOOL,  RK_FIELD(renderLevers),             0, 0.0f, 0.0f, false,
 	  "Rendering optimizations",
-	  "Master switch for KEO's rendering and particle optimizations, including those set only in KEO.ini.", false, 0.0f, 0),
+	  "Master switch for KEO's rendering and particle optimizations, including those set only in KEO.ini.", true, 0.0f, 0),
 	RK_ROW("reflectionHalfRate",       RK_BOOL,  RK_FIELD(reflectionHalfRate),       0, 0.0f, 0.0f, true,
 	  "Water reflection at half rate",
 	  "Renders the water reflection every other frame.", true, 0.0f, 0),

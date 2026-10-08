@@ -37,11 +37,7 @@ static const ProdRow kProdPage[] =
 	{ "zoneLifeRetainRadius", "Zone loading" }, { "zoneLifeSquadRadius", "Zone loading" },
 	{ "zoneRetentionMaxHeld", "Zone loading" }, { "plannerAheadTiles", "Zone loading" },
 	{ "navmeshDiskCacheMaxMB", "Zone loading" },
-	{ "particleStepCap", "Performance" }, { "renderLevers", "Performance" },
-	{ "hullSameSkip", "Performance" }, { "sceneForkSkip", "Performance" },
-	{ "instEmptySkip", "Performance" }, { "d3dStateSkip", "Performance" },
-	{ "relationsSelfFind", "Performance" }, { "onScreenStagger", "Performance" },
-	{ "pausedOffscreenSkip", "Performance" }, { "ogreJoinSpinUs", "Performance" },
+	{ "particleStepCap", "Performance" },
 	{ "foliagePageBudgetMs", "Performance" },
 	{ "groupCohesion", "Squad movement" }, { "formationGatherPace", "Squad movement" },
 	{ "k7PostDeathHold", "Squad movement" }, { "plannerMode", "Squad movement" },
@@ -50,7 +46,7 @@ static const ProdRow kProdPage[] =
 	{ "backpackFixes", "Backpacks and jobs" }, { "operatorHoldUntil", "Backpacks and jobs" },
 	{ NULL, NULL }
 };
-static const int PROD_PAGE_ROWS = 28;
+static const int PROD_PAGE_ROWS = 19;
 static const char* const PROD_SECTIONS[] = { "Zone loading", "Performance", "Squad movement", "Gameplay fixes",
 	"Backpacks and jobs" };
 
