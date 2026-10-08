@@ -7,8 +7,7 @@
 // action slave and not a living player character to its own load check,
 // except one paused frame in sixteen. The detour and the tick both run on the
 // main thread: the tick hands the detour the key, advances the frame counter
-// and writes the PausedSkip: line. DEV builds only: PROD compiles both
-// functions as stubs.
+// and, in DEV builds, records counters and writes the PausedSkip: line.
 
 void InstallPausedSkip(int* installed, int*);
 void PausedSkipTick(double now);

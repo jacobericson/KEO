@@ -14,6 +14,7 @@
 #include "render/render_config.h"
 #include "render/render_levers.h"
 #include "gui/settings_panel.h"
+#include "bench/bench_group.h"
 #include "bench/bench_lever_ab.h"
 #include "bench/bench_runner.h"
 #include "bench/bench_sweep.h"
@@ -384,8 +385,10 @@ void InitializeRuntimeState(EntryCtx& ctx)
 	if (g_renderCfg.renderLevers)
 		InstallRenderLevers(&ctx.renderInstalled, &ctx.renderWanted);
 	ctx.benchToken = BenchRunnerInstall();
+	BenchGroupsResolve(&LogMsg);
 	BenchRegisterScenario("leverAB", BuildLeverAB);   // kind 0, every slot's
-	BenchSweepRunner sweepRunner = { &BenchRunnerArm, &BenchRunnerActive, &BenchRunnerAbort, &BenchRunnerArmBlocked, &LogMsg };
+	BenchSweepRunner sweepRunner = { &BenchRunnerArm, &BenchRunnerActive, &BenchRunnerAbort, &BenchRunnerArmBlocked, &LogMsg,
+	                                 &BenchGroupFind };
 	BenchSweepSetRunner(sweepRunner);
 	BenchRunnerSetEndCallback(&BenchSweepOnRunEnd);
 	InstallSettingsPanel();

@@ -114,9 +114,3 @@ bool RelArmVerifyWindow(int oldMode, int newMode)
 {
 	return newMode == REL_MODE_ON && oldMode != REL_MODE_ON;
 }
-
-// With the guard on, a non-NULL source equal to the faction itself is dropped.
-bool RelGuardDrops(int guard, uintptr_t me, uintptr_t from)
-{
-	return guard != 0 && from != 0 && from == me;
-}

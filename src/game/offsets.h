@@ -282,6 +282,15 @@ const size_t RVA_USER_PAUSE_SPEED       = 0x2131E88; // float, userPause's saved
 const size_t RVA_USER_PAUSE_GUARD       = 0x2131E8C; // bit 0: the saved speed is set
 const size_t RVA_OPTIONS_INSTANCE       = 0x212E080; // OptionsWindow* (getSingleton's static)
 const size_t RVA_WEATHER_INSTANCE       = 0x2127180; // WeatherSystem* (getInstance's static)
+// The game clock's rate: a float in .rdata, game hours per real second at 1x,
+// read only by the sky's per-frame advance (mulss at +0x25A); the advance bumps
+// the sky's day (inc dword [rdi+8]) when the hour wraps.
+const size_t RVA_CLOCK_RATE             = 0x16FC7F8;
+const size_t RVA_SKY_ADVANCE            = 0x66E700;
+const size_t OFF_SKY_ADVANCE_RATE_READ  = 0x25A;
+const size_t RVA_SKY_DAY_INCREMENT      = 0x66E990;
+const unsigned CLOCK_RATE_BITS          = 0x3C162FC9; // the shipped value, 1 / 109.09
+const size_t RVA_WEATHER_SETUP          = 0x9DC090;  // WeatherInstance::setupWeather
 
 
 #endif // KEO_OFFSETS_H

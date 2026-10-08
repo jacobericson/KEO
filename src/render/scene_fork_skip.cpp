@@ -2,8 +2,6 @@
 // skipped when their lists give every worker nothing to do (scene_levers.h).
 #include "render/scene_levers.h"
 
-#ifdef KEO_DEBUG
-
 #include "render/scene_lever_policy.h"
 #include "render/ogre_worker_policy.h"
 #include "render/module_hooks.h"
@@ -26,7 +24,7 @@ static const uintptr_t RVA_BARRIER_SYNC   = 0x3DFF40;
 static const uintptr_t RVA_UPDATE_VB      = 0x130490;
 static const uintptr_t RVA_BASE_CULL      = 0x274C0;
 
-// This switch reads the same OgreMain build as the join spin and the worker priority, and the same
+// This switch reads the same OgreMain build as the join spin, and the same
 // Barrier::sync export as the join spin.
 static_assert(OGRE_SCENE_BUILD_STAMP == OGRE_TIMESTAMP && OGRE_SCENE_BUILD_SIZE == OGRE_IMAGE_SIZE,
               "one OgreMain build for every render switch");
@@ -70,18 +68,22 @@ static char s_siteWhy[16];               // "site <n>", when a site refuses
 
 // Main thread only: every site sits in a function only the main thread runs.
 static ForkPairState s_pair[FORK_PAIRS];
+#ifdef KEO_DEBUG
 static LONG s_fires[FORK_PAIRS];
 static LONG s_skips[FORK_PAIRS];
 static LONG s_odd = 0;
 static volatile LONG s_offMain = 0;
+#endif
 
 // Published by the tick; the entry reads it at a fire only.
 static volatile LONG s_mode = 0;
 
 // Main-thread tick state.
 static int s_seenMode = 0;
+#ifdef KEO_DEBUG
 static double s_lastBeat = 0.0;
 static const double kBeatSeconds = 60.0;
+#endif
 
 // The import-thunk test's reads. A slot may name any module's code, so a
 // fault answers false and the fork runs.
@@ -136,19 +138,27 @@ static void ForkSyncEntry(void* barrier, unsigned char* sm, int site)
 
 	const bool on = s_mode != 0;
 	const bool onMain = IsMainThread();
+#ifdef KEO_DEBUG
 	if (!onMain)
 		InterlockedIncrement(&s_offMain);
+#endif
 	const bool idle = on && onMain && s_pair[pair].live && !s_pair[pair].pending && PairIdle(pair, sm);
 	const ForkAction a = ForkFire(&s_pair[pair], on, onMain, idle);
+#ifdef KEO_DEBUG
 	if (on && onMain)
 		++s_fires[pair];
+#endif
 	if (a == FORK_SKIP)
 	{
+#ifdef KEO_DEBUG
 		++s_skips[pair];
+#endif
 		return;
 	}
+#ifdef KEO_DEBUG
 	if (a == FORK_CALL_ODD)
 		++s_odd;
+#endif
 	s_sync(barrier);
 }
 
@@ -285,6 +295,7 @@ static bool InstallOk()
 	return s_install && strcmp(s_install, "ok") == 0;
 }
 
+#ifdef KEO_DEBUG
 static void EmitHeartbeat()
 {
 	std::ostringstream line;
@@ -299,27 +310,29 @@ static void EmitHeartbeat()
 	     << " odd=" << s_odd << " offMain=" << InterlockedCompareExchange(&s_offMain, 0, 0);
 	LogMsg(line.str());
 }
+#endif
 
 void SceneForkSkipTick(double now)
 {
 	const int mode = (fixes::g_fixesCfg.cfg_sceneForkSkip == 1 && InstallOk()) ? 1 : 0;
+#ifdef KEO_DEBUG
 	bool beat = false;
+#endif
 	if (mode != s_seenMode)
 	{
 		InterlockedExchange(&s_mode, mode);
 		s_seenMode = mode;
+#ifdef KEO_DEBUG
 		beat = true;
+#endif
 	}
+#ifdef KEO_DEBUG
 	if (beat || now - s_lastBeat >= kBeatSeconds)
 	{
 		s_lastBeat = now;
 		EmitHeartbeat();
 	}
+#else
+	(void)now;
+#endif
 }
-
-#else  // !KEO_DEBUG
-
-void InstallSceneForkSkip(int* installed, int*) { (void)installed; }
-void SceneForkSkipTick(double now) { (void)now; }
-
-#endif // KEO_DEBUG

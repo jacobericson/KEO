@@ -57,6 +57,23 @@ const size_t RVA_GLOBAL_FRAME_TIME   = 0x2132730;
 // The game's OptionsHolder, a static object (not a pointer); its Options
 // window's checkboxes write its fields the moment they are clicked.
 const size_t RVA_GLOBAL_OPTIONS      = 0x2132440;
+// The game-speed-scaled frame delta (IDB frameTime), the one the on-screen check adds
+// to an off-screen character's time; RVA_GLOBAL_FRAME_TIME above is the unscaled delta
+// stored beside it.
+const size_t RVA_GLOBAL_GAME_FRAME_TIME  = 0x2132734;
+// Character::updateOnScreenCheck: the AI back thread (the main thread with
+// characterMultithreading off), for every character and every corpse each AI run.
+const size_t RVA_CHARACTER_UPDATE_ONSCREEN_CHECK = 0x5C94D0;
+// PlayerInterface::getSquaredDistanceFromCamera(player, const Vector3*): the camera node's
+// position against the point, the on-screen check's own distance test.
+const size_t RVA_PLAYER_SQ_DIST_FROM_CAMERA = 0x7F1E80;
+// Character::pausedUpdate: vtable slot 78 of every character class, called for every
+// loaded character by GameWorld::charsUpdatePaused on the main thread while the game is
+// paused; it ends with the character's loadUnloadCheck (vtable +0x220).
+const size_t RVA_CHARACTER_PAUSED_UPDATE = 0x5C7090;
+// Character::isPlayerCharacter: getFaction() has a player interface. The paused update
+// leases the cell of a living character for which it is true.
+const size_t RVA_CHARACTER_IS_PLAYER_CHARACTER = 0x790B30;
 // The insert helper both tracking sets use: (set, outPair, &value, &pValue).
 // Not a KenshiLib-named member; it is the out-of-line body behind
 // ogre_unordered_set<ZoneMap*>::insert.
@@ -330,6 +347,11 @@ const size_t RVA_HULL_PUSH_ENTITY = 0x7DC170;   // SimplePhysXEntity family
 const size_t RVA_HULL_PUSH_SCYTHE = 0x7DBF20;   // ScythePhysicsT
 const size_t RVA_HULL_PUSH_ROOT   = 0x7DC0B0;
 const size_t RVA_HULL_PUSH_BASE   = 0x7DC110;
+// PhysicsHullT's apply: the physics thread's threadJunkPreBT calls vtable slot 5 on every
+// registered hull. The slot holds a jmp thunk to the apply; nothing else references either.
+const size_t RVA_PHYSICS_HULL_APPLY_SLOT  = 0x16DD700;  // PhysicsHullT vftable 0x16DD6D8 + 0x28
+const size_t RVA_PHYSICS_HULL_APPLY_THUNK = 0x259F5;    // E9 rel32 to the apply
+const size_t RVA_PHYSICS_HULL_APPLY       = 0x4CB0E0;
 
 #ifdef KEO_DEBUG
 // NavMesh::deleteInstance. Tears one navmesh instance down and, when the
@@ -382,6 +404,10 @@ const size_t RVA_REQUEST_PATH       = 0x145CB0;
 const size_t RVA_PATH_REQ_SUBMIT    = 0x3AAEF0;
 const size_t RVA_ENQUEUE_PATH_REQ   = 0x3B6110;
 const size_t RVA_NAVMESH_GET_FACE_KEY_VEC4 = 0x3A1CB0;  // NavMesh::getFaceKey_hkVector4f(pos, rayLength): lock-free, the caller holds +0x200 shared
+// FactionRelations (the AI back thread; the main thread with characterMultithreading
+// off). update rewrites the faction's own entry to 100 by walking the whole map.
+// The player faction's object has a nullsub in that slot.
+const size_t RVA_FACTION_RELATIONS_UPDATE = 0x6B2480;  // FactionRelations::update, vtable slot 2
 
 // Island routing. Verified against the IDB (kenshi_x64.exe 1.0.65).
 //   ZoneMap::isInIsland      0xA07EB0 (19 bytes): `b && a->island == b->island`.

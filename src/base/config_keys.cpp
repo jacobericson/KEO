@@ -27,7 +27,7 @@ static bool ParseBenchSweep(const std::string& val, ConfigLogFn log)
 	bool sweepDefault = false;
 	ParseBenchSweepKey("bench.sweep", val, &badLegs, &extraLegs, &sweepDefault);
 	for (size_t i = 0; i < badLegs.size(); ++i)
-		log("Bench: bench.sweep entry '" + badLegs[i] + "' ignored (a slot:1 or slot:20 leg is expected)");
+		log("Bench: bench.sweep entry '" + badLegs[i] + "' ignored (a slot:speed[:group] leg is expected, speed 0, 1 or 20)");
 	for (size_t i = 0; i < extraLegs.size(); ++i)
 	{
 		std::ostringstream ss;
@@ -36,7 +36,7 @@ static bool ParseBenchSweep(const std::string& val, ConfigLogFn log)
 		log(ss.str());
 	}
 	if (sweepDefault)
-		log("Bench: bench.sweep named no valid leg, using the default " + BenchSweepListText());
+		log("Bench: bench.sweep named no valid leg, using the default; the next stage is " + BenchSweepListText());
 	return true;
 }
 

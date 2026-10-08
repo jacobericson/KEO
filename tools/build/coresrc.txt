@@ -2,7 +2,10 @@ src\pathfind\astar_cost.cpp
 src\pathfind\astar_cost_policy.cpp
 src\bench\bench_game.cpp
 src\bench\bench_game_math.cpp
+src\bench\bench_group.cpp
 src\bench\bench_lever_ab.cpp
+src\bench\bench_pin.cpp
+src\bench\bench_pin_run.cpp
 src\bench\bench_recorders.cpp
 src\bench\bench_report.cpp
 src\bench\bench_restore.cpp
@@ -30,6 +33,8 @@ src\diag\physx_pool_sets.cpp
 src\diag\throw_ring.cpp
 src\fixes\world\corpse_pin.cpp
 src\fixes\world\corpse_pin_policy.cpp
+src\fixes\world\faction_relations_policy.cpp
+src\fixes\world\faction_relations.cpp
 src\fixes\crash_claim.cpp
 src\fixes\streaming\create_instance_guard.cpp
 src\fixes\streaming\create_instance_guard_policy.cpp
@@ -41,6 +46,8 @@ src\fixes\search\graph_visitor_guard.cpp
 src\fixes\search\graph_visitor_guard_policy.cpp
 src\fixes\physx\hull_queue_guard.cpp
 src\fixes\physx\hull_queue_guard_policy.cpp
+src\fixes\physx\hull_same_skip_policy.cpp
+src\fixes\physx\hull_same_skip.cpp
 src\fixes\streaming\mesh_face_guard.cpp
 src\fixes\streaming\mesh_face_guard_policy.cpp
 src\fixes\streaming\navmesh_guard_policy.cpp
@@ -49,6 +56,10 @@ src\fixes\streaming\navmesh_update_guard.cpp
 src\fixes\near_page.cpp
 src\fixes\world\nest_validation.cpp
 src\fixes\world\nest_validation_policy.cpp
+src\fixes\world\onscreen_stagger_policy.cpp
+src\fixes\world\onscreen_stagger.cpp
+src\fixes\world\paused_skip_policy.cpp
+src\fixes\world\paused_skip.cpp
 src\fixes\physx\physx_query_guard.cpp
 src\fixes\physx\physx_query_guard_policy.cpp
 src\fixes\physx\purecall_layout.cpp
@@ -111,6 +122,8 @@ src\pathfind\pathfind_diag.cpp
 src\pathfind\pathfind_hooks.cpp
 src\pathfind\player_repath_tier.cpp
 src\pathfind\player_repath_tier_policy.cpp
+src\pathfind\npc_search_probe_policy.cpp
+src\pathfind\npc_cap_requester.cpp
 src\zone\preload\preload.cpp
 src\zone\preload\preload_pipe_stats.cpp
 src\zone\preload\preload_prepare.cpp
@@ -118,6 +131,8 @@ src\zone\preload\preload_queue.cpp
 src\zone\reset\preload_saveload.cpp
 src\render\compositor_layout.cpp
 src\render\compositor_lever.cpp
+src\render\d3d_state_policy.cpp
+src\render\d3d_state_skip.cpp
 src\render\empty_pass_visibility.cpp
 src\render\fog_fade.cpp
 src\render\foliage_budget.cpp
@@ -126,9 +141,12 @@ src\render\gpu_param_cache.cpp
 src\render\gpu_params.cpp
 src\render\gpu_upload.cpp
 src\render\id_string.cpp
+src\render\inst_empty_skip.cpp
 src\render\module_hooks.cpp
+src\render\ogre_join_spin.cpp
 src\render\ogre_purge_policy.cpp
 src\render\ogre_purge_skip.cpp
+src\render\ogre_worker_policy.cpp
 src\render\old_anim_lever.cpp
 src\render\particle_levers.cpp
 src\render\pass_visibility.cpp
@@ -140,6 +158,8 @@ src\render\render_defaults.cpp
 src\render\render_keys.cpp
 src\render\render_levers.cpp
 src\render\render_live.cpp
+src\render\scene_fork_skip.cpp
+src\render\scene_lever_policy.cpp
 src\render\shadow_reach.cpp
 src\render\shadow_reach_math.cpp
 src\render\shadow_receiver_depth.cpp

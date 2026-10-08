@@ -39,6 +39,7 @@
 #include "pathfind/gate_pass.h"
 #include "bench/bench_runner.h"
 #include "fixes/world/corpse_pin.h"
+#include "fixes/world/faction_relations.h"
 #include "inventory/backpack_first.h"
 #include "fixes/world/town_claim.h"
 #include "fixes/world/throwout.h"
@@ -53,6 +54,8 @@
 #include "fixes/world/nest_validation.h"
 #endif
 #include "fixes/stitch/unstitch_guard.h"
+#include "fixes/world/onscreen_stagger.h"
+#include "fixes/world/paused_skip.h"
 #include "fixes/stitch/stitch_source.h"
 #include "fixes/search/graph_visitor_guard.h"
 #include "fixes/search/graph_expand_guard.h"
@@ -62,11 +65,15 @@
 #include "planner/planner_hooks.h"
 #include "fixes/streaming/create_instance_guard.h"
 #include "fixes/physx/hull_queue_guard.h"
+#include "fixes/physx/hull_same_skip.h"
 #include "fixes/streaming/mesh_face_guard.h"
 #include "fixes/streaming/navmesh_life.h"
 #include "fixes/stitch/unstitch_probe.h"
+#include "render/scene_levers.h"
+#include "render/d3d_state_skip.h"
 #include "fixes/streaming/section_key_probe.h"
 #include "diag/physx_pool_probe.h"
+#include "render/ogre_join_spin.h"
 
 // `extern` is required: a const object at namespace scope has internal
 // linkage in C++ without it, and plugin_entry.cpp needs this one.
@@ -618,6 +625,17 @@ static void (*const kInstallSteps[])(int*, int*) =
 	// physics thread, the second time through freed memory.
 	InstallHullQueueGuard,
 
+	// The click-hull same-target skip swaps a verified slot for its live setting in every build.
+	InstallHullSameSkip,
+
+	// The OgreMain scene switches install for their live settings in every build; no manifest row.
+	InstallSceneForkSkip,
+	InstallInstEmptySkip,
+
+	// The D3D11 state-object switch: installed whatever its
+	// live key says; no manifest row.
+	InstallD3dStateSkip,
+
 	// The drain end of the navmesh adjacency window, whatever the key says:
 	// the key chooses deferral or counting, never whether the window is seen.
 	InstallNavMeshAdjacency,
@@ -626,6 +644,9 @@ static void (*const kInstallSteps[])(int*, int*) =
 	// rides the streaming-collection insert hook below, which this key alone
 	// is enough to install.
 	InstallNavMeshLife,
+
+	// The Ogre join spin installs for its live setting; its module site is outside this table.
+	InstallOgreJoinSpin,
 
 #ifdef KEO_DEBUG
 	// Read-only diagnostic, off unless unstitchProbe is set; the entry itself
@@ -643,6 +664,12 @@ static void (*const kInstallSteps[])(int*, int*) =
 #endif
 
 	InstallZonePauseGuard,
+	// The far visibility-check stagger: installed whatever its
+	// live key says.
+	InstallOnScreenStagger,
+	// The paused off-screen skip: installed whatever its live key
+	// says.
+	InstallPausedSkip,
 	InstallZoneLifecycleHooks,
 	InstallCorpsePin,
 	keo_inventory::InstallBackpackFirst,
@@ -650,6 +677,8 @@ static void (*const kInstallSteps[])(int*, int*) =
 	keo_inventory::InstallBackpackSidecar,
 	keo_inventory::InstallBackpackWindow,
 	InstallFormationPace,
+	// The faction relations lookup is installed for its live setting in every build.
+	InstallFactionRelations,
 	fixes::InstallThrowout,
 #if ZONEHAND_STEP >= 2
 	InstallNestValidationGuard,

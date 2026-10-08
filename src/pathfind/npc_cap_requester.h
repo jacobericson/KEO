@@ -5,7 +5,14 @@
 // copies each such request's owner handle into a ring, and the main thread resolves the handles
 // noted since its last line into the character's name, faction, race and current task types.
 
+#include "pathfind/astar_cost_policy.h"
+
 #ifdef KEO_DEBUG
+// Path thread: read diagnostic metadata after a completed capped character search.
+void NpcCapRequesterAfter(void* collection, void* input, AstarCallerClass cls, int status, int cause,
+                          const void* request, int* goalData, int* startCluster);
+// Main-thread diagnostic heartbeat, with no search-state mutation.
+void NpcCapRequesterTick(double now);
 // Path thread, on a capped character search; request is the request being served (NULL: none).
 void NpcCapRequesterNote(const void* request, int player);
 // Main thread: resolves the handles noted since the last call and writes the NpcCapWho: line.

@@ -3,6 +3,7 @@
 
 #include "base/config_table.h"
 #include "bench/bench_slots.h"
+#include "bench/bench_sweep.h"
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
@@ -168,6 +169,8 @@ void ConfigApplyLine(const std::string& key, const std::string& val, int lineNo,
 	if (k)
 		matched = ConfigApplyValue(*m, *k, val, log);
 	else if (ParseBenchSlotKey(key, val, g_benchSlots))
+		matched = true;
+	else if (ParseBenchSweepFamilyKey(key, val, log))
 		matched = true;
 
 	if (matched)

@@ -21,7 +21,7 @@ const RenderConfig kRenderDefaults =
 	3.0f,                // particleStepCapSpeed
 	0.5f,                // particleOffscreenSeconds
 	10.0f,               // particleOffscreenMinAge
-	"fire,smoke,torch,rain,weather",
+	"fire,smoke,torch,rain,weather,poison gas",
 	true,                // oldAnimSkip
 	false,               // oldAnimDiag
 	true,                // gpuParamCache

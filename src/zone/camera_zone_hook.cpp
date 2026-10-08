@@ -21,22 +21,30 @@
 #include "movement/formation.h"
 #include "pathfind/pathfinding.h"
 #include "pathfind/player_repath_tier.h"
+#include "pathfind/npc_cap_requester.h"
 #include "navmesh/scheduling/navmesh_sched.h"
 #include "movement/mover_policy.h"
 #include "movement/islands.h"
 #include "pathfind/path_pool.h"
 #include "pathfind/gate_pass.h"
 #include "render/render_levers.h"
+#include "render/ogre_join_spin.h"
 #include "bench/bench_runner.h"
 #include "bench/bench_sweep.h"
+#include "render/scene_levers.h"
+#include "render/d3d_state_skip.h"
 #include "fixes/physx/purecall_record.h"
 #include "fixes/physx/physx_query_guard.h"
 #include "fixes/streaming/create_instance_guard.h"
 #include "fixes/physx/hull_queue_guard.h"
+#include "fixes/physx/hull_same_skip.h"
 #include "fixes/stitch/stitch_source.h"
 #include "fixes/stitch/stitch_byte_guard.h"
+#include "fixes/world/onscreen_stagger.h"
+#include "fixes/world/paused_skip.h"
 #include "diag/physx_pool_probe.h"
 #include "fixes/world/corpse_pin.h"
+#include "fixes/world/faction_relations.h"
 #include "fixes/world/throwout.h"
 #include "fixes/world/town_claim.h"
 #include "zone/handoff/zone_handoff.h"
@@ -259,17 +267,28 @@ static bool CameraZoneTicks(void* zoneMgr, bool saveLoading)
 	double tickNow = ElapsedSec();
 	PathPoolTickMain(tickNow);
 	GatePassTickMain();
+#ifdef KEO_DEBUG
+	NpcCapRequesterTick(tickNow);
+#endif
 	ReadinessReportTick(tickNow);
 	RenderLeversMainThreadTick(saveLoading);
+	OgreJoinSpinTick(tickNow);
 	BenchMainThreadTick(saveLoading);
 	BenchSweepMainThreadTick(tickNow);
 	ProfilerImageTickMain(tickNow);
+	SceneForkSkipTick(tickNow);
+	InstEmptySkipTick(tickNow);
+	D3dStateSkipTick(tickNow);
 	PurecallRecordTick(tickNow);
 	PhysQueryGuardTick(tickNow);
+	OnScreenStaggerTick(tickNow, saveLoading);
+	PausedSkipTick(tickNow);
 	CreateInstanceGuardTick(tickNow);
 	HullQueueGuardTick(tickNow);
+	HullSameSkipTick(tickNow, saveLoading);
 	StitchByteGuardTick(tickNow);
 	PhysXPoolTick(tickNow);
+	FactionRelationsTick(tickNow);
 	StitchSourceTick(tickNow);
 	NavMeshAdjTick(tickNow);
 	// The rebuild key's marks and panel hold; a dismissal it held is issued here

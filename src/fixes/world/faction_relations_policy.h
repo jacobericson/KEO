@@ -68,7 +68,4 @@ RelPath RelChoosePath(int mode, bool fallback, uintptr_t me, bool inWindow);
 // A switch to on (from off or verify) opens a verified stretch.
 bool RelArmVerifyWindow(int oldMode, int newMode);
 
-// The guard drops a relation change whose source is the faction itself.
-bool RelGuardDrops(int guard, uintptr_t me, uintptr_t from);
-
 #endif // KEO_FIXES_FACTION_RELATIONS_POLICY_H

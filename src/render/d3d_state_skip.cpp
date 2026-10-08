@@ -1,8 +1,6 @@
 // d3d_state_skip.cpp - keeps an unchanged D3D11 blend, rasterizer or
-// depth-stencil state object across a material change (d3dStateSkip, DEV).
+// depth-stencil state object across a material change (d3dStateSkip).
 #include "render/d3d_state_skip.h"
-
-#ifdef KEO_DEBUG
 
 #include "render/d3d_state_policy.h"
 #include "render/module_hooks.h"
@@ -54,6 +52,7 @@ static volatile LONG s_epoch = 0;
 static D3dShadows s_shadows;   // main thread
 static bool s_ready = false;   // all four hooked; written once by the install
 
+#ifdef KEO_DEBUG
 // Main thread only.
 static LONG s_calls = 0;
 static LONG s_flagged[D3D_STATES] = { 0, 0, 0 };
@@ -64,12 +63,17 @@ static volatile LONG s_invalRt = 0;
 static volatile LONG s_invalDev = 0;
 static volatile LONG s_invalFrame = 0;
 static volatile LONG s_offMain = 0;
+#endif
 
 // The install's refusal reason, NULL once it succeeded; set before any tick.
+#ifdef KEO_DEBUG
 static const char* s_installWhy = "not run";
+#endif
 static int s_seenMode = 0;
+#ifdef KEO_DEBUG
 static double s_lastBeat = 0.0;
 static const double kBeatSeconds = 60.0;
+#endif
 
 // Main thread (Ogre's render calls). Off: one read and the forward.
 static void hook_D3DRender(void* rs, const void* op)
@@ -81,7 +85,9 @@ static void hook_D3DRender(void* rs, const void* op)
 	}
 	if (!IsMainThread())
 	{
+#ifdef KEO_DEBUG
 		InterlockedIncrement(&s_offMain);
+#endif
 		InterlockedIncrement(&s_epoch);
 		s_origRender(rs, op);
 		return;
@@ -94,6 +100,7 @@ static void hook_D3DRender(void* rs, const void* op)
 		return;
 	}
 	const D3dBefore b = D3dStateBefore((unsigned char*)rs, &s_shadows, s_epoch);
+#ifdef KEO_DEBUG
 	++s_calls;
 	if (b.dropped)
 		++s_drops;
@@ -104,6 +111,7 @@ static void hook_D3DRender(void* rs, const void* op)
 		if (b.skipped & (1u << i))
 			++s_skipped[i];
 	}
+#endif
 	// An exception from the original passes through: the recreated states'
 	// shadows were already dropped, and its failure path leaves the mirror NULL.
 	s_origRender(rs, op);
@@ -116,7 +124,9 @@ static void hook_SetRenderTarget(void* rs, void* target)
 	if (s_mode)
 	{
 		InterlockedIncrement(&s_epoch);
+#ifdef KEO_DEBUG
 		InterlockedIncrement(&s_invalRt);
+#endif
 	}
 	s_origSetRt(rs, target);
 }
@@ -125,7 +135,9 @@ static void hook_SetRenderTarget(void* rs, void* target)
 static unsigned long long hook_DeviceRelease(void* wrapper)
 {
 	InterlockedIncrement(&s_epoch);
+#ifdef KEO_DEBUG
 	InterlockedIncrement(&s_invalDev);
+#endif
 	const unsigned long long r = s_origRelease(wrapper);
 	InterlockedIncrement(&s_epoch);
 	return r;
@@ -134,12 +146,15 @@ static unsigned long long hook_DeviceRelease(void* wrapper)
 static void* hook_RsInitialise(void* rs, bool autoWindow, const void* title)
 {
 	InterlockedIncrement(&s_epoch);
+#ifdef KEO_DEBUG
 	InterlockedIncrement(&s_invalDev);
+#endif
 	void* r = s_origInit(rs, autoWindow, title);
 	InterlockedIncrement(&s_epoch);
 	return r;
 }
 
+#ifdef KEO_DEBUG
 static LONG ReadCounter(volatile LONG* c)
 {
 	return InterlockedCompareExchange(c, 0, 0);
@@ -164,6 +179,7 @@ static void EmitHeartbeat()
 	   << " offMain=" << ReadCounter(&s_offMain);
 	LogMsg(os.str());
 }
+#endif
 
 // NULL when the loaded module is the build the offsets were read from, else the reason.
 static const char* CheckBuild(HMODULE m)
@@ -204,7 +220,9 @@ void InstallD3dStateSkip(int* installed, int*)
 	if (!why)
 		why = HookSites(shared);
 	s_ready = why == NULL;
+#ifdef KEO_DEBUG
 	s_installWhy = why;
+#endif
 
 	if (why)
 	{
@@ -222,29 +240,32 @@ void InstallD3dStateSkip(int* installed, int*)
 void D3dStateSkipTick(double now)
 {
 	const int mode = (fixes::g_fixesCfg.cfg_d3dStateSkip == 1 && s_ready) ? 1 : 0;
+#ifdef KEO_DEBUG
 	bool beat = false;
+#endif
 	if (mode != s_seenMode)
 	{
 		InterlockedExchange(&s_mode, mode);
 		InterlockedIncrement(&s_epoch);
 		s_seenMode = mode;
+#ifdef KEO_DEBUG
 		beat = true;
+#endif
 	}
 	if (mode)
 	{
 		InterlockedIncrement(&s_epoch);
+#ifdef KEO_DEBUG
 		InterlockedIncrement(&s_invalFrame);
+#endif
 	}
+#ifdef KEO_DEBUG
 	if (beat || now - s_lastBeat >= kBeatSeconds)
 	{
 		s_lastBeat = now;
 		EmitHeartbeat();
 	}
+#else
+	(void)now;
+#endif
 }
-
-#else  // !KEO_DEBUG
-
-void InstallD3dStateSkip(int* installed, int*) { (void)installed; }
-void D3dStateSkipTick(double now) { (void)now; }
-
-#endif // KEO_DEBUG

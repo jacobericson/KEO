@@ -6,8 +6,6 @@
 #endif
 #include "fixes/physx/hull_same_skip.h"
 
-#ifdef KEO_DEBUG
-
 #include "fixes/physx/hull_same_skip_policy.h"
 #include "fixes/fixes_config.h"
 #include "game/game.h"
@@ -31,19 +29,24 @@ static HullApply_t s_origApply = NULL;   // the slot's thunk, read once at insta
 static volatile LONG s_mode = 0;
 static volatile LONG s_clearReq = 0;
 
+#ifdef KEO_DEBUG
 static volatile LONG s_skipped = 0;
 static volatile LONG s_teleports = 0;
 static volatile LONG s_creates = 0;
 static volatile LONG s_moves = 0;
 static volatile LONG s_resets = 0;
+#endif
 
 // Main thread only.
 static int s_seenMode = 0;
+#ifdef KEO_DEBUG
 static const char* s_installWhy = "not run";
+#endif
 static bool s_wasLoading = false;
+#ifdef KEO_DEBUG
 static double s_lastBeat = 0.0;
-
 static const double kBeatSeconds = 60.0;
+#endif
 
 // Physics thread. Off: one read and the forward.
 static __int64 HullApplyDetour(void* hull)
@@ -56,7 +59,9 @@ static __int64 HullApplyDetour(void* hull)
 	{
 		HullSameClear(&s_table);
 		s_clearSeen = req;
+#ifdef KEO_DEBUG
 		InterlockedIncrement(&s_resets);
+#endif
 	}
 
 	uintptr_t actor;
@@ -66,14 +71,17 @@ static __int64 HullApplyDetour(void* hull)
 
 	bool emptied = false;
 	const HullApplyAction action = HullSameStep(&s_table, (uintptr_t)hull, actor, teleport, pos, &emptied);
+#ifdef KEO_DEBUG
 	if (emptied)
 		InterlockedIncrement(&s_resets);
+#endif
 
+#ifdef KEO_DEBUG
 	switch (action)
 	{
 	case HULL_SKIP:
 		InterlockedIncrement(&s_skipped);
-		return 0;
+		break;
 	case HULL_FORWARD_CREATE:
 		InterlockedIncrement(&s_creates);
 		break;
@@ -84,9 +92,13 @@ static __int64 HullApplyDetour(void* hull)
 		InterlockedIncrement(&s_moves);
 		break;
 	}
+#endif
+	if (action == HULL_SKIP)
+		return 0;
 	return s_origApply(hull);
 }
 
+#ifdef KEO_DEBUG
 static LONG ReadCounter(volatile LONG* c)
 {
 	return InterlockedCompareExchange(c, 0, 0);
@@ -111,6 +123,7 @@ static void EmitHeartbeat()
 		(long)skipped, (long)teleports, (long)creates, (long)resets);
 	LogMsg(line);
 }
+#endif
 
 void InstallHullSameSkip(int* installed, int*)
 {
@@ -129,7 +142,9 @@ void InstallHullSameSkip(int* installed, int*)
 	else if (!VirtualProtect(slot, sizeof(void*), PAGE_READWRITE, &old))
 		why = "protect";
 
+#ifdef KEO_DEBUG
 	s_installWhy = why;
+#endif
 	if (why)
 	{
 		LogMsg(std::string("HullSame: install=refused(") + why + ")");
@@ -151,29 +166,30 @@ void InstallHullSameSkip(int* installed, int*)
 void HullSameSkipTick(double now, bool saveLoading)
 {
 	const int mode = fixes::g_fixesCfg.cfg_hullSameSkip ? 1 : 0;
+#ifdef KEO_DEBUG
 	bool beat = false;
+#endif
 	if (mode != s_seenMode)
 	{
 		if (mode)
 			InterlockedIncrement(&s_clearReq);
 		InterlockedExchange(&s_mode, mode);
 		s_seenMode = mode;
+#ifdef KEO_DEBUG
 		beat = true;
+#endif
 	}
 	if (saveLoading && !s_wasLoading)
 		InterlockedIncrement(&s_clearReq);
 	s_wasLoading = saveLoading;
 
+#ifdef KEO_DEBUG
 	if (beat || now - s_lastBeat >= kBeatSeconds)
 	{
 		s_lastBeat = now;
 		EmitHeartbeat();
 	}
+#else
+	(void)now;
+#endif
 }
-
-#else  // !KEO_DEBUG
-
-void InstallHullSameSkip(int* installed, int*) { (void)installed; }
-void HullSameSkipTick(double now, bool saveLoading) { (void)now; (void)saveLoading; }
-
-#endif // KEO_DEBUG

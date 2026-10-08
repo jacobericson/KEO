@@ -6,8 +6,8 @@
 // key's microseconds while the other parties have not all arrived, then calls
 // the original unchanged. The forking thread, the main thread, is the only
 // caller of the export; the tick runs on the main thread too and hands the key
-// to the detour as a budget in counter ticks. DEV builds only: PROD compiles
-// both functions as stubs.
+// to the detour as a budget in counter ticks. DEV builds also record counters
+// and write the OgreSpin: heartbeat.
 
 void InstallOgreJoinSpin(int* installed, int*);
 void OgreJoinSpinTick(double now);

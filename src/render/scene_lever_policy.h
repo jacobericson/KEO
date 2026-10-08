@@ -3,8 +3,8 @@
 
 // The scene switches' rules: which of the scene manager's worker forks would
 // give every worker nothing to do, whether an instance batch's upload would be
-// empty, when the render-queue flag is written, the call-site stubs' bytes and
-// the OgreMain build every offset here was read from. Pure: no game, Windows
+// empty, the call-site stubs' bytes and the OgreMain build every offset here
+// was read from. Pure: no game, Windows
 // or Ogre header.
 
 #include <stddef.h>
@@ -106,10 +106,5 @@ bool ForkSiteMatches(const unsigned char* window, const unsigned char* expect, s
 // updateVertexBuffer's early answer for one call.
 enum InstUpload { INST_RUN, INST_EMPTY, INST_UNTHREADED, INST_OFF_MAIN };
 InstUpload InstUploadDecide(bool mainThread, const unsigned char* batch);
-
-// The render-queue flag's write when the switch changes (mode 1 on, any other
-// value off; applied is the mode last written, 0 at start).
-enum RqClearAction { RQ_NONE, RQ_SET_ON, RQ_RESTORE };
-RqClearAction RqClearStep(int mode, int applied);
 
 #endif // KEO_RENDER_SCENE_LEVER_POLICY_H

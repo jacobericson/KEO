@@ -2,8 +2,6 @@
 // left nothing visible skips its vertex buffer lock and upload (scene_levers.h).
 #include "render/scene_levers.h"
 
-#ifdef KEO_DEBUG
-
 #include "render/scene_lever_policy.h"
 #include "render/module_hooks.h"
 #include "fixes/fixes_config.h"
@@ -24,15 +22,19 @@ static const char* s_install = "not run";
 // Published by the tick; the detour reads it first.
 static volatile LONG s_mode = 0;
 
+#ifdef KEO_DEBUG
 // Main thread only, except s_offMain.
 static LONG s_calls = 0;
 static LONG s_skipped = 0;
 static LONG s_unthreaded = 0;
 static volatile LONG s_offMain = 0;
 
+#endif
 static int s_seenMode = 0;
+#ifdef KEO_DEBUG
 static double s_lastBeat = 0.0;
 static const double kBeatSeconds = 60.0;
+#endif
 
 // The caller stores the return as the batch's instance count and queues the
 // batch only when it is non-zero, so an empty batch's answer of 0 needs no
@@ -44,17 +46,25 @@ static size_t hook_UpdateVertexBuffer(void* batch, void* camera, const void* lod
 	const InstUpload d = InstUploadDecide(IsMainThread(), (const unsigned char*)batch);
 	if (d == INST_OFF_MAIN)
 	{
+#ifdef KEO_DEBUG
 		InterlockedIncrement(&s_offMain);
+#endif
 		return s_orig(batch, camera, lodCamera);
 	}
+#ifdef KEO_DEBUG
 	++s_calls;
+#endif
 	if (d == INST_EMPTY)
 	{
+#ifdef KEO_DEBUG
 		++s_skipped;
+#endif
 		return 0;
 	}
+#ifdef KEO_DEBUG
 	if (d == INST_UNTHREADED)
 		++s_unthreaded;
+#endif
 	return s_orig(batch, camera, lodCamera);
 }
 
@@ -82,6 +92,7 @@ static bool InstallOk()
 	return strcmp(s_install, "ok") == 0;
 }
 
+#ifdef KEO_DEBUG
 static void EmitHeartbeat()
 {
 	std::ostringstream line;
@@ -94,27 +105,29 @@ static void EmitHeartbeat()
 	     << " offMain=" << InterlockedCompareExchange(&s_offMain, 0, 0);
 	LogMsg(line.str());
 }
+#endif
 
 void InstEmptySkipTick(double now)
 {
 	const int mode = (fixes::g_fixesCfg.cfg_instEmptySkip == 1 && InstallOk()) ? 1 : 0;
+#ifdef KEO_DEBUG
 	bool beat = false;
+#endif
 	if (mode != s_seenMode)
 	{
 		InterlockedExchange(&s_mode, mode);
 		s_seenMode = mode;
+#ifdef KEO_DEBUG
 		beat = true;
+#endif
 	}
+#ifdef KEO_DEBUG
 	if (beat || now - s_lastBeat >= kBeatSeconds)
 	{
 		s_lastBeat = now;
 		EmitHeartbeat();
 	}
+#else
+	(void)now;
+#endif
 }
-
-#else  // !KEO_DEBUG
-
-void InstallInstEmptySkip(int* installed, int*) { (void)installed; }
-void InstEmptySkipTick(double now) { (void)now; }
-
-#endif // KEO_DEBUG

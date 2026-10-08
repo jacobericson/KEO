@@ -236,20 +236,21 @@ static void CheckVariant(const TestRow* rows, int n, const char* variant, int ex
 	Check(n > 0 && strcmp(rows[n - 1].name, "OptionsWindow::saveOptions") == 0, what);
 }
 
-// Exactly the DEV-only rows listed separate the variants: a define that leaked
+// Exactly the rows of kDevOnly separate the variants: a define that leaked
 // from the first expansion into the second would make the counts agree.
 static void CheckDevMinusProd()
 {
 	static const char* const kDevOnly[] =
 		{ "deleteInstance", "clearanceResetKeys", "sectionCutLookup", "loadPhysXResource", "haulAmount" };
+	const int devOnly = (int)(sizeof(kDevOnly) / sizeof(kDevOnly[0]));
 
-	bool ok = kDevCount - kProdCount == 5;
+	bool ok = kDevCount - kProdCount == devOnly;
 	int extra = 0;
 	for (int i = 0; i < kDevCount; ++i)
 		if (!HasName(kProdRows, kProdCount, kDevRows[i].name))
 			++extra;
-	ok = ok && extra == 5;
-	for (int k = 0; k < (int)(sizeof(kDevOnly) / sizeof(kDevOnly[0])); ++k)
+	ok = ok && extra == devOnly;
+	for (int k = 0; k < devOnly; ++k)
 		ok = ok && HasName(kDevRows, kDevCount, kDevOnly[k])
 		        && !HasName(kProdRows, kProdCount, kDevOnly[k]);
 	for (int i = 0; i < kProdCount; ++i)
@@ -461,14 +462,14 @@ int main()
 {
 	CheckInstallAdmit();
 #if ZONEHAND_STEP >= 3
-	CheckVariant(kDevRows, kDevCount, "dev", 90, 75, 74, 25, 50, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 85, 70, 68, 25, 45, ProdDefaults());
+	CheckVariant(kDevRows, kDevCount, "dev", 93, 78, 77, 25, 53, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 88, 73, 71, 25, 48, ProdDefaults());
 #elif ZONEHAND_STEP == 2
+	CheckVariant(kDevRows, kDevCount, "dev", 92, 77, 76, 25, 52, DevDefaults());
+	CheckVariant(kProdRows, kProdCount, "prod", 87, 72, 70, 25, 47, ProdDefaults());
+#else
 	CheckVariant(kDevRows, kDevCount, "dev", 89, 74, 73, 25, 49, DevDefaults());
 	CheckVariant(kProdRows, kProdCount, "prod", 84, 69, 67, 25, 44, ProdDefaults());
-#else
-	CheckVariant(kDevRows, kDevCount, "dev", 86, 71, 70, 25, 46, DevDefaults());
-	CheckVariant(kProdRows, kProdCount, "prod", 81, 66, 64, 25, 41, ProdDefaults());
 #endif
 	CheckDevMinusProd();
 	CheckWantTruthTable();

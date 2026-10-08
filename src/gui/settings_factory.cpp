@@ -535,14 +535,19 @@ int ApplyLiveModuleRows(const ConfigModule& m, const ConfigModuleStage& staged, 
 
 void StageLiveModuleRows(const ConfigModule& m, ConfigModuleStage* s)
 {
-	if (!m.state)
+	StageLiveModuleRowsFrom(m, m.state, s);
+}
+
+void StageLiveModuleRowsFrom(const ConfigModule& m, const void* src, ConfigModuleStage* s)
+{
+	if (!m.state || !src)
 		return;
 	for (int i = 0; i < CONFIG_STAGE_MAX && m.keys[i].name; ++i)
 	{
 		const ConfigKey& k = m.keys[i];
 		if (!k.live || k.retired || k.target)
 			continue;
-		memcpy((char*)s->state + k.offset, (const char*)m.state + k.offset, k.size);
+		memcpy((char*)s->state + k.offset, (const char*)src + k.offset, k.size);
 		if (SlotBoundOffset(k))
 		{
 			ConfigKey local = k;

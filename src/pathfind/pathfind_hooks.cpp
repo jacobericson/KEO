@@ -17,7 +17,7 @@
 #include "pathfind/player_repath_tier_policy.h"
 #include "planner/planner_water_table.h"
 #include "pathfind/path_result_trace.h"
-#include "pathfind/npc_fail_memo.h"
+#include "pathfind/npc_cap_requester.h"
 #include <intrin.h>
 #pragma intrinsic(_ReturnAddress)
 
@@ -592,16 +592,6 @@ void hook_findPathFull(void* streamingCollection, void* searchState, void* findP
 	CountFindPathWave(c);
 	c.slowGoalData = -1;
 	c.slowStartCluster = -1;
-#ifdef KEO_DEBUG
-	// The NPC failed-search memo, once the request's labels are taken: a search it answers never
-	// reaches the A*, and is counted on the memo's own line rather than in the A* records.
-	// CountFindPathWave above has already counted a waved-through search as started; the memo never
-	// covers one (NfmCovers), which keeps every started wave paired with an outcome.
-	NpcFailMemoCall memo;
-	if (NpcFailMemoBefore(streamingCollection, searchState, findPathOutput, c.astarCallerClass,
-	                      currentRequestIsPlayer, c.wavedThrough, &memo))
-		return;
-#endif
 	// Counted only for a search that reaches the A*, so every attempt lands in one outcome bucket.
 	InterlockedIncrement(&pathfind::g_pathDiag.diagAstarAttempts);
 	c.pathPoolBoosted = 0;
@@ -624,8 +614,7 @@ void hook_findPathFull(void* streamingCollection, void* searchState, void* findP
 	// thread, every call.
 	QueryPerformanceCounter(&c.pathPoolQpcAfter);
 #ifdef KEO_DEBUG
-	NpcFailMemoAfter(&memo, streamingCollection, searchState, c.astarCallerClass, c.status, c.cause,
-	                 c.iterCount, c.pathPoolQpcAfter.QuadPart - c.pathPoolQpcBefore.QuadPart, c.request,
+	NpcCapRequesterAfter(streamingCollection, searchState, c.astarCallerClass, c.status, c.cause, c.request,
 	                 &c.slowGoalData, &c.slowStartCluster);
 #endif
 	RecordFindPathSamples(c);

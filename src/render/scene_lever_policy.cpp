@@ -234,13 +234,3 @@ InstUpload InstUploadDecide(bool mainThread, const unsigned char* batch)
 		return INST_EMPTY;
 	return INST_RUN;
 }
-
-RqClearAction RqClearStep(int mode, int applied)
-{
-	const bool on = mode == 1;
-	if (on && applied != 1)
-		return RQ_SET_ON;
-	if (!on && applied == 1)
-		return RQ_RESTORE;
-	return RQ_NONE;
-}

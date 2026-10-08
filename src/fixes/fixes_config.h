@@ -112,6 +112,19 @@ struct FixesConfig
 	// (false, observe). Read when the guard installs, and never again.
 	bool hullDoublePushGuardEnabled;
 
+	// hullSameSkip: default on in every build. Live changes are published by the
+	// main-thread tick to the module reader.
+	int cfg_hullSameSkip;
+
+	// Scene fork and empty-instance shortcuts, on by default in every build.
+	// Live values are read by the main-thread module ticks.
+	int cfg_sceneForkSkip;
+	int cfg_instEmptySkip;
+
+	// d3dStateSkip: default on in every build. Live changes are published by the
+	// main-thread tick to the module reader.
+	int cfg_d3dStateSkip;
+
 	// stitchByteGuard: skips the one-byte `+0x50` store NavMeshGenerator::update
 	// makes on the output of an interior stitch task, which lands one byte past
 	// the 0x48-byte NavInstance on the next heap block
@@ -172,11 +185,24 @@ struct FixesConfig
 	// startup either way, like every other row). Read once, at hook install.
 	bool corpsePinEnabled;
 
+	// relationsSelfFind: default on in every build. Live changes are published by the
+	// main-thread tick to the module reader.
+	int cfg_relationsSelfFind;
+
+
 	// nestValidationGuard: at ZONEHAND_STEP >= 2, the finalizeZoneResources
 	// detour (src/fixes/world/nest_validation.h). On by default; false is a true
 	// no-op -- the original runs exactly as before the guard existed. Read on
 	// every call.
 	bool nestValidationGuardEnabled;
+
+	// onScreenStagger: default on in every build. Live changes are published by the
+	// main-thread tick to the module reader.
+	int cfg_onScreenStagger;
+
+	// pausedOffscreenSkip: default on in every build. Live changes are published by the
+	// main-thread tick to the module reader.
+	int cfg_pausedOffscreenSkip;
 
 	// graphHeuristicGuard: installs the three guards inside the A* search's hierarchical
 	// heuristic (graph_heuristic_guard.cpp); 0 by default. playerHierarchical other than off
@@ -189,6 +215,10 @@ struct FixesConfig
 	// distance as an instance registers (cluster_cross_cost.cpp); 0 by default. Changes NPC
 	// routing as well as the hierarchical player search. Read at startup only.
 	int clusterCrossCostOn;
+
+	// ogreJoinSpinUs: default 20 microseconds in every build. Live changes are published by the
+	// main-thread tick to the module reader.
+	int cfg_ogreJoinSpinUs;
 
 	// townClaimFix: a building the player places keeps the town its placement chose, or the player
 	// town whose radius holds it, or none, instead of the NPC town the game's re-check in an unsaved

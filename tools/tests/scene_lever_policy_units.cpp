@@ -484,17 +484,6 @@ static void TestInst()
 	Check(InstUploadDecide(false, b) == INST_OFF_MAIN, "inst: off the main thread runs");
 }
 
-// ---- rq -----------------------------------------------------------------
-
-static void TestRq()
-{
-	Check(RqClearStep(1, 0) == RQ_SET_ON, "rq: switching on writes on");
-	Check(RqClearStep(1, 1) == RQ_NONE, "rq: on again writes nothing");
-	Check(RqClearStep(0, 1) == RQ_RESTORE, "rq: switching off restores");
-	Check(RqClearStep(0, 0) == RQ_NONE, "rq: off at start writes nothing");
-	Check(RqClearStep(7, 0) == RQ_NONE && RqClearStep(7, 1) == RQ_RESTORE, "rq: an unknown mode reads as off");
-}
-
 int main()
 {
 	TestR8();
@@ -506,6 +495,5 @@ int main()
 	TestRel32();
 	TestSite();
 	TestInst();
-	TestRq();
 	return CheckExit("scene_lever_policy_units");
 }

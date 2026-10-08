@@ -3,6 +3,7 @@
 // word moved. Names are read raw from the game's objects inside one guarded reader on the main
 // thread, where the handle is resolved.
 #include "pathfind/npc_cap_requester.h"
+#include "pathfind/npc_search_probe_policy.h"
 
 #ifdef KEO_DEBUG
 #include "base/core.h"
@@ -209,6 +210,36 @@ void NpcCapRequesterPrintLine()
 		}
 	}
 	LogMsg(ss.str());
+}
+
+void NpcCapRequesterAfter(void* collection, void* input, AstarCallerClass cls, int status, int cause,
+                          const void* request, int* goalData, int* startCluster)
+{
+	*goalData = -1;
+	*startCluster = -1;
+	if (status == 3 && cause == 3 && (cls == ASTAR_CALLER_CHARACTER_PLAYER || cls == ASTAR_CALLER_CHARACTER_NPC
+	    || cls == ASTAR_CALLER_CHARACTER_UNKNOWN) && collection && input)
+	{
+		const unsigned char* in = (const unsigned char*)input;
+		const unsigned* goals = *(const unsigned* const*)(in + NSP_IN_GOAL_KEYS);
+		int goalCount = *(const int*)(in + NSP_IN_GOAL_KEYS + 8);
+		unsigned startFace = *(const unsigned*)(in + NSP_IN_START_FACE);
+		int cluster = -1, unused = -1;
+		if (goals && goalCount >= 1)
+			NpcProbeReadFace(collection, goals[0], &unused, goalData);
+		if (NpcProbeReadFace(collection, startFace, &cluster, &unused))
+			*startCluster = (int)NpcProbeClusterKey(startFace, cluster);
+		NpcCapRequesterNote(request, cls == ASTAR_CALLER_CHARACTER_PLAYER ? 1 : 0);
+	}
+}
+
+void NpcCapRequesterTick(double now)
+{
+	static double last = -1.0e9;
+	if (now - last < 10.0)
+		return;
+	last = now;
+	NpcCapRequesterPrintLine();
 }
 
 #else

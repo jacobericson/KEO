@@ -1,11 +1,9 @@
 // onscreen_stagger.cpp - The far visibility-check stagger: the entry detour on
 // Character::updateOnScreenCheck, its install step, and the main-thread tick that hands it the key,
-// advances the frame counter, forces a full pass on a camera jump or a save load, and writes the
-// OnScreenStagger: line. The detour runs on the AI back thread: one volatile read and a forward when
-// off, one Interlocked counter per call, no lock, no allocation, no logging.
+// advances the frame counter and forces a full pass on a camera jump or a save load. DEV builds
+// record counters and write the OnScreenStagger: line. The detour runs on the AI back thread:
+// one volatile read and a forward when off, no lock, no allocation, no logging.
 #include "fixes/world/onscreen_stagger.h"
-
-#ifdef KEO_DEBUG
 
 #include "fixes/world/onscreen_stagger_policy.h"
 #include "plugin/hook_manifest.h"
@@ -43,15 +41,21 @@ static volatile LONG s_mode = 0;
 static volatile LONG s_frame = 0;
 static volatile LONG s_forceUntil = 0;
 
+#ifdef KEO_DEBUG
 static volatile LONG s_full = 0;
 static volatile LONG s_skipped = 0;
 static volatile LONG s_jumps = 0;
+#endif
 
 // Main thread only.
 static int         s_seenMode = 0;
+#ifdef KEO_DEBUG
 static const char* s_installWhy = "not run";
+#endif
 static OnScreenCam s_last = { false, 0.0f, 0.0f, -1, -1 };
+#ifdef KEO_DEBUG
 static double      s_lastBeat = 0;
+#endif
 
 static void* OnsVcall(void* obj, size_t slot)
 {
@@ -61,7 +65,9 @@ static void* OnsVcall(void* obj, size_t slot)
 
 static bool OnsFull(void* chv)
 {
+#ifdef KEO_DEBUG
 	InterlockedIncrement(&s_full);
+#endif
 	return orig_check(chv);
 }
 
@@ -98,7 +104,9 @@ static bool hook_updateOnScreenCheck(void* chv)
 		return OnsFull(chv);
 
 	OnScreenFarWrites(ch, animation, *s_paused != 0, *s_frameTime);
+#ifdef KEO_DEBUG
 	InterlockedIncrement(&s_skipped);
+#endif
 	return false;
 }
 
@@ -124,17 +132,21 @@ void InstallOnScreenStagger(int* installed, int*)
 		why = HookInstall(HOOK_CHARACTER_UPDATE_ONSCREEN_CHECK, hook_updateOnScreenCheck, &orig_check,
 		                  installed, true);
 	}
+#ifdef KEO_DEBUG
 	s_installWhy = why;
+#endif
 	if (why)
 		ErrorLog(std::string("OnScreenStagger: install=refused(") + why + ")");
 	else
 		LogMsg("OnScreenStagger: install=ok");
 }
 
+#ifdef KEO_DEBUG
 static LONG OnsRead(volatile LONG* x)
 {
 	return InterlockedCompareExchange(x, 0, 0);
 }
+#endif
 
 // The next three AI runs check everyone.
 static void OnsForce(LONG frame)
@@ -170,6 +182,7 @@ static OnScreenCam OnsReadCamera()
 	return cam;
 }
 
+#ifdef KEO_DEBUG
 static void OnsHeartbeat(double now)
 {
 	const LONG full = OnsRead(&s_full);
@@ -185,19 +198,24 @@ static void OnsHeartbeat(double now)
 	LogMsg(ss.str());
 	s_lastBeat = now;
 }
+#endif
 
 void OnScreenStaggerTick(double now, bool saveLoading)
 {
 	const LONG frame = InterlockedIncrement(&s_frame);
 	const int mode = fixes::g_fixesCfg.cfg_onScreenStagger ? 1 : 0;
+#ifdef KEO_DEBUG
 	bool beat = false;
+#endif
 	if (mode != s_seenMode)
 	{
 		s_last.valid = false;
 		OnsForce(frame);
 		InterlockedExchange(&s_mode, (LONG)mode);
 		s_seenMode = mode;
+#ifdef KEO_DEBUG
 		beat = true;
+#endif
 	}
 
 	if (saveLoading)
@@ -212,7 +230,9 @@ void OnScreenStaggerTick(double now, bool saveLoading)
 		if (v == CAM_JUMP)
 		{
 			OnsForce(frame);
+#ifdef KEO_DEBUG
 			InterlockedIncrement(&s_jumps);
+#endif
 		}
 		else if (v == CAM_UNKNOWN)
 		{
@@ -221,13 +241,10 @@ void OnScreenStaggerTick(double now, bool saveLoading)
 		s_last = cam;
 	}
 
+#ifdef KEO_DEBUG
 	if (beat || now - s_lastBeat >= 60.0)
 		OnsHeartbeat(now);
+#else
+	(void)now;
+#endif
 }
-
-#else  // !KEO_DEBUG
-
-void InstallOnScreenStagger(int* installed, int*) { (void)installed; }
-void OnScreenStaggerTick(double now, bool saveLoading) { (void)now; (void)saveLoading; }
-
-#endif // KEO_DEBUG

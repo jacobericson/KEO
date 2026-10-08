@@ -70,6 +70,10 @@ static const Owner kOwners[] =
 	{ "meshFaceGuard", "fixes" },
 	{ "createInstanceGuard", "fixes" },
 	{ "hullDoublePushGuard", "fixes" },
+	{ "hullSameSkip", "fixes" },
+	{ "sceneForkSkip", "fixes" },
+	{ "instEmptySkip", "fixes" },
+	{ "d3dStateSkip", "fixes" },
 	{ "stitchByteGuard", "fixes" },
 	{ "navmeshAdjExclusion", "navmesh" },
 	{ "playerRepathTier", "pathfind" },
@@ -85,11 +89,15 @@ static const Owner kOwners[] =
 	{ "physPurecallRecord", "fixes" },
 	{ "physQueryGuard", "fixes" },
 	{ "corpsePin", "fixes" },
+	{ "relationsSelfFind", "fixes" },
 	{ "nestValidationGuard", "fixes" },
+	{ "onScreenStagger", "fixes" },
+	{ "pausedOffscreenSkip", "fixes" },
 	{ "graphHeuristicGuard", "fixes" },
 	{ "playerHierarchical", "pathfind" },
 	{ "playerHierOnCap", "pathfind" },
 	{ "clusterCrossCost", "fixes" },
+	{ "ogreJoinSpinUs", "fixes" },
 	{ "zoneGeometryMode", "zone" },
 	{ "camFocus", "zone" },
 	{ "preloadKeepAliveSeconds", "zone" },
@@ -302,19 +310,22 @@ static void CheckZoneSquadRadiusAndCap()
 	zone::g_zoneCfg = held;
 }
 
-// The live offset rows outside the render module, by name: each one's field is stored once by the
-// tab's close and loaded once per use by its readers, and no startup path writes it on a refusal.
-// The three zone footprint rows, the operator hold's tier (the evaluator loads the field once
-// per call; the close stores it once) and the backpack switch (each backpack part loads it once
-// per call).
+// Live module rows either publish through their frame tick or load the stored field once per use.
 static bool LiveOffsetRowAllowed(const char* module, const char* key)
 {
 	if (!strcmp(module, "inventory"))
 		return !strcmp(key, "operatorHoldUntil") || !strcmp(key, "backpackFixes");
-	if (strcmp(module, "zone"))
-		return false;
-	return !strcmp(key, "zoneLifeRetainRadius") || !strcmp(key, "zoneLifeSquadRadius")
-	    || !strcmp(key, "zoneRetentionMaxHeld");
+	if (!strcmp(module, "zone"))
+		return !strcmp(key, "zoneLifeRetainRadius") || !strcmp(key, "zoneLifeSquadRadius")
+		    || !strcmp(key, "zoneRetentionMaxHeld");
+	if (!strcmp(module, "fixes"))
+		return !strcmp(key, "relationsSelfFind")
+		    || !strcmp(key, "hullSameSkip") || !strcmp(key, "onScreenStagger")
+		    || !strcmp(key, "pausedOffscreenSkip")
+		    || !strcmp(key, "ogreJoinSpinUs")
+		    || !strcmp(key, "sceneForkSkip") || !strcmp(key, "instEmptySkip")
+		    || !strcmp(key, "d3dStateSkip");
+	return false;
 }
 
 // A live field LiveFieldStore can store: 1, 4 or 8 bytes at an offset aligned to its width.
@@ -402,7 +413,10 @@ int main()
 		}
 		if (i == CONFIG_STAGE_MAX) Fail(mod.name, "no table end within stage capacity");
 	}
-	Check(moduleKeys == 106 && activeCore == 2 && retiredCore == 23 && debug == 4, "module and core row counts");
+	Check(moduleKeys == 114 && activeCore == 2 && retiredCore == 23 && debug == 4, "module and core row counts");
+	const char* const removed[] = { "npcFailMemo", "rqStructClear", "ogreWorkerPriority", "factionSelfGuard" };
+	for (int i = 0; i < 4; ++i)
+		Check(FindConfigKey(removed[i], NULL) == NULL, "removed switches have no config row");
 	for (size_t i = 0; i < sizeof(kOwners) / sizeof(kOwners[0]); ++i)
 	{
 		const ConfigModule* mod = NULL;

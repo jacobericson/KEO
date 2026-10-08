@@ -6,6 +6,7 @@
 #include "gui/bench_buttons.h"
 #include "render/render_config.h"
 #include "render/render_keys.h"
+#include "bench/bench_group.h"
 #include "bench/bench_lever_ab.h"
 #include "bench/bench_runner.h"
 #include "bench/bench_sweep.h"
@@ -310,13 +311,26 @@ static void BuildTab(OptionsWindow* win)
 	{
 		s_staging.module[m] = s_saved.module[m];
 		if (m != renderModule)
-			StageLiveModuleRows(kConfigModules[m], &s_staging.module[m]);
+		{
+			// A benchmark group run's keys are staged at the user's values.
+			const ConfigModule& mod = kConfigModules[m];
+			double buf[CONFIG_STATE_MAX / sizeof(double)];
+			const void* src = mod.state;
+			if (mod.state && mod.stateSize <= sizeof(buf))
+			{
+				memcpy(buf, mod.state, mod.stateSize);
+				BenchGroupUserState(mod, buf);
+				src = buf;
+			}
+			StageLiveModuleRowsFrom(mod, src, &s_staging.module[m]);
+		}
 	}
 	if (renderModule >= 0)
 	{
 		RenderConfig& render = StagedRender(&s_staging);
 		render = g_renderCfg;
 		BenchLeverUserRenderConfig(&render);
+		BenchGroupUserRenderConfig(&render);
 		render.renderLevers = StagedRender(&s_saved).renderLevers;
 	}
 	StageBenchSpeeds(&s_staging, g_benchSlots);
@@ -412,8 +426,13 @@ static void CommitStaging()
 		if (m != renderModule)
 			ApplyLiveModuleRows(kConfigModules[m], staged.module[m], &live);
 	}
+	// Each live line carries a QueryPerformanceCounter reading, which places it on another log's clock.
 	for (size_t i = 0; i < live.size(); ++i)
-		LogMsg("Settings panel: live " + live[i]);
+	{
+		std::ostringstream line;
+		line << "Settings panel: live " << live[i] << " qpc=" << QpcNow();
+		LogMsg(line.str());
+	}
 
 	int savedKeys = 0;
 	if (d.saved)

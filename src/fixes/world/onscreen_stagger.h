@@ -8,8 +8,8 @@
 // jump, after a save load and for anything nearer or visible. The detour runs
 // on the AI back thread (the main thread with characterMultithreading off);
 // the tick runs on the main thread, hands the key to the detour and keeps the
-// frame counter and the camera baseline. DEV builds only: PROD compiles both
-// functions as stubs.
+// frame counter and the camera baseline. DEV builds also record counters
+// and write the OnScreenStagger: heartbeat.
 
 void InstallOnScreenStagger(int* installed, int*);
 void OnScreenStaggerTick(double now, bool saveLoading);

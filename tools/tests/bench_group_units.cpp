@@ -1,7 +1,6 @@
 // Benchmark groups, built twice at /DZONEHAND_STEP=3: with /DKEO_DEBUG (the
-// DEV table, where the DEV-only switches are levers) and without it (the PROD
-// table, where they are dropped). The PROD build exercises the same rules
-// through rows both builds read: the render keys and the zone module's live rows.
+// DEV table) and without it (the PROD table). Both builds exercise the shipping
+// switches, render keys and zone module's live rows.
 
 #include "bench/bench_group.h"
 #include "bench/bench_sweep.h"
@@ -34,22 +33,16 @@ int BenchLoadedZoneCount() { return 0; }
 
 #ifdef KEO_DEBUG
 static const char* const SUITE_NAME = "bench_group_units";
-// Two module switches in two modules, and their off and on texts.
-static const char* const KEY_A = "hullSameSkip";
-static const char* const KEY_B = "npcFailMemo";
-static const char* const A_ON = "on";
-static const char* const A_OFF = "off";
-static const char* const B_ON = "on";
-static const char* const B_OFF = "off";
 #else
 static const char* const SUITE_NAME = "bench_group_prod_units";
-static const char* const KEY_A = "zoneLifeSquadRadius";
+#endif
+// Two live switches in two modules, with their off and on texts.
+static const char* const KEY_A = "hullSameSkip";
 static const char* const KEY_B = "reflectionHalfRate";
-static const char* const A_ON = "2";
-static const char* const A_OFF = "0";
+static const char* const A_ON = "on";
+static const char* const A_OFF = "off";
 static const char* const B_ON = "true";
 static const char* const B_OFF = "false";
-#endif
 
 static std::vector<std::string> g_lines;
 static void TestLog(const std::string& line) { g_lines.push_back(line); }
@@ -169,6 +162,7 @@ static void ParseTests()
 	      HasLine("Bench: group m3 refused (the passes are 1-8)"),
 	      "parse: a malformed head refuses the group");
 
+	SetRunning("particleLoopingNames", "fire,smoke");
 	Groups("l8", "each/2/10+40:particleLoopingNames=fire,smoke,torch,rain,weather,poison gas;reflectionHalfRate=true");
 	g = Find("l8");
 	Check(g >= 0 && BenchGroupLeverCount(g) == 2 &&
@@ -223,11 +217,7 @@ static void ResolveTests()
 	Check(BenchGroupLeverCount(Find("r6")) == 1 && HasLine("Bench: group r6: squadPathCache is retired, dropped"),
 	      "resolve: a retired row is dropped as retired");
 
-#ifdef KEO_DEBUG
-	const char* refusedKey = "npcFailMemo";
-#else
-	const char* refusedKey = "reflectionHalfRate";
-#endif
+	const char* refusedKey = "relationsSelfFind";
 	text = std::string("each/1/3+25:") + refusedKey + "=bright;particleStepCap=true";
 	Groups("r3", text.c_str());
 	Check(BenchGroupLeverCount(Find("r3")) == 1 &&
@@ -250,20 +240,18 @@ static void ResolveTests()
 
 static void OffTests()
 {
-#ifdef KEO_DEBUG
 	ResetRunning();
 	SetRunning("ogreJoinSpinUs", "50");
-	SetRunning("npcFailMemo", "on");
-	Groups("o1", "each/1/3+25:ogreJoinSpinUs=20;npcFailMemo=observe");
+	SetRunning("relationsSelfFind", "on");
+	Groups("o1", "each/1/3+25:ogreJoinSpinUs=20;relationsSelfFind=verify");
 	BenchScenario sc;
 	Check(Build("o1", &sc), "off: a choice row's off is its first choice");
 	sc.applySet(0, sc.ctx);
-	Check(Running("ogreJoinSpinUs") == "0" && Running("npcFailMemo") == "off", "off: a choice row's off is its first choice");
+	Check(Running("ogreJoinSpinUs") == "0" && Running("relationsSelfFind") == "off", "off: a choice row's off is its first choice");
 	sc.restoreSettings(sc.ctx);
-	Check(Running("ogreJoinSpinUs") == "50" && Running("npcFailMemo") == "on", "off: a choice row's off is its first choice");
+	Check(Running("ogreJoinSpinUs") == "50" && Running("relationsSelfFind") == "on", "off: a choice row's off is its first choice");
 	SetRunning("ogreJoinSpinUs", "0");
-	SetRunning("npcFailMemo", "off");
-#endif
+	SetRunning("relationsSelfFind", "off");
 
 	ResetRunning();
 	strcpy_s(g_renderCfg.particleLoopingNames, sizeof(g_renderCfg.particleLoopingNames), "fire,smoke");
@@ -315,15 +303,9 @@ static void SetsTests()
 	Check(Build("s4", &sc) && sc.sets.size() == 2 && sc.sets[1] == "particleLoopingNames=fire,poison_gas",
 	      "sets: a value's spaces are underscores in the set name");
 
-#ifdef KEO_DEBUG
 	Groups("s5", "each/1/3+25:ogreJoinSpinUs=20;ogreJoinSpinUs=50");
 	const char* twoA = "ogreJoinSpinUs=20";
 	const char* twoB = "ogreJoinSpinUs=50";
-#else
-	Groups("s5", "each/1/3+25:foliagePageBudgetMs=2;foliagePageBudgetMs=5");
-	const char* twoA = "foliagePageBudgetMs=2";
-	const char* twoB = "foliagePageBudgetMs=5";
-#endif
 	Check(Build("s5", &sc) && sc.sets.size() == 3 && sc.sets[1] == twoA && sc.sets[2] == twoB,
 	      "sets: one key with two values makes two sets");
 
@@ -452,20 +434,20 @@ static void BuildTests()
 	ResetRunning();
 }
 
-static void DevOnlyTests()
+static void ShippingSwitchTests()
 {
 	ResetRunning();
 	Groups("d1", "each/1/3+25:hullSameSkip=on", "d2", "each/1/3+25:hullSameSkip=on;reflectionHalfRate=true");
-#ifndef KEO_DEBUG
-	std::ostringstream d2;
-	d2 << "Bench: group d2 sets=each passes=1 window=3+25 levers=reflectionHalfRate=true held=" << BenchGroupHeldCount()
-	   << " (1 DEV-only levers dropped)";
-	Check(Find("d1") == -1 && HasLine("Bench: group d1 empty (DEV-only levers)") &&
-	      BenchGroupLeverCount(Find("d2")) == 1 && HasLine(d2.str()) && !HasLineWith("DEV-only in this build"),
-	      "prod: a DEV-only key is dropped");
-#else
 	Check(BenchGroupLeverCount(Find("d1")) == 1 && BenchGroupLeverCount(Find("d2")) == 2 && !HasLineWith("DEV-only"),
-	      "dev: a DEV-only key is kept");
+	      "shipping: promoted switches resolve as benchmark levers in DEV and PROD");
+	Groups("d3", "each/1/3+25:movementTrace=true;reflectionHalfRate=true");
+#ifdef KEO_DEBUG
+	Check(BenchGroupLeverCount(Find("d3")) == 1 &&
+	      HasLine("Bench: group d3: movementTrace is startup-only, dropped"),
+	      "shipping: a genuine DEV diagnostic remains unavailable as a live lever");
+#else
+	Check(BenchGroupLeverCount(Find("d3")) == 1 && HasLineWith("(1 DEV-only levers dropped)"),
+	      "shipping: PROD excludes a genuine DEV diagnostic");
 #endif
 	ClearGroups();
 }
@@ -502,7 +484,7 @@ int main()
 	SetsTests();
 	ApplyTests();
 	BuildTests();
-	DevOnlyTests();
+	ShippingSwitchTests();
 	CapTests();
 	return CheckExit(SUITE_NAME);
 }

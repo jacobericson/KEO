@@ -29,7 +29,18 @@
 //   guard, which verify their own bytes exactly, because a prologue's
 //   shared-site allowance is wrong mid-function;
 // - the purecall recorder's data write into PhysXCore64's CRT, which is not an
-//   exe site.
+//   exe site;
+// - the OgreMain scene switches' six call sites and their updateVertexBuffer
+//   hook (src/render/scene_fork_skip.cpp, src/render/inst_empty_skip.cpp), each checked against the OgreMain build and its own bytes;
+// - the D3D11 state-object switch's four hooks in the render system DLL
+//   (src/render/d3d_state_skip.cpp), checked against the
+//   DLL's build and their own prologues;
+// - the physics hull apply's vtable slot (src/fixes/physx/hull_same_skip.cpp),
+//   a data write that checks the slot and its thunk exactly
+//   before it swaps them;
+// - the Ogre barrier join spin's entry on OgreMain's exported Barrier::sync
+//   (src/render/ogre_join_spin.cpp), checked against the
+//   OgreMain build and its own prologue by its own install.
 
 	// --- unconditional: hook_manifest.cpp's startup groups, or the module file a row names ---
 	HOOK_ROW(HOOK_SHOW_LOADING_MESSAGE, "showLoadingMessage", RVA_SHOW_LOADING_MESSAGE, HOOK_FATAL, HOOK_BY_STARTUP, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
@@ -83,6 +94,12 @@
 	// gather walks at the group's own pace as it did before.
 	HOOK_ROW(HOOK_SPEED_GROUP_GET_SPEED, "getSpeed", RVA_SPEED_GROUP_GET_SPEED, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_GATHER_PACE, HOOK_CAP_NONE,
 	         0x48,0x89,0x54,0x24,0x10,0x53,0x55,0x41,0x55,0x48,0x83,0xEC,0x60,0x48,0x8B,0x05)
+
+	// FactionRelations::update (src/fixes/world/faction_relations.cpp), entry: one whole five-byte
+	// `cmp qword ptr [rcx+40h],0`, position-independent; KEOProfiler may detour the same entry. The
+	// live lookup is installed in every build. diagnostic = true: a mismatch leaves the game's walk.
+	HOOK_ROW(HOOK_FACTION_RELATIONS_UPDATE, "factionRelationsUpdate", RVA_FACTION_RELATIONS_UPDATE, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
+	         0x48,0x83,0x79,0x40,0x00,0x4C,0x8B,0xC1,0x74,0x13,0x48,0x8B,0x51,0x38,0x48,0x8B)
 
 	// --- src/inventory/, backpacks ---
 	// Character::giveItem (src/inventory/backpack_first.cpp): `mov [rsp+8],rbx; mov [rsp+10h],rbp;
@@ -372,6 +389,20 @@
 	// mismatch turns the pre-arrival request off alone, and the planner keeps its portal protocol.
 	HOOK_ROW(HOOK_CHARMOVEMENT_UPDATE, "charMovementUpdate", RVA_CHARMOVEMENT_UPDATE, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_PLANNER_PRE_ARRIVAL, HOOK_CAP_NONE,
 	         0x48,0x8B,0xC4,0x55,0x56,0x57,0x41,0x54,0x41,0x55,0x41,0x56,0x41,0x57,0x48,0x8D)
+	// Character::updateOnScreenCheck (src/fixes/world/onscreen_stagger.cpp), entry: push rbx; push
+	// r14; sub rsp,68h, whole and position-independent to byte 8; KEOProfiler times its two call
+	// sites, not the entry. Installed in every build for its live key. diagnostic =
+	// true: a mismatch refuses the stagger alone, and every check runs as vanilla's.
+	HOOK_ROW(HOOK_CHARACTER_UPDATE_ONSCREEN_CHECK, "updateOnScreenCheck", RVA_CHARACTER_UPDATE_ONSCREEN_CHECK, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
+	         0x40,0x53,0x41,0x56,0x48,0x83,0xEC,0x68,0x44,0x0F,0xB6,0xB1,0xA9,0x01,0x00,0x00)
+
+	// Character::pausedUpdate (src/fixes/world/paused_skip.cpp), entry: push rbx; sub rsp,30h; mov
+	// rax,[rcx]; movzx edx,byte [rcx+0E5h], whole and position-independent to byte 16; KEOProfiler
+	// detours the same entry with the same bytes. Installed in every build for its live key,
+	// says. diagnostic = true: a mismatch refuses the skip alone, and every paused update runs whole.
+	HOOK_ROW(HOOK_CHARACTER_PAUSED_UPDATE, "pausedUpdate", RVA_CHARACTER_PAUSED_UPDATE, HOOK_DIAGNOSTIC, HOOK_BY_MODULE, HOOK_WANT_ALWAYS, HOOK_CAP_NONE,
+	         0x40,0x53,0x48,0x83,0xEC,0x30,0x48,0x8B,0x01,0x0F,0xB6,0x91,0xE5,0x00,0x00,0x00)
+
 	// --- hook_manifest.cpp, player cancel hooks ---
 	// Bytes read from the IDB (ida MCP read_data/disassemble).
 	// All three prologues are position-independent over the bytes a detour

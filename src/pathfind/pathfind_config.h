@@ -2,7 +2,6 @@
 #pragma once
 #include "base/config_table.h"
 #include "pathfind/astar_hier_policy.h"
-#include "pathfind/npc_fail_memo_policy.h"
 
 // clusterGraphBypass: what checkFaceConnectivity
 // answers. Four positions, mutually exclusive, so there is no combination to
@@ -91,10 +90,6 @@ struct PathfindConfig
 	int playerHierarchicalMode;
 	int playerHierOnCapMode;
 
-	// npcFailMemo: the NPC failed-search memo's mode (npc_fail_memo_policy.h's NfmMode), off by
-	// default. A DEV-build key the settings tab writes live; the main thread hands it to the path
-	// thread (npc_fail_memo.cpp), which reads only that copy.
-	int npcFailMemoMode;
 };
 
 extern PathfindConfig g_pathfindCfg;

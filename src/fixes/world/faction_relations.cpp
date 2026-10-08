@@ -1,11 +1,5 @@
-// faction_relations.cpp - The faction relations switches: the entry detour on FactionRelations::update
-// (relationsSelfFind), the pre-call detours on both affectRelations overloads (factionSelfGuard), the
-// install step and the main-thread tick that hands the keys to them and writes the Relations: line.
-// The detours run on the AI back thread or the main thread: one volatile read and a forward when
-// off, Interlocked counters only, no lock, no allocation, no logging.
+// faction_relations.cpp - Faction self-relation lookup and its verified fallback.
 #include "fixes/world/faction_relations.h"
-
-#ifdef KEO_DEBUG
 
 #include "fixes/world/faction_relations_policy.h"
 #include "plugin/hook_manifest.h"
@@ -16,41 +10,37 @@
 #include <string>
 
 typedef void (*relationsUpdate_t)(void* rel);
-typedef void (*affectRelationsEvent_t)(void* rel, void* from, int ev, float mult);
-typedef void (*affectRelationsAmount_t)(void* rel, void* from, float amount, float mult);
 
 static relationsUpdate_t       orig_update = NULL;
-static affectRelationsEvent_t  orig_event  = NULL;
-static affectRelationsAmount_t orig_amount = NULL;
 
 // Published by the tick, read by the detours.
 static volatile LONG s_mode = 0;
-static volatile LONG s_guard = 0;
 // Latched by the update detour on any disagreement or refused table: the walk for the session.
 static volatile LONG s_fallback = 0;
 // Calls left in the verified stretch after a switch to on.
 static volatile LONG s_verifyLeft = 0;
 
+#ifdef KEO_DEBUG
 static volatile LONG s_found = 0;
 static volatile LONG s_absent = 0;
 static volatile LONG s_forwarded = 0;
 static volatile LONG s_verifyBad = 0;
 static volatile LONG s_hashBad = 0;
-static volatile LONG s_selfBlocked = 0;
-static volatile LONG s_selfMain = 0;
+#endif
 
 // Main thread only.
 static int    s_seenMode = 0;
-static int    s_seenGuard = 0;
+#ifdef KEO_DEBUG
 static double s_lastBeat = 0;
+#endif
 static const char* s_updateWhy = "not run";
-static const char* s_eventWhy = "not run";
-static const char* s_amountWhy = "not run";
 
 static void RelLatchForward(void* rel)
 {
 	InterlockedExchange(&s_fallback, 1);
+#ifdef KEO_DEBUG
 	InterlockedIncrement(&s_forwarded);
+#endif
 	orig_update(rel);
 }
 
@@ -77,7 +67,9 @@ static void hook_relationsUpdate(void* rel)
 	}
 	if (path == REL_PATH_FORWARD)
 	{
+#ifdef KEO_DEBUG
 		InterlockedIncrement(&s_forwarded);
+#endif
 		orig_update(rel);
 		return;
 	}
@@ -108,15 +100,21 @@ static void hook_relationsUpdate(void* rel)
 		const RelVerify v = RelVerifyLookup(node, walk, stored, RelKeyHash((unsigned long long)me));
 		if (v == REL_VERIFY_NODE)
 		{
+#ifdef KEO_DEBUG
 			InterlockedIncrement(&s_verifyBad);
+#endif
 			InterlockedExchange(&s_fallback, 1);
 		}
 		else if (v == REL_VERIFY_HASH)
 		{
+#ifdef KEO_DEBUG
 			InterlockedIncrement(&s_hashBad);
+#endif
 			InterlockedExchange(&s_fallback, 1);
 		}
+#ifdef KEO_DEBUG
 		InterlockedIncrement(found == REL_FOUND ? &s_found : &s_absent);
+#endif
 		orig_update(rel);
 		return;
 	}
@@ -124,40 +122,16 @@ static void hook_relationsUpdate(void* rel)
 	if (found == REL_FOUND)
 	{
 		RelWriteSelf(node);
+#ifdef KEO_DEBUG
 		InterlockedIncrement(&s_found);
+#endif
 	}
+#ifdef KEO_DEBUG
 	else
 	{
 		InterlockedIncrement(&s_absent);
 	}
-}
-
-// True when the guard drops this call; counts it, and its main-thread share.
-static bool RelGuardTake(void* rel, void* from)
-{
-	if (!s_guard)
-		return false;
-	const uintptr_t me = *(const uintptr_t*)((const char*)rel + REL_OBJ_ME);
-	if (!RelGuardDrops(1, me, (uintptr_t)from))
-		return false;
-	InterlockedIncrement(&s_selfBlocked);
-	if (IsMainThread())
-		InterlockedIncrement(&s_selfMain);
-	return true;
-}
-
-static void hook_affectRelationsEvent(void* rel, void* from, int ev, float mult)
-{
-	if (RelGuardTake(rel, from))
-		return;
-	orig_event(rel, from, ev, mult);
-}
-
-static void hook_affectRelationsAmount(void* rel, void* from, float amount, float mult)
-{
-	if (RelGuardTake(rel, from))
-		return;
-	orig_amount(rel, from, amount, mult);
+#endif
 }
 
 static void RelInstallToken(std::ostringstream& ss, const char* name, const char* why)
@@ -172,21 +146,17 @@ static void RelInstallToken(std::ostringstream& ss, const char* name, const char
 void InstallFactionRelations(int* installed, int*)
 {
 	s_updateWhy = HookInstall(HOOK_FACTION_RELATIONS_UPDATE, hook_relationsUpdate, &orig_update, installed, true);
-	s_eventWhy = HookInstall(HOOK_AFFECT_RELATIONS_EVENT, hook_affectRelationsEvent, &orig_event, installed, true);
-	s_amountWhy = HookInstall(HOOK_AFFECT_RELATIONS_AMOUNT, hook_affectRelationsAmount, &orig_amount, installed,
-	                          true);
 
 	std::ostringstream ss;
 	ss << "Relations: install";
 	RelInstallToken(ss, "update", s_updateWhy);
-	RelInstallToken(ss, "event", s_eventWhy);
-	RelInstallToken(ss, "amount", s_amountWhy);
-	if (s_updateWhy || s_eventWhy || s_amountWhy)
+	if (s_updateWhy)
 		ErrorLog(ss.str());
 	else
 		LogMsg(ss.str());
 }
 
+#ifdef KEO_DEBUG
 static LONG RelRead(volatile LONG* x)
 {
 	return InterlockedCompareExchange(x, 0, 0);
@@ -210,44 +180,35 @@ static void RelHeartbeat(double now)
 	ss << "Relations: mode=" << RelModeName(s_seenMode);
 	if (s_updateWhy)
 		ss << " install=refused(update:" << s_updateWhy << ")";
-	else if (s_eventWhy)
-		ss << " install=refused(event:" << s_eventWhy << ")";
-	else if (s_amountWhy)
-		ss << " install=refused(amount:" << s_amountWhy << ")";
 	else
 		ss << " install=ok";
 	ss << " calls=" << (long long)found + (long long)absent + (long long)forwarded
 	   << " found=" << found << " absent=" << absent
 	   << " verifyBad=" << RelRead(&s_verifyBad) << " hashBad=" << RelRead(&s_hashBad)
-	   << " fallback=" << (RelRead(&s_fallback) ? 1 : 0)
-	   << " guard=" << (s_seenGuard ? "on" : "off")
-	   << " selfBlocked=" << RelRead(&s_selfBlocked) << " selfMain=" << RelRead(&s_selfMain);
+	   << " fallback=" << (RelRead(&s_fallback) ? 1 : 0);
 	LogMsg(ss.str());
 	s_lastBeat = now;
 }
+#endif
 
 void FactionRelationsTick(double now)
 {
 	const int mode = fixes::g_fixesCfg.cfg_relationsSelfFind;
-	const int guard = fixes::g_fixesCfg.cfg_factionSelfGuard;
-	if (mode != s_seenMode || guard != s_seenGuard)
+	if (mode != s_seenMode)
 	{
 		if (RelArmVerifyWindow(s_seenMode, mode))
 			InterlockedExchange(&s_verifyLeft, 512);
 		InterlockedExchange(&s_mode, (LONG)mode);
-		InterlockedExchange(&s_guard, (LONG)guard);
 		s_seenMode = mode;
-		s_seenGuard = guard;
+#ifdef KEO_DEBUG
 		RelHeartbeat(now);
+#endif
 		return;
 	}
+#ifdef KEO_DEBUG
 	if (now - s_lastBeat >= 60.0)
 		RelHeartbeat(now);
+#else
+	(void)now;
+#endif
 }
-
-#else  // !KEO_DEBUG
-
-void InstallFactionRelations(int* installed, int*) { (void)installed; }
-void FactionRelationsTick(double now) { (void)now; }
-
-#endif // KEO_DEBUG

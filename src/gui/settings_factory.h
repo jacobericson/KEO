@@ -96,3 +96,5 @@ bool LiveFieldStore(void* dst, const void* src, size_t width);
 // copy, slots included, so the tab shows what runs: after a close whose INI
 // write failed the two differ, and the next close writes the value again.
 void StageLiveModuleRows(const ConfigModule& m, ConfigModuleStage* s);
+// The same, reading the live rows from src (a copy of m.state) instead.
+void StageLiveModuleRowsFrom(const ConfigModule& m, const void* src, ConfigModuleStage* s);

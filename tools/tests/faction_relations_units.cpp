@@ -259,16 +259,6 @@ static void CheckWrite()
 	      "write: nothing else in the node changes");
 }
 
-static void CheckGuard()
-{
-	const uintptr_t me = 0x5000, other = 0x6000;
-	Check(RelGuardDrops(1, me, me), "guard: a change from the faction itself is dropped");
-	Check(!RelGuardDrops(1, me, other), "guard: a change from another faction passes");
-	Check(!RelGuardDrops(1, me, 0) && !RelGuardDrops(1, 0, 0), "guard: a NULL faction passes");
-	Check(!RelGuardDrops(0, me, me) && !RelGuardDrops(0, me, other) && !RelGuardDrops(0, me, 0),
-	      "guard: off passes everything");
-}
-
 static void CheckWindow()
 {
 	Check(RelArmVerifyWindow(REL_MODE_OFF, REL_MODE_ON) && RelArmVerifyWindow(REL_MODE_VERIFY, REL_MODE_ON),
@@ -311,7 +301,6 @@ int main()
 	CheckRefusals();
 	CheckVerify();
 	CheckWrite();
-	CheckGuard();
 	CheckWindow();
 	CheckPath();
 	return CheckExit("faction_relations_units");
